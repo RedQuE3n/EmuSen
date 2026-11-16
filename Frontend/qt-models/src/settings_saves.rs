@@ -84,7 +84,7 @@ impl SettingsView {
     pub(crate) fn saves_row(&self, entry: &Value) -> Option<Row> {
         let m = self.saves_medium()?;
         let id = entry["id"].as_str().unwrap_or_default().to_owned();
-        let row = |label: &str, value: String, kind: RowKind| Some(Row { id: id.clone(), label: label.to_owned(), value, kind, held: self.saves_held(entry), marked: false });
+        let row = |label: &str, value: String, kind: RowKind| Some(Row { id: id.clone(), label: label.to_owned(), value, kind, held: self.saves_held(entry), marked: false, code: false });
         if entry.get("savescard").is_some() {
             return row("Card", self.chosen().map(|c| c.label.clone()).unwrap_or_default(), RowKind::Steps);
         }

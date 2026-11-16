@@ -1,9 +1,8 @@
 import QtQuick
 import EmuSen.Theme
 
-// A tile's foot: its title standing on its facts line over the tile's art, and the shade under them (Main:84-86). The facts sit
-// the board's 12 px above the foot; the shade fades in over the board's 96 px and holds the board's 0.92 from the title's top to
-// the foot, so words raised to the legibility floor keep the look's 4.5:1 over any art (provisional, the tester's to judge).
+// A tile's foot as the board draws it (Main:84-86): a shade the board's 96 px tall from rgba(4, 5, 10, 0.92) at the foot to
+// clear, the console line 12 px above the tile's foot and the title 34 px above it, each inset 18 px.
 Item {
     id: root
     // A board pixel in canvas units, Board.unit.
@@ -21,6 +20,7 @@ Item {
     property real factsSize: 15
     property real inset: 18
     property real foot: 12
+    property real titleFoot: 34
     property real fade: 96
     property color titleInk: "transparent"
     property color factsInk: "transparent"
@@ -32,22 +32,22 @@ Item {
         objectName: "tileShade." + root.place
         // The shade's dark colour, which the test reads.
         readonly property color paint: root.shadeInk
-        readonly property real solid: root.height - titleItem.y
         width: root.width
-        height: Math.max(root.fade * root.unit, shade.solid + root.fade * root.unit / 2)
+        height: root.fade * root.unit
         y: root.height - height
         radius: root.radius * root.unit
         gradient: Gradient {
             GradientStop { position: 0; color: root.shadeClear }
-            GradientStop { position: Math.max(0, 1 - shade.solid / shade.height); color: shade.paint }
             GradientStop { position: 1; color: shade.paint }
         }
     }
-    Text {
+    Line {
         id: titleItem
         objectName: "tileTitle." + root.place
+        unit: root.unit
         x: root.inset * root.unit
-        y: (factsItem.visible ? factsItem.y : root.height - root.foot * root.unit) - height
+        // Its foot the board's 34 px over the tile's (Main:85).
+        y: root.height - root.titleFoot * root.unit - height
         width: root.width - 2 * root.inset * root.unit
         text: root.title
         wrapMode: root.titleLines > 1 ? Text.Wrap : Text.NoWrap
@@ -55,20 +55,23 @@ Item {
         lineHeight: root.titleLineHeight
         elide: Text.ElideRight
         color: root.titleInk
-        font.pixelSize: Type.size(root.titleSize * root.unit, Tokens.textScale)
-        font.weight: Font.DemiBold
+        size: root.titleSize
+        weight: Font.DemiBold
     }
-    Text {
+    Line {
         id: factsItem
         objectName: "tileFacts." + root.place
+        unit: root.unit
         x: root.inset * root.unit
         y: root.height - root.foot * root.unit - height
         visible: root.facts.length > 0
-        width: root.width - 2 * root.inset * root.unit
+        // As wide as its words, as the board's line placed by its left alone is, and no wider than the tile less its insets.
+        width: Math.min(implicitWidth, root.width - 2 * root.inset * root.unit)
         text: root.facts
         elide: Text.ElideRight
         color: root.factsInk
-        font.pixelSize: Type.size(root.factsSize * root.unit, Tokens.textScale)
-        font.letterSpacing: 0.08 * root.factsSize * root.unit
+        size: root.factsSize
+        spacing: 0.08 * root.factsSize
+        capitalization: Font.AllUppercase
     }
 }

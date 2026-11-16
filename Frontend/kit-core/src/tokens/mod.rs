@@ -1,12 +1,14 @@
-//! The interface's tokens: colour in two variants, type, spacing and focus in two forms, and motion (EmuSen_Interface.md §5, EmuSen_Kit.md §1).
+//! The interface's tokens: colour in two variants, type and its faces, spacing and focus in two forms, and motion (EmuSen_Interface.md §5, EmuSen_Kit.md §1).
 
 mod colour;
+mod faces;
 mod metrics;
 mod palette;
 
 pub use colour::Colour;
+pub use faces::{BUNDLED, FaceRole, WeightRole, is_bundled};
 pub use metrics::{
-    legible_text,
+    legible_header, legible_text, legible_type,
     Corona, FocusMarks, Insets, MAX_TEXT_SCALE, SAFE_AREA_FRACTION, Shadow, Spacing, TEXT_SIZES, TypeScale, base_type, clamp_text_scale,
     corona, focus_marks, header_base, header_of, header_size, raised_shadow, safe_area_of, scaled_text, spacing, text_scale_of, type_scale,
 };

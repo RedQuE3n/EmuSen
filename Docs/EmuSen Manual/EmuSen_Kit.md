@@ -2937,6 +2937,19 @@ neither changes what an existing screen draws.
   (null by default, the kit's `Text` in `labelFont`). The ES-DE painter gives it `GlyphLine`, ES-DE's own line layout,
   since Qt's text layout has no form of it (EmuSen_Qt.md §4.8.7, item 3).
 
+- **`HelpBar.glyph`** (added 2026-11-15, Kit 1.8), a component that draws an entry's glyph in place of the kit's
+  `PadGlyph`, given `button`, `family` and `lead` (the first entry); null by default. Eclipse's boards draw a lettered
+  button's letter in the face in a 2 px ring and Start as "MENU" in a capsule (`Main.dc.html:94-97`), reading the letter
+  and the name from the kit (`PadGlyph.letter`, added, and `name`). **`HelpBar.snapped`** (true by default): each entry,
+  and each part of it, is centred on the bar's middle as Qt's centre anchors put it, each half rounded to a whole unit
+  (`qquickanchors.cpp` `vcenter`, Qt 6.11.2: a parent's centre is rounded unless its own anchors say otherwise, so
+  `alignWhenCentered` on the child alone does not centre exactly); false centres exactly, for a look on a canvas whose
+  unit is no pixel. Entries of different heights now share the bar's middle; before, each stood at the row's top.
+
+A theme that draws its own glyphs (`glyph`) gets the pair's second as its own glyph too, `ownGlyph2-<label>`, so LT RT
+Maker is two of the theme's boxes as Eclipse's Choose a console board draws it (added 2026-11-16; before, only the first
+was drawn).
+
 **Held to**: kit-core's `tests/glyph.rs` `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
 sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
 glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry
@@ -4051,6 +4064,19 @@ in the accent, its gap in `ringGapColor`; under Eclipse the glow paints once and
 follows the rule within its measured bound and ends at its reach. `tests/glow.rs` (software) and `tests/glow_gpu.rs`
 (the card, a GPU job) hold the part itself. Kit 1.5; `Glow` and `ringGapped` Kit 1.6.
 
+**Glow on the card as a box-shadow's Gaussian (2026-11-15).** `Glow`'s card path draws the box grown by its spread, its
+corners grown with it and moved by its offsets, blurred by the kit's `GaussianBlur` (§7.118) with a deviation of half the
+blur radius (CSS Backgrounds 3 §6.1.2), still masked to outside the box. It replaced Qt's `RectangularShadow` at 1.2 times
+the blur, which stood up to 9 levels of 255 under CSS's at a disc's edge (§7.116). `pixelScale` (scene pixels a unit, 1 by
+default) lets the blur run at the pixels drawn. Measured 2026-11-15 by `tests/glow_gpu.rs` under Eclipse's tokens, the
+drawn alpha against the recipe: the ring's 0.2000/0.1985 at 5.5 px, the disc's glow 0.2886/0.2889 at 5.5 and the halo
+0.1271/0.1258 at 30.5. `FocusRing` takes `gap`, `thickness`, `glowColor`, `glowBlur`, `glowSpread` and `bandRadius`, the
+tokens' (and the kit's own corners, the box's grown by the gap) by default, so a board that draws a ring apart sets its own:
+Eclipse's Home tile, 4 px of gap, 3 of ring and 40 px of glow 10 px out at 0.5 (`Main.dc.html:113`), the corners grown by
+the whole 7 px. `FocusRing.pixelScale` hands the scale to its glow; Eclipse's Home sets the canvas's unit on every glow it
+draws (the pills' halo and glow, the tiles' shadow and ring, the search's ring), which before 2026-11-15 ran at 1, a grid of
+canvas units coarser than the pixels at every size above 800 high. Kit 1.8.
+
 ### 7.114 A button's corners (2026-11-14)
 
 `buttonRadius` is a number token of `Tokens` (kit-core `Spacing`, 4 in both forms, the `rowRadius` that `ActionButton` and
@@ -4113,7 +4139,10 @@ the first on top as a box-shadow lists them, by default two from the tokens, the
 disc is drawn past the box, as a box-shadow is, and takes no room in a layout. Each glow is a `Glow` (§7.113) of the
 disc's square with corners of half its side, so a circle grown by its spread and blurred by its blur, outside the disc
 alone: a disc with no fill (the splash's) shows none of it inside. On the graphics card that is Qt's `RectangularShadow`,
-on the software backend a `Canvas`, as §7.113 says; the measures of the commonest recipe are in §7.113's table.
+on the software backend a `Canvas`, as §7.113 says; the measures of the commonest recipe are in §7.113's table. The rim,
+the disc and each glow are centred with `anchors.alignWhenCentered` false: Qt's anchors otherwise round a centred item to
+a whole unit of its parent (Qt 6, "Positioning with Anchors", `anchors.alignWhenCentered`, true by default), which put
+Choose a console's rim of two board pixels a third of a unit off its disc (measured 2026-11-16, qt-app's eclipse_consoles).
 
 **A game's corona.** `corona` is a game's corona colour, transparent (none given) by default; `gameCorona` is true while
 it is not transparent. The rim (`rimColor`) is the game's corona where one is given and the look's `coronaColor`
@@ -4138,6 +4167,117 @@ drawn; a disc given its own one glow, with a game's corona, draws that glow alon
 largest difference measured on 2026-11-14 on the software backend, 0.0192; the bound stands as measured, decided
 2026-11-15 by the tester, R-20261115-1, §7.113), and black past the halo's reach. The pixel
 ratio is one under the headless harness. Kit 1.6.
+
+**The glows on the card as CSS draws them (2026-11-15).** Each glow is the disc grown by its spread, blurred by the kit's
+`GaussianBlur` (§7.118) with a deviation of half its blur radius, as a box-shadow is (CSS Backgrounds 3 §6.1.2: "a
+Gaussian blur with a standard deviation equal to half the blur radius"), under the disc, which hides what falls inside.
+`pixelScale` (scene pixels a unit) lets the blur run at the pixels drawn; Eclipse's Home sets the canvas's unit. On the
+software backend each glow is still the kit's `Glow`. Drawn by `Glow`'s RectangularShadow, the board's two glows
+(`Main.dc.html:25`) stood up to 9 levels of 255 under CSS's between 4 and 32 px past the edge (measured 2026-11-15 on
+the RX 6800). `tests/corona_gpu.rs` (a GPU job) draws the board's disc, rim and glows over Home's ground and holds the
+colour at thirteen distances past the edge against the two box-shadows computed in the test (each chord's share by the
+error function, summed at a tenth of a pixel): within 2 levels (measured worst 2). Kit 1.8.
+
+**A glow's entry gone before its delegate.** Each delegate reads its glow through `modelData?.` guards: a `list<CoronaGlow>`
+holds its entries as guarded pointers, so an entry deleted while the disc lives, as a theme's dropped engine deletes them,
+leaves a null the delegate still reads. `tests/corona_disc.rs` deletes a disc's one glow while the disc lives and holds the
+log quiet; with one guard removed it logs "TypeError: Cannot read property 'blur' of null" (seen 2026-11-15). Eclipse's
+own drop under `qt-app/tests/eclipse.rs` no longer logs it with the guard removed (seen 2026-11-15); which order of
+deletion changed is not known, so the case is held in the kit.
+
+### 7.117 The face tokens: Sora and JetBrains Mono bundled, a face for each role (2026-11-15)
+
+Decided 2026-11-14 by the tester (R-20261114-15): "Bundle both fonts and add the face token": Eclipse's typeface is Sora,
+with JetBrains Mono for codes, both bundled, and a theme names its face through a token. Decided 2026-11-14
+(R-20261114-21): under the reference every text draws in the face it had.
+
+**The fonts.** In `kit-qt/fonts/`, each project's licence beside them; both are the SIL Open Font License 1.1, whose
+condition 2 lets the fonts "be bundled, redistributed and/or sold with any software" provided the copyright notice and the
+licence go with them (read 2026-11-15). Sora: the static Light, Regular, SemiBold and Bold (the weights 300, 400, 600 and
+700 the boards link, `Main.dc.html:11`), from `github.com/sora-xor/sora-font`, `fonts/ttf/`, at commit `7f9a9c5d0ccd`
+(2022-09-05; the project publishes no release), SHA-256 `75a3bb35…`, `517e945d…`, `b02621d4…`, `2ee62953…`;
+`Sora-OFL.txt` `ba0b9729…`. JetBrains Mono: Regular and Bold (the 400 and 700 the boards set it in), from release v2.304
+(`github.com/JetBrains/JetBrainsMono/releases`, `JetBrainsMono-2.304.zip`, SHA-256 `6f6376c6…`), `fonts/ttf/`, SHA-256
+`a0bf60ef…` and `5590990c…`; `JetBrainsMono-OFL.txt` `30f0c136…`. The six files are 908,152 bytes, the licences 8,784.
+
+**Loaded once.** `bundled_families()` (`cpp/bundled_faces.cpp`) adds every `.ttf` under `qrc:/emusen/fonts` to the
+application's font database (`QFontDatabase::addApplicationFont`) the first time a `Tokens` singleton is made, on any
+engine, and keeps each file's first family, its typographic one (a static weight's file also declares its legacy
+name, "Sora Light", which `applicationFontFamilies` lists after it; measured 2026-11-15); the database is the process's, so the theme's engine and the program's
+share them. The `FontLoader`s of the program's `Faces.qml`, the reference theme's `parts/Faces.qml`, `Moonrise` and
+`CoverTile`, which loaded the same Barlow files four times over, are gone. Qt names a static file by its typographic
+family: `BarlowCondensed-Light.ttf`, `-Regular` and `-Medium` are all "Barlow Condensed" at weights 300, 400 and 500
+(measured 2026-11-15 with `FontLoader.font`), so a family is one face and its weight stays the text's own.
+
+**The tokens.** Four `QString` properties of `Tokens`, read-only, one per role (kit-core's `FaceRole`):
+
+| Token | Role | The kit's (the reference) | Eclipse |
+|---|---|---|---|
+| `faceText` | the screens' words, strong words by weight | Barlow | Sora |
+| `faceLabel` | names, titles, counts, the wordmark | Barlow Condensed | Sora |
+| `faceInterface` | the kit's rows, controls, sentences, glyph letters | the application's font | Sora |
+| `faceCode` | codes: a version, a folder's path, a cheat's code | the application's font | JetBrains Mono |
+
+The four roles are what the program and the kit named before: 94 places set Barlow and 28 Barlow Condensed (through the
+two `Faces` items, which typed the same four loaders twice), and every text that named no face (the kit's style
+controls, its parts' default fonts, its plain texts) drew the application's font, `QGuiApplication::font()`'s family,
+which Qt resolved to Noto Sans on the desktop (2026-11-15). No text was set as a code. An empty family is not that
+font: Qt matched `font.family: ""` to Adwaita Mono (measured 2026-11-15), so the kit's value for the two roles is the
+application font's family as `QGuiApplication::font()` gives it, asked of Qt, never typed. A text asks
+`Kit.Tokens.faceX` (a theme `Tokens.faceX`); its weight, size and capitals stay its own. The style's controls, `ToneText`
+and the parts' default fonts ask `faceInterface`; a settings row whose model gives `code` true draws its value in
+`faceCode` (`MenuRow.code`; the folders' and the version's value specs say `"code": true`, and a blank's words are not
+a code).
+
+**A theme's face.** `theme.json` names a family the kit bundles (`tokens::BUNDLED`: Barlow, Barlow Condensed, Sora,
+JetBrains Mono); theme-check finds any other value, and the kit, given one, keeps its own and says so on the console. A
+face is never a family the machine may lack, so a theme's text is never drawn in a fallback. Sora has no 500: a text
+asking Sora at `Font.Medium` is drawn in Sora Regular (fontInfo, 2026-11-15).
+
+**Weights.** Decided 2026-11-15 by main, provisional on the tester's word about API additions: a weight token beside the
+faces where the reference and Eclipse's boards draw a kind of text differently. Each kind of text the program and the
+kit draw, its weight under the reference (what trunk draws), and the boards' (`~/.cache/emusen/design-console-themes-2026-11-11/project/`, read 2026-11-15):
+
+| Kind | Reference (path:line) | Boards (file:line) | Token |
+|---|---|---|---|
+| title: a screen's, a section's, a card's, a pane's, a question's, the page's | 400: `Settings.qml:71`, `Themes.qml:45`, `MenuCard.qml:242`, `Question.qml:23`, `ToolScreen.qml:38`, `PageFrame.qml:152`, `style/Dialog.qml:22` | 600: every `h1` but one (66 boards; `EclipseSettings:25`, `EclipsePause:35`), every `h2` (40) and `h3` (22; `EclipseSettings:40`, `:74`) | `weightTitle` 400, Eclipse 600 |
+| the pane's sentence | 400: `SettingsFrame.qml` (`settingsSentence`) | 300 on all 24 Settings boards (`EclipseSettings:75`) | `weightSentence` 400, Eclipse 300 |
+| the wordmark | 300: `themes/emusen/screens/Home.qml:110`, `Moonrise.qml:289` | 600 on every board that draws it (`Main:31`, `EclipseSplash`, `EclipseConsoles:26`) | `weightWordmark` 300, Eclipse 600 |
+| a row's value, the pane's muted lines, help words | 400: `MenuRow.qml` (`value`), `HelpBar.qml:16` | 400 (`EclipseSettings:47`, `:73`, `:79`) | none: both 400 |
+| strong words | 600: `GamePage.qml:248`, `:292` | 600 | none |
+| a row's label | 400: `MenuRow.qml:20` | **disagree**: 600 on every Settings board (`EclipseSettings:44`, 27 boards); a card's rows 400 at rest and 600 focused (`EclipsePause:72`) | not carried: the tester's |
+| a code | 400: `MenuRow.qml` (`value`) | **disagree**: 400 (`EclipseSettingsLibrary:70`, `EclipseSettingsEmuSen:72`); a cheat's code 700 (`EclipseCheats:75`, `:87`) | not carried: the tester's |
+| a section tab | 400: `SettingsFrame.qml:70` | the chosen tab 600, the rest 400 (`EclipseSettings:94`) | not carried: a chosen weight, the same question as a card's focused row |
+
+`EclipseLaunch:28` draws a game's title at 700 on a launch screen the program does not draw; its launch question is a
+dialog, 600 (`EclipseDialog`). Every weight named for Eclipse is one of Sora's four files (300, 400, 600, 700); Qt
+matches weight after family and size ("the remaining attributes are matched in order of priority: fixedPitch,
+pointSize, weight, style", doc.qt.io, Qt 6, `QFont`, read 2026-11-15), so a weight Sora lacks is drawn in the nearest
+file Qt picks, as `Font.Medium` was drawn in Sora Regular. The tokens are whole numbers in `theme.json`; a text sets
+`font.weight` from its kind's token, its other weights its own.
+
+**Fit under Eclipse.** Measured 2026-11-15 on the software backend: the kit's gate (`Scene::audit`) at the five sizes of
+`harness::SIZES`, walked, over Settings' six sections and the Themes tab, under the reference and then under Eclipse,
+leaving out the palette and contrast rules (they were judged against the kit's palette, not Eclipse's). No text runs past
+its box, is cut at a foot or an edge, or overlaps under Eclipse. The ROM folder's path is cut with an ellipsis at 1280 ×
+800 and 1920 × 1200 under Eclipse and at all five sizes under the reference, as `MenuRow` cuts a long path at its start.
+187 texts are too small to read under Eclipse and none under the reference: at 1280 × 720 every row's label and value
+(16 px, Eclipse's `fontRow`) and the pane's lines (14 px, `fontBody`), 135 findings; at the four other sizes the pane's
+sentence and lines and the Themes tab's line (14 px), 13 at each. They follow Eclipse's type sizes, not its face; the
+sizes are another piece's. The findings, each with its screen, size, words and pixel size, are kept with the piece's
+evidence.
+
+**Tests.** `kit-qt/tests/faces.rs`: `BUNDLED` is the families of the folder's files and every file is in the resource;
+each bundled family is drawn as itself (the family Qt matched, `QFontInfo`: "if the requested font is not available,
+the font matcher chooses the closest", doc.qt.io, Qt 6, `QFontInfo`, read 2026-11-15); the reference's four values; a
+theme's faces in its variant, an unbundled one left. `qt-app/tests/eclipse_faces.rs`
+`kit_7_117_…`: under the reference the wordmark draws Barlow Condensed, the status line Barlow and a settings row the
+application's font; under Eclipse a settings row draws Sora and the ROM folder's path JetBrains Mono, Eclipse's engine
+gives its texts Sora, and the reference's Home on an engine holding Eclipse's overrides draws its wordmark and status
+line in Sora; the reference again as before. The same test reads each weight drawn (`QFontInfo::weight`): the
+reference's row label, value and sentence 400 and its wordmark 300; Eclipse's 400, 400 and 300, and its wordmark 600. The harness's tree reports each text's `drawn` family beside the `face` it
+asks for. Kit 1.7, Theme 1.3.
+
 ### 7.118 Backdrop: a screen's blurred colour fields or picture (2026-11-15)
 
 Decided 2026-11-15 by the tester (R-20261115-6): a kit part themes may use. On the card it draws as the boards do. On the
@@ -4153,16 +4293,21 @@ picture filling the box at `sourceBlur`, in the fields' place. A field's blur is
 standard deviation (Filter Effects 1, `blur()`: "The passed parameter defines the value of the standard deviation to the
 Gaussian function"; w3.org/TR/filter-effects-1, read 2026-11-15).
 
-- *On the graphics card* each field is a layer blurred by a `MultiEffect` with `blur` 1, `blurMax` 64 and a
-  `blurMultiplier` of the radius over 64 less one. Qt's page (qml-qtquick-effects-multieffect, read 2026-11-15) says that
-  `blurMax` is "the maximum pixel radius that blur with value 1.0 will reach", meaningful "from 2 (subtle blur) to 64 (high
-  blur)". It says that the multiplier "extends the blur radius, but decreases the blur quality" and is "more performant
-  ... for a bigger blur radius than blurMax". It gives no formula for either. The radius is read as a box-shadow's blur
-  radius, twice the deviation (CSS Backgrounds 3 §6.1.2). How close the result is to the Gaussian is printed by
-  `tests/backdrop_gpu.rs` beside the rule and is not asserted. Measured 2026-11-15 on the desktop's RX 6800, a field of
-  blur 40 across its straight edge, the field's share against the rule's: 0.92/0.84 40 inside, 0.46/0.50 at the edge,
-  0.17/0.31 20 past it, 0.06/0.16 at 40, 0.006/0.023 at 80. The card's blur is narrower than the CSS filter's, about
-  half its reach. Reading MultiEffect's radius as the deviation itself, not twice it, was not measured.
+- *On the graphics card* each field is blurred by the kit's `GaussianBlur` (2026-11-15), a Gaussian of the field's
+  deviation out to three deviations, as CSS's `blur()` is. It replaced a `MultiEffect`, which is not a Gaussian: Qt's page
+  (qml-qtquick-effects-multieffect, read 2026-11-15) gives `blurMax` as "the maximum pixel radius that blur with value 1.0
+  will reach" and no kernel, and its source (qtdeclarative v6.11.2 `src/effects/qquickmultieffect.cpp:1610-1631`,
+  `calculateLod` and `getBlurWeights`; `src/effects/data/shaders/bluritems.frag`, `.vert`) blends up to five
+  half-resolution four-tap box passes by weights of a level of detail, `sqrt(blur × blurMax / 64) × 1.2 − 0.2`. With
+  `blur` 1 the least radius is `blurMax` itself, so no deviation under it could be drawn (the streaks, 18 and 22 px, came
+  out at 64 and vanished). Measured 2026-11-15 on the RX 6800 with MultiEffect, a field of blur 40, the share 20 px past
+  its edge was 0.17 where the Gaussian gives 0.31. `GaussianBlur` draws the field into a texture of a texel of up to an
+  eighth of the deviation (`ShaderEffectSource.textureSize`), runs two separable passes of `shaders/gaussian.frag`
+  (`ShaderEffect`, baked by `qsb` in `build.rs`) of eight texels' deviation less the variance the coarse drawing and the
+  bilinear reading add (a twelfth and a sixth of a texel squared), and draws the result in the field's place: at most 49
+  taps a pass whatever the deviation. `tests/backdrop_gpu.rs` holds an ellipse's drawn share at eight distances across its
+  edge against the ellipse convolved with the Gaussian, summed in the test at half-pixel steps: worst 0.0163, held within
+  0.02 (measured 2026-11-15; 0.6423 drawn for 0.6260 at 20 px inside the edge).
   In a theme's engine the sandbox lets through exactly the four files of Qt's own that MultiEffect's blur loads: `qrc:/data/BlurItem.qml`, its folder's
   `qmldir`, and `qrc:/data/shaders/bluritems.vert.qsb` and `.frag.qsb` (`theme-host/src/policy.rs`, `QT_FILES`;
   qtdeclarative v6.11.2 `src/effects/qquickmultieffect.cpp:1763-1765`). Without them no theme could blur.
@@ -4174,7 +4319,12 @@ Gaussian function"; w3.org/TR/filter-effects-1, read 2026-11-15).
 
 Tests: `tests/backdrop.rs` (software) holds the ground, each field's colour at its opacity over the ground, its sharp
 edge, the streak's turn, and a picture drawn at its opacity in the fields' place. `tests/backdrop_gpu.rs` (the card, a GPU job) holds the field
-blurred past its edge, the ground where no field reaches, and the picture in the fields' place. Kit 1.8, Theme 1.4.
+blurred past its edge as the Gaussian is, the ground where no field reaches, and the picture in the fields' place. A
+An ellipse field is a circle as wide as its box (a `Rectangle` of half its width's radius) scaled to the box's height, a
+painted ground as the disc is, where a `Shape` was read by the fit audit as a picture past the panel and over words (seen
+2026-11-15 when Eclipse's Home drew its fields). A
+picture in the fields' place (`source`) is still blurred by `MultiEffect`; Eclipse's Home no longer draws one. Kit 1.8,
+Theme 1.4.
 
 ### 7.119 Glow for themes, and its offset (2026-11-15)
 
@@ -4194,10 +4344,43 @@ offset is added to the canvas's shadow offset. EmuSen.Theme 1.4 exports `Glow` b
 same glow unmoved draws `offset` further out and nearer in, within one level of 255 on the software backend and two on
 the card, and nothing inside the box. Kit 1.8.
 
+
+### 7.120 GroupGridLayout: groups as a column and the chosen group as a grid (2026-11-15)
+
+`kit-core/src/group_grid.rs` (`group_grid`) takes each item's group and place in its group, in a model's order, and a
+number of columns. It gives each item its column and row in its group's grid, and its left, right, up and down neighbours
+inside that grid: none past the grid's edge. Down from a row lands on the item below, or on the last item when the next
+row is shorter, and gives none from the last row. It also gives each group's first item and its number of rows. It names
+no console. `kit-qt/src/group_grid.rs`, **`GroupGridLayout`**, reads the two roles (`groupRole`, `group` by default;
+`indexRole`, `groupIndex`) from any list model when `read()` is called or the model changes. It lays out again when
+`columns` changes, and gives the lists `columnOf`, `rowOf`, `left`, `right`, `up`, `down`, `firsts` and `rows`, with -1
+for none. A screen places an item at its column and row and answers each arrow in the item's own `Keys.onPressed` from the neighbour's index; Eclipse's Choose a console uses no `KeyNavigation`, which writes back links of its own and skips a hidden delegate (EmuSen_Qt.md §3.4.9). The
+edges of the grid are the screen's to join: to its group's heading, to an action. Exported to themes in EmuSen.Theme 1.5
+(Eclipse's Choose a console, EmuSen_Qt.md §3.4.9). Kit 1.9.
+
+**Proof.** kit-core's `tests/group_grid.rs`: two interleaved groups at four columns, with each item's place, the groups'
+firsts and rows; a walk that stays inside its group, with Down landing on a short row's last item; and one column and no
+items. A fourth holds the walk at one to six columns on one group of 1, of a row's worth, of 11, 30 and 40, and on 120 items
+in seven interleaved groups, 40 in one: every neighbour is the one the grid's arithmetic gives (along the row, the row
+above, the row below or the last item when that row is short), no press toward an item that lies that way gives none, and
+every item is reached from its group's first. theme-qt's harness scene reads the consoles through it after the list resets.
+
 ### 7.121 A look's type size and the legibility floor (2026-11-15)
 
-Decided 2026-11-15 by the tester (R-20261115-14): any Eclipse text under the kit's legibility floor is raised to the
-smallest size that passes; larger text keeps the boards' sizes. kit-core's `tokens::legible_text(base, textScale,
+Decided 2026-11-15 by the tester (R-20261115-24, replacing R-20261115-14 and -22 for Eclipse's own screens): every text
+an Eclipse board draws is drawn at the board's size, weight, spacing and case, none raised; legibility is the tester's own
+work. Words written in the built-in Eclipse's `parts/Line.qml` under the floor, and (R-20261115-29) under their contrast,
+are accepted by those rulings (`audit::eclipse_board_words` over `ECLIPSE_LINE_RESOURCE` and `eclipse_line_checkout`,
+the `EclipseBoardType` row of `accepted.rs`, the exemptions "too small to read, a named exception" and "low contrast as
+Eclipse's board draws it"), and the findings stay printed as accepted. What it lets through, exactly: words whose file is
+`qrc:/emusen/themes/eclipse/parts/Line.qml`, or the one `file://` URL of the checkout kit-core was built from, its path
+resolved (`fs::canonicalize`); no other folder, though its path end the same (until 2026-11-15 any `file://` path ending
+`/Frontend/themes/eclipse/parts/Line.qml` passed), and no theme of the player's. For those words it excuses a size under
+the floor and any contrast, with no lower bound; cut-off, ellipsis, overlap and reach are still findings.
+The program's own screens under Eclipse (Settings, the cards) are not covered and still draw through the kit's column
+below. Test: kit-core's `tests/exempted.rs`. EmuSen.Theme's `Type` and kit-qt's
+`type_size::legible` and `legible_in`, which raised Eclipse's words, are removed, since nothing calls them. What follows
+holds the kit's own `Tokens` column, which the program's own screens read under every look, Eclipse's included. kit-core's `tokens::legible_text(base, textScale,
 caps_at)` is the rule. It takes `scaled_text` of the board's size in canvas units, then raises it by the kit's half units
 until the capitals' height of the face (`caps_at`) reaches the fit audit's floor at every size the gate runs at,
 `audit::smallest_capitals_in_units()`. The audit holds a window's capitals in its own pixels to `smallest_capitals()`
@@ -4208,8 +4391,18 @@ now owns and qt-test's harness re-exports (seen 2026-11-15 by the games view's a
 under the first rule, which held the floor at 1280 × 800 alone). kit-qt's `type_size::legible` measures the capitals with Qt (`QFontMetricsF::capHeight`, `cpp/text_width.cpp`)
 for the application's face, the one a Text with no family takes, at the whole pixel size Qt draws: a real handed to a Text's
 `font.pixelSize` is taken to the nearest, seen 2026-11-15 (74.67 drawn at 75), and a `Qt.font({ pixelSize })` truncates it
-(16.5 drawn at 16), so a part sets `labelFont.pixelSize`, never `Qt.font`. EmuSen.Theme 1.4's `Type.size(base, textScale)`
-gives it to a theme; the text scale is an argument so a binding follows `Tokens.textScale`. Once the typeface piece adds the
-look's face, `caps_at` reads that face. Tests: kit-core's `tests/legible_text.rs` holds the rule itself. qt-app's `eclipse_home`
-holds every Eclipse text at the rule's size, and its table lists which were raised.
+(16.5 drawn at 16). Tests: kit-core's `tests/legible_text.rs` holds the rule itself.
+
+**A theme's size tokens.** The same rule holds the `Tokens` sizes a theme sets: kit-core's `tokens::legible_type(form,
+bases, textScale, caps_at)` gives each big-screen type size as `legible_text` of its base, and `legible_header` the
+heading's at text scale 1; on the desktop they are `scaled_text` alone, since the floor is the big screen's. kit-qt's
+`Column::themed` makes the `Tokens` column with them, `caps_at` being `type_size::caps`, the application's face measured by
+Qt. Each is held at the whole size under it, since the program's rows set their size through `Qt.font`, which truncates a
+half pixel: seen 2026-11-15, Eclipse's rows held at the size itself drew at 18, whose capitals at 1280 × 720 are 11.57 px
+where the floor there is 11.60. Eclipse's tokens were read off its boards (`fontRow` 16, `fontBody` 14, `fontCaption` 15.33), so under Eclipse the
+program's own screens drew Settings rows and pane lines under the floor; they are now raised. The kit's own big-screen
+sizes (20 and above) pass the floor, so the reference's sizes do not move. Tests: kit-core's `legible_text.rs`
+(`kit_7_121_a_theme_s_size_tokens_are_never_under_the_floor_on_the_big_screen`), kit-qt's `column.rs`, qt-app's `eclipse`,
+and qt-app's `eclipse_floor`, which uses Eclipse and runs the kit's gate's legibility rule over the Themes tab and Settings'
+six sections at every gate size: 85 words under the floor at 1280 × 720 before, none after.
 

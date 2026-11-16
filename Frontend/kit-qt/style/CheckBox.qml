@@ -12,6 +12,7 @@ T.CheckBox {
     implicitHeight: Math.ceil(Math.max(implicitBackgroundHeight + topInset + bottomInset, implicitContentHeight + topPadding + bottomPadding, implicitIndicatorHeight + topPadding + bottomPadding))
     padding: Kit.Tokens.base * 2
     spacing: Kit.Tokens.base * 2
+    font.family: Kit.Tokens.faceInterface
     font.pixelSize: Kit.Tokens.fontBody
     indicator: Rectangle {
         implicitWidth: Kit.Tokens.fontBody * 1.4

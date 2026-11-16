@@ -28,11 +28,11 @@ Kit.NormalizedCanvas {
             choices: launchCanvas.launch.choices
             backIndex: launchCanvas.launch.backIndex
             padFamily: launchCanvas.padFamily
-            titleFont: Qt.font({ family: launchFaces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
-            bodyFont: Qt.font({ family: launchFaces.regular, pixelSize: Kit.Tokens.fontBody })
-            captionFont: Qt.font({ family: launchFaces.regular, pixelSize: Kit.Tokens.fontCaption })
-            rowFont: Qt.font({ family: launchFaces.regular, pixelSize: Kit.Tokens.fontRow })
-            helpFont: Qt.font({ family: launchFaces.regular, pixelSize: 20 })
+            titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
+            bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
+            captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
+            rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
+            helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
             help: HelpModel {
                 screen: launchCanvas.launch.help
             }
@@ -41,8 +41,5 @@ Kit.NormalizedCanvas {
         Binding {
             launchQuestion.visible: launchCanvas.launch.asking
         }
-    }
-    Faces {
-        id: launchFaces
     }
 }

@@ -242,6 +242,12 @@ impl LibrarySource for ClientSource {
         Ok(games.iter().filter_map(of).collect())
     }
 
+    fn screens(&self) -> Result<Vec<(String, String)>, String> {
+        let catalogue = emusen_platform_client::serenity::catalogue(&self.platform).map_err(words)?;
+        let text = |s: &Value, key: &str| s[key].as_str().unwrap_or_default().to_owned();
+        Ok(catalogue["screens"].as_array().into_iter().flatten().map(|s| (text(s, "console"), text(s, "kind"))).collect())
+    }
+
     fn collections(&self) -> Result<Vec<Collection>, String> {
         let all = self.library.get(&json!({ "what": "collections" })).map_err(words)?;
         let mut out = Vec::new();

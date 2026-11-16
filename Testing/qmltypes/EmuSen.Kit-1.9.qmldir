@@ -1,0 +1,52 @@
+module EmuSen.Kit
+optional plugin EmuSen_Kit
+classname EmuSen_Kit_plugin
+typeinfo plugin.qmltypes
+depends QtQuick
+depends QtQuick.Shapes
+depends QtMultimedia
+depends QtQuick.Pdf
+prefer :/qt/qml/EmuSen/Kit/
+Walkable 1.9 qml/Walkable.qml
+Body 1.9 qml/Body.qml
+Sky 1.9 qml/Sky.qml
+Moonrise 1.9 qml/Moonrise.qml
+Frame 1.9 qml/Frame.qml
+Card 1.9 qml/Card.qml
+Sheet 1.9 qml/Sheet.qml
+Question 1.9 qml/Question.qml
+HelpBar 1.9 qml/HelpBar.qml
+MenuPanel 1.9 qml/MenuPanel.qml
+MenuRow 1.9 qml/MenuRow.qml
+WholeRow 1.9 qml/WholeRow.qml
+Carousel 1.9 qml/Carousel.qml
+NormalizedCanvas 1.9 qml/NormalizedCanvas.qml
+PadGlyph 1.9 qml/PadGlyph.qml
+Scene 1.9 qml/Scene.qml
+Keyboard 1.9 qml/Keyboard.qml
+NoticeLayer 1.9 qml/NoticeLayer.qml
+RoundPicture 1.9 qml/RoundPicture.qml
+CoverTile 1.9 qml/CoverTile.qml
+OrbitSlot 1.9 qml/OrbitSlot.qml
+EdgeFade 1.9 qml/EdgeFade.qml
+SettingsFrame 1.9 qml/SettingsFrame.qml
+ChoiceRow 1.9 qml/ChoiceRow.qml
+SliderRow 1.9 qml/SliderRow.qml
+SectionStrip 1.9 qml/SectionStrip.qml
+ToolScreen 1.9 qml/ToolScreen.qml
+PageFrame 1.9 qml/PageFrame.qml
+ToneText 1.9 qml/ToneText.qml
+ActionButton 1.9 qml/ActionButton.qml
+VideoTile 1.9 qml/VideoTile.qml
+VideoClip 1.9 qml/VideoClip.qml
+RaisedShadow 1.9 qml/RaisedShadow.qml
+ControllerDrawing 1.9 qml/ControllerDrawing.qml
+PdfPage 1.9 qml/PdfPage.qml
+Glow 1.9 qml/Glow.qml
+FocusRing 1.9 qml/FocusRing.qml
+PlanetMark 1.9 qml/PlanetMark.qml
+CoronaGlow 1.9 qml/CoronaGlow.qml
+CoronaDisc 1.9 qml/CoronaDisc.qml
+BackdropField 1.9 qml/BackdropField.qml
+Backdrop 1.9 qml/Backdrop.qml
+GaussianBlur 1.9 qml/GaussianBlur.qml

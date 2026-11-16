@@ -10,11 +10,15 @@ Item {
     required property var controller
     property bool searchable: true
     property bool glass: true
+    // The battery's charge before the clock, where the machine has a battery (EclipseConsoles:36).
+    property bool battery: false
     property color glassColor: "transparent"
     property real tall: 56
     property real pad: 22
     property real gap: 22
     property real size: 22
+    // Scene pixels to a canvas unit, so the search's ring glows at the pixels drawn (EmuSen_Kit.md §7.119).
+    property real pixelScale: 1
     readonly property Item search: searchButton
     // Where Down takes the focus from the search.
     property Item below: null
@@ -42,6 +46,7 @@ Item {
         FocusRing {
             anchors.fill: parent
             radius: width / 2
+            pixelScale: root.pixelScale
             visible: searchButton.activeFocus
         }
         Item {
@@ -85,14 +90,29 @@ Item {
             }
         }
     }
-    Text {
-        id: clock
-        objectName: "clock"
+    // Made only where a board draws the battery and the machine reports one, so otherwise no element of it is held.
+    Loader {
+        id: charge
+        active: root.battery && Words.percent(Device.battery).length > 0
         x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
         y: (root.height - height) / 2
-        text: Device.clock
+        sourceComponent: Line {
+            objectName: "battery"
+            unit: root.unit
+            text: Words.percent(Device.battery)
+            color: Tokens.text
+            size: root.size
+        }
+    }
+    Line {
+        id: clock
+        objectName: "clock"
+        unit: root.unit
+        x: charge.item !== null ? charge.x + charge.width + root.gap * root.unit : charge.x
+        y: (root.height - height) / 2
+        text: Device.shortTime
         color: Tokens.text
-        font.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
-        font.weight: Font.DemiBold
+        size: root.size
+        weight: Font.DemiBold
     }
 }

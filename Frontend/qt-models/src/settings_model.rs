@@ -250,6 +250,12 @@ pub mod qobject {
         #[cxx_name = "cardAct"]
         fn card_act(self: Pin<&mut SettingsModel>, index: i32, by: i32);
 
+        /// The consoles' section with `console`'s page open, as Choose a console's options ask for it; false where no
+        /// engine runs the console.
+        #[qinvokable]
+        #[cxx_name = "openConsole"]
+        fn open_console(self: Pin<&mut SettingsModel>, console: &QString) -> bool;
+
         /// The card's Display (`page` "display", on `console`'s rows) or Sound opened.
         #[qinvokable]
         #[cxx_name = "cardOpen"]
@@ -556,6 +562,7 @@ const MINIMUM: i32 = 7;
 const MAXIMUM: i32 = 8;
 const STEP: i32 = 9;
 const AMOUNT: i32 = 10;
+const CODE: i32 = 11;
 
 impl qobject::SettingsModel {
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
@@ -569,6 +576,7 @@ impl qobject::SettingsModel {
             HELD => QVariant::from(&row.held),
             MARKED => QVariant::from(&row.marked),
             KEY => text(&row.id),
+            CODE => QVariant::from(&row.code),
             MINIMUM..=AMOUNT => self.view.slider(index.row() as usize).map_or_else(QVariant::default, |s| QVariant::from(&s[(role - MINIMUM) as usize])),
             _ => QVariant::default(),
         }
@@ -578,7 +586,7 @@ impl qobject::SettingsModel {
         let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
         for (role, name) in [(LABEL, "label"), (VALUE, "value"), (SENTENCE, "sentence"), (KIND, "kind"), (HELD, "held"), (MARKED, "marked"), (KEY, "key")]
             .into_iter()
-            .chain([(MINIMUM, "minimum"), (MAXIMUM, "maximum"), (STEP, "step"), (AMOUNT, "amount")])
+            .chain([(MINIMUM, "minimum"), (MAXIMUM, "maximum"), (STEP, "step"), (AMOUNT, "amount"), (CODE, "code")])
         {
             roles.insert(role, QByteArray::from(name));
         }
@@ -989,7 +997,19 @@ impl qobject::SettingsModel {
         self.outcome(outcome);
     }
 
-    pub fn card_open(mut self: Pin<&mut Self>, page: &QString, console: &QString) {
+    pub fn open_console(mut self: Pin<&mut Self>, console: &QString) -> bool {
+        if self.view.running_row(&console.to_string()).is_none() {
+            return false;
+        }
+        // The strip's section first, whose change closes every page, then the console's page over it.
+        let section = self.view.section_of("consoles") as i32;
+        self.as_mut().set_section(section);
+        let opened = self.as_mut().rust_mut().view.open_console(&console.to_string());
+        self.draw();
+        opened
+    }
+
+        pub fn card_open(mut self: Pin<&mut Self>, page: &QString, console: &QString) {
         let Some(page) = crate::settings_card::CardPage::of(&page.to_string()) else { return };
         self.as_mut().rust_mut().view.card_open(page, &console.to_string());
         self.draw();

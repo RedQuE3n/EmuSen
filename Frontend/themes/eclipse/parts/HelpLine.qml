@@ -33,10 +33,30 @@ Item {
         color: "transparent"
         labelColor: root.ink
         iconColor: Tokens.muted
-        labelFont.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
+        // The main action's glyph filled in the corona, its letter cut out of it, as the board draws A (Main:101).
+        leadStyle: PadGlyph.Filled
+        leadColor: Tokens.accent
+        labelFont.family: Tokens.faceText
+        // The words at the board's size, which a font's whole pixel size cannot hold in canvas units (parts/Line.qml).
+        label: Component {
+            Line {
+                unit: root.unit
+                size: root.size
+            }
+        }
         entrySpacing: root.spacing * root.unit
         glyphGap: root.glyphGap * root.unit
         glyphSize: root.glyphSide * root.unit
+        // The canvas's unit is no pixel, so the entries are centred exactly, as the board centres them (Main:93).
+        snapped: false
+        // The boards' glyphs: letters in the face in a 2 px ring, A filled, Menu and the shoulders named in a capsule (Main:94-97).
+        glyph: Component {
+            Glyph {
+                unit: root.unit
+                side: root.glyphSide
+                ink: root.ink
+            }
+        }
     }
     Item {
         id: sideSlot

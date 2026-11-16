@@ -11,6 +11,7 @@ use emusen_client_fixture::World;
 use emusen_kit_core::tokens::Variant;
 use emusen_qt_test::Harness;
 use emusen_theme_qt::actions::{Action, ActionSink};
+use emusen_theme_qt::help::Names;
 use emusen_theme_qt::bells::Striker;
 use emusen_theme_qt::cues::{Cue, CuePlayer};
 use emusen_theme_qt::device::DeviceFacts;
@@ -78,6 +79,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "firstConsole"), "nes");
     assert_eq!(scene.property("orbits", "orbitCount"), "1", "the orbits read the consoles' groups when the list resets");
     assert_eq!(scene.property("figures", "count"), "1", "the figures read the consoles' groups when the list resets");
+    assert_eq!((scene.property("grids", "count").as_str(), scene.property("grids", "groups").as_str()), ("1", "1"), "the group grid reads the consoles' groups when the list resets");
     assert_eq!(scene.property("wheels", "count"), "1", "the wheels read the consoles' groups when the list resets");
     assert_eq!(scene.property("wheels", "wheel"), "0", "the first console's wheel turned to it");
     assert_eq!(scene.property("wheels", "dialWidth"), "544", "three places and one maker on the dial");
@@ -93,7 +95,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "secondPlace"), "Scraper", "the row changed in place");
     {
         let library = host::library(within(window)).unwrap();
-        for (list, roles) in [("consoles", 16), ("places", 7), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
+        for (list, roles) in [("consoles", 19), ("places", 7), ("shelves", 4), ("recent", 19), ("shelf", 19), ("favourites", 19), ("collections", 3)] {
             assert_eq!(library.list(list).map(|l| l.roles().len()), Some(roles), "{list}'s roles");
         }
     }
@@ -152,6 +154,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         "No games yet|Nothing played yet|No consoles have games yet|Settings › Library adds a folder|PLACES|Continue|Recent"
     );
     assert!(scene.property("scene", "paused").starts_with("Paused "), "pausedAgo from the models' words");
+    assert_eq!(scene.property("scene", "placeLine"), "3 of 14|Nintendo · 1990", "a place among a list and a line of parts, from the models' words");
     // Words.now holds the time the phrases are said against, as the program's held clock sets it (decided 2026-11-09).
     host::words(within(window)).unwrap().show_now(1_000_000.0);
     host::session(within(window)).unwrap().show(&SessionFacts {
@@ -174,10 +177,17 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         // Safety: the help's lists are its children.
         let entries = unsafe { help.entries(kind).as_ref() }.expect("a list for every kind");
         assert!(!emusen_qt_models::help::entries(entries.screen()).is_empty(), "kind {} has entries", kind.repr);
-        for (group, back, accept, letters) in emusen_theme_qt::help::FLAGS {
-            let added = unsafe { help.list(kind, group, back, accept, letters).as_ref() }.expect("a list for every kind and flag");
-            assert_eq!(added.list(), emusen_qt_models::help::entries_with_letters(entries.screen(), group, back, letters), "kind {}", kind.repr);
-            assert_eq!(added.action_lines().to_string(), emusen_qt_models::help::action_lines_with(entries.screen(), letters), "kind {}", kind.repr);
+        for (group, back, accept, actions, names, letters) in emusen_theme_qt::help::FLAGS {
+            let added = unsafe { help.list(kind, group, back, accept, actions, names, letters).as_ref() }.expect("a list for every kind and flag");
+            let grouped = emusen_qt_models::help::entries_grouped(entries.screen(), group, back);
+            let want = if actions { grouped } else { emusen_qt_models::help::without_actions(grouped) };
+            let want = match names {
+                Names::Own => want,
+                Names::Card => emusen_qt_models::help::card_named(want),
+                Names::Options => emusen_qt_models::help::options_named(want),
+            };
+            assert_eq!(added.list(), emusen_qt_models::help::with_letters(entries.screen(), want, letters), "kind {}", kind.repr);
+            assert!(added.action_lines().to_string().ends_with(&emusen_qt_models::help::letter_lines(entries.screen(), letters)), "kind {}", kind.repr);
             assert_eq!(added.accepts(), accept, "kind {}", kind.repr);
         }
     }

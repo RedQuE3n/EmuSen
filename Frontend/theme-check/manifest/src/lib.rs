@@ -368,7 +368,7 @@ fn read_tokens(r: &mut Reader<'_>, m: &mut Manifest, tokens: &Value) {
                 Value::Number(n) => TokenValue::Number(n.as_f64().unwrap_or(f64::NAN)),
                 Value::Bool(b) => TokenValue::Switch(*b),
                 _ => {
-                    r.find(&["tokens", variant_name, name], Kind::Schema, format!("{name} is a value: a colour, a number or true/false"));
+                    r.find(&["tokens", variant_name, name], Kind::Schema, format!("{name} is a value: a colour, a face, a number or true/false"));
                     continue;
                 }
             };

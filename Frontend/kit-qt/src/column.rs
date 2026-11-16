@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use emusen_kit_core::motion::{breathes_if, movement, Curve, MotionToken, BREATH_DELAY, BREATH_LOW, BREATH_PERIOD};
-use emusen_kit_core::tokens::{self, Colour, ColourToken, Corona, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
+use emusen_kit_core::tokens::{self, BUNDLED, Colour, ColourToken, Corona, FaceRole, FocusMarks, WeightRole, Form, Shadow, Spacing, TypeScale, Variant};
 
 /// QEasingCurve::Type's number for a kit-core curve, so QML binds `easing.type` to a token.
 pub fn easing_type(curve: Curve) -> i32 {
@@ -30,6 +30,10 @@ pub struct Column {
     pub corona: Corona,
     /// The corona's rim, glow and halo colours, in `Corona::COLOUR_PROPERTIES`' order.
     pub corona_colours: [Colour; 3],
+    /// Each role's family in `FaceRole::ALL`'s order: a bundled face, or none for the platform's default font.
+    pub faces: [Option<&'static str>; 4],
+    /// Each kind's weight in `WeightRole::ALL`'s order.
+    pub weights: [i32; 3],
     pub durations: [i32; 8],
     pub fades: [i32; 8],
     pub curves: [i32; 8],
@@ -47,6 +51,8 @@ struct Bases {
     focus: FocusMarks,
     shadow: Shadow,
     corona: Corona,
+    faces: [Option<&'static str>; 4],
+    weights: [i32; 3],
     durations: [i32; 8],
     fades: [i32; 8],
     curves: [i32; 8],
@@ -63,6 +69,7 @@ enum Slot<'a> {
     Whole(&'a mut i32),
     Switch(&'a mut bool),
     Colour(&'a mut Colour),
+    Face(&'a mut Option<&'static str>),
 }
 
 impl Bases {
@@ -75,6 +82,8 @@ impl Bases {
             focus: tokens::focus_marks(form),
             shadow: tokens::raised_shadow(form),
             corona: tokens::corona(form),
+            faces: FaceRole::ALL.map(FaceRole::kit),
+            weights: WeightRole::ALL.map(WeightRole::kit),
             durations: nominal,
             fades: nominal,
             curves: MotionToken::ALL.map(|token| easing_type(token.curve())),
@@ -90,6 +99,12 @@ impl Bases {
         use MotionToken as M;
         let (t, sp, f, sh, co) = (&mut self.type_scale, &mut self.spacing, &mut self.focus, &mut self.shadow, &mut self.corona);
         let i = Column::slot;
+        if let Some(role) = FaceRole::of_property(property) {
+            return Some(Slot::Face(&mut self.faces[Column::face_slot(role)]));
+        }
+        if let Some(role) = WeightRole::of_property(property) {
+            return Some(Slot::Whole(&mut self.weights[Column::weight_slot(role)]));
+        }
         Some(match property {
             "fontDisplay" => Slot::Number(&mut t.display),
             "fontTitle" => Slot::Number(&mut t.title),
@@ -175,6 +190,7 @@ impl Bases {
             Some(Slot::Whole(held)) => value.parse::<i32>().map(|v| *held = v).is_ok(),
             Some(Slot::Switch(held)) => value.parse::<bool>().map(|v| *held = v).is_ok(),
             Some(Slot::Colour(held)) => Colour::parse(value).map(|v| *held = v).is_some(),
+            Some(Slot::Face(held)) => BUNDLED.iter().find(|family| **family == value).map(|family| *held = Some(*family)).is_some(),
             None => false,
         }
     }
@@ -185,14 +201,14 @@ fn length(ms: i32) -> Duration {
 }
 
 impl Column {
-    pub fn compute(form: Form, variant: Variant, text_scale: f64, reduced: bool) -> Column {
-        Column::themed(form, variant, text_scale, reduced, &[])
+    pub fn compute(form: Form, variant: Variant, text_scale: f64, reduced: bool, caps_at: &dyn Fn(f64) -> f64) -> Column {
+        Column::themed(form, variant, text_scale, reduced, &[], caps_at)
     }
 
     /// The column with a theme's overrides for this variant, each a `Tokens` property and its value as `theme.json` writes it.
     /// A number or switch becomes the base kit-core makes the token from, so the text scale and reduced motion act on it as on
     /// the kit's own; a colour replaces the palette's or the raised shadow's (EmuSen_Kit.md §7.2, §7.55; EmuSen_Qt.md §3.5.1).
-    pub fn themed(form: Form, variant: Variant, text_scale: f64, reduced: bool, given: &[(String, String)]) -> Column {
+    pub fn themed(form: Form, variant: Variant, text_scale: f64, reduced: bool, given: &[(String, String)], caps_at: &dyn Fn(f64) -> f64) -> Column {
         let mut b = Bases::of(form);
         for (name, value) in given {
             b.set(name, value);
@@ -209,13 +225,15 @@ impl Column {
         let fades = MotionToken::ALL.map(|token| millis(token.fade_of(length(b.fades[Self::slot(token)]), reduced)));
         Column {
             colours: ColourToken::ALL.map(|token| tokens::colour(variant, token)),
-            type_scale: b.type_scale.scaled(text_scale),
-            header: tokens::header_of(form, b.header, text_scale),
+            type_scale: tokens::legible_type(form, &b.type_scale, text_scale, caps_at),
+            header: tokens::legible_header(form, b.header, text_scale, caps_at),
             spacing: b.spacing,
             focus: b.focus,
             shadow: b.shadow,
             corona: b.corona,
             corona_colours,
+            faces: b.faces,
+            weights: b.weights,
             durations,
             fades,
             curves: b.curves,
@@ -243,6 +261,24 @@ impl Column {
 
     fn slot(token: MotionToken) -> usize {
         MotionToken::ALL.iter().position(|t| *t == token).unwrap_or(0)
+    }
+
+    fn face_slot(role: FaceRole) -> usize {
+        FaceRole::ALL.iter().position(|r| *r == role).unwrap_or(0)
+    }
+
+    fn weight_slot(role: WeightRole) -> usize {
+        WeightRole::ALL.iter().position(|r| *r == role).unwrap_or(0)
+    }
+
+    /// The kind's weight, as `Font.weight` takes it.
+    pub fn weight(&self, role: WeightRole) -> i32 {
+        self.weights[Self::weight_slot(role)]
+    }
+
+    /// The role's family: a bundled face, or none for the platform's default font.
+    pub fn face(&self, role: FaceRole) -> Option<&'static str> {
+        self.faces[Self::face_slot(role)]
     }
 
     pub fn colour(&self, token: ColourToken) -> Colour {

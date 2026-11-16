@@ -11,6 +11,7 @@ T.ToolTip {
     implicitHeight: Math.max(implicitBackgroundHeight + topInset + bottomInset, implicitContentHeight + topPadding + bottomPadding)
     margins: Kit.Tokens.base
     padding: Kit.Tokens.base * 2
+    font.family: Kit.Tokens.faceInterface
     font.pixelSize: Kit.Tokens.fontCaption
     closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent | T.Popup.CloseOnReleaseOutsideParent
     contentItem: Text {

@@ -14,9 +14,6 @@ Item {
     PaneModel {
         id: paneModel
     }
-    Faces {
-        id: faces
-    }
     // A disc's cover at 180 square, the generated card edged in Border where it has none, its name and what A does beside it (Mistress's ShowCover).
     Row {
         objectName: "PaneCoverRow"
@@ -48,7 +45,7 @@ Item {
                 width: parent.width
                 text: paneModel.title
                 color: Kit.Tokens.text
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: 22
                 wrapMode: Text.Wrap
             }
@@ -57,7 +54,7 @@ Item {
                 width: parent.width
                 text: paneModel.sentence
                 color: Kit.Tokens.muted
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: 22
                 wrapMode: Text.Wrap
             }
@@ -139,7 +136,7 @@ Item {
                             visible: paneModel.slots && tile.picture.length === 0
                             text: paneModel.blank
                             color: Kit.Tokens.muted
-                            font.family: faces.regular
+                            font.family: Kit.Tokens.faceText
                             font.pixelSize: 22
                         }
                         Rectangle {
@@ -155,7 +152,7 @@ Item {
                         width: parent.width
                         text: tile.name
                         color: tile.ringed || !paneModel.moment ? Kit.Tokens.textStrong : Kit.Tokens.muted
-                        font.family: faces.regular
+                        font.family: Kit.Tokens.faceText
                         font.pixelSize: 20
                         elide: Text.ElideRight
                     }
@@ -164,7 +161,7 @@ Item {
                         visible: !paneModel.moment && tile.when.length > 0
                         text: tile.when
                         color: Kit.Tokens.muted
-                        font.family: faces.regular
+                        font.family: Kit.Tokens.faceText
                         font.pixelSize: 20
                         elide: Text.ElideRight
                     }
@@ -180,7 +177,7 @@ Item {
                 width: 592
                 text: paneModel.sentence
                 color: Kit.Tokens.text
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: 22
                 wrapMode: Text.Wrap
             }
@@ -190,7 +187,7 @@ Item {
                 visible: text.length > 0
                 text: paneModel.muted
                 color: Kit.Tokens.muted
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: 22
                 wrapMode: Text.Wrap
             }

@@ -296,6 +296,8 @@ pub const CHECK: &str = "check";
 /// The shoulders' entry where a screen's shoulders jump a group of its own row, and B's where a screen has none (the
 /// themes' help bars, EmuSen_Qt.md §3.2): no action, since the walk and the theme answer them.
 pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
+/// The group's entry on the triggers, where a screen's triggers step its makers (Eclipse's Choose a console, R-20261115-17).
+pub const MAKER: Entry = (UiButton::First, "Maker", None);
 pub const BACK: Entry = (UiButton::Back, "Back", None);
 /// The triggers on a games view that steps letters (R-20261115-12): LT the letter before, drawn as one entry with RT,
 /// the letter after; the List card's Jump to by the same actions.
@@ -312,8 +314,13 @@ pub fn letters_at(screen: Screen) -> Option<usize> {
 
 /// As `entries_with`, the letters' entry added where the screen takes it and `letters` asks for it.
 pub fn entries_with_letters(screen: Screen, group: bool, back: bool, letters: bool) -> Vec<Entry> {
-    let mut list = entries_with(screen, group, back);
-    if let Some(at) = letters_at(screen).filter(|_| letters) {
+    with_letters(screen, entries_with(screen, group, back), letters)
+}
+
+/// A screen's list with the letters' entry added after its shoulders' entry where the screen takes it and `letters` asks.
+pub fn with_letters(screen: Screen, mut list: Vec<Entry>, letters: bool) -> Vec<Entry> {
+    let at = list.iter().position(|e| e.0 == UiButton::PageUp).map(|at| at + 1);
+    if let Some(at) = at.filter(|_| letters && letters_at(screen).is_some()) {
         list.insert(at, LETTER);
     }
     list
@@ -321,10 +328,13 @@ pub fn entries_with_letters(screen: Screen, group: bool, back: bool, letters: bo
 
 /// As `action_lines`, with the triggers' two actions where the letters' entry is added.
 pub fn action_lines_with(screen: Screen, letters: bool) -> String {
+    action_lines(screen) + &letter_lines(screen, letters)
+}
+
+/// The triggers' two action lines where the screen takes the letters' entry and `letters` asks for it.
+pub fn letter_lines(screen: Screen, letters: bool) -> String {
     let added = if letters && letters_at(screen).is_some() { [LETTER, LETTER_ON].as_slice() } else { &[] };
-    let mut lines = action_lines(screen);
-    lines.extend(added.iter().filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))));
-    lines
+    added.iter().filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
 }
 
 /// A game's page's shared entries: Y the heart, the shoulders the sections (the frame steps them), Start Home.
@@ -352,17 +362,60 @@ pub fn back_at(screen: Screen) -> Option<usize> {
     }
 }
 
+/// A list as Eclipse's Home names it (Main.dc.html:94-97): X the game's options and Start the Home card it opens, and no
+/// Select search, which the theme draws as its own button. The actions are the list's own.
+pub fn card_named(list: Vec<Entry>) -> Vec<Entry> {
+    list.into_iter()
+        .filter(|e| e.0 != UiButton::Options)
+        .map(|(button, label, action)| match (button, action) {
+            (UiButton::Screensaver, Some(GAME_PAGE)) => (button, crate::words::OPTIONS, action),
+            (UiButton::Menu, Some(HOME)) => (button, crate::words::HOME_CARD, action),
+            _ => (button, label, action),
+        })
+        .collect()
+}
+
+/// Choose a console's list as Eclipse's board gives its buttons (EclipseConsoles:46-50, 94): Y steps the order (`SORT`) and
+/// X opens the focused console's options (`CONSOLE_OPTIONS`), in place of Favourites and Random game.
+pub fn options_named(list: Vec<Entry>) -> Vec<Entry> {
+    list.into_iter()
+        .map(|(button, label, action)| match (button, action) {
+            (UiButton::Search, Some(crate::library::FAVOURITES)) => (button, crate::words::SORT, Some(SORT)),
+            (UiButton::Screensaver, Some(RANDOM)) => (button, crate::words::OPTIONS, Some(CONSOLE_OPTIONS)),
+            _ => (button, label, action),
+        })
+        .collect()
+}
+
+/// The frame's action lines of a list as it stands, with the screen's unnamed actions after.
+pub fn lines_of(screen: Screen, list: &[Entry]) -> String {
+    list.iter().chain(unnamed(screen)).filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
+}
+
 /// A screen's entries with the group's and B's added where the screen takes them, B before the group.
 pub fn entries_with(screen: Screen, group: bool, back: bool) -> Vec<Entry> {
+    entries_grouped(screen, group.then_some(GROUP), back)
+}
+
+/// As `entries_with`, the group's entry given: `GROUP` on the shoulders or `MAKER` on the triggers.
+pub fn entries_grouped(screen: Screen, group: Option<Entry>, back: bool) -> Vec<Entry> {
     let mut list = entries(screen).to_vec();
     let has_back = list.iter().any(|e| e.0 == UiButton::Back);
     let back_place = back_at(screen).filter(|_| back && !has_back);
     if let Some(at) = back_place {
         list.insert(at, BACK);
     }
-    if let Some(at) = group_at(screen).filter(|_| group) {
-        list.insert(at + usize::from(back_place.is_some_and(|b| b <= at)), GROUP);
+    if let (Some(at), Some(entry)) = (group_at(screen), group) {
+        list.insert(at + usize::from(back_place.is_some_and(|b| b <= at)), entry);
     }
+    list
+}
+
+/// A list with the entries that carry an action of the screen's own left out (Favourites, Random game): what a board
+/// draws in the bar where it gives those buttons other work; the entries the frame acts on itself (Open, Back, the
+/// group's) stay.
+pub fn without_actions(mut list: Vec<Entry>) -> Vec<Entry> {
+    list.retain(|e| e.2.is_none());
     list
 }
 
@@ -382,6 +435,10 @@ pub const DELETE: &str = "delete";
 /// X in a game's page's media viewer (EmuSen_Interface.md §18.2): the picture shown made the game's cover.
 pub const SET_COVER: &str = "setCover";
 pub const RANDOM: &str = "random";
+/// Y on Eclipse's Choose a console: the next order of the consoles, which the theme keeps.
+pub const SORT: &str = "sort";
+/// X on Eclipse's Choose a console: the focused console's options, Settings' page of it.
+pub const CONSOLE_OPTIONS: &str = "consoleOptions";
 
 /// The shoulders on the grid: the console before and the console after (Mistress's `StepSection`).
 pub const PREVIOUS: &str = "previous";
@@ -391,19 +448,19 @@ pub const NEXT: &str = "next";
 pub const CLOSE: &str = "close";
 
 /// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them, and
-/// the d-pad's Left and Right one entry.
+/// the d-pad's Left and Right one entry; the triggers too, LT and RT.
 pub fn pair_of(button: UiButton) -> Option<UiButton> {
     match button {
         UiButton::PageUp => Some(UiButton::PageDown),
-        UiButton::Left => Some(UiButton::Right),
         UiButton::First => Some(UiButton::Last),
+        UiButton::Left => Some(UiButton::Right),
         _ => None,
     }
 }
 
 /// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.19).
 pub fn action_lines(screen: Screen) -> String {
-    entries(screen).iter().chain(unnamed(screen)).filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
+    lines_of(screen, entries(screen))
 }
 
 /// A screen's actions its help bar does not name: Start on Choose a console goes Home, as Mistress's

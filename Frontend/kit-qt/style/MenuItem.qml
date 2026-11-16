@@ -13,6 +13,7 @@ T.MenuItem {
     padding: Kit.Tokens.base * 2
     leftPadding: Kit.Tokens.base * 4
     spacing: Kit.Tokens.base * 2
+    font.family: Kit.Tokens.faceInterface
     font.pixelSize: Kit.Tokens.fontRow
     icon.width: Kit.Tokens.fontRow * 1.5
     icon.height: Kit.Tokens.fontRow * 1.5

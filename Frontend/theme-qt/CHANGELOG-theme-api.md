@@ -23,6 +23,41 @@ Decided 2026-11-15 by the tester (R-20261115-10 to -13): a theme reads and drive
   "No games yet").
 - The module is 1.7 (1.3, 1.5 and 1.6 being held by other pieces, 1.4 the backdrop and the glow); every type keeps the minor it was added in.
 
+## 1.5, an addition: a console's played games (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played games is added to what a theme may read.
+
+- **`Library.consoles`' `played`** (added role): how many of the console's games were played, a game counting as played
+  when the catalogue holds a last-played time for it (`Catalog::played`, `qt-models/src/library.rs`), the same rule as a
+  game row's `played`. Counted once, where the library's rows are built (`library::rows`), not per frame or per console list.
+- **`Library.consoles`' `glow`** (added role): the console's own colour as `#RRGGBB`, the glow kit-core gives its body
+  (`world::glow`), so a theme's corona and the Sky agree (R-20261115-9).
+- **`Words.line(parts)`** (the parts joined as the facts join theirs, " · ", the empty
+  ones left out; `words::facts` now calls it) (added).
+- **`Help.entries(kind, {triggers: true})`** (added flag): with `group`, the group's entry is LT RT Maker on the triggers
+  (`help.rs`'s `MAKER`) in place of LB RB Group, as Eclipse's Choose a console steps its makers (decided 2026-11-15 by the
+  tester, R-20261115-17). The pair is drawn as one glyph, LT with RT.
+- **`Library.consoles`' `screen`** (added role): the screen the console drove, in words ("CRT, television", "LCD";
+  `words::screen`), from Serenity's catalogue of screens (`emusen_serenity_filters`' `screens`, read through
+  `LibrarySource::screens` once a refresh); empty where the catalogue names none. For Eclipse's facts table
+  (EclipseConsoles:87).
+- **`Words.factLabels`** ("Games", "Played", "Core", "Screen", `words::FACT_LABELS`) and **`Words.count(n)`** (a count
+  grouped by thousands, `words::grouped`) (added), for the same table's labels and values.
+- **`Help.entries(kind, {actions: false})`** (added flag): the entries that carry the screen's own actions (Choose a
+  console's Favourites and Random game) left out (`help::without_actions`), for a board that draws neither in its bar
+  (EclipseConsoles:99-104); Open, Back and the group's entry stay.
+- **`Library.consolesBy(show, order)`** (added): the consoles a core runs, those with no game among them, as Choose a
+  console's chips show them (0 All, 1 With games, 2 Favourites) in an order (0 maker, 1 year, 2 name, 3 games), each
+  maker's together (`console_list.rs`); **`Words.consoleShows`**, **`Words.consoleSorts`** ("Sorted by maker"),
+  **`Words.noGamesLine`** ("no games yet") and **`Words.percent(charge)`** ("82%") (added).
+- **`Help.entries(kind, {options: true})`** (added flag): Choose a console's Y named Sort and X Options, their actions
+  `sort` and `consoleOptions`, the list's action lines its own; the entries' new **`action`** role names each entry's
+  action. **`Actions.consoleOptions(key)`** (added): Settings opened at the console's page.
+- **`GroupGridLayout`** (the kit's, by name; 1.5 in the qmldir): groups as a column and the chosen group's items as a
+  grid, with the walk inside it (`EmuSen_Kit.md` §7.120), so a theme lays such a screen out without logic of its own.
+- The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.
+  A role is no QML type, so the qmldir's types keep their minors and `import EmuSen.Theme 1.0` finds what it found before.
+
 ## 1.4, an addition: the backdrop and the glow (2026-11-15)
 
 Decided 2026-11-15 by the tester (R-20261115-6): Eclipse gets two kit parts themes may use, a blurred backdrop and the glow
@@ -31,10 +66,49 @@ or shadow. 1.3 is another piece's.
 - **`Backdrop`**, **`BackdropField`**, **`Glow`** (the kit's, by name): a screen's ground with its blurred colour fields or a
   blurred picture, and a rounded box's glow or shadow, outside the box alone, with a box-shadow's offsets (`EmuSen_Kit.md`
   §7.118, §7.119). Each keeps 1.4 in the qmldir, so a theme importing 1.0 or 1.2 finds what it found before.
-- **`Type`** (singleton): `size(base, textScale)`, the size words of a design's size are drawn at, never under the kit's
-  legibility floor (`EmuSen_Kit.md` §7.121, R-20261115-14). As a type made in Rust it is exported at 1.0 like every
-  singleton of the module, so an import of 1.0 finds it too.
-- The module is 1.4 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.4.*`.
+- **`consoleName`** (added to every game row): the console's name alone, the same name `facts` begins with, from the
+  one owner of both (`qt-models/src/library.rs`); Eclipse's Home tile draws it under the title, as its board does.
+- **`PadGlyph.Style`** (`Outlined`, `Filled`), the kit's glyph styles by name, and the kit's **`HelpBar.leadStyle`** and
+  **`leadColor`**, the first entry's glyph drawn apart: Eclipse's filled A in the help line and the filled pill.
+- **`Words.name`**, **`Words.playedFacts(at, seconds)`**, **`Words.continueLine(console)`**: the program's name in its own
+  case, "EmuSen", Eclipse's wordmark, where `title` stays "EMUSEN" for the other screens; a game's last play and its time
+  played, "Last played yesterday · 3 h 20 min played"; and "Continue · Super Nintendo" (`qt-models/src/words.rs`). The host
+  now feeds `Session.played` from games.db's seconds played. Eclipse's Home draws all three, as its board does.
+- **`Library.artHues(key, most)`**, **`Library.artHuesRead`**: a game's art's hues in degrees, most prominent first, read
+  once a picture, and again when its file has changed since, by one reading thread off the GUI thread (pictures read one
+  after another, so a library of covers starts no thread each) with `qt-models/src/art_hues.rs`; `artHuesRead` moves when a reading lands or the
+  library is fed, so a binding asks again. Eclipse's Home colours its backdrop's fields and its disc's corona with them.
+- **`Help.entries(kind, { card: true })`**: the kind's entries as Eclipse's Home names them, X "Options" and Start "Home
+  card" (the card it opens), and no Select search in the bar, its action still the frame's (`qt-models/src/help.rs`,
+  `card_named`; the words `words::OPTIONS`, `HOME_CARD`). The kit's `HelpBar.glyph`, `snapped` and `PadGlyph.letter` reach
+  themes through the kit's types.
+- **`Words.resumePoint(pausedSince)`**: "Resume point · saved 9:12 PM", the time of pausing in the machine's short form
+  (`qt-models/src/words.rs`, `resume_point`; `qt-models/src/clock.rs`, `short_time`). Eclipse's Home draws it beside the
+  paused picture, as its board does (Main.dc.html:59).
+- **`Words.place(index, count)`** ("3 of 14", the game page's `place`, its one owner) and **`Words.gameArt(title)`**
+  ("Game art · Aurora Drift", `qt-models/src/words.rs`, `game_art`): Eclipse's Home draws the shown tile's place among
+  every game played beside Recent and names the art behind its disc under the status, as its board does
+  (Main.dc.html:75, 80).
+- **`Device.shortTime`**, **`Words.shortTime(at)`**: the time, and a moment in seconds since 1970, in the machine's zone
+  and its locale's short form (`QLocale::system()`, `QLocale::ShortFormat`): "9:41 PM" under en_US, "21:41" under de_DE.
+  `Device.clock` keeps the program's "hh:mm", so the other themes' clocks are unchanged (R-20261114-21). Eclipse's status
+  draws `Device.shortTime` (Main.dc.html:49).
+- The module is 1.4 and `theme.json`'s `api` may name it; its registry was `Testing/qmltypes/EmuSen.Theme-1.4.*` until 1.5.
+
+## 1.3, an addition: the face tokens (2026-11-15)
+
+Decided 2026-11-14 by the tester (R-20261114-15): a theme names its face through a token.
+
+- **`Tokens.faceText`, `faceLabel`, `faceInterface`, `faceCode`** (added, read-only), as the kit's `Tokens` gained them
+  (Kit 1.7, `EmuSen_Kit.md` §7.117): the family of the words, the labels, the kit's rows and controls, and codes. A
+  `theme.json` may set each to a face the kit bundles: Barlow, Barlow Condensed, Sora or JetBrains Mono; theme-check finds
+  any other.
+- **`Tokens.weightTitle`, `weightSentence`, `weightWordmark`** (added, read-only): the weights of a title, the pane's
+  sentence and the wordmark, as the kit's; a `theme.json` may set each as a whole number. Eclipse sets 600, 300 and 600,
+  its boards' (`EmuSen_Kit.md` §7.117); the reference's Home reads `weightWordmark`.
+- The reference's `parts/Faces.qml` reads `faceText` and `faceLabel` and loads no font of its own; its manifest declares
+  api 1.3. Eclipse sets Sora for the first three and JetBrains Mono for codes, and declares api 1.3.
+- The module is 1.3; `PlanetMark`, `CoronaGlow` and `CoronaDisc` keep 1.2 in the qmldir, every other type its own minor.
 
 ## 1.2, an addition: the corona disc and the planet mark (2026-11-14)
 

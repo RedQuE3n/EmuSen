@@ -81,7 +81,7 @@ ThemeScreen {
             verticalAlignment: Text.AlignVCenter
             text: place.name
             color: night.textStrong
-            font.family: faces.condensed
+            font.family: faces.label
             font.weight: Font.Medium
             font.pixelSize: 24
             font.letterSpacing: 1.5
@@ -220,7 +220,7 @@ ThemeScreen {
             text: node.name
             elide: Text.ElideRight
             color: night.textStrong
-            font.family: faces.condensed
+            font.family: faces.label
             font.weight: Font.Medium
             font.pixelSize: 20
             font.letterSpacing: 1.2
@@ -240,7 +240,7 @@ ThemeScreen {
                 text: Words.games(node.count)
                 color: night.muted
                 // 19 units, the smallest whole size over the capitals' floor at 1280 x 720, condensed to stay as wide as the canvas's 17 (EmuSen_Qt.md §3.4.1).
-                font.family: faces.condensedRegular
+                font.family: faces.label
                 font.pixelSize: 19
                 lineHeight: 22.8
                 lineHeightMode: Text.FixedHeight
@@ -303,7 +303,7 @@ ThemeScreen {
                 anchors.fill: parent
                 surfaceDrawn: false
                 padFamily: Device.family
-                helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+                helpFont: Qt.font({ family: faces.words, pixelSize: 20 })
                 helpSpacing: 40
                 helpGlyphGap: 10
                 focus: true
@@ -329,7 +329,7 @@ ThemeScreen {
                         y: 40
                         text: Words.gamesHeading
                         color: night.textStrong
-                        font.family: faces.condensed
+                        font.family: faces.label
                         font.weight: Font.Medium
                         font.pixelSize: 32
                         font.letterSpacing: 3
@@ -342,7 +342,7 @@ ThemeScreen {
                         y: 52
                         text: Words.chooseAConsole
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 20
                         lineHeight: 24
                         lineHeightMode: Text.FixedHeight
@@ -353,7 +353,7 @@ ThemeScreen {
                         y: 52
                         text: Words.summary(Library.consoles.count, root.allGames ? root.allGames.count : 0)
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 20
                         lineHeight: 24
                         lineHeightMode: Text.FixedHeight
@@ -423,7 +423,7 @@ ThemeScreen {
                             Text {
                                 text: layout.labels[label.index] ?? ""
                                 color: label.ink
-                                font.family: faces.condensed
+                                font.family: faces.label
                                 font.weight: Font.Medium
                                 font.pixelSize: 19
                                 font.letterSpacing: 2
@@ -435,7 +435,7 @@ ThemeScreen {
                                 visible: label.turning
                                 text: Words.between
                                 color: label.ink
-                                font.family: faces.condensed
+                                font.family: faces.label
                                 font.weight: Font.Medium
                                 font.pixelSize: 19
                                 lineHeight: 22.8
@@ -445,7 +445,7 @@ ThemeScreen {
                                 visible: label.turning
                                 text: layout.sizes[label.index] ?? 0
                                 color: label.ink
-                                font.family: faces.condensed
+                                font.family: faces.label
                                 font.weight: Font.Medium
                                 font.pixelSize: 19
                                 font.letterSpacing: 2
@@ -525,7 +525,7 @@ ThemeScreen {
                         horizontalAlignment: Text.AlignHCenter
                         text: Words.noConsoles
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 22
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight
@@ -540,7 +540,7 @@ ThemeScreen {
                         horizontalAlignment: Text.AlignHCenter
                         text: Words.addFolder
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 22
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight
@@ -554,7 +554,7 @@ ThemeScreen {
                         text: root.focusedTile ? root.focusedTile.fullName : ""
                         elide: Text.ElideRight
                         color: night.textStrong
-                        font.family: faces.condensed
+                        font.family: faces.label
                         font.weight: Font.Medium
                         font.pixelSize: 44
                         font.letterSpacing: 2
@@ -568,7 +568,7 @@ ThemeScreen {
                         text: root.focusedTile ? root.focusedTile.facts : ""
                         elide: Text.ElideRight
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 22
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight
@@ -583,7 +583,7 @@ ThemeScreen {
                         mark: root.focusedTile && root.focusedTile.planet ? root.focusedTile.engineMark : ""
                         libretro: root.focusedTile && root.focusedTile.planet ? root.focusedTile.libretro : false
                         hue: root.focusedTile && root.focusedTile.planet ? root.focusedTile.hue : 0
-                        family: faces.condensed
+                        family: faces.label
                     }
                     CoverRow {
                         id: coverRow

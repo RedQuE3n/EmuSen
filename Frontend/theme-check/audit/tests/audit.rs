@@ -155,6 +155,25 @@ fn qt_3_7_consoles_laid_out_by_hand_do_not_survive_120_consoles() {
 }
 
 #[test]
+fn qt_3_7_the_sweep_follows_a_side_column_s_own_neighbours_to_every_console() {
+    // Makers in a column beside the chosen maker's grid: Left from a first-column console goes to its maker, Down from a maker to the next.
+    let ran = audit("side-column");
+    let swept: Vec<&str> = ran.out.lines().filter(|l| l.contains(" reach ")).collect();
+    assert!(ran.held("Consoles").0 > 0, "{}", ran.err);
+    assert!(swept.is_empty(), "every console of 120 is reached by the pad:\n{}", swept.join("\n"));
+}
+
+#[test]
+fn qt_3_7_the_sweep_still_misses_the_consoles_no_press_reaches() {
+    // The same screen with no press from the first maker to the next: those makers' consoles are reached by no press.
+    let ran = audit("side-column-cut");
+    for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
+        let want = format!(" reach {size} dark, 120 consoles: the pad's sweep heard ");
+        assert!(ran.out.contains(&want), "{want}\n{}", ran.out);
+    }
+}
+
+#[test]
 fn qt_3_7_a_package_with_static_findings_is_not_loaded_and_each_fixture_is_named() {
     for (name, want) in [
         ("literal", "literal/parts/Shelf.qml:8 words \"CONTINUE PLAYING\""),
@@ -567,7 +586,12 @@ fn qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has() {
     // the one variant it lists.
     let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes/eclipse");
     let ran = Ran::judged(Command::new(PROGRAM).args(["--states", "all"]).arg(&folder));
-    for screen in ["Home", "Games"] {
+    let screens: Vec<String> = std::fs::read_dir(folder.join("screens"))
+        .expect("Eclipse's screens")
+        .filter_map(|entry| entry.ok()?.file_name().to_str()?.strip_suffix(".qml").map(str::to_owned))
+        .collect();
+    assert!(screens.iter().any(|screen| screen == "Home"), "Eclipse's screens are read from its folder: {screens:?}");
+    for screen in &screens {
         assert!(ran.held(screen).0 >= SIZES.len(), "{screen} held at the gate's sizes: {}", ran.err);
     }
     assert_eq!(ran.status, 0, "Eclipse's findings:\n{}", ran.out);

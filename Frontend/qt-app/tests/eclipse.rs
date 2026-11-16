@@ -10,7 +10,7 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
-use emusen_kit_core::tokens::{scaled_text, Colour};
+use emusen_kit_core::tokens::Colour;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
@@ -43,13 +43,21 @@ fn stored(platform: &Platform) -> String {
     settings["EmuSenTheme"].as_str().unwrap_or_default().to_owned()
 }
 
+/// A big-screen type token's size as the kit's `Tokens` draws it (`legible_type`, EmuSen_Kit.md §7.121), held with the capitals
+/// of `face`, the interface face the theme sets, at the rows' weight.
+fn drawn_size(base: f64, text_scale: f64, face: &str) -> f64 {
+    use emusen_kit_core::tokens::{legible_type, Form, TypeScale};
+    let all = TypeScale { display: base, title: base, strong: base, row: base, body: base, caption: base, glyph: base };
+    legible_type(Form::BigScreen, &all, text_scale, |size| emusen_kit_qt::type_size::caps_in(face, 400, size)).row
+}
+
 /// Whether a token read as text is the value `theme.json` gives it: a colour as the same colour, a number as the same number,
-/// a type size as the kit's size of that base at the text scale in force (`scaled_text`).
-fn holds(name: &str, read: &str, given: &str, text_scale: f64) -> bool {
+/// a type size as the kit's size of that base at the text scale in force, never under the legibility floor (EmuSen_Kit.md §7.121).
+fn holds(name: &str, read: &str, given: &str, text_scale: f64, face: &str) -> bool {
     match (Colour::parse(given), given.parse::<f64>()) {
         (Some(colour), _) => Colour::parse(read) == Some(colour),
         (None, Ok(number)) => {
-            let want = if name.starts_with("font") { scaled_text(number, text_scale) } else { number };
+            let want = if name.starts_with("font") { drawn_size(number, text_scale, face) } else { number };
             read.parse::<f64>().is_ok_and(|r| (r - want).abs() < 1e-9)
         }
         _ => read == given,
@@ -102,7 +110,7 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
     assert_eq!(scene.property("themesModel", "usable"), "true");
 
-    // Use stores its id and loads it from the resources; Eclipse draws its own Home, and the other screens are the reference's.
+    // Use stores its id and loads it from the resources; Eclipse draws its own Home and Choose a console, and the other screens are the reference's.
     scene.pad(UiButton::Accept);
     scene.wait(200);
     assert_eq!(stored(&platform), "eclipse", "the id is stored, never a folder");
@@ -111,7 +119,7 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     assert_eq!(scene.property("host.theme", "name"), "Eclipse");
     assert_eq!(scene.property("host.theme", "failed"), "false", "{}", scene.property("host.theme", "warnings"));
     assert_eq!((scene.property("theme", "home").as_str(), scene.property("reference", "home").as_str()), ("true", "false"));
-    assert_eq!((scene.property("theme", "consoles").as_str(), scene.property("reference", "consoles").as_str()), ("false", "true"));
+    assert_eq!((scene.property("theme", "consoles").as_str(), scene.property("reference", "consoles").as_str()), ("true", "false"));
     assert_eq!(scene.property("themesModel", "findings"), "In use.");
 
     // Every override, on the theme's engine and on the program's, is theme.json's value; every other token is the kit's.
@@ -119,12 +127,13 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     let overrides = package.overrides();
     assert!(!overrides.is_empty() && overrides.iter().all(|(light, _, _)| !light), "dark overrides only");
     let text_scale = *scene.kit_tokens().expect("the program's tokens").text_scale();
+    let face = overrides.iter().find(|(_, name, _)| name == "faceInterface").map(|(_, _, family)| family.clone()).unwrap_or_default();
     let theirs = engine_tokens(&mut scene, "host.theme");
     let ours = program_tokens(&mut scene);
     for (engine, tokens) in [("the theme's engine", &theirs), ("the program's engine", &ours)] {
         for (_, name, value) in &overrides {
             let read = tokens.get(name).map(String::as_str).unwrap_or("(no such token)");
-            assert!(holds(name, read, value, text_scale), "{engine}: {name} is {read}, theme.json gives {value}");
+            assert!(holds(name, read, value, text_scale, &face), "{engine}: {name} is {read}, theme.json gives {value}");
         }
         for (name, value) in tokens.iter().filter(|(name, _)| !overrides.iter().any(|(_, n, _)| n == *name)) {
             assert_eq!(Some(value), kit.get(name), "{engine}: {name}, which Eclipse leaves, is the kit's");
@@ -154,4 +163,6 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     assert_eq!(scene.property("program", "theme"), "");
     wait_for(&mut scene, "chosenTheme", "status", "Null", 2000);
     assert_eq!(program_tokens(&mut scene), kit, "the reference again leaves the program the kit's tokens");
+    // Eclipse's engine dropped with its Home's disc: nothing is logged (a glow's entry read after it went, EmuSen_Kit.md §7.116).
+    scene.assert_quiet();
 }

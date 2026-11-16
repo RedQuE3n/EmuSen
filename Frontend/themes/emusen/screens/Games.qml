@@ -41,7 +41,7 @@ ThemeScreen {
                 anchors.fill: parent
                 surfaceDrawn: false
                 padFamily: Device.family
-                helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+                helpFont: Qt.font({ family: faces.words, pixelSize: 20 })
                 helpSpacing: 40
                 helpGlyphGap: 10
                 // While the search's keyboard is typed on, its help is EmuSen's, drawn with it.
@@ -69,7 +69,7 @@ ThemeScreen {
                             text: Words.gamesPath
                             font.letterSpacing: 2
                             color: night.muted
-                            font.family: faces.regular
+                            font.family: faces.words
                             font.pixelSize: 20
                             lineHeight: 24
                             lineHeightMode: Text.FixedHeight
@@ -86,7 +86,7 @@ ThemeScreen {
                             objectName: "gridTitle"
                             text: Browse.heading
                             color: night.textStrong
-                            font.family: faces.condensed
+                            font.family: faces.label
                             font.weight: Font.Medium
                             font.pixelSize: 32
                             font.letterSpacing: 3
@@ -99,7 +99,7 @@ ThemeScreen {
                             y: 7.2
                             text: Browse.countLine
                             color: night.muted
-                            font.family: faces.regular
+                            font.family: faces.words
                             font.pixelSize: 20
                             lineHeight: 24
                             lineHeightMode: Text.FixedHeight
@@ -124,7 +124,7 @@ ThemeScreen {
                             anchors.verticalCenter: parent.verticalCenter
                             text: Browse.previous
                             color: night.muted
-                            font.family: faces.regular
+                            font.family: faces.words
                             font.pixelSize: 19
                         }
                         Text {
@@ -132,7 +132,7 @@ ThemeScreen {
                             visible: Browse.previous.length > 0 && Browse.next.length > 0
                             text: Words.between
                             color: night.muted
-                            font.family: faces.regular
+                            font.family: faces.words
                             font.pixelSize: 19
                         }
                         Text {
@@ -140,7 +140,7 @@ ThemeScreen {
                             anchors.verticalCenter: parent.verticalCenter
                             text: Browse.next
                             color: night.muted
-                            font.family: faces.regular
+                            font.family: faces.words
                             font.pixelSize: 19
                         }
                         PadGlyph {
@@ -214,7 +214,7 @@ ThemeScreen {
                         text: root.focusedCell ? root.focusedCell.title : ""
                         elide: Text.ElideRight
                         color: night.textStrong
-                        font.family: faces.condensed
+                        font.family: faces.label
                         font.weight: Font.Medium
                         font.pixelSize: 32
                         lineHeight: 38.4
@@ -230,7 +230,7 @@ ThemeScreen {
                         text: root.focusedCell ? root.focusedCell.facts : ""
                         elide: Text.ElideRight
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 22
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight

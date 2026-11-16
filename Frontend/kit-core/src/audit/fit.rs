@@ -21,9 +21,33 @@ pub const MOONRISE_SOURCE: &str = "qrc:/qt/qml/EmuSen/Kit/qml/Moonrise.qml";
 /// that lets them pass (EmuSen_Kit.md §7.102, §7.109).
 pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str, Class); 1] = [(MOONRISE_SOURCE, "moonriseCaption", Class::MoonriseCaption)];
 
-/// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item written in its file, if one does; the same name in any
-/// other file, a theme's among them, is held.
+/// The built-in Eclipse's file that draws every word of its boards at the board's size (R-20261115-24), in the program's
+/// resources.
+pub const ECLIPSE_LINE_RESOURCE: &str = "qrc:/emusen/themes/eclipse/parts/Line.qml";
+
+/// The same file in the checkout this crate was built from, as Qt writes a local file's URL, which theme-check and the tests
+/// load; none where that checkout is not on the machine.
+pub fn eclipse_line_checkout() -> Option<&'static str> {
+    static LINE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    LINE.get_or_init(|| {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes/eclipse/parts/Line.qml");
+        std::fs::canonicalize(path).ok().map(|p| format!("file://{}", p.display()))
+    })
+    .as_deref()
+}
+
+/// Whether words are written in the built-in Eclipse's `Line.qml`, a board's words at the board's size (R-20261115-24, -29):
+/// the resource's, or the one file of the checkout this was built from; no other path, whatever its tail.
+pub fn eclipse_board_words(item: &Item) -> bool {
+    item.source == ECLIPSE_LINE_RESOURCE || eclipse_line_checkout().is_some_and(|line| item.source == line)
+}
+
+/// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item written in its file, if one does, or Eclipse's board type
+/// for words written in the built-in Eclipse's `Line.qml`; the same name in any other file, a theme's among them, is held.
 pub fn small_text_exception(item: &Item) -> Option<Class> {
+    if eclipse_board_words(item) {
+        return Some(Class::EclipseBoardType);
+    }
     SMALL_TEXT_EXCEPTIONS.iter().find(|(source, name, _)| item.name == *name && item.source == *source).map(|(_, _, class)| *class)
 }
 

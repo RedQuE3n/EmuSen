@@ -31,6 +31,7 @@ fn main() {
         QmlFile::from("qml/BackdropField.qml").version(1, 4),
         QmlFile::from("qml/Backdrop.qml").version(1, 4),
         QmlFile::from("qml/Glow.qml").version(1, 4),
+        QmlFile::from("qml/GroupGridLayout.qml").version(1, 5),
     ];
     CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 7).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([
@@ -45,7 +46,6 @@ fn main() {
             "src/help.rs",
             "src/browse.rs",
             "src/marks.rs",
-            "src/type_size.rs",
             "src/glue.rs",
         ])
         .include_dir("cpp")

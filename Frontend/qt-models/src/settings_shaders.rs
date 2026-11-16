@@ -191,7 +191,7 @@ impl SettingsView {
 
     pub(crate) fn shaders_row(&self, entry: &Value) -> Option<Row> {
         let id = text_of(&entry["id"]);
-        let row = |label: String, value: String, kind: RowKind, held: bool, marked: bool| Some(Row { id: id.clone(), label, value, kind, held, marked });
+        let row = |label: String, value: String, kind: RowKind, held: bool, marked: bool| Some(Row { id: id.clone(), label, value, kind, held, marked, code: false });
         if let Some(console) = entry["shader_console"].as_str() {
             return row(self.console_name(console), Self::shader_name(&self.shader_of(console)), RowKind::Opens, false, false);
         }

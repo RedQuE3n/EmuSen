@@ -1,7 +1,8 @@
 //! What a theme sees of the library, as plain rows (EmuSen_Qt.md §3.2): each list's roles written once here and its rows
 //! curated from emusen-qt-models' view, a cell for each role in the role's order. No Qt.
 
-use emusen_qt_models::library::{self, GameRow, Kind, LibraryView};
+use emusen_qt_models::console_list::{self, Order, Show};
+use emusen_qt_models::library::{self, GameRow, Kind, LibraryRow, LibraryView};
 use emusen_qt_models::listing::{self, Listing};
 use emusen_qt_models::game_model::cover_url;
 use emusen_qt_models::words;
@@ -21,7 +22,7 @@ pub enum Cell {
 pub type Row = Vec<Cell>;
 
 /// `Library.consoles`: each console with games, in the shelves' order.
-pub const CONSOLE_ROLES: [&str; 16] = [
+pub const CONSOLE_ROLES: [&str; 19] = [
     "key",
     "name",
     "displayName",
@@ -38,13 +39,16 @@ pub const CONSOLE_ROLES: [&str; 16] = [
     "groupIndex",
     "groupSize",
     "groupStart",
+    "played",
+    "glow",
+    "screen",
 ];
 /// `Library.places`: Home's destinations in Home's order.
 pub const PLACE_ROLES: [&str; 7] = ["key", "name", "kind", "line", "attention", "count", "available"];
 /// `Library.shelves`: the library's three places, All, Favourites and Recent, which `gamesOf` also takes.
 pub const SHELF_ROLES: [&str; 4] = ["key", "name", "line", "count"];
 /// `Library.gamesOf`, `recent`, `favourites` and `search`: one game a row.
-pub const GAME_ROLES: [&str; 18] = [
+pub const GAME_ROLES: [&str; 19] = [
     "key",
     "title",
     "cover",
@@ -63,6 +67,7 @@ pub const GAME_ROLES: [&str; 18] = [
     "hero",
     "lastPlayedWords",
     "facts",
+    "consoleName",
 ];
 /// `Browse.filters`: the Filter page's choices (1.7).
 pub const FILTER_ROLES: [&str; 4] = ["key", "name", "count", "line"];
@@ -82,7 +87,7 @@ pub fn letters(letters: &[String]) -> Vec<Row> {
 /// `Library.collections`: the player's collections.
 pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
 /// `Help.entries`: the help bar's entries, as the kit's `HelpBar` reads them.
-pub const HELP_ROLES: [&str; 4] = ["button", "label", "pair", "enabled"];
+pub const HELP_ROLES: [&str; 5] = ["button", "label", "pair", "enabled", "action"];
 
 /// Home's destinations' keys, in Home's order: Games, the four tools as their summaries name them, Settings, Power.
 pub const PLACE_IDS: [&str; 7] =
@@ -125,9 +130,23 @@ pub fn maker_groups(makers: &[&str]) -> Vec<(i32, i32, i32, i32)> {
     placed.into_iter().map(|(g, i)| (g, i, sizes[g as usize], starts[g as usize])).collect()
 }
 
+/// A console's own colour as `#RRGGBB`: the glow kit-core gives its body (`world::glow`), the one owner, so the Sky and a theme agree.
+pub fn glow_of(hue: f64) -> String {
+    emusen_kit_core::world::glow(hue, true).0.to_hex()
+}
+
 /// The consoles with games, each with the systems table's facts, the engine it runs now and its maker's group.
 pub fn consoles(view: &LibraryView) -> Vec<Row> {
-    let shown: Vec<_> = view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).collect();
+    console_cells(&view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).collect::<Vec<_>>())
+}
+
+/// The consoles a core runs that `show` holds, in `order`, each as `consoles` gives a console (Choose a console's chips and Y).
+pub fn consoles_listed(view: &LibraryView, show: Show, order: Order) -> Vec<Row> {
+    console_cells(&console_list::listed(&view.cored, show, order))
+}
+
+/// The consoles' rows with their makers' groups, in the order given.
+fn console_cells(shown: &[&LibraryRow]) -> Vec<Row> {
     let groups = maker_groups(&shown.iter().map(|r| r.maker.as_str()).collect::<Vec<_>>());
     shown
         .iter()
@@ -136,7 +155,7 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
             vec![
                 text(&r.key),
                 text(&r.name),
-                text(if r.full_name.is_empty() { &r.name } else { &r.full_name }),
+                text(r.shown_name()),
                 text(&r.maker),
                 Cell::Whole(r.year),
                 Cell::Whole(r.count as i32),
@@ -150,6 +169,9 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
                 Cell::Whole(index),
                 Cell::Whole(size),
                 Cell::Whole(start),
+                Cell::Whole(r.played as i32),
+                Cell::Text(glow_of(r.hue)),
+                text(&r.screen),
             ]
         })
         .collect()
@@ -226,6 +248,7 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
         Cell::Text(cover_url(if g.hero.is_empty() { &g.cover } else { &g.hero })),
         Cell::Text(if played { words::ago(g.played_at, now) } else { String::new() }),
         text(&g.facts),
+        text(&g.console),
     ]
 }
 

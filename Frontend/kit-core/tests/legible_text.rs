@@ -38,3 +38,30 @@ fn kit_7_121_the_legible_size_passes_the_floor_at_every_gate_size() {
         }
     }
 }
+
+#[test]
+fn kit_7_121_a_theme_s_size_tokens_are_never_under_the_floor_on_the_big_screen() {
+    use emusen_kit_core::tokens::{base_type, header_base, header_size, legible_header, legible_type, type_scale, Form, TypeScale};
+    let caps = |size: f64| size * DESKTOP_CAPS;
+    let floor = smallest_capitals_in_units();
+    // Eclipse's tokens as theme.json gives them: the row at 16, the body at 14, the caption at 15.33, read off its boards.
+    let eclipse = TypeScale { row: 16.0, body: 14.0, caption: 15.333_333_333_333_334, ..base_type(Form::BigScreen) };
+    for scale in [1.0, 1.15, 1.3] {
+        let drawn = legible_type(Form::BigScreen, &eclipse, scale, caps);
+        for (given, size) in [(eclipse.row, drawn.row), (eclipse.body, drawn.body), (eclipse.caption, drawn.caption)] {
+            assert!(caps(size.floor()) >= floor, "{given} at {scale}: {size}, drawn at {} by a Qt.font, is under the floor", size.floor());
+            assert!(size == scaled_text(given, scale) || caps((size - 0.5).floor()) < floor, "{given} at {scale}: {size} is the smallest that passes");
+        }
+        // The reference's own sizes are above the floor and do not move, on the big screen and the desktop.
+        for form in [Form::BigScreen, Form::Desktop] {
+            assert_eq!(legible_type(form, &base_type(form), scale, caps), type_scale(form, scale), "{form:?} at {scale}");
+        }
+    }
+    // A heading a theme sets under the floor is raised; the kit's own does not move.
+    assert!(caps(legible_header(Form::BigScreen, 14.0, 1.0, caps).floor()) >= floor, "a heading at 14");
+    for form in [Form::BigScreen, Form::Desktop] {
+        assert_eq!(legible_header(form, header_base(form), 1.3, caps), header_size(form, 1.3), "{form:?}'s heading");
+    }
+    // The desktop is not held to the big screen's floor: its sizes are scaled alone.
+    assert_eq!(legible_type(Form::Desktop, &eclipse, 1.0, caps), eclipse.scaled(1.0));
+}

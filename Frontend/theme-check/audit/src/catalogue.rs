@@ -54,6 +54,8 @@ pub struct Catalogue<'a> {
     systems: Vec<SystemRow>,
     games: Vec<GameFile>,
     engines: Vec<(String, Engine)>,
+    /// Each entry's console under its own name and the table's console whose screen it takes (its `like` row's).
+    screens_of: Vec<(String, String)>,
 }
 
 impl<'a> Catalogue<'a> {
@@ -67,11 +69,12 @@ impl<'a> Catalogue<'a> {
             .find(|s| shelved.iter().any(|g| g.system.as_ref() == Some(&s.id)))
             .or(table.first())
             .ok_or("the table has no console")?;
-        let (mut systems, mut games, mut engines) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut systems, mut games, mut engines, mut screens_of) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         for (n, entry) in entries.iter().enumerate() {
             let like = table.iter().find(|s| !entry.like.is_empty() && s.id == entry.like).unwrap_or(first);
             let id = format!("catalogue{n:03}");
             let mut row = like.clone();
+            screens_of.push((entry.name.clone(), like.console.clone()));
             if entry.like.is_empty() {
                 row.look.hue = (n * 37 % 360) as f64;
                 row.release_year = 1977 + (n % 30) as i32;
@@ -95,7 +98,7 @@ impl<'a> Catalogue<'a> {
             }
             systems.push(row);
         }
-        Ok(Catalogue { inner, systems, games, engines })
+        Ok(Catalogue { inner, systems, games, engines, screens_of })
     }
 }
 
@@ -137,7 +140,9 @@ impl LibrarySource for Catalogue<'_> {
         self.inner.collections()
     }
     fn screens(&self) -> Result<Vec<(String, String)>, String> {
-        self.inner.screens()
+        let table = self.inner.screens()?;
+        let kind = |console: &String| table.iter().find(|(c, _)| c == console).map(|(_, k)| k.clone());
+        Ok(self.screens_of.iter().filter_map(|(name, like)| kind(like).map(|k| (name.clone(), k))).collect())
     }
 }
 

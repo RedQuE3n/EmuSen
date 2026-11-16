@@ -875,7 +875,11 @@ range (`StrictlyEnforceRange`) must stand at the offset that item rests at, `fmo
 target Qt's own step to an index moves to. The harness polls those declarations every 10 ms and fails the state past
 5 s, so an unsettled state is refused rather than read. `resize` settles after `QQuickTest::qWaitForPolish` (Qt's word
 that no item is still to be laid out) where it slept 20 ms, and the put-back settles after its writes. The gallery gate
-reads each state after a resize and so after a settle; its fixed 60 ms wait is gone.
+reads each state after a resize and so after a settle; its fixed 60 ms wait is gone. `settle` returns whether it waited
+(2026-11-16): when every view was at rest at once, no event ran and the tree it was given still stands as read, which
+theme-audit's sweep uses to read the focus from that tree rather than read another (`man theme-check`). `qt-test/tests/settled.rs`
+holds the answer both ways: a list at rest is not waited for and its rows read again stand where they stood; after eight
+presses of Down a list whose highlight moves over 300 ms is waited for, its rows moved meanwhile; then at rest again, no wait.
 
 The defect that showed it, measured on 2026-11-08. The release gate failed about two runs in three with
 `big-Dark-menu-3840x2160: rests outside the carousel 341: 350, Card… at 2950,875 486x648`, the same card at the same

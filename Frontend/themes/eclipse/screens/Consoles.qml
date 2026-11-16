@@ -41,6 +41,10 @@ ThemeScreen {
             readonly property real asideX: root.width - root.margin - root.asideWidth
             readonly property real gridWidth: root.asideX - root.asideGap - root.gridX
             readonly property int columns: Math.max(1, Math.floor((root.gridWidth + root.plateGap) / (root.plateWidth + root.plateGap)))
+            // As many whole rows of plates and of makers as stand between the list's top and the foot, so none is cut by the
+            // view's edge or lies under the help line; the focus brings the next row in whole.
+            readonly property real platesHeight: Math.max(1, Math.floor((root.foot - root.listTop + root.plateGap) / (root.plateHeight + root.plateGap))) * (root.plateHeight + root.plateGap) - root.plateGap
+            readonly property real makersHeight: Math.max(1, Math.floor((root.foot - root.listTop + root.makerPitch - root.makerHeight) / root.makerPitch)) * root.makerPitch - (root.makerPitch - root.makerHeight)
             // The chip pressed (Words.consoleShows' order) and the order in force (Words.consoleSorts'), the theme's own.
             property int show: 0
             property int order: 0
@@ -284,7 +288,7 @@ ThemeScreen {
                         x: root.margin
                         y: root.listTop
                         width: root.makerWidth
-                        height: root.foot - root.listTop
+                        height: root.makersHeight
                         clip: true
                         // The wheel and a drag scroll it; the binding brings the chosen maker back into sight as another is chosen.
                         boundsBehavior: Flickable.StopAtBounds
@@ -367,7 +371,7 @@ ThemeScreen {
                         x: root.gridX - root.plateGap / 2
                         y: root.listTop
                         width: root.gridWidth + root.plateGap
-                        height: root.foot - root.listTop
+                        height: root.platesHeight
                         leftMargin: root.plateGap / 2
                         rightMargin: root.plateGap / 2
                         clip: true

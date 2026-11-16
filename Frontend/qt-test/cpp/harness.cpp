@@ -835,11 +835,11 @@ bool animating(QObject* object)
     return (object->inherits("QQuickFrameAnimation") || object->inherits("QQuickAbstractAnimation")) && object->property("running").toBool();
 }
 
-// Whether an animation repeats without end, itself or a group it runs in: a design's resting motion, not a transition.
+// Whether an animation declares it repeats without end, itself or a group it runs in: a design's resting motion; a frame clock declares no end (EmuSen_Kit.md §7.49).
 bool looping(QObject* object)
 {
     for (QObject* at = object; at != nullptr; at = at->parent()) {
-        if (at->inherits("QQuickFrameAnimation") || (at->inherits("QQuickAbstractAnimation") && at->property("loops").toInt() < 0)) {
+        if (at->inherits("QQuickAbstractAnimation") && at->property("loops").toInt() < 0) {
             return true;
         }
     }

@@ -875,7 +875,11 @@ range (`StrictlyEnforceRange`) must stand at the offset that item rests at, `fmo
 target Qt's own step to an index moves to. The harness polls those declarations every 10 ms and fails the state past
 5 s, so an unsettled state is refused rather than read. `resize` settles after `QQuickTest::qWaitForPolish` (Qt's word
 that no item is still to be laid out) where it slept 20 ms, and the put-back settles after its writes. The gallery gate
-reads each state after a resize and so after a settle; its fixed 60 ms wait is gone.
+reads each state after a resize and so after a settle; its fixed 60 ms wait is gone. `settle` returns whether it waited
+(2026-11-16): when every view was at rest at once, no event ran and the tree it was given still stands as read, which
+theme-audit's sweep uses to read the focus from that tree rather than read another (`man theme-check`). `qt-test/tests/settled.rs`
+holds the answer both ways: a list at rest is not waited for and its rows read again stand where they stood; after eight
+presses of Down a list whose highlight moves over 300 ms is waited for, its rows moved meanwhile; then at rest again, no wait.
 
 The defect that showed it, measured on 2026-11-08. The release gate failed about two runs in three with
 `big-Dark-menu-3840x2160: rests outside the carousel 341: 350, Card… at 2950,875 486x648`, the same card at the same
@@ -2200,6 +2204,27 @@ the software backend and on Vulkan (the RX 6800); the fixed one passes on both, 
 `fade.rs` still passes on both. Seeded faults, each reverted, each a fault in the test: `layer.enabled: root.fading` as
 before, and the `Binding` not delayed.
 
+**An edge that starts and stops fading before the queue clears** (found 2026-11-16). theme-audit over Orrery faulted in
+`QQuickItem::geometryChange` under `Scene::resize`, about once in three runs, trunk 385db3952 as well. Run with glibc's
+thread cache off and freed memory overwritten (`GLIBC_TUNABLES=glibc.malloc.tcache_count=0:glibc.malloc.perturb=165`), it
+faulted on every run, 38 s in; with a breakpoint on `QQuickItemLayer::deactivate` and the faulting item's class read in the
+live process, the item was the dial's `EdgeFade` (Choose a console, `themes/orrery/screens/Consoles.qml`, `width:
+root.width - 128`), and the layer was deleted inside the resize that widened it, under the dial's `setContentWidth`, its
+`fixup` and its `contentX`, the dial's `fadeLeft` and `fadeRight` falling. The delayed `Binding` left a hole: `layered`
+followed `fading` only once the queue was clear, so an edge that began fading and then stopped before that (here inside
+the window's one geometry event) found `layered` still false, and the layer went off at
+once, its `ShaderEffectSource` deleted while the fade's copied listener list still held it (the faulting entry: a
+`Geometry` listener of `All` changes, which is what `QQuickShaderEffectSource::setSourceItem` adds). So `layered` now goes
+true the moment an edge starts fading (an `onFadingChanged` assignment) and follows `fading` back only once the queue is
+clear, through a `Timer` of interval 0 running while the two differ; a layer that goes on is never turned off within the
+same turn of the event loop. `Binding`s with `when` and `restoreMode: Binding.RestoreNone` for the two directions were
+tried first and faulted in `fade_resize.rs` with the thread cache off. `qt-test/tests/fade_rise.rs` holds it: a fade whose
+row grows past its width (the edge starts fading) and whose width then grows past the row, with no event between, twice.
+The test runs itself again in a child process with the thread cache off and the perturb on, because `mallopt`'s
+`M_PERTURB` alone does not overwrite a block freed into glibc's thread cache: the unfixed kit passed it in process and
+faulted in the child on three runs of three (2026-11-16); `fade_resize.rs`'s binary, run with the same tunables, passes with the fix. The
+fixed audit ran over Orrery under the same tunables to its end (see `man theme-check`).
+
 ### 7.36 A held clock, a held press and drawn covers in the harness (stage 3, theme-audit's states; 2026-11-09)
 
 theme-audit records a theme's splash at a stated time and a screen with A held (`man theme-check`, STATES), so the harness
@@ -2814,9 +2839,24 @@ from a cover to a place moved the glow. The tree was read between the change and
 The light variant, whose sky is not drawn, waited for frames and read the row as drawn.
 
 **The rule.** `harness_tree` waits for a scheduled polish first (`QQuickTest::qWaitForPolish`, Qt's own test API), so the
-tree is the one the next frame draws, whatever is running. The audit's rules are unchanged. That `rest` cannot tell the
-sky's easing from a resting motion stays as it was: a frame clock declares neither, and the polish wait is what the tree
-needed.
+tree is the one the next frame draws, whatever is running. The audit's rules are unchanged. That `rest` could not tell the
+sky's easing from a resting motion was left as it was then: the polish wait is what the tree needed (changed 2026-11-16,
+below).
+
+**A frame clock is waited for** (2026-11-16). Taking every `FrameAnimation` for a resting motion let theme-audit read
+Choose a console at a ratio that changed from run to run: two runs of trunk 385db3952 over Orrery wrote one accepted
+contrast line at 4.39:1 and at 4.41:1. The audit read each size 150 ms after its resize; the resize changes the sky's
+`glowX` (the canvas's width in design units changes with the window's shape), the glow eases to its new centre over Pan
+(320 ms, CubicOut) on a clock summed from the frames' `frameTime`s, so how far it had eased at the read, and the glow's
+colour behind the maker's name under the hub, depended on how many frames the machine had drawn by then. Listing the
+running animations at that read on 2026-11-16 found the sky's `FrameAnimation` running at 1920 × 1200, 1920 × 1080,
+1280 × 720 and 3840 × 2160 dark, the states of the varying lines. A `FrameAnimation` declares no end, so `looping`
+now counts only an animation whose `loops` is infinite (or a group's that is): `rest` waits for a running frame clock as
+for any transition and fails past `SETTLE_MS` naming it, and theme-audit rests after each resize in place of the 150 ms (a held clock's states keep the 150 ms: nothing moves under a held clock, so resting there only waits out the limit).
+The kit's two frame clocks both stop by themselves (`Sky`'s once its glow settles, Moonrise's once the splash ends; a
+held clock's passes never rest). `PolishScene.qml` stands for a resting motion with a `NumberAnimation` of infinite
+`loops`, so `polish.rs` still holds the tree read while frames swap and `rest` has nothing to wait for. Two runs of the
+changed audit over Orrery wrote byte-identical accounts.
 
 **Why the polish is the moment.** Qt Quick places an item in two steps: a property change marks a positioner or layout
 dirty and asks for a polish, and the polish, run on the GUI thread just before the scene graph is synchronised for a

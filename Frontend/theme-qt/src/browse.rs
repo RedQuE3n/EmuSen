@@ -52,6 +52,14 @@ pub mod qobject {
         /// The shown games' first letters in order, each a `letter`, and the focused game's (1.7, R-20261115-12).
         #[qproperty(*mut ThemeRows, letters, READ, CONSTANT)]
         #[qproperty(QString, letter, READ, NOTIFY)]
+        /// The focused game's facts, read off the GUI thread as the focus moves: whose they are (a game's `key`), its year, its genre, its players in words, its description, its time played in words and its count of states, each empty or 0 where the program holds none (1.7).
+        #[qproperty(QString, facts_key, cxx_name = "factsKey", READ, NOTIFY)]
+        #[qproperty(QString, year, READ, NOTIFY)]
+        #[qproperty(QString, genre, READ, NOTIFY)]
+        #[qproperty(QString, players, READ, NOTIFY)]
+        #[qproperty(QString, description, READ, NOTIFY)]
+        #[qproperty(QString, time_played, cxx_name = "timePlayed", READ, NOTIFY)]
+        #[qproperty(i32, states, READ, NOTIFY)]
         type ThemeBrowse = super::ThemeBrowseRust;
     }
 
@@ -107,6 +115,13 @@ pub struct ThemeBrowseRust {
     sort_line: QString,
     letters: *mut ThemeRows,
     letter: QString,
+    facts_key: QString,
+    year: QString,
+    genre: QString,
+    players: QString,
+    description: QString,
+    time_played: QString,
+    states: i32,
 }
 
 impl Default for ThemeBrowseRust {
@@ -133,6 +148,13 @@ impl Default for ThemeBrowseRust {
             sort_line: QString::default(),
             letters: std::ptr::null_mut(),
             letter: QString::default(),
+            facts_key: QString::default(),
+            year: QString::default(),
+            genre: QString::default(),
+            players: QString::default(),
+            description: QString::default(),
+            time_played: QString::default(),
+            states: 0,
         }
     }
 }
@@ -196,6 +218,18 @@ impl qobject::ThemeBrowse {
         text!(self, sort, sort_changed, facts.sort);
         text!(self, sort_line, sort_line_changed, emusen_qt_models::listing::sort_line(&facts.sort));
         text!(self, letter, letter_changed, facts.letter);
+    }
+
+    /// The host's feed of the focused game's facts, as `library::facts_of` read them.
+    pub fn show_facts(mut self: Pin<&mut Self>, facts: &emusen_qt_models::library::GameFacts) {
+        text!(self, year, year_changed, facts.year);
+        text!(self, genre, genre_changed, facts.genre);
+        text!(self, players, players_changed, facts.players);
+        text!(self, description, description_changed, facts.description);
+        text!(self, time_played, time_played_changed, facts.time_played);
+        plain!(self, states, states_changed, facts.states.min(i32::MAX as usize) as i32);
+        // Last, so a binding that waits on the key reads the facts it names.
+        text!(self, facts_key, facts_key_changed, facts.path);
     }
 
     /// The host's feed of the Filter page's choices and the shown games' letters, each replaced whole.

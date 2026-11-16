@@ -112,6 +112,8 @@ pub trait LibrarySource: Send + Sync {
 pub struct GameFacts {
     /// The game's file, whose facts these are.
     pub path: String,
+    /// Its year of release, from the scraper's release date, which a refresh reads only for the sorts that need it.
+    pub year: String,
     /// The scraper's genre, as it keeps it.
     pub genre: String,
     /// The scraper's players, in words: "1 to 2 players" (`words::players`).
@@ -124,14 +126,19 @@ pub struct GameFacts {
     pub states: usize,
 }
 
-/// The facts of one game: its metadata by one scraper answer, its seconds played from the catalog as last read, and its
-/// states counted where they are saved. Run off the GUI thread.
-pub fn facts_of(source: &dyn LibrarySource, game: &GameFile, catalog: &Catalog) -> Result<GameFacts, String> {
+/// A game's seconds played as the catalog last read them; 0 for none.
+pub fn seconds_played(catalog: &Catalog, path: &str) -> i64 {
+    catalog.plays.iter().find(|(p, _)| p == path).map_or(0, |(_, n)| n.seconds)
+}
+
+/// The facts of one game: its metadata by one scraper answer, its `seconds` played, and its states counted where they
+/// are saved. Run off the GUI thread.
+pub fn facts_of(source: &dyn LibrarySource, game: &GameFile, seconds: i64) -> Result<GameFacts, String> {
     let metadata = source.metadata(std::slice::from_ref(game))?.into_iter().next().map(|(_, m)| m).unwrap_or_default();
     let field = |key: &str| metadata.get(key).cloned().unwrap_or_default();
-    let seconds = catalog.plays.iter().find(|(p, _)| *p == game.path).map_or(0, |(_, n)| n.seconds);
     Ok(GameFacts {
         path: game.path.clone(),
+        year: crate::esde_shelves::release_date(&metadata).and_then(|d| crate::esde_shelves::year_of(&d)).unwrap_or_default(),
         genre: field("genre"),
         players: words::players(&field("players")),
         description: field("description"),

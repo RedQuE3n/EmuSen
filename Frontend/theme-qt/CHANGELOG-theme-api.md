@@ -27,6 +27,12 @@ Decided 2026-11-15 by the tester (R-20261115-10 to -13): a theme reads and drive
 - **`Words.gameFactLabels`** ("Last played", "Time played", "States") and **`Words.crumb`** ("/"), the games board's words.
 - **`Help.entries(kind, {games: true})`**: A Start, B Back and Y Favourite, in that order, as Eclipse's games board's foot
   names them (`help::games_named`, `words::START`); the action lines the list's own.
+- **`Browse.factsKey`, `year`, `genre`, `players`, `description`, `timePlayed`, `states`**: the focused game's facts as
+  Eclipse's games board draws them beside it, read off the GUI thread each time the focus moves to another game
+  (`library::facts_of`: one scraper answer for the game, games.db's seconds played, its states counted where Galaxia's save
+  paths put them). `factsKey` names the game they belong to, set last, so a theme draws them only while it is the focused
+  game's; each is empty, or 0, where the program holds none. `players` is in words ("1 to 2 players", `words::players`),
+  `timePlayed` too ("3 h 20 min", `words::time_played`, none under a minute).
 - The module is 1.7 (1.3, 1.5 and 1.6 being held by other pieces, 1.4 the backdrop and the glow); every type keeps the minor it was added in.
 
 ## 1.5, an addition: a console's played games (2026-11-15)

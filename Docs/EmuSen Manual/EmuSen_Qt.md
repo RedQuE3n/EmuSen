@@ -2023,8 +2023,8 @@ program has nothing for it. The empty board's rows and the empty lists' words ar
   board's shape) and as many whole rows as stand above the foot (four): the cover cropped at corner 16, the 84 px shade,
   the title 14 px in and 12 px over the foot at 18 px on lines of 21.6, wrapped whole (`parts/TileWords.qml` takes any
   number of lines); a resting tile's shadow, 0 8 24 at 0.4, and the focused one's ring, 4 px of the ground's dark, 3 of the
-  accent and 40 of glow 10 out. The rows move a row at a time once the focus leaves them; the wheel moves the focus a row a
-  notch.
+  accent and 40 of glow 10 out. The rows move a row at a time once the focus leaves them; the wheel scrolls them a row a notch,
+  and the pointer moved onto a tile focuses it (a click plays it, the left button being A there).
 - The rail at the right, 34 by 740: the focused game's letter on the accent's disc, the track, the last letter; a press on
   the track steps to the letter at that height.
 - The foot: A Start, B Back and Y Favourite (`Help.entries(kind, {games: true})`, `help::games_named`), and at the right on

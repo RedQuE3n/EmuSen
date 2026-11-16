@@ -135,7 +135,6 @@ pub fn screen(kind: &str) -> &'static str {
     }
 }
 
-/// How many of a console's games were played, in the form the facts give a count: "61 played".
 /// A battery's charge as the status says it: "82%"; none below 0, where the machine has no battery.
 pub fn percent(n: i32) -> String {
     if n < 0 {
@@ -147,10 +146,6 @@ pub fn percent(n: i32) -> String {
 
 /// A console plate's line where it holds no game, after its year: "1986 · no games yet" (EclipseConsoles:129).
 pub const NO_GAMES_LINE: &str = "no games yet";
-
-pub fn played(n: usize) -> String {
-    format!("{} played", grouped(n))
-}
 
 /// The Recently played place's line: the game played last, or none yet.
 pub fn last_played(title: Option<&str>) -> String {

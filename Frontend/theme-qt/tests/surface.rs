@@ -128,7 +128,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "now",
                 "name",
             ],
-            &["games", "count", "line", "played", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "percent", "shortTime", "gameArt"],
+            &["games", "count", "line", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "percent", "shortTime", "gameArt"],
         ),
         ("Help", &[], &["entries"]),
         (

@@ -154,7 +154,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         "No games yet|Nothing played yet|No consoles have games yet|Settings › Library adds a folder|PLACES|Continue|Recent"
     );
     assert!(scene.property("scene", "paused").starts_with("Paused "), "pausedAgo from the models' words");
-    assert_eq!(scene.property("scene", "playedPlace"), "1,566 played|3 of 14|Nintendo · 1990", "a console's played games, a place among a list and a line of parts, from the models' words");
+    assert_eq!(scene.property("scene", "placeLine"), "3 of 14|Nintendo · 1990", "a place among a list and a line of parts, from the models' words");
     // Words.now holds the time the phrases are said against, as the program's held clock sets it (decided 2026-11-09).
     host::words(within(window)).unwrap().show_now(1_000_000.0);
     host::session(within(window)).unwrap().show(&SessionFacts {

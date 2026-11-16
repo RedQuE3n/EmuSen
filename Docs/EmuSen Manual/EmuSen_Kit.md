@@ -4354,7 +4354,7 @@ row is shorter, and gives none from the last row. It also gives each group's fir
 no console. `kit-qt/src/group_grid.rs`, **`GroupGridLayout`**, reads the two roles (`groupRole`, `group` by default;
 `indexRole`, `groupIndex`) from any list model when `read()` is called or the model changes. It lays out again when
 `columns` changes, and gives the lists `columnOf`, `rowOf`, `left`, `right`, `up`, `down`, `firsts` and `rows`, with -1
-for none. A screen places an item at its column and row and binds its `KeyNavigation` to the neighbours' delegates. The
+for none. A screen places an item at its column and row and answers each arrow in the item's own `Keys.onPressed` from the neighbour's index; Eclipse's Choose a console uses no `KeyNavigation`, which writes back links of its own and skips a hidden delegate (EmuSen_Qt.md §3.4.9). The
 edges of the grid are the screen's to join: to its group's heading, to an action. Exported to themes in EmuSen.Theme 1.5
 (Eclipse's Choose a console, EmuSen_Qt.md §3.4.9). Kit 1.9.
 

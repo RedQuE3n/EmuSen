@@ -12,7 +12,7 @@ Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played
   game row's `played`. Counted once, where the library's rows are built (`library::rows`), not per frame or per console list.
 - **`Library.consoles`' `glow`** (added role): the console's own colour as `#RRGGBB`, the glow kit-core gives its body
   (`world::glow`), so a theme's corona and the Sky agree (R-20261115-9).
-- **`Words.played(n)`** ("61 played", `qt-models/src/words.rs`) and **`Words.line(parts)`** (the parts joined as the facts join theirs, " · ", the empty
+- **`Words.line(parts)`** (the parts joined as the facts join theirs, " · ", the empty
   ones left out; `words::facts` now calls it) (added).
 - **`Help.entries(kind, {triggers: true})`** (added flag): with `group`, the group's entry is LT RT Maker on the triggers
   (`help.rs`'s `MAKER`) in place of LB RB Group, as Eclipse's Choose a console steps its makers (decided 2026-11-15 by the

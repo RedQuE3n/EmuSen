@@ -56,9 +56,6 @@ pub mod qobject {
         /// Parts said as one line, the empty ones left out: "Nintendo · 1990".
         #[qinvokable]
         fn line(self: &ThemeWords, parts: &QStringList) -> QString;
-        /// How many of a console's games were played: "61 played".
-        #[qinvokable]
-        fn played(self: &ThemeWords, count: i32) -> QString;
         /// A battery's charge: "82%"; empty below 0, where the machine has none.
         #[qinvokable]
         fn percent(self: &ThemeWords, charge: i32) -> QString;
@@ -207,10 +204,6 @@ impl qobject::ThemeWords {
 
     pub fn percent(&self, charge: i32) -> QString {
         said(words::percent(charge))
-    }
-
-    pub fn played(&self, count: i32) -> QString {
-        said(words::played(count.max(0) as usize))
     }
 
     pub fn place(&self, index: i32, count: i32) -> QString {

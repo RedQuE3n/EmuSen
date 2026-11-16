@@ -1,7 +1,8 @@
 //! Eclipse's Home acts on what it draws (EmuSen_Qt.md §3.4.8), in the program under Eclipse with an in-process SDL pad: the
 //! walk reaches every button and every tile drawn and the search; A on the first button starts the game shown, A on a tile
 //! other than the first starts that tile's game, X and the second button open the game's page, Y and the third button turn
-//! it a favourite, A on the search opens the search, and Start opens the Home card.
+//! it a favourite, A on the search opens the search, and Start opens the Home card; at every gate size the walk reaches all six
+//! tiles both ways, the buttons and the search; each help line entry pressed by a pointer acts.
 
 mod common;
 
@@ -220,6 +221,56 @@ fn qt_3_4_8_eclipse_s_home_acts_on_every_button_tile_and_the_search_from_the_pad
     hand_until(&mut scene, &sdl, &pad, UiButton::Menu, |s| s.property("screens", "shown") == "HomeCard");
     wait_for(&mut scene, "screens", "shown", "HomeCard", 3000);
     home(&mut scene);
+
+    // At every gate size the walk reaches all six tiles both ways, the three buttons and the search.
+    for (w, h) in emusen_qt_test::harness::SIZES {
+        scene.resize(w, h);
+        scene.wait(200);
+        first_tile(&mut scene, &sdl, &pad);
+        for name in &drawn[1..] {
+            hand(&mut scene, &sdl, &pad, UiButton::Right);
+            assert_eq!(&focused(&mut scene), name, "{w}x{h}: Right");
+        }
+        for name in drawn[..drawn.len() - 1].iter().rev() {
+            hand(&mut scene, &sdl, &pad, UiButton::Left);
+            assert_eq!(&focused(&mut scene), name, "{w}x{h}: Left");
+        }
+        let mut walked = Vec::new();
+        for button in [UiButton::Up, UiButton::Right, UiButton::Right, UiButton::Up, UiButton::Down, UiButton::Down] {
+            hand(&mut scene, &sdl, &pad, button);
+            walked.push(focused(&mut scene));
+        }
+        assert_eq!(walked, ["button.0", "button.1", "button.2", "search", "button.0", "tile.0"], "{w}x{h}: the walk");
+    }
+    scene.resize(1280, 800);
+    scene.wait(200);
+
+    // Each entry of the help line, pressed as a pointer presses it, acts as its button does: Options opens the game's page,
+    // Favourite turns its heart, Home card opens the Home card.
+    let click = |scene: &mut Scene<'_>, name: &str| {
+        let tree = scene.tree();
+        let n = tree.nodes.iter().find(|n| n.name == name && n.visible).unwrap_or_else(|| panic!("{name} is drawn"));
+        let (x, y) = (n.x + n.w / 2.0, n.y + n.h / 2.0);
+        scene.click(x, y);
+    };
+    first_tile(&mut scene, &sdl, &pad);
+    click(&mut scene, &format!("help-{}", words::OPTIONS));
+    until(&mut scene, "the help line's Options opening the game's page", 3000, |s| s.property("screens", "shown") == "Page");
+    // The page model still holds the page opened before until it has read this one: its title is the shown game's once read.
+    until(&mut scene, "the page of the game shown", 10000, |s| s.property("pageModel", "ready") == "true" && s.property("pageModel", "title") == GAMES[0].0);
+    home(&mut scene);
+    first_tile(&mut scene, &sdl, &pad);
+    let hearted = favourite(&paths[0]);
+    click(&mut scene, "help-Favourite");
+    until(&mut scene, "the help line's Favourite turning the heart", 5000, |_| favourite(&paths[0]) != hearted);
+    click(&mut scene, &format!("help-{}", words::HOME_CARD));
+    until(&mut scene, "the help line's Home card opening it", 3000, |s| s.property("screens", "shown") == "HomeCard");
+    home(&mut scene);
+    // The heart turned back by Y. A second press of the line's Favourite after the Home card has been open and closed does
+    // nothing, seen 2026-11-15 and its cause not known (EmuSen_Qt.md §3.4.8); this test does not lean on it.
+    first_tile(&mut scene, &sdl, &pad);
+    hand(&mut scene, &sdl, &pad, UiButton::Search);
+    until(&mut scene, "the heart turned back by Y", 5000, |_| favourite(&paths[0]) == hearted);
 
     // A on the first button starts the game shown: the second tile's, not the first's.
     first_tile(&mut scene, &sdl, &pad);

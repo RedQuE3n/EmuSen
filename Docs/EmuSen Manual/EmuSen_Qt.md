@@ -1851,6 +1851,13 @@ each field is drawn unblurred at its opacity. The oracle reads, on both backends
 field nor the disc reaches: it is that field's board colour with the first cover's second hue at its opacity over the
 ground, within two levels of 255, and none of the cover's own colours; it reads the rim's hue against the art's first.
 
+**Every size, and the help line by pointer.** `eclipse_home_pad.rs` walks, at each of the gate's five sizes, Right through
+all six tiles and Left back, Up to the buttons and through them, Up to the search and Down again; at 1280 × 800 it presses
+the help line's Options, Favourite and Home card with the pointer, which open the shown game's page, turn its heart and open
+the Home card. Not known (2026-11-15): after the Home card opened by the line's Home card is closed with B, a second pointer
+press of the line's Favourite turns nothing, where the pad's Y does; what would settle it is reading which item takes that
+press.
+
 **At rest under reduced motion.** Theme-check's audit logs of 03:04 and 07:32 on 2026-11-15 recorded Home swapping a frame
 while at rest under reduced motion; ten audit runs after did not show it, and its cause is not known: what would settle it
 is a run that records which item asked for the frame when it happens again. The oracle now places Home, sets the kit's

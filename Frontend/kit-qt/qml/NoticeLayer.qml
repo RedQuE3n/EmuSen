@@ -7,7 +7,7 @@ import EmuSen.Kit as Kit
 Item {
     id: root
     required property Kit.NoticeModel model
-    property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
+    property font labelFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontBody })
     // The glyph's box in design units.
     property real glyphSize: Kit.Tokens.base * 5
     // The shadow's darkness and blur, §5.4's raised shadow from the tokens.

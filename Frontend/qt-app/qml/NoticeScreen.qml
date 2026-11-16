@@ -11,9 +11,6 @@ Kit.NormalizedCanvas {
         model: noticeCanvas.notices
         width: noticeCanvas.width
         height: noticeCanvas.height
-        labelFont: Qt.font({ family: noticeFaces.regular, pixelSize: Kit.Tokens.fontBody })
-    }
-    Faces {
-        id: noticeFaces
+        labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
     }
 }

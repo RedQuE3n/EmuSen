@@ -3,19 +3,26 @@
 
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QString, QTime};
+use cxx_qt_lib::{QDateTime, QString, QTimeZone};
 
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("short_time.h");
+
+        /// `seconds`' time of day, in UTC or the machine's zone, in the short form of `locale` ("" is the machine's own).
+        #[cxx_name = "clockShortTime"]
+        fn short_time_of(seconds: i64, utc: bool, locale: &QString) -> QString;
     }
 
     extern "RustQt" {
         #[qobject]
         #[qml_element]
         #[qproperty(QString, time, READ, NOTIFY)]
+        /// The time in the machine's own short form, "9:41 PM" where its locale is en_US (EmuSen_Qt.md §7.1).
+        #[qproperty(QString, short_time, cxx_name = "shortTime", READ, NOTIFY)]
         #[qproperty(i32, controllers)]
         #[qproperty(QString, line, READ, NOTIFY)]
         #[qproperty(QString, console)]
@@ -44,6 +51,7 @@ pub mod qobject {
 #[derive(Default)]
 pub struct ClockRust {
     time: QString,
+    short_time: QString,
     /// The pads connected, as Endymion counts them.
     controllers: i32,
     line: QString,
@@ -71,6 +79,22 @@ impl cxx_qt::Initialize for qobject::Clock {
     }
 }
 
+/// A moment, in seconds since 1970, in the form the clock reads the wall clock: the player's own hours and minutes, "hh:mm".
+pub fn clock_time(at: i64) -> String {
+    QDateTime::from_secs_since_epoch(at, &QTimeZone::system_time_zone()).time().format(&QString::from("hh:mm")).to_string()
+}
+
+/// A moment, in seconds since 1970, in the machine's zone and its locale's short time form, `QLocale::ShortFormat`:
+/// "9:41 PM" under en_US, "21:41" under de_DE.
+pub fn short_time(at: i64) -> String {
+    short_time_in(at, false, "")
+}
+
+/// A moment's time in UTC or the machine's zone, in the short form of the named locale ("" is the machine's own).
+pub fn short_time_in(at: i64, utc: bool, locale: &str) -> String {
+    qobject::short_time_of(at, utc, &QString::from(locale)).to_string()
+}
+
 impl qobject::Clock {
     pub fn paused_at(&self) -> f64 {
         if self.game_paused { self.paused_at as f64 } else { 0.0 }
@@ -86,11 +110,16 @@ impl qobject::Clock {
         let time = if self.now > 0 {
             QString::from(format!("{:02}:{:02}", self.now.rem_euclid(86_400) / 3600, self.now.rem_euclid(3600) / 60).as_str())
         } else {
-            QTime::current_time().format(&QString::from("hh:mm"))
+            QString::from(clock_time(self.at()).as_str())
         };
         if self.time != time {
             self.as_mut().rust_mut().time = time;
             self.as_mut().time_changed();
+        }
+        let short = QString::from(short_time_in(self.at(), self.now > 0, "").as_str());
+        if self.short_time != short {
+            self.as_mut().rust_mut().short_time = short;
+            self.as_mut().short_time_changed();
         }
         self.say();
     }

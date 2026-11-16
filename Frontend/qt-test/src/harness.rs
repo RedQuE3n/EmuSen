@@ -128,9 +128,8 @@ pub fn tests_only_lines(messages: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
-/// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.
-pub const SIZES: [(i32, i32); 5] = [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)];
+/// The sizes the gate runs at, kit-core's, whose type rule holds its floor at each (EmuSen_Kit.md §7.121).
+pub use emusen_kit_core::audit::SIZES;
 
 /// The engine and the held clock are declared first so they drop before the application, as Qt requires.
 pub struct Harness {
@@ -943,7 +942,7 @@ pub struct Measures {
 
 impl Measures {
     pub fn of(form: WalkForm, height: f64) -> Measures {
-        let unit = (height / 800.0).max(1.0);
+        let unit = audit::screen_unit(height);
         let slack = if unit > 1.0 { 1.5 } else { 1.0 };
         if form == WalkForm::Desktop {
             Measures { unit: 1.0, slack, floor: 0.0 }

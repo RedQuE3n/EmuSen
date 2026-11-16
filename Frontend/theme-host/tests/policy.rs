@@ -51,6 +51,17 @@ fn qt_3_5_qt_s_versioned_probes_follow_the_module_they_probe_for() {
 }
 
 #[test]
+fn qt_3_5_multi_effect_s_blur_item_is_read_and_its_neighbours_are_not() {
+    let p = policy();
+    assert!(passes(&p, "qrc:/data/BlurItem.qml", Kind::Qml), "QtQuick.Effects' blur, which MultiEffect loads for a theme");
+    assert!(passes(&p, "qrc:/data/qmldir", Kind::Qmldir), "Qt's probe of its folder");
+    assert!(passes(&p, "qrc:/data/shaders/bluritems.vert.qsb", Kind::Url) && passes(&p, "qrc:/data/shaders/bluritems.frag.qsb", Kind::Url), "its blur's shaders");
+    assert!(!passes(&p, "qrc:/data/shaders/other.frag.qsb", Kind::Url), "no other shader of the folder");
+    assert!(!passes(&p, "qrc:/data/Other.qml", Kind::Qml), "only those files of the folder");
+    assert!(!passes(&p, "qrc:/data/BlurItem.qml.js", Kind::Script));
+}
+
+#[test]
 fn qt_3_5_qt_own_modules_resolve_and_the_named_ones_never() {
     let p = policy();
     assert!(passes(&p, "file:///usr/lib64/qt6/qml/QtQuick/qmldir", Kind::Qmldir));

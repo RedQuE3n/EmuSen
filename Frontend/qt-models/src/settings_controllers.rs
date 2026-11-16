@@ -265,7 +265,7 @@ impl SettingsView {
     /// A row of Controllers' own that the description alone does not resolve.
     pub(crate) fn controller_row(&self, entry: &Value) -> Option<Row> {
         let id = entry["id"].as_str().unwrap_or_default().to_owned();
-        let row = |label: String, value: String, kind: RowKind, held: bool| Some(Row { id: id.clone(), label, value, kind, held, marked: false });
+        let row = |label: String, value: String, kind: RowKind, held: bool| Some(Row { id: id.clone(), label, value, kind, held, marked: false, code: false });
         let label = || entry["label"].as_str().unwrap_or_default().to_owned();
         match entry["controllers"].as_str() {
             Some("players") => {

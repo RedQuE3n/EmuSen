@@ -37,7 +37,7 @@ Kit.NormalizedCanvas {
         anchors.fill: parent
         surfaceDrawn: false
         padFamily: searchCanvas.padFamily
-        helpFont: Qt.font({ family: searchFaces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         // Its help stands while the keyboard holds the focus; on the covers the theme's own does.
@@ -76,7 +76,7 @@ Kit.NormalizedCanvas {
                 text: typist.text
                 cursorPosition: typist.caret
                 color: Kit.Tokens.textStrong
-                font.family: searchFaces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: 22
                 Accessible.name: Words.search
             }
@@ -87,12 +87,9 @@ Kit.NormalizedCanvas {
                 y: 398
                 width: searchCanvas.width
                 focus: true
-                labelFont: Qt.font({ family: searchFaces.regular, pixelSize: Kit.Tokens.fontBody })
+                labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
                 onActiveFocusChanged: if (searchCanvas.host.searching && keyboard.activeFocus !== searchCanvas.host.typing) searchCanvas.screens.keysFocused(keyboard.activeFocus)
             }
         }
-    }
-    Faces {
-        id: searchFaces
     }
 }

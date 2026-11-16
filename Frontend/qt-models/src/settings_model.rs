@@ -556,6 +556,7 @@ const MINIMUM: i32 = 7;
 const MAXIMUM: i32 = 8;
 const STEP: i32 = 9;
 const AMOUNT: i32 = 10;
+const CODE: i32 = 11;
 
 impl qobject::SettingsModel {
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
@@ -569,6 +570,7 @@ impl qobject::SettingsModel {
             HELD => QVariant::from(&row.held),
             MARKED => QVariant::from(&row.marked),
             KEY => text(&row.id),
+            CODE => QVariant::from(&row.code),
             MINIMUM..=AMOUNT => self.view.slider(index.row() as usize).map_or_else(QVariant::default, |s| QVariant::from(&s[(role - MINIMUM) as usize])),
             _ => QVariant::default(),
         }
@@ -578,7 +580,7 @@ impl qobject::SettingsModel {
         let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
         for (role, name) in [(LABEL, "label"), (VALUE, "value"), (SENTENCE, "sentence"), (KIND, "kind"), (HELD, "held"), (MARKED, "marked"), (KEY, "key")]
             .into_iter()
-            .chain([(MINIMUM, "minimum"), (MAXIMUM, "maximum"), (STEP, "step"), (AMOUNT, "amount")])
+            .chain([(MINIMUM, "minimum"), (MAXIMUM, "maximum"), (STEP, "step"), (AMOUNT, "amount"), (CODE, "code")])
         {
             roles.insert(role, QByteArray::from(name));
         }

@@ -98,6 +98,8 @@ pub struct Row {
     pub held: bool,
     /// The choice in force on a page of choices.
     pub marked: bool,
+    /// Its value is a code, a folder's path or the version, drawn in the codes' face (EmuSen_Kit.md §7.117).
+    pub code: bool,
 }
 
 /// What the pane holds over its words.
@@ -723,9 +725,7 @@ impl SettingsView {
         if let Some(fact) = spec["fact"].as_str() {
             return (self.fact(fact), None, 0);
         }
-        let Some(from) = spec["from"].as_str() else { return (String::new(), None, 0) };
-        let (model, key) = from.split_once(' ').unwrap_or((from, ""));
-        let text = at(self.document(model), key).map(text_of).unwrap_or_default();
+        let Some(text) = self.read_from(spec) else { return (String::new(), None, 0) };
         let words = spec["words"].get(&text).and_then(Value::as_str);
         let shown = match (words, text.is_empty()) {
             (Some(w), _) => w.to_owned(),
@@ -733,6 +733,19 @@ impl SettingsView {
             (None, false) => text,
         };
         (shown, None, 0)
+    }
+
+    /// The text a value spec's `from` names, `Model Key`, as its document holds it.
+    fn read_from(&self, spec: &Value) -> Option<String> {
+        let from = spec["from"].as_str()?;
+        let (model, key) = from.split_once(' ').unwrap_or((from, ""));
+        Some(at(self.document(model), key).map(text_of).unwrap_or_default())
+    }
+
+    /// Whether a row's value is a code: its spec says so, and it shows a fact or the text read, not the blank's words.
+    fn is_code(&self, entry: &Value) -> bool {
+        let spec = &entry["value"];
+        spec["code"] == true && (spec.get("fact").is_some() || self.read_from(spec).is_some_and(|text| !text.is_empty()))
     }
 
     fn fact(&self, name: &str) -> String {
@@ -772,7 +785,7 @@ impl SettingsView {
             RowKind::Action
         };
         let held = keyed.as_ref().is_some_and(|k| k.row["locked"] == true) || self.declined(entry);
-        Row { id: text_of(&entry["id"]), label: self.fill(&label, ""), value: self.value(entry).0, kind, held, marked: false }
+        Row { id: text_of(&entry["id"]), label: self.fill(&label, ""), value: self.value(entry).0, kind, held, marked: false, code: self.is_code(entry) }
     }
 
     /// A row of the description a console's state declines: a door whose filter is not chosen, a folder to forget that
@@ -798,7 +811,7 @@ impl SettingsView {
             return self.saves_row(entry);
         }
         let id = text_of(&entry["id"]);
-        let row = |label: String, value: String, kind: RowKind, held: bool| Some(Row { id: id.clone(), label, value, kind, held, marked: false });
+        let row = |label: String, value: String, kind: RowKind, held: bool| Some(Row { id: id.clone(), label, value, kind, held, marked: false, code: false });
         if let Some(name) = entry["console"].as_str() {
             let c = self.read.consoles.console(name)?;
             return row(c.name.clone(), if c.runs() { String::new() } else { self.console_word("unsupported") }, RowKind::Opens, !c.runs());

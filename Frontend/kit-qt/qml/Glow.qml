@@ -1,8 +1,9 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
+import EmuSen.Kit as Kit
 
-// The glow of the rounded box this item fills, outside the box only, as a CSS box-shadow with no offset draws it (EmuSen_Kit.md §7.113).
+// The glow or shadow of the rounded box this item fills, outside the box only, as a CSS outer box-shadow draws it (EmuSen_Kit.md §7.113, §7.119).
 Item {
     id: root
     // The box's corner radius.
@@ -13,14 +14,19 @@ Item {
     property real blur
     // How far past the box the glow's shape is grown before it is blurred.
     property real spread
-    // How far past the box the glow is drawn: the spread and twice the blur, in whole units.
-    readonly property real reach: Math.ceil(root.spread + 2 * root.blur)
-    // RectangularShadow's blur for a CSS blur: 1.2, a constant of Qt's RectangularShadow page, the closest of those measured (§7.113).
-    readonly property real cardBlur: 1.2
-    // The software backend renders no shader effect; there Qt's Context2D paints the glow (§7.113).
+    // How far the shadow's shape is moved from the box, as a box-shadow's offsets; the glow of 0, 0 stands round it (§7.119).
+    property real offsetX: 0
+    property real offsetY: 0
+    // How far past the box the glow is drawn: the spread, twice the blur and the offset, in whole units.
+    readonly property real reach: Math.ceil(root.spread + 2 * root.blur + Math.max(Math.abs(root.offsetX), Math.abs(root.offsetY)))
+    // The card's blur as a share of the given blur: 1 since the glow is drawn as a Gaussian (EmuSen_Kit.md §7.119).
+    readonly property real cardBlur: 1
+    // Scene pixels to one of this item's units, so the card's blur runs at the pixels it draws.
+    property real pixelScale: 1
+    // The software backend renders no shader effect; there the kit's GlowPaint draws the glow (§7.113).
     readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     // A glow of no blur and no spread lies under its box alone, where it is not drawn: nothing is made.
-    readonly property bool glows: root.visible && root.color.a > 0 && root.width > 0 && root.height > 0 && (root.blur > 0 || root.spread > 0)
+    readonly property bool glows: root.visible && root.color.a > 0 && root.width > 0 && root.height > 0 && (root.blur > 0 || root.spread > 0 || root.offsetX !== 0 || root.offsetY !== 0)
     Loader {
         objectName: "glowCast"
         active: root.glows && !root.software
@@ -36,18 +42,34 @@ Item {
                 maskInverted: true
                 maskSource: hole
             }
-            RectangularShadow {
+            // The box grown by the spread and moved by the offset, its corners grown with it, blurred by a Gaussian of half the
+            // blur radius, as CSS draws a box-shadow (CSS Backgrounds 3 §6.1.1, §6.1.2).
+            Item {
                 objectName: "glowShadow"
-                x: root.reach
-                y: root.reach
-                width: root.width
-                height: root.height
-                radius: Math.min(root.radius, Math.min(root.width, root.height) / 2)
-                color: root.color
-                spread: root.spread
-                blur: root.blur * root.cardBlur
-                cached: false
-                antialiasing: true
+                anchors.fill: parent
+                Item {
+                    id: grown
+                    x: root.reach - root.spread + root.offsetX
+                    y: root.reach - root.spread + root.offsetY
+                    width: root.width + 2 * root.spread
+                    height: root.height + 2 * root.spread
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Math.min(root.radius, Math.min(root.width, root.height) / 2) + root.spread
+                        color: root.color
+                        antialiasing: true
+                    }
+                }
+                Loader {
+                    active: root.blur > 0
+                    sourceComponent: Component {
+                        Kit.GaussianBlur {
+                            source: grown
+                            deviation: root.blur / 2
+                            pixelScale: root.pixelScale
+                        }
+                    }
+                }
             }
             Item {
                 id: hole
@@ -74,46 +96,16 @@ Item {
         y: -root.reach
         width: root.width + 2 * root.reach
         height: root.height + 2 * root.reach
-        sourceComponent: Canvas {
-            id: paint
+        // Painted in native code, its blur made once a shape and tinted once a colour (EmuSen_Kit.md §7.113).
+        sourceComponent: Kit.GlowPaint {
             objectName: "glowCanvas"
-            property int paints: 0
-            readonly property real reach: root.reach
-            readonly property real corner: Math.min(root.radius, Math.min(root.width, root.height) / 2)
-            readonly property real spread: root.spread
-            readonly property real blur: root.blur
-            readonly property color ink: root.color
-            contextType: "2d"
-            onReachChanged: requestPaint()
-            onCornerChanged: requestPaint()
-            onSpreadChanged: requestPaint()
-            onBlurChanged: requestPaint()
-            onInkChanged: requestPaint()
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
-            onPaint: {
-                // The grown shape is drawn a canvas's width away and only its shadow, offset back, lands, clipped to outside the box.
-                const ctx = getContext(contextType)
-                const away = paint.width
-                const grown = paint.spread
-                // The shape's corners grow by the spread, less where they are smaller than it: CSS Backgrounds 3 §6.1.1.
-                const share = grown > 0 && paint.corner < grown ? 1 + Math.pow(paint.corner / grown - 1, 3) : 1
-                const rounded = paint.corner + grown * share
-                ctx.reset()
-                ctx.fillRule = Qt.OddEvenFill
-                ctx.beginPath()
-                ctx.rect(0, 0, paint.width, paint.height)
-                ctx.roundedRect(paint.reach, paint.reach, paint.width - 2 * paint.reach, paint.height - 2 * paint.reach, paint.corner, paint.corner)
-                ctx.clip()
-                ctx.shadowColor = paint.ink
-                ctx.shadowBlur = paint.blur
-                ctx.shadowOffsetX = away
-                ctx.fillStyle = Qt.rgba(paint.ink.r, paint.ink.g, paint.ink.b, 1)
-                ctx.beginPath()
-                ctx.roundedRect(paint.reach - grown - away, paint.reach - grown, paint.width - 2 * (paint.reach - grown), paint.height - 2 * (paint.reach - grown), rounded, rounded)
-                ctx.fill()
-                paint.paints = paint.paints + 1
-            }
+            color: root.color
+            corner: Math.min(root.radius, Math.min(root.width, root.height) / 2)
+            blur: root.blur
+            spread: root.spread
+            reach: root.reach
+            offsetX: root.offsetX
+            offsetY: root.offsetY
         }
     }
 }

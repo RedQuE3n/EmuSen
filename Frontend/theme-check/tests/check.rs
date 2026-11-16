@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use emusen_kit_core::tokens::{ColourToken, Corona, FocusMarks, Shadow};
+use emusen_kit_core::tokens::{ColourToken, Corona, FaceRole, FocusMarks, Shadow};
 use emusen_theme_check::{run, run_with};
 use emusen_theme_check::tokens::{TokenType, property_of, registry_tokens};
 
@@ -76,7 +76,10 @@ fn qt_3_4_token_names_types_and_text_scales_are_the_kits() {
     "quick": 1.5,
     "breathes": 1,
     "surfaceRaised": "#8026262B",
-    "homepage": null
+    "homepage": null,
+    "faceText": "Comic Sans MS",
+    "faceLabel": 300,
+    "faceCode": "JetBrains Mono"
   } },
   "previews": ["shot.png"],
   "extra": 1
@@ -94,10 +97,12 @@ fn qt_3_4_token_names_types_and_text_scales_are_the_kits() {
             "7 token tileRadius is a number",
             "8 token quick is a whole number",
             "9 token breathes is true or false",
-            "11 schema homepage is a value: a colour, a number or true/false",
-            "13 path shot.png is missing",
-            "14 note extra is not a key of schema 1, ignored",
-            "8 findings",
+            "11 schema homepage is a value: a colour, a face, a number or true/false",
+            "12 token faceText is a face the kit bundles, one of Barlow, Barlow Condensed, Sora, JetBrains Mono",
+            "13 token faceLabel is a face the kit bundles, one of Barlow, Barlow Condensed, Sora, JetBrains Mono",
+            "16 path shot.png is missing",
+            "17 note extra is not a key of schema 1, ignored",
+            "10 findings",
         ],
         "{out}"
     );
@@ -148,6 +153,8 @@ fn rule_q_every_colour_token_names_a_read_only_colour_of_the_registry_and_back()
     let mut named: Vec<&str> = ColourToken::ALL.iter().map(|t| property_of(*t)).collect();
     named.extend([Shadow::COLOUR_PROPERTY, FocusMarks::GAP_COLOUR_PROPERTY, FocusMarks::GLOW_COLOUR_PROPERTY]);
     named.extend(Corona::COLOUR_PROPERTIES);
+    let faces: Vec<&str> = registry.iter().filter(|(_, t)| *t == TokenType::Face).map(|(n, _)| n.as_str()).collect();
+    assert_eq!(faces, FaceRole::ALL.map(FaceRole::property), "the face tokens are the registry's read-only strings, in its order");
     assert_eq!(colours, named, "the palette's colour tokens, the raised shadow's, the focus marks' and the corona's, in the registry's order");
 }
 

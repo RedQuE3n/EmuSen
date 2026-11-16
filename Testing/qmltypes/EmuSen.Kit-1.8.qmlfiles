@@ -112,10 +112,14 @@ HelpBar
     property real glyphGap
     property color labelColor
     property color iconColor
+    property int leadStyle
+    property color leadColor
     property real entryScale
     property real glyphSize
     property bool pairGlyph
     property Component label
+    property Component glyph
+    property bool snapped
     property color color
     property alias radius
     property real horizontalPadding
@@ -128,6 +132,7 @@ HelpBar
     objectName "helpGlassRule"
     objectName "help-" + entry.label
     objectName "icon-" + entry.label
+    objectName "ownGlyph-" + entry.label
     objectName "glyph-" + entry.label
     objectName "glyph2-" + entry.label
 MenuPanel
@@ -148,6 +153,8 @@ MenuRow
     property bool sectionEnd
     property real inset
     property font labelFont
+    property bool code
+    readonly property font valueFont
     property bool overRaised
     readonly property size stepMark
     readonly property size openMark
@@ -178,6 +185,7 @@ PadGlyph
     readonly property alias paired
     property color ink
     readonly property alias name
+    readonly property alias letter
     readonly property real sideShare
 Scene
 Keyboard
@@ -468,8 +476,11 @@ Glow
     property color color
     property real blur
     property real spread
+    property real offsetX
+    property real offsetY
     readonly property real reach
     readonly property real cardBlur
+    property real pixelScale
     readonly property bool software
     readonly property bool glows
     objectName "glowCast"
@@ -480,6 +491,13 @@ FocusRing
     property real radius
     property int placement
     readonly property int form
+    property real gap
+    property real thickness
+    property color glowColor
+    property real glowBlur
+    property real glowSpread
+    property real bandRadius
+    property real pixelScale
     readonly property bool onEdge
     readonly property real edgeWidth
     readonly property color edgeColor
@@ -512,6 +530,44 @@ CoronaDisc
     property real rim
     property list<Kit.CoronaGlow> glows
     readonly property real diameter
+    property real pixelScale
     objectName "coronaGlow." + glow.index
     objectName "coronaRim"
     objectName "coronaDisc"
+BackdropField
+    property real x
+    property real y
+    property real width
+    property real height
+    property color color
+    property real blur
+    property real opacity
+    property real rotation
+    property real corner
+Backdrop
+    property color ground
+    property list<Kit.BackdropField> fields
+    property url source
+    property real sourceBlur
+    property real sourceOpacity
+    property real pixelScale
+    readonly property bool software
+    readonly property bool pictured
+    readonly property real radiusShare
+    readonly property int blurMax
+    objectName "backdropGround"
+    objectName "backdropFields"
+    objectName "backdropField." + field.index
+    objectName "backdropEllipse"
+    objectName "backdropBox"
+    objectName "backdropPicture"
+GaussianBlur
+    required property Item source
+    property real deviation
+    property real pixelScale
+    readonly property real reach
+    readonly property real deviationPixels
+    readonly property real texel
+    readonly property real texels
+    readonly property size grid
+    objectName "gaussianDown"

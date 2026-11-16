@@ -13,6 +13,7 @@ T.ComboBox {
     leftPadding: padding + (!control.mirrored || !indicator || !indicator.visible ? Kit.Tokens.base : indicator.width + spacing)
     rightPadding: padding + (control.mirrored || !indicator || !indicator.visible ? Kit.Tokens.base : indicator.width + spacing)
     spacing: Kit.Tokens.base * 2
+    font.family: Kit.Tokens.faceInterface
     font.pixelSize: Kit.Tokens.fontBody
     // Closed, Up and Down walk to the rows around the box and never change its value; open, they move in its list (EmuSen_Kit.md §7.24).
     Keys.onUpPressed: (event) => event.accepted = !control.popup.visible && Kit.KeyPass.toAncestors(control, event.key, event.modifiers)

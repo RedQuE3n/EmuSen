@@ -40,7 +40,7 @@ Kit.NormalizedCanvas {
         form: Kit.Forms.BigScreen
         focus: screen.inputs && !screen.typing && !listener.focus
         padFamily: screen.padFamily
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         model: screen.settings
@@ -71,7 +71,8 @@ Kit.NormalizedCanvas {
                 text: screen.settings.caption
                 wrapMode: Text.Wrap
                 color: Kit.Tokens.text
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             // The game's picture, named by its caption; the frame itself is drawn from piece J on (EmuSen_Qt.md §7.7).
@@ -90,7 +91,8 @@ Kit.NormalizedCanvas {
                     wrapMode: Text.Wrap
                     text: screen.settings.caption
                     color: Kit.Tokens.overArt
-                    font.family: faces.condensed
+                    font.family: Kit.Tokens.faceLabel
+                    font.weight: Kit.Tokens.weightTitle
                     font.pixelSize: Kit.Tokens.fontTitle
                 }
             }
@@ -131,7 +133,7 @@ Kit.NormalizedCanvas {
                             y: Kit.Tokens.base * 1.5
                             text: tile.modelData
                             color: Kit.Tokens.text
-                            font.family: faces.regular
+                            font.family: Kit.Tokens.faceText
                             font.pixelSize: Kit.Tokens.fontCaption
                         }
                     }
@@ -154,7 +156,7 @@ Kit.NormalizedCanvas {
                         text: sample.modelData
                         elide: Text.ElideRight
                         color: Kit.Tokens.text
-                        font.family: faces.regular
+                        font.family: Kit.Tokens.faceText
                         font.pixelSize: Kit.Tokens.fontBody / Kit.Tokens.textScale * screen.settings.sampleScale(sample.index)
                     }
                 }
@@ -175,7 +177,7 @@ Kit.NormalizedCanvas {
                     text: line.modelData
                     wrapMode: Text.Wrap
                     tone: screen.settings.lineTone(line.index)
-                    font.family: faces.regular
+                    font.family: Kit.Tokens.faceText
                     font.pixelSize: Kit.Tokens.fontBody
                 }
             }
@@ -189,7 +191,7 @@ Kit.NormalizedCanvas {
                     text: muted.modelData
                     wrapMode: Text.Wrap
                     color: Kit.Tokens.muted
-                    font.family: faces.regular
+                    font.family: Kit.Tokens.faceText
                     font.pixelSize: Kit.Tokens.fontBody
                 }
             }
@@ -275,7 +277,7 @@ Kit.NormalizedCanvas {
                 text: screen.settings.bindingCaption
                 wrapMode: Text.Wrap
                 color: Kit.Tokens.muted
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontBody
             }
         }
@@ -331,7 +333,7 @@ Kit.NormalizedCanvas {
         visible: screen.typing
         focus: screen.inputs && screen.typing
         padFamily: screen.padFamily
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         controller.navigationShown: false
@@ -347,20 +349,21 @@ Kit.NormalizedCanvas {
             Text {
                 text: screen.settings.typingTitle
                 color: Kit.Tokens.textStrong
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             Text {
                 text: screen.settings.typingPrompt
                 color: Kit.Tokens.muted
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontBody
             }
             Text {
                 objectName: "settingsTyped"
                 text: typist.text
                 color: Kit.Tokens.text
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontRow
             }
         }
@@ -375,11 +378,8 @@ Kit.NormalizedCanvas {
                 y: 398
                 width: screen.width
                 focus: true
-                labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
+                labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
             }
         }
-    }
-    Faces {
-        id: faces
     }
 }

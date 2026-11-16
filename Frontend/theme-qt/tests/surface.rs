@@ -6,9 +6,9 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.2.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.2.qmldir");
-const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.6.qmltypes");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.4.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.4.qmldir");
+const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.8.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
@@ -61,12 +61,12 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.2.qmltypes"
+        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.4.qmltypes"
     );
     assert_eq!(
         normalized(COMMITTED_QMLDIR),
         normalized(&built("qmldir")),
-        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.2.qmldir"
+        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.4.qmldir"
     );
 }
 
@@ -74,9 +74,9 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
     let api: [(&str, &[&str], &[&str]); 12] = [
-        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections"], &["gamesOf", "search", "firstOf"]),
+        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead"], &["gamesOf", "search", "firstOf", "artHues"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
-        ("Device", &["controllers", "family", "clock", "battery", "charging", "network", "bigScreen", "form"], &[]),
+        ("Device", &["controllers", "family", "clock", "shortTime", "battery", "charging", "network", "bigScreen", "form"], &[]),
         (
             "Actions",
             &[],
@@ -121,8 +121,9 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "continueEntry",
                 "recentEntry",
                 "now",
+                "name",
             ],
-            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo"],
+            &["games", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "shortTime", "gameArt"],
         ),
         ("Help", &[], &["entries"]),
         (
@@ -150,6 +151,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     assert_eq!(
         files,
         [
+            "Backdrop",
+            "BackdropField",
             "Body",
             "Carousel",
             "CoronaDisc",
@@ -159,6 +162,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "FigureLayout",
             "FocusRing",
             "Frame",
+            "Glow",
             "HelpBar",
             "Moonrise",
             "NormalizedCanvas",
@@ -178,6 +182,10 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         "the kit's types by name, the screen and the tokens; never the whole kit"
     );
     assert!(COMMITTED_QMLDIR.contains("singleton Tokens 1.0"), "Tokens is a singleton");
+    // 1.4's additions keep 1.4, so a theme importing 1.0 or 1.2 finds what it found before (CHANGELOG-theme-api.md).
+    for (name, minor) in [("Backdrop", "1.4"), ("BackdropField", "1.4"), ("Glow", "1.4"), ("CoronaDisc", "1.2"), ("FocusRing", "1.1"), ("Walkable", "1.0")] {
+        assert!(COMMITTED_QMLDIR.lines().any(|l| l == format!("{name} {minor} qml/{name}.qml")), "{name} is {minor}'s");
+    }
     assert!(!COMMITTED_QMLDIR.lines().any(|l| l.starts_with("import ")), "the qmldir does not hand a theme the kit");
 }
 

@@ -21,15 +21,61 @@ pub const MOONRISE_SOURCE: &str = "qrc:/qt/qml/EmuSen/Kit/qml/Moonrise.qml";
 /// that lets them pass (EmuSen_Kit.md §7.102, §7.109).
 pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str, Class); 1] = [(MOONRISE_SOURCE, "moonriseCaption", Class::MoonriseCaption)];
 
-/// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item written in its file, if one does; the same name in any
-/// other file, a theme's among them, is held.
+/// The built-in Eclipse's file that draws every word of its boards at the board's size (R-20261115-24), in the program's
+/// resources.
+pub const ECLIPSE_LINE_RESOURCE: &str = "qrc:/emusen/themes/eclipse/parts/Line.qml";
+
+/// The same file in the checkout this crate was built from, as Qt writes a local file's URL, which theme-check and the tests
+/// load; none where that checkout is not on the machine.
+pub fn eclipse_line_checkout() -> Option<&'static str> {
+    static LINE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    LINE.get_or_init(|| {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes/eclipse/parts/Line.qml");
+        std::fs::canonicalize(path).ok().map(|p| format!("file://{}", p.display()))
+    })
+    .as_deref()
+}
+
+/// Whether words are written in the built-in Eclipse's `Line.qml`, a board's words at the board's size (R-20261115-24, -29):
+/// the resource's, or the one file of the checkout this was built from; no other path, whatever its tail.
+pub fn eclipse_board_words(item: &Item) -> bool {
+    item.source == ECLIPSE_LINE_RESOURCE || eclipse_line_checkout().is_some_and(|line| item.source == line)
+}
+
+/// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item written in its file, if one does, or Eclipse's board type
+/// for words written in the built-in Eclipse's `Line.qml`; the same name in any other file, a theme's among them, is held.
 pub fn small_text_exception(item: &Item) -> Option<Class> {
+    if eclipse_board_words(item) {
+        return Some(Class::EclipseBoardType);
+    }
     SMALL_TEXT_EXCEPTIONS.iter().find(|(source, name, _)| item.name == *name && item.source == *source).map(|(_, _, class)| *class)
 }
 
 /// The floor on a big screen: the capitals Inter draws at 16 design pixels, 11.64.
 pub fn smallest_capitals() -> f64 {
     SMALLEST_TEXT * DESKTOP_CAPS
+}
+
+/// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
+/// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.
+pub const SIZES: [(i32, i32); 5] = [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)];
+
+/// A window's pixels to one of the audit's design pixels: its height over the design height, never under one, so a window
+/// shorter than the design is held to the floor in its own pixels.
+pub fn screen_unit(height: f64) -> f64 {
+    (height / crate::canvas::DESIGN_HEIGHT).max(1.0)
+}
+
+/// The capitals' floor in canvas units, where a big screen's words are laid out: at each gate size the audit's floor in the
+/// window's pixels, less its slack, over the canvas's pixels a unit there, the largest of them (EmuSen_Kit.md §7.121).
+pub fn smallest_capitals_in_units() -> f64 {
+    SIZES
+        .iter()
+        .map(|&(_, h)| {
+            let h = f64::from(h);
+            (smallest_capitals() * screen_unit(h) - CAPS_SLACK) / (h / crate::canvas::DESIGN_HEIGHT)
+        })
+        .fold(0.0, f64::max)
 }
 
 /// The fit audit of Settings Reference §4.83.2 over one screen: `panel` is its frame, `slack` a pixel (a pixel and a half above scale 1), `smallest` the capitals' floor or 0 for a desktop window.

@@ -6,7 +6,7 @@ use crate::rows::qobject::ThemeRows;
 use crate::view::{self, Row};
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use emusen_qt_models::library::{LibraryView, FAVOURITES, RECENT};
 use emusen_qt_models::words;
@@ -17,6 +17,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qlist.h");
+        type QList_f64 = cxx_qt_lib::QList<f64>;
         include!("emusen-theme-qt/src/rows.cxxqt.h");
         type ThemeRows = crate::rows::qobject::ThemeRows;
     }
@@ -32,6 +34,8 @@ pub mod qobject {
         #[qproperty(*mut ThemeRows, favourites, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, collections, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, shelf, READ, CONSTANT)]
+        /// Moves each time a picture's hues have been read and each time the library is fed, so a binding on `artHues` asks again.
+        #[qproperty(i32, art_hues_read, cxx_name = "artHuesRead", READ, NOTIFY)]
         type ThemeLibrary = super::ThemeLibraryRust;
     }
 
@@ -48,9 +52,16 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "firstOf"]
         fn first_of(self: Pin<&mut ThemeLibrary>, id: &QString, count: i32) -> *mut ThemeRows;
+
+        /// The hues of a game's art (its hero, else its cover), most prominent first, at most `most`, in degrees; none
+        /// while they are read off the GUI thread (`artHuesRead` moves when they are) and for art with no colour or none.
+        #[qinvokable]
+        #[cxx_name = "artHues"]
+        fn art_hues(self: Pin<&mut ThemeLibrary>, key: &QString, most: i32) -> QList_f64;
     }
 
     impl cxx_qt::Initialize for ThemeLibrary {}
+    impl cxx_qt::Threading for ThemeLibrary {}
 }
 
 /// The lists, each the singleton's child, and the view they were last fed from.
@@ -72,7 +83,16 @@ pub struct ThemeLibraryRust {
     /// Home's lines as last fed, and the places the host would decline.
     lines: Vec<(String, bool)>,
     declined: Vec<String>,
+    art_hues_read: i32,
+    /// Each picture's hues as read, by its path, when its file last changed and how many were asked; a picture being read is
+    /// listed with none, and one written again, or written after it was first asked for, is read again.
+    hues: HashMap<Asked, Vec<f64>>,
+    /// The one thread that reads pictures, one after another, started at the first asked for; it ends with the library.
+    reader: Option<std::sync::mpsc::Sender<Asked>>,
 }
+
+/// A picture's hues asked for: its path, when its file last changed (none while there is no file), and how many.
+type Asked = (String, Option<std::time::SystemTime>, usize);
 
 impl Default for ThemeLibraryRust {
     fn default() -> Self {
@@ -93,6 +113,9 @@ impl Default for ThemeLibraryRust {
             view: LibraryView::empty(),
             lines: Vec::new(),
             declined: Vec::new(),
+            art_hues_read: 0,
+            hues: HashMap::new(),
+            reader: None,
         }
     }
 }
@@ -130,6 +153,46 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
 }
 
 impl qobject::ThemeLibrary {
+    pub fn art_hues(mut self: Pin<&mut Self>, key: &QString, most: i32) -> cxx_qt_lib::QList<f64> {
+        let mut out = cxx_qt_lib::QList::<f64>::default();
+        let Some(game) = self.view.game(&key.to_string()) else { return out };
+        let path = if game.hero.is_empty() { game.cover } else { game.hero };
+        if path.is_empty() || most <= 0 {
+            return out;
+        }
+        let changed = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        let asked = (path, changed, most as usize);
+        if let Some(hues) = self.hues.get(&asked) {
+            hues.iter().for_each(|h| out.append(*h));
+            return out;
+        }
+        self.as_mut().rust_mut().hues.insert(asked.clone(), Vec::new());
+        if self.reader.is_none() {
+            let (send, take) = std::sync::mpsc::channel::<Asked>();
+            let qt = self.qt_thread();
+            std::thread::spawn(move || {
+                for asked in take {
+                    let hues = emusen_qt_models::art_hues::hues_of_file(&asked.0, asked.2);
+                    let sent = qt.queue(move |mut library| {
+                        library.as_mut().rust_mut().hues.insert(asked, hues);
+                        let read = library.art_hues_read.wrapping_add(1);
+                        library.as_mut().rust_mut().art_hues_read = read;
+                        library.as_mut().art_hues_read_changed();
+                    });
+                    // The library is gone: nothing is left to read for.
+                    if sent.is_err() {
+                        break;
+                    }
+                }
+            });
+            self.as_mut().rust_mut().reader = Some(send);
+        }
+        if let Some(reader) = &self.reader {
+            let _ = reader.send(asked);
+        }
+        out
+    }
+
     /// A list of the singleton's own with `roles`.
     fn made(self: Pin<&mut Self>, roles: &'static [&'static str]) -> *mut ThemeRows {
         let list = ffi::new_rows(self.upcast_pin());
@@ -162,6 +225,10 @@ impl qobject::ThemeLibrary {
         // The own look reads the rows, the systems and the catalog alone; the lists' texts and the ES-DE state are not copied (EmuSen_Qt.md §4.15).
         self.as_mut().rust_mut().view = LibraryView { rows: view.rows.clone(), systems: view.systems.clone(), catalog: view.catalog.clone(), ..LibraryView::default() };
         self.as_mut().rust_mut().lines = lines;
+        // The games' art may have changed with the view: a binding on `artHues` asks again.
+        let read = self.art_hues_read.wrapping_add(1);
+        self.as_mut().rust_mut().art_hues_read = read;
+        self.as_mut().art_hues_read_changed();
     }
 
     /// The host's feed of the places whose `openPlace` it would decline, by key; their rows are not `available`.

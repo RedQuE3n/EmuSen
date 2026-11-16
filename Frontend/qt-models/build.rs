@@ -50,7 +50,7 @@ fn main() {
             "src/game_page_model.rs",
         ])
         .include_dir("cpp")
-        .cpp_files(["cpp/session_pictures.cpp", "cpp/folders.cpp"])
+        .cpp_files(["cpp/session_pictures.cpp", "cpp/folders.cpp", "cpp/short_time.cpp"])
         .qt_module("Quick")
         .qt_module("Qml")
         .build()

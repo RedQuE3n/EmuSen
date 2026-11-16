@@ -398,3 +398,49 @@ fn qt_7_8_g2_a_hidden_game_leaves_every_place_until_settings_lists_hidden_games(
     let rows = refresh(&source).unwrap().rows;
     assert_eq!(rows.iter().map(|r| r.count).collect::<Vec<_>>(), [5, 1, 4, 3, 2], "listed again with the rest");
 }
+
+#[test]
+fn eclipse_s_home_says_a_game_s_last_play_its_time_played_and_continue_as_its_board_does() {
+    use emusen_qt_models::words::{continue_line, played_facts};
+    let at = 1_000_000;
+    // Main.dc.html:56, "Last played yesterday · 3 h 20 min played".
+    assert_eq!(played_facts(at, at + 86_400, 3 * 3600 + 20 * 60), "Last played yesterday · 3 h 20 min played");
+    assert_eq!(played_facts(at, at + 720, 45 * 60), "Last played 12 minutes ago · 45 min played");
+    assert_eq!(played_facts(at, at + 7200, 2 * 3600), "Last played 2 hours ago · 2 h played");
+    assert_eq!(played_facts(at, at + 3 * 86_400, 0), "Last played 3 days ago", "no time played, no second half");
+    assert_eq!(played_facts(at, at + 30, 59), "Last played just now", "under a minute played is none");
+    // Main.dc.html:53, "CONTINUE · SUPER NINTENDO", its capitals the font's.
+    assert_eq!(continue_line("Super Nintendo"), "Continue · Super Nintendo");
+    assert_eq!(continue_line(""), "Continue");
+}
+
+#[test]
+fn eclipse_s_home_names_x_options_and_start_the_home_card_and_leaves_select_s_search_out_of_its_bar() {
+    use emusen_qt_models::help::{card_named, entries, Screen};
+    let words = |s: Screen| card_named(entries(s).to_vec()).iter().map(|e| e.1).collect::<Vec<_>>();
+    // Main.dc.html:94-97: "A Resume, X Options, Y Favourite, MENU Home card".
+    assert_eq!(words(Screen::Home), ["Resume", "Options", "Favourite", "Home card"]);
+    assert_eq!(words(Screen::HomeShelf), ["Play", "Options", "Favourite", "Home card"]);
+    let actions = |s: Screen| card_named(entries(s).to_vec()).iter().map(|e| e.2).collect::<Vec<_>>();
+    assert_eq!(actions(Screen::Home), [None, Some("gamePage"), Some("favourite"), Some("home")], "each still acts as before");
+}
+
+#[test]
+fn eclipse_s_times_are_said_in_the_locale_s_short_form() {
+    use emusen_qt_models::clock::short_time_in;
+    use emusen_qt_models::words::resume_point;
+    // 1970-01-01 21:41 and 21:12 UTC: the board's status (Main.dc.html:49) and resume row (:59) under en_US.
+    let (status, saved) = (21 * 3600 + 41 * 60, 21 * 3600 + 12 * 60);
+    assert_eq!(short_time_in(status, true, "en_US"), "9:41 PM");
+    assert_eq!(resume_point(&short_time_in(saved, true, "en_US")), "Resume point · saved 9:12 PM");
+    // A 24-hour locale gives its own form, so no form is the program's.
+    assert_eq!(short_time_in(status, true, "de_DE"), "21:41");
+    assert_eq!(short_time_in(status, true, "en_GB"), "21:41");
+}
+
+#[test]
+fn eclipse_s_art_pill_says_the_game_s_title() {
+    // Main.dc.html:75, "GAME ART · AURORA DRIFT", drawn in capitals from these words.
+    assert_eq!(emusen_qt_models::words::game_art("Aurora Drift"), "Game art · Aurora Drift");
+    assert_eq!(emusen_qt_models::game_page::place(0, 24), "1 of 24", "Main.dc.html:80");
+}

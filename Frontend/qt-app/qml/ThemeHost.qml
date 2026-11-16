@@ -51,6 +51,7 @@ Item {
     signal resumed()
     signal backed()
     signal focused(string game)
+    signal favourite(string game)
     // What a slot holds: the scope the theme's screen is made in, out of the window's items while not shown, so a forceActiveFocus
     // in it climbs no scope of the window's, the slot's included, and takes no focus from the screen shown (EmuSen_Qt.md §3.5.2).
     component Placing: Item {
@@ -101,6 +102,7 @@ Item {
         objectName: "feed." + themed.objectName
         host: host
         clock: themed.clock.time
+        shortTime: themed.clock.shortTime
         now: themed.clock.now
         onPlayed: (game) => themed.played(game)
         onResumed: themed.resumed()
@@ -109,6 +111,7 @@ Item {
         onBacked: themed.backed()
         onActed: (key) => themed.screens.act(key)
         onFocused: (game) => themed.focused(game)
+        onFavourite: (game) => themed.favourite(game)
         onSelected: (index) => themed.library.select(index)
     }
     // A new engine is fed everything the feed holds, and the models as they stand, since a host made at run time (the

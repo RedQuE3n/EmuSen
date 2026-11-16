@@ -937,23 +937,23 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 `import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
 `Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.2.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.4.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
 |---|---|---|
-| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts` (cover and hero as file URLs) |
+| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts`, `consoleName` (the console's name alone, that `facts` begins with; 1.4) (cover and hero as file URLs) |
 | `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
 | `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (-1 none), `charging`, `network`, `bigScreen`, `form` |
 | `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting |
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
 | `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
-| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations: the curated face of `words.rs` |
+| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations; since 1.4 `name`, the program's name in its own case, `playedFacts(at, seconds)` and `continueLine(console)`: the curated face of `words.rs` |
 | `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept})` the same with LB RB Group and B Back added where the kind takes them, and A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false; the curated face of `help.rs` |
-| `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
+| `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only, the face tokens among them (1.3, `EmuSen_Kit.md` §7.117); `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
-| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30) |
+| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30); `FocusRing`, `PlanetMark`, `CoronaDisc`, `CoronaGlow`, `Backdrop`, `BackdropField` and `Glow` are the later minors' (`CHANGELOG-theme-api.md`) |
 | `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
@@ -1036,14 +1036,14 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, now `EmuSen.Theme 1.2` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.4` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
 deprecated, in the changelog and its doc comment, for one minor, then removed at a major. A theme states the API it was
 written for in `theme.json` (`"api": "1.0"`); a theme written for a newer major than the build has is refused with words
 naming both; one written for an older minor of the same major loads, its minors being additive after the first release;
-before it a later minor may have removed what the theme uses, each removal listed in the changelog. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`.
+before it a later minor may have removed what the theme uses, each removal listed in the changelog. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`. The API is the newest of what the module exports and the newest minor that changelog heads a section with, and nothing the module exports is newer, so a minor whose additions are members of types exported earlier is still that minor (decided 2026-11-11 by the tester, R-20261111-107; theme-check's `registry.rs`).
 
 ### 3.4 The package
 
@@ -1640,19 +1640,19 @@ Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the pres
 theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
 only once Eclipse has screens of its own.
 
-**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.2 (its corona tokens are 1.2's, the newest it sets; its focus tokens are 1.1's), the dark variant, no
-screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
-the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
-tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
-and notices) and Eclipse's own engine take Eclipse's values. It has no preview because a grab of the program in Eclipse
-today shows the reference's screens, which would not show Eclipse. The manifest allows all of this: `screens` and
-`variants` are lists, `previews` is optional, and theme-audit audits the screens a package lists, so it loads none here.
+**The package.** `Frontend/themes/eclipse/` holds `theme.json`: name Eclipse, `api` 1.4 (Home's `Backdrop`, `Glow`, `Type` and the rows' `consoleName` are 1.4's, the newest it uses; its face tokens are 1.3's, its corona tokens 1.2's, its focus tokens 1.1's), the dark variant, one
+screen of its own (`"screens": ["home"]`, §3.4.8), its parts (`parts/`), no cue, no preview, and the token overrides below. Choose a console and
+the games are still the reference's, drawn by the reference's host, whose engine keeps the kit's tokens; Eclipse's Home,
+the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions and notices) and
+Eclipse's own engine take Eclipse's values. It has no preview yet: a grab of the program in Eclipse still shows the
+reference's Choose a console and games. The manifest allows all of this: `screens` and `variants` are lists, `previews`
+is optional, and theme-audit audits the screens a package lists.
 
 **Built in.** `themes::BUILT_IN` (`qt-models/src/themes.rs`) is the one list of built-in themes, the reference first;
 `themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
 holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
 tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
-project · EmuSen.Theme 1.2 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
+project · EmuSen.Theme 1.3 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
 theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
 `Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
 overrides on the program's engine.
@@ -1709,6 +1709,13 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | coronaHaloColor | the disc's far glow | the same, the third shadow (`Main:25`) | rgba(236, 160, 186, 0.28) | #47ECA0BA |
 | coronaHaloBlur | the far glow's blur | the same (`Main:25`) | 170 px | 113.333… |
 | coronaHaloSpread | the far glow's spread | the same (`Main:25`) | 46 px | 30.666… |
+| faceText | the screens' words (`Settings.qml`, the cards, the game page) | the board's face (`EclipseSettings:17`, `Main:17`) | 'Sora' | Sora |
+| faceLabel | names, titles, the wordmark (`themes/emusen/parts/Faces.qml`) | the same (`EclipseSettings:17`) | 'Sora' | Sora |
+| faceInterface | a row's label and value (`MenuRow.qml:58`), the style's controls | the rows (`EclipseSettings:17`) | 'Sora' | Sora |
+| faceCode | a folder's path and the version in a row (`MenuRow.qml`, `code`) | the path (`EclipseSettingsLibrary:70`), the version (`EclipseSettingsEmuSen:72`), a cheat's code (`EclipseCheats:75`) | 'JetBrains Mono' | JetBrains Mono |
+| weightTitle | every title's weight (`Settings.qml:71`, `MenuCard.qml:242`) | the titles (`EclipseSettings:25`, `:40`) | 600 | 600 |
+| weightSentence | the pane's sentence (`SettingsFrame.qml`) | the sentence (`EclipseSettings:75`) | 300 | 300 |
+| weightWordmark | the wordmark (`Moonrise.qml:289`, the reference's Home) | the wordmark (`Main:31`) | 600 | 600 |
 
 The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
 (96 px, 64 units) is the kit's value too. `border` is not the board's #5A6076, which is 2.83:1 on surfaceRaised and 2.97:1
@@ -1742,6 +1749,149 @@ Eclipse; Use stores `eclipse` and loads it from the resources; every override re
 program's equals `theme.json`'s, and every other token is the kit's; the reference chosen again gives the kit's tokens
 back. qt-models' `both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference` holds the listing and the
 resolution, and qt-app's `qt_3_4_2_…` holds each built-in's resources to its folder.
+
+#### 3.4.8 Eclipse's Home **[M 2026-11-15]**
+
+Decided 2026-11-13 by the tester (R-20261113-5): a theme has its own Home, Consoles, games view and splash, and the theme API is
+not widened for it. Eclipse's Home (`Frontend/themes/eclipse/screens/Home.qml`) is the board `Main.dc.html` ("Eclipse theme,
+Home", 1920 × 1200, in the design project) built against `EmuSen.Theme` alone. Every measure is the board's pixel times
+`Board.unit` (`parts/Board.qml`): the canvas's design height, read from `NormalizedCanvas.designHeight` (kit-core's
+`canvas::DESIGN_HEIGHT`), over the boards' height, 1200. The canvas is 800 units high at every window shape, so the same
+rule places the screen at every size the gate uses. Elements tied to the board's left edge keep their x, and the status
+keeps its distance from the right edge. Recent shows as many tiles as fit before the window's edge.
+
+**What it draws.** Over the ground (#0A1024, `parts/Ink.qml`) and the shown game's art is the kit's `CoronaDisc`, 2100 board pixels at (-900, -450),
+with the look's corona, since the model holds no game's corona yet. Then the header: the crescent mark and `Words.title`,
+and at the right the status glass with the search (`Actions.search`) and `Device.shortTime`. Under the status, while
+the shown game's art gives the backdrop its hues (`Library.artHues`), the art is named on a glass of its own,
+`Words.gameArt` in capitals 0.14em apart, "GAME ART · AURORA DRIFT". Then the shown game: the eyebrow
+`Words.continuePlaying` while it is the suspended game, its title, and its facts (`Words.pausedFacts`, or the row's
+`facts`). While the shown game is the suspended one, the resume point follows: `Session.frame`, the paused
+picture, cut at its centre to 96 × 60 with the board's inset rim, and `Words.resumePoint`, "Resume point · saved 9:12 PM", the
+time of pausing in the machine's short form. Both times are the machine's own: `qt-models/src/clock.rs`, `short_time`, asks
+`QLocale::system()` for `toString(time, QLocale::ShortFormat)`, whose en_US form is "h:mm AP" (doc.qt.io/qt-6/qlocale.html,
+`timeFormat`, read 2026-11-15); Qt 6.11's locale data writes the gap before AM or PM as U+202F, a narrow no-break space Sora
+has no glyph for, so the one function turns it (and U+00A0) to the face's space, as the boards write "9:41 PM". Under them, the first three entries of `Help.entries` as pill buttons: A plays the game, and the others press
+their own button, as the help line does. Then `Words.recentEntry`, beside it on its baseline `Words.place` of the shown tile among every game played ("1 of
+24"), and the Recent row, `Library.recent` with the suspended
+game first as the board puts it. The shown tile is 312 × 196 board pixels and the others 264 × 165, each with its hero
+cropped, the shade, its title and its row's `facts`. Last, the help line, the kit's `HelpBar` on the board's foot. The pad
+walks the tiles, Up to the buttons, then Up to the search. Every word is the program's. Where the board's differ, the
+program's are drawn: "EMUSEN" for "EmuSen", "CONTINUE PLAYING" for "CONTINUE · SUPER NINTENDO", and the paused facts for "Last
+played yesterday · 3 h 20 min played". The buttons and the help line read
+`Help.entries(kind, { card: true })`: X "Options", still opening the game's page, and Start "Home card", which opens the
+Home card (`qt-models/src/screens.rs`, Home's `home` action), with no Select search in the line; the search is the
+status's own button. Their glyphs are `parts/Glyph.qml`, the board's: the kit's letter for the pad's family in Sora in a
+2 px ring, A filled, Start's name in a capsule.
+
+**Not drawn**: the section tabs (Home, Library, Consoles, Collections, Tools) and "LB RB Sections", a piece of their
+own (R-20261115-7). Also not drawn, because the program has nothing for them: the battery, since the program feeds no
+`Device.battery` (`qt-app/src/theme.rs`, `feed_device`); "GAME ART". "1 of 24" waits for `Words.place`, which Choose a console's piece adds over
+`game_page.rs`'s `place`; its place on Home is left empty until then. The backdrop is the board's (R-20261115-27, -28): the ground #0A1024 and the five fields of `Main.dc.html:19-23`,
+each at its place, size, corners, turn, blur and opacity, in the kit's `Backdrop` (`EmuSen_Kit.md` §7.118). Only each
+field's hue is the shown game's: the field keeps the board colour's saturation, lightness and alpha. The program reads a
+game's art (its hero, else its cover) once, off the GUI thread, for its hues, most prominent first (`qt-models/src/art_hues.rs`,
+`Library.artHues`). A reading is kept by the picture's path and the time its file last changed, so a cover written later
+or written again is read again once the library is fed (until 2026-11-15 it kept the first reading, none for a cover not
+yet written); one thread reads the pictures one after another, started at the first asked for and ended with the library,
+as no thread pool is in the tree and Qt's `QThreadPool` is not wrapped by cxx-qt-lib; the three large fields take the first three and the two streaks, pale tints of the first two fields on
+the board, take those two hues. Where the art has fewer than three, the board's own offsets spread them: its hues are 168,
+251 and 218 degrees, the second 83 past the first and the third 50 past it, so one hue h gives h, h + 83 and h + 50, and two
+give h1, h2 and the point 50/83 of the way from h1 to h2 the short way round. Art with no hue (greys) or a game with no art
+takes its console's hue (`consoleHue`) by the same rule, and with no game shown the fields are the board's own colours. The
+disc's rim takes the first hue at the look's rim's saturation and lightness, and its two glows take it at their own
+strengths (R-20261114-38). The cover's own pixels are never drawn behind the disc. A resting
+tile's shadow and the filled button's halo and glow are the kit's `Glow` (§7.119).
+
+**Shared parts.** `parts/` serves every Eclipse screen. `Board` and `Ink` hold the measure and the boards' own colours.
+`Brand` is the mark and the name. `Status` is the search and the clock, on the glass or not.
+`Pill` is a button. `HelpLine` is the help bar on the foot, with a place at its right. `Glyph` is a pad button's glyph as the
+boards draw it, `Line` a text at the board's own size (its words named as the Line is), and `FieldInk` a board field's
+colour with a game's hue. `TileWords` is a tile's foot as the board draws it: the board's
+96 px shade from rgba(4, 5, 10, 0.92) at the foot to clear, the console line in capitals 12 px over the foot and the title
+34 px over it, each inset 18 px (`Main.dc.html:84-86`). The column follows the board's flow (Main:53): each
+line 26 px under the one before, the buttons 18 px further. The title's line box is the board's, 1.02 of 112 px for each
+line (`titleLine`); the title's own box keeps the face's height about that box's middle, where CSS spreads a short line's
+leading equally above and below, so its glyphs stand where the board's do and theme-check's fit still finds none cut. A
+pill's lead and trail are measured inside its 2 px outline and an outlined glyph is 44 px inside its own 2 px ring, as
+CSS's box model gives the board's buttons (`Main.dc.html:62-68`); the outline is the board's #5A6076. Measured 2026-11-15
+in headless Chrome over the board with the repo's Sora, every box of the column is the table's. What differs between the boards
+(the ground, the status's glass and search, the line's right side, a pill's measures) is a property of the part.
+
+**The table and its test.** `qt-app/tests/eclipse_home.tsv` lists every element of the board with its line, what the
+program has for it, the part that draws it, and its box, colour and type size in board pixels or as the board's layout
+rule (a flex gap after the element before it, for instance). Words in the board's typeface take the face's own line
+height, so a rule follows the drawn line rather than a guessed one. `qt-app`'s
+`qt_3_4_8_eclipse_s_home_is_its_board_at_every_size` places the screen through the theme host on six synthetic games,
+the first suspended and focused, as the board shows them. At each of the gate's five sizes it holds every built row
+(boxes, radius, colour, type size, part), every row not drawn, the focused tile's ring and every word. It also holds the
+pad's walk from the shown tile up to the buttons and the search and back, and the host dropping the screen with nothing
+logged. `eclipse_home_gpu.rs` runs the same oracle on the graphics card. With `EMUSEN_ECLIPSE_PICTURES` naming a folder,
+both grab Home at 1280 × 800 and 1920 × 1200, and once more at 1920 × 1200 with the shown game one with no art. The
+six games' first five have covers, drawn by qt-test's `covers`.
+
+**What the oracle holds besides boxes (2026-11-15).** The table's `type` column carries the board's CSS for what a box
+cannot: each text's weight, letter spacing in em and case, read from the drawn Text's font (Qt keeps a spacing in 64ths
+of a pixel, so it is held within one); each glyph's letter size and weight; each field's turn, corner (the ellipse drawn
+as one, the bars as boxes at 40 px) and which of the art's hues it takes; each glow's blur, spread and offsets and the
+scene pixels its Gaussian runs at; and the focused tile's ring, its gap, thickness, glow, band radius and colours, with
+the gap and the band drawn round the tile by their widths. The words are the board's own literals where the fixture's
+first game is the board's ("9:41 PM", "Resume point · saved 9:12 PM", "Last played yesterday · 3 h 20 min played",
+"GAME ART · AURORA DRIFT"), with the locale set to en_US and the zone to UTC. The five fields' colours are held over the
+first two covers, and the second field's centre is read from the window for both. The pointer's presses are held on the
+real program by `eclipse_home_pad.rs`.
+
+**Type.** Every word is drawn in the look's face, Sora (`Tokens.faceText`), at the board's size, weight, letter spacing and
+case (R-20261115-24). A font's pixel size is a whole number (`QFont::setPixelSize`, an `int`), so a board's 20 px, 13.33
+canvas units, cannot be set on a Text in the canvas. `parts/Line.qml` draws each text at the board's pixels and scales
+it by `Board.unit`, its box the canvas's; the oracle reads each text's size in board pixels and holds it equal to the
+board's. Under the legibility floor, and under their contrast where the board puts them (a resting tile's title over its
+art measured 3.06:1 to 4.46:1 on 2026-11-15), these words are accepted by R-20261115-24 and -29 and printed as accepted
+(`EmuSen_Kit.md` §7.121); theme-check's loaded audit of Home then passes.
+
+**Words.** The wordmark is `Words.name`, the program's name in its own case; the eyebrow `Words.continueLine`, "Continue ·
+Super Nintendo" in the font's capitals; the line under the title `Words.playedFacts`, when the game was last played and,
+where games.db holds any, its time played (`Session.played`, which the host now feeds). Where the board's words differ
+from the program's and no word exists (the battery, "1 of 24", the resume
+point, the section tabs), Home draws the program's or nothing, as listed in the table.
+
+**What acts.** Home's `Frame` holds the help's entries, so the pad's X, Y, Select and Start reach their actions on Home as
+they do on the reference's; the help line draws the frame's list. A theme's `Actions.favourite`, or the help's Y on the game
+in hand, turns that game's favourite in the library. A pad's release goes to every engine's router, so a press whose action
+moved the focus to another engine (X opening the game page) leaves no engine holding the button and eating its next press.
+`qt_3_4_8_eclipse_s_home_acts_on_every_button_tile_and_the_search_from_the_pad` (`eclipse_home_pad.rs`) drives the program
+under Eclipse with an in-process SDL pad, each press let go before the next: the walk through every tile and button and to
+the search, X and the second button opening the shown game's page, Y and the third button turning its favourite, A on the
+search opening the search, and A on the first button and on a tile other than the first each starting that game, which
+games.db then records as last played. The harness feeds no game picture, so a started game is not opened, and the
+program is loaded again after each start. With no game on the row the title's words take a second line and the search
+holds the focus (theme-audit's 50 states, `qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has`).
+
+**The art on the software backend.** R-20261115-6 rules the software backdrop the same colours, dimmed and unblurred: there
+each field is drawn unblurred at its opacity. The oracle reads, on both backends, the second field's centre, which no other
+field nor the disc reaches: it is that field's board colour with the first cover's second hue at its opacity over the
+ground, within two levels of 255, and none of the cover's own colours; it reads the rim's hue against the art's first.
+
+**Every size, and every press by pointer.** `eclipse_home_pad.rs` walks, at each of the gate's five sizes, Right through
+all six tiles and Left back, Up to the buttons and through them, Up to the search and Down again. At 1280 × 800 it presses
+with the pointer the help line's Options and Favourite, the Options and Favourite pills and the search, which open the
+shown game's page, turn its heart and open the search; then the line's Home card, closed at once with B, and every one of
+them again; then, each in a program loaded afresh, the line's first entry, the Resume pill and a tile, which start their
+game. A pointer press of the line's Favourite after the card did nothing until 2026-11-15: the card, closed while it still
+slid in, stayed drawn over Home, and its help band's Back, at the place of Home's Favourite, took the press (§7.2,
+`MenuCard`'s slide); the test now also waits for the card to leave the screen.
+
+**At rest under reduced motion.** Theme-check's audit logs of 03:04 and 07:32 on 2026-11-15 recorded Home swapping a frame
+while at rest under reduced motion; ten audit runs after did not show it, and its cause is not known: what would settle it
+is a run that records which item asked for the frame when it happens again. The oracle now places Home, sets the kit's
+`reducedMotion`, and holds that no frame is swapped for two seconds (`assert_still`), on both backends.
+
+**A tile's line is the console alone.** The board's tile draws `{{t.system}}` under the title (Main.dc.html line 86), so
+the tile draws the row's `consoleName` (EmuSen.Theme 1.4), the same name the row's `facts` begin with, from the one owner
+of both, `qt-models/src/library.rs`. The oracle holds the word and that no shown tile's title or line is cut.
+
+**Where the board shows "Sections", the theme has none.** The section tabs and their shoulders are a piece of their own
+(R-20261115-7); Home leaves their place empty. The theme's own `Type` is exported at 1.0, as every singleton made in Rust is.
 
 ### 3.5 Loading and the sandbox
 
@@ -5439,7 +5589,9 @@ built on it too:
   the List card's rows after Left on Sort: the reset made new delegates under the walk (a seeded fault below).
 - `qt-app/qml/MenuCard.qml` draws it: the scrim, the panel at 40% with its shadow, the title row (an optional cover, the
   breadcrumb above the title), the rows as the kit's `MenuRow`s, the pane at 576,156, the 98-unit band with its help bar,
-  and the slide (Enter in, Exit out, nothing under reduced motion). Its words are its host's properties, its pane is
+  and the slide (Enter in, Exit out, nothing under reduced motion). Each way stops the other: a card closed while it
+  still slid in had its Exit finish first and its Enter carry on to the end, so it stayed drawn over Home, its help band
+  taking the pointer presses meant for Home's help line (found 2026-11-15 by Eclipse's pad test, Start then B). Its words are its host's properties, its pane is
   lines or a picture or the host's own items (its default property, for the Pause Card's reel and slots), and its
   signals are `chosen`, `stepped(index, by, held)`, `focused`, `backed`, `acted` and `gone`, each answered in one call.
   **The shadow falls over the help band** beside the panel, as Mistress's does (the tester's note on stage 1's Pause

@@ -15,6 +15,7 @@ pub enum Class {
     DimmedAndMoving,
     DataWordsElided,
     MainThreadLineInTests,
+    EclipseBoardType,
 }
 
 /// One accepted class: the ruling's id in the rulings log and what it covers.
@@ -30,7 +31,7 @@ pub struct Accepted {
 }
 
 /// Every class the tester has accepted; a row is added only by a ruling of hers.
-pub const ACCEPTED: [Accepted; 9] = [
+pub const ACCEPTED: [Accepted; 10] = [
     Accepted {
         class: Class::RomFolderCutAtStart,
         ruling: "R-20261111-36",
@@ -93,6 +94,13 @@ pub const ACCEPTED: [Accepted; 9] = [
         covers: "Qt's main-thread warning in test programs only; the program itself never prints it",
         lines: &["QApplication was not created in the main() thread"],
         findings: &[],
+    },
+    Accepted {
+        class: Class::EclipseBoardType,
+        ruling: "R-20261115-24, R-20261115-29",
+        covers: "words Eclipse's boards draw, as the board draws them, under the floor or under their contrast, on the theme's own screens: the built-in Eclipse's parts/Line.qml alone",
+        lines: &[],
+        findings: &[Exempted::SMALL_TEXT, Exempted::BOARD],
     },
 ];
 

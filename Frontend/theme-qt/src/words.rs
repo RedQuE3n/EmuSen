@@ -36,6 +36,7 @@ pub mod qobject {
         /// The time the timed phrases are said against, in seconds since 1970; 0, the default, is the wall clock. The
         /// program sets it from its clock, which a test holds (decided 2026-11-09 by the tester); a theme only reads it.
         #[qproperty(f64, now, READ, NOTIFY)]
+        #[qproperty(QString, name, READ, CONSTANT)]
         type ThemeWords = super::ThemeWordsRust;
     }
 
@@ -43,6 +44,9 @@ pub mod qobject {
         /// "1 game", "1,566 games".
         #[qinvokable]
         fn games(self: &ThemeWords, count: i32) -> QString;
+        /// Where an item stands among its list: "3 of 14", for the item at `index` from 0.
+        #[qinvokable]
+        fn place(self: &ThemeWords, index: i32, count: i32) -> QString;
         /// How long ago a time in seconds since 1970 was: "12 min ago".
         #[qinvokable]
         fn ago(self: &ThemeWords, at: f64) -> QString;
@@ -72,11 +76,33 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pausedAgo"]
         fn paused_ago(self: &ThemeWords, paused_since: f64) -> QString;
+        /// A game's last play and its time played: "Last played yesterday · 3 h 20 min played".
+        #[qinvokable]
+        #[cxx_name = "playedFacts"]
+        fn played_facts(self: &ThemeWords, at: f64, seconds: f64) -> QString;
+        /// The line over a suspended game's name: "Continue · Super Nintendo".
+        #[qinvokable]
+        #[cxx_name = "continueLine"]
+        fn continue_line(self: &ThemeWords, console: &QString) -> QString;
+
+        /// "Resume point · saved 9:12 PM": a suspended game's picture and when it was paused, in the machine's short form.
+        #[qinvokable]
+        #[cxx_name = "resumePoint"]
+        fn resume_point(self: &ThemeWords, paused_since: f64) -> QString;
+        /// The art behind Eclipse's disc named: "Game art · Aurora Drift".
+        #[qinvokable]
+        #[cxx_name = "gameArt"]
+        fn game_art(self: &ThemeWords, title: &QString) -> QString;
+        /// A moment, in seconds since 1970, in the machine's zone and short time form: "9:12 PM" under en_US.
+        #[qinvokable]
+        #[cxx_name = "shortTime"]
+        fn short_time(self: &ThemeWords, at: f64) -> QString;
     }
 }
 
 pub struct ThemeWordsRust {
     title: QString,
+    name: QString,
     games_heading: QString,
     choose_a_console: QString,
     games_path: QString,
@@ -100,6 +126,7 @@ impl Default for ThemeWordsRust {
     fn default() -> Self {
         ThemeWordsRust {
             title: QString::from(words::TITLE),
+            name: QString::from(words::NAME),
             games_heading: QString::from(words::GAMES),
             choose_a_console: QString::from(words::CHOOSE_A_CONSOLE),
             games_path: QString::from(words::GAMES_PATH),
@@ -143,12 +170,36 @@ impl qobject::ThemeWords {
         said(words::games(count.max(0) as usize))
     }
 
+    pub fn place(&self, index: i32, count: i32) -> QString {
+        said(emusen_qt_models::game_page::place(index.max(0) as usize, count.max(0) as usize))
+    }
+
     pub fn ago(&self, at: f64) -> QString {
         said(words::ago(at as i64, self.at()))
     }
 
     pub fn paused_facts(&self, console: &QString, paused_since: f64) -> QString {
         said(words::paused_facts(&console.to_string(), paused_since as i64, self.at()))
+    }
+
+    pub fn played_facts(&self, at: f64, seconds: f64) -> QString {
+        said(words::played_facts(at as i64, self.at(), seconds as i64))
+    }
+
+    pub fn continue_line(&self, console: &QString) -> QString {
+        said(words::continue_line(&console.to_string()))
+    }
+
+    pub fn resume_point(&self, paused_since: f64) -> QString {
+        said(words::resume_point(&emusen_qt_models::clock::short_time(paused_since as i64)))
+    }
+
+    pub fn game_art(&self, title: &QString) -> QString {
+        said(words::game_art(&title.to_string()))
+    }
+
+    pub fn short_time(&self, at: f64) -> QString {
+        QString::from(emusen_qt_models::clock::short_time(at as i64).as_str())
     }
 
     pub fn facts(&self, maker: &QString, year: i32, count: i32, runs_on: &QString) -> QString {

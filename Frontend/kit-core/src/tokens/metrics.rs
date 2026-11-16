@@ -199,6 +199,46 @@ pub fn scaled_text(base: f64, text_scale: f64) -> f64 {
     (base * clamp_text_scale(text_scale) * 2.0).round() / 2.0
 }
 
+/// A type size a look's design gives, at a text scale, never under the big screen's legibility floor: `scaled_text` of it,
+/// raised by the kit's half units to the smallest whose capitals pass the fit audit's floor at every gate size
+/// (`audit::smallest_capitals_in_units`), `caps_at(size)` being the capitals' height of the face the words are drawn in at that size (decided
+/// 2026-11-15 by the tester, R-20261115-14; EmuSen_Kit.md §7.121).
+pub fn legible_text(base: f64, text_scale: f64, caps_at: impl Fn(f64) -> f64) -> f64 {
+    let floor = crate::audit::smallest_capitals_in_units();
+    let mut size = scaled_text(base, text_scale);
+    // A face that reports no capitals' height cannot be measured; its size stays the design's.
+    if caps_at(size) <= 0.0 {
+        return size;
+    }
+    while caps_at(size) < floor {
+        size += 0.5;
+    }
+    size
+}
+
+/// A form's type sizes from `bases` (the kit's or a theme's) at a text scale as drawn: on the big screen each is `legible_text`
+/// of its base, so no theme's size token draws under the legibility floor; the desktop's are `scaled_text` alone (EmuSen_Kit.md
+/// §7.121), its capitals measured at the whole size under it. The kit's own big-screen sizes are above the floor, so they
+/// are the same as `type_scale`'s.
+pub fn legible_type(form: Form, bases: &TypeScale, text_scale: f64, caps_at: impl Fn(f64) -> f64) -> TypeScale {
+    match form {
+        Form::Desktop => bases.scaled(text_scale),
+        Form::BigScreen => {
+            // Held at the whole size under it: a `Qt.font` truncates a half pixel, where a Text rounds it.
+            let r = |v: f64| legible_text(v, text_scale, |size| caps_at(size.floor()));
+            TypeScale {
+                display: r(bases.display),
+                title: r(bases.title),
+                strong: r(bases.strong),
+                row: r(bases.row),
+                body: r(bases.body),
+                caption: r(bases.caption),
+                glyph: r(bases.glyph),
+            }
+        }
+    }
+}
+
 impl TypeScale {
     /// Every size of these bases at a text scale (`scaled_text`).
     pub fn scaled(&self, text_scale: f64) -> TypeScale {
@@ -256,6 +296,15 @@ pub fn header_of(form: Form, base: f64, text_scale: f64) -> f64 {
     match form {
         Form::BigScreen => base,
         Form::Desktop => scaled_text(base, text_scale),
+    }
+}
+
+/// A section heading's size from its base as drawn: `header_of`, and on the big screen never under the legibility floor
+/// (`legible_text` at text scale 1, since the big screen's heading does not scale; EmuSen_Kit.md §7.121).
+pub fn legible_header(form: Form, base: f64, text_scale: f64, caps_at: impl Fn(f64) -> f64) -> f64 {
+    match form {
+        Form::BigScreen => legible_text(base, 1.0, |size| caps_at(size.floor())),
+        Form::Desktop => header_of(form, base, text_scale),
     }
 }
 

@@ -4,7 +4,7 @@ use std::process::Command;
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 // The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5), and the splash's two faces as fonts/Fonts.qrc (EmuSen_Kit.md §7.10).
-const KIT_FILES: [&str; 40] = [
+const KIT_FILES: [&str; 43] = [
     "qml/Walkable.qml",
     "qml/Body.qml",
     "qml/Sky.qml",
@@ -45,29 +45,38 @@ const KIT_FILES: [&str; 40] = [
     "qml/PlanetMark.qml",
     "qml/CoronaGlow.qml",
     "qml/CoronaDisc.qml",
+    "qml/BackdropField.qml",
+    "qml/Backdrop.qml",
+    "qml/GaussianBlur.qml",
 ];
 
-/// Qt's shader baker over EdgeFade's fragment shader, into a resource beside the module's own at qrc:/qt/qml/EmuSen/Kit/shaders/ (EmuSen_Kit.md §7.35).
+/// The kit's fragment shaders: EdgeFade's and the backdrop's Gaussian.
+const SHADERS: [&str; 2] = ["edge_fade.frag", "gaussian.frag"];
+
+/// Qt's shader baker over the kit's fragment shaders, into a resource beside the module's own at qrc:/qt/qml/EmuSen/Kit/shaders/ (EmuSen_Kit.md §7.35).
 fn baked_shader() -> PathBuf {
     let out = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
     let qsb = ["/usr/lib64/qt6/bin/qsb", "/usr/lib/qt6/bin/qsb", "qsb"]
         .into_iter()
         .find(|p| Command::new(p).arg("--version").output().is_ok())
         .expect("Qt's qsb (qt6-qtshadertools)");
-    println!("cargo:rerun-if-changed=shaders/edge_fade.frag");
-    let baked = out.join("edge_fade.frag.qsb");
-    let status = Command::new(qsb).args(["--qt6", "-o"]).arg(&baked).arg("shaders/edge_fade.frag").status().expect("qsb runs");
-    assert!(status.success(), "qsb failed on shaders/edge_fade.frag");
+    for name in SHADERS {
+        println!("cargo:rerun-if-changed=shaders/{name}");
+        let baked = out.join(format!("{name}.qsb"));
+        let status = Command::new(qsb).args(["--qt6", "-o"]).arg(&baked).arg(format!("shaders/{name}")).status().expect("qsb runs");
+        assert!(status.success(), "qsb failed on shaders/{name}");
+    }
+    let files: String = SHADERS.iter().map(|name| format!("    <file>{name}.qsb</file>\n")).collect();
     let qrc = out.join("Shaders.qrc");
-    std::fs::write(&qrc, "<RCC>\n  <qresource prefix=\"/qt/qml/EmuSen/Kit/shaders\">\n    <file>edge_fade.frag.qsb</file>\n  </qresource>\n</RCC>\n")
-        .expect("the shader's resource file");
+    std::fs::write(&qrc, format!("<RCC>\n  <qresource prefix=\"/qt/qml/EmuSen/Kit/shaders\">\n{files}  </qresource>\n</RCC>\n"))
+        .expect("the shaders' resource file");
     qrc
 }
 
 fn main() {
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Kit").version(1, 6).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
+        QmlModule::new("EmuSen.Kit").version(1, 8).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
     )
     .qrc("style/EmuSen.qrc")
     .qrc("fonts/Fonts.qrc")
@@ -99,13 +108,14 @@ fn main() {
         "src/tool.rs",
         "src/page.rs",
         "src/table.rs",
+        "src/type_size.rs",
         "src/reset_gate.rs",
         "src/controller.rs",
         "src/canvas.rs",
         "src/planet_mark.rs",
     ])
     .include_dir("cpp")
-    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/drawn_pixels.h", "cpp/drawn_pixels.cpp", "cpp/text_width.h", "cpp/text_width.cpp", "cpp/video_frames.h", "cpp/video_frames.cpp"])
+    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/drawn_pixels.h", "cpp/drawn_pixels.cpp", "cpp/text_width.h", "cpp/text_width.cpp", "cpp/bundled_faces.h", "cpp/bundled_faces.cpp", "cpp/video_frames.h", "cpp/video_frames.cpp", "cpp/glow_paint.h", "cpp/glow_paint.cpp"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
     // The clip's frames on the software backend (VideoFrames); the decoder is Qt Multimedia's, over the system's FFmpeg (EmuSen_Qt.md §1.8.9).

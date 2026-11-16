@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Theme
 
 // The makers in a column at the left and the chosen maker's consoles as a grid beside it; Left from a first-column console goes
-// to its maker, Down from a maker to the next maker. Every console is reached by the pad.
+// to its maker, Up and Down from a maker to the makers beside it. Every console is reached by the pad.
 ThemeScreen {
     objectName: "Consoles"
     role: ThemeScreen.Consoles
@@ -46,6 +46,7 @@ ThemeScreen {
                             required property string maker
                             required property int group
                             required property int groupIndex
+                            readonly property int before: layout.firsts[maker.group - 1] ?? -1
                             readonly property int after: layout.firsts[maker.group + 1] ?? -1
                             controller: frame.controller
                             objectName: "maker." + maker.group
@@ -56,6 +57,8 @@ ThemeScreen {
                             width: 160
                             height: 32
                             KeyNavigation.down: root.joined && root.made > 0 && maker.after >= 0 ? makers.itemAt(maker.after) : null
+                            // Up is bound as Down is: Qt's written-back Up did not take (Up from the last maker stayed, measured 2026-11-15).
+                            KeyNavigation.up: root.joined && root.made > 0 && maker.before >= 0 ? makers.itemAt(maker.before) : null
                             KeyNavigation.right: root.made > 0 ? consoles.itemAt(layout.firsts[maker.group] ?? 0) : null
                             onActiveFocusChanged: if (maker.activeFocus) root.chosen = maker.group
                             Text {

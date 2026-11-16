@@ -400,6 +400,18 @@ fn built_in(theme: &str) {
     }
     let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ")).collect();
     assert!(found.is_empty(), "{theme}: {} differences from its mockups:\n{}", found.len(), found.join("\n"));
+    // The whole account, findings and what was held and accepted, as recorded from the audit before its sweep read less (man theme-check).
+    let recorded = mockups.join("audit").join(format!("{theme}.findings"));
+    let expected = std::fs::read_to_string(&recorded).unwrap_or_else(|e| panic!("{}: {e}", recorded.display()));
+    assert_eq!(whole(&ran, &folder, theme), expected, "{theme}: the audit's whole account differs from {}", recorded.display());
+}
+
+/// A run's lines and its `theme-audit:` words, the theme's folder written `themes/<theme>` wherever it is checked out.
+fn whole(ran: &Ran, folder: &Path, theme: &str) -> String {
+    let real = std::fs::canonicalize(folder).unwrap().display().to_string();
+    let given = folder.display().to_string();
+    let words = ran.err.lines().filter(|l| l.starts_with("theme-audit: "));
+    ran.out.lines().chain(words).map(|l| format!("{}\n", l.replace(&given, &format!("themes/{theme}")).replace(&real, &format!("themes/{theme}")))).collect()
 }
 
 #[test]

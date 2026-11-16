@@ -441,10 +441,15 @@ fn spoken(tree: &Tree, index: u32) -> String {
 /// The focused element's item, its spoken name, and whether its centre is inside the window, where the player can see it.
 fn focused(scene: &mut Scene<'_>, size: (f64, f64)) -> Option<(u64, String, bool)> {
     let tree = scene.tree();
-    scene.focus(&tree).map(|f| {
+    focused_in(scene, &tree, size)
+}
+
+/// As `focused`, on a tree that still stands as the window shows it.
+fn focused_in(scene: &mut Scene<'_>, tree: &Tree, size: (f64, f64)) -> Option<(u64, String, bool)> {
+    scene.focus(tree).map(|f| {
         let n = &tree.nodes[f as usize];
         let (x, y) = (n.x + n.w / 2.0, n.y + n.h / 2.0);
-        (tree.id_of(f), spoken(&tree, f), x >= 0.0 && y >= 0.0 && x < size.0 && y < size.1)
+        (tree.id_of(f), spoken(tree, f), x >= 0.0 && y >= 0.0 && x < size.0 && y < size.1)
     })
 }
 
@@ -453,27 +458,30 @@ fn focused(scene: &mut Scene<'_>, size: (f64, f64)) -> Option<(u64, String, bool
 /// was inside the window; else how many were and the first few that were not.
 fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option<String> {
     let mut heard: Vec<String> = Vec::new();
-    if let Some((_, name, true)) = focused(scene, size) {
-        heard.push(name);
+    // The focus as last read: nothing but reading happens between one press's settled reading and the next press (man theme-check).
+    let mut last = focused(scene, size);
+    if let Some((_, name, true)) = &last {
+        heard.push(name.clone());
     }
     let limit = consoles.len() * 3 + 40;
-    let mut press = |scene: &mut Scene<'_>, button: UiButton| -> bool {
-        let before = focused(scene, size);
+    // Whether the press moved the focus, and where it stands after it.
+    let mut press = |scene: &mut Scene<'_>, button: UiButton| -> (bool, Option<(u64, String, bool)>) {
         scene.key(key_of(button), 0);
         // The view brought the new focus into sight before it is read.
         let tree = scene.tree();
-        scene.settle(&tree);
-        let after = focused(scene, size);
+        let after = if scene.settle(&tree) { focused(scene, size) } else { focused_in(scene, &tree, size) };
         if let Some((_, name, true)) = &after {
             if !heard.contains(name) {
                 heard.push(name.clone());
             }
         }
-        after.is_some() && after != before
+        let moved = after.is_some() && after != last;
+        last = after.clone();
+        (moved, after)
     };
     let mut presses = 0;
     for button in [UiButton::Up, UiButton::Left] {
-        while presses < limit && press(scene, button) {
+        while presses < limit && press(scene, button).0 {
             presses += 1;
         }
     }
@@ -481,9 +489,12 @@ fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option
     loop {
         for along in [UiButton::Right, UiButton::Left] {
             let mut seen = Vec::new();
-            while presses < limit && press(scene, along) {
+            while presses < limit {
+                let (moved, now) = press(scene, along);
+                if !moved {
+                    break;
+                }
                 presses += 1;
-                let now = focused(scene, size);
                 if seen.contains(&now) {
                     break;
                 }
@@ -491,7 +502,7 @@ fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option
             }
         }
         presses += 1;
-        if presses >= limit || !press(scene, UiButton::Down) {
+        if presses >= limit || !press(scene, UiButton::Down).0 {
             break;
         }
     }

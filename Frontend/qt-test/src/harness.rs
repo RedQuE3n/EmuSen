@@ -295,7 +295,8 @@ impl Scene<'_> {
     /// flicking, and a path view that keeps its current item in its highlight range at the offset that item rests at,
     /// Qt's `fmod(count - currentIndex, count)`, since Qt declares a step to a current index as no movement
     /// (EmuSen_Kit.md §7.11). It polls those declarations and fails past `SETTLE_MS`, so an unsettled state is never read.
-    pub fn settle(&mut self, tree: &Tree) {
+    /// True when it waited; false when every view was at rest already and no event ran, so `tree` still stands as read.
+    pub fn settle(&mut self, tree: &Tree) -> bool {
         let views: Vec<(u64, bool)> = tree
             .nodes
             .iter()
@@ -314,6 +315,7 @@ impl Scene<'_> {
             self.wait(10);
             waited += 10;
         }
+        waited > 0
     }
 
     fn at_rest(&mut self, id: u64, path: bool) -> bool {

@@ -2,12 +2,12 @@
 # board_height: 1200
 # Boxes are the board's pixels; tests/eclipse_consoles.rs turns each into canvas units as value × canvas::DESIGN_HEIGHT / board_height.
 # The rules are eclipse_home.tsv's (tests/eclipse_board/mod.rs), and two more: top:N:g  y is N's y + g; before:N:g  the right edge is g short of N's x.
-# type, beside eclipse_home.tsv's: "line W C", a box's line inside its edge, W board pixels wide in colour C (0, none); "corona B S A", a
+# type, beside eclipse_home.tsv's: "word S W C P", a named glyph's name size and weight, its corner C and its padding P either side; "line W C", a box's line inside its edge, W board pixels wide in colour C (0, none); "corona B S A", a
 # glow of the disc, its blur radius B and spread S in board pixels and its colour's strength A (board line 78's box-shadow).
 # A ringed glyph's box is its span's with the ring outside it (CSS's content-box): Y's 34 is 38, X's 40 is 44; a button's holds its line.
 # The state held is the board's with the program's eleven consoles: the first chip pressed, the first maker chosen, its first
 # console focused; the disc's colour, the fields' hue and the words are held by the test beside the table.
-# status: built, or ruled (the section tabs, another piece's by R-20261115-7: nothing drawn here).
+# status: built, nothing (the program has nothing for it, so no element of it is made), or ruled (the section tabs, another piece's by R-20261115-7: nothing drawn here).
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 backdropGround	17	the ground	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	#FF07080F	-	built	-
 backdropField.0	19	a colour field: #5B3FD6, a circle, blurred 140 px at 0.5	the kit's BackdropField: the board's saturation and lightness with the focused console's hue (its glow)	-	1250	120	900	900	-	opacity:0.5	blur:140	built	field 0 -1 #5B3FD6 0
@@ -19,7 +19,7 @@ nav.library	30	"Library", a section	the sections are another piece's (R-20261115
 nav.consoles	31	"Consoles", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
 nav.collections	32	"Collections", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
 nav.tools	33	"Tools", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
-battery	37	"82%"	Device.battery, Home's Status part, drawn where the machine has a battery	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+battery	37	"82%"	nothing: the program feeds Device.battery no charge on any machine yet (the tester's); Status draws it, before the clock by 22, where one is fed	-	-	-	-	-	-	-	-	nothing	-
 clock	38	"9:41 PM"	Device.shortTime, Home's Status part	Text	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
 chip.0	44	the chip pressed, "All · 124"	Words.consoleShows[0], Library.consolesBy(0, 0).count	Walkable	96	150	fit:chipWords.0:22	48	-	-	-	built	-
 chipFill.0	44	its fill, no line	the chip pressed: Tokens.accent	Rectangle	in:chip.0:0	top:chip.0:0	fit:chip.0:0	48	24	Tokens.accent	-	built	line 0 -
@@ -77,4 +77,8 @@ consoleOptions	93	Options, X	Help.entries' X entry, Eclipse's Pill	Pill	after:co
 buttonGlyph.1	94	X, ringed	the kit's lettered glyph	Glyph	in:consoleOptions:14	mid:consoleOptions	44	44	-	-	-	built	glyph 18 400
 buttonLabel.1	94	"Options"	Help.entries' X entry	Text	after:buttonGlyph.1:12	mid:consoleOptions	-	-	-	Tokens.text	23	built	400 0 none
 help	99	the help line: A Open, B Back, LT RT Maker	Help.entries(Help.Console), Eclipse's HelpLine	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Open	101	A, filled, 34 px	the kit's lettered glyph through Eclipse's Glyph part	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Back	102	B in a 2 px ring, 34 px inside	the kit's lettered glyph through Eclipse's Glyph part	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Maker	103	LT in a 2 px box, 30 px inside, corner 8, padding 10	the kit's named glyph through Eclipse's Glyph part	-	-	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Maker	103	RT, the pair's second, in the same box	the kit's HelpBar's pair through Eclipse's Glyph part	-	after:ownGlyph-Maker:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
 consolePlace	105	"Nintendo · 3 of 14"	maker, Words.between, Words.place	Text	-	mid:help	right:96	-	-	#FFD8DBE6	21	built	400 0 none

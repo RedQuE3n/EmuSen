@@ -90,11 +90,10 @@ Item {
             }
         }
     }
-    // Made only where a board draws the battery, so a board without it (Home's) holds no element of it.
+    // Made only where a board draws the battery and the machine reports one, so otherwise no element of it is held.
     Loader {
         id: charge
-        active: root.battery
-        visible: charge.item !== null && charge.item.text.length > 0
+        active: root.battery && Words.percent(Device.battery).length > 0
         x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
         y: (root.height - height) / 2
         sourceComponent: Line {
@@ -109,7 +108,7 @@ Item {
         id: clock
         objectName: "clock"
         unit: root.unit
-        x: charge.visible ? charge.x + charge.width + root.gap * root.unit : charge.x
+        x: charge.item !== null ? charge.x + charge.width + root.gap * root.unit : charge.x
         y: (root.height - height) / 2
         text: Device.shortTime
         color: Tokens.text

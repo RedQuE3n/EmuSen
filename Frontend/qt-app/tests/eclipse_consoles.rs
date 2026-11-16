@@ -53,9 +53,7 @@ fn board_held(scene: &mut Scene<'_>, c: &Console) {
         let unit: f64 = eclipse_board::read(&tree, "consolesCanvas", "unit").parse().expect("the canvas's unit");
         let screen: u64 = tree.nodes[tree.find_named("consolesScreen").expect("Eclipse's Choose a console") as usize].id.parse().unwrap();
         let tokens = eclipse_board::tokens(screen);
-        // The battery is drawn only where the machine reports one, as Status draws it.
-        let no_battery = eclipse_board::read(&tree, "battery", "text").is_empty();
-        eclipse_board::held(&tree, &rows, k, unit, f64::from(width) / unit, &tokens, &at, &|name, _, _| name == "battery" && no_battery, &mut differences);
+        eclipse_board::held(&tree, &rows, k, unit, f64::from(width) / unit, &tokens, &at, &|_, _, _| false, &mut differences);
         // The disc's glows blurred at the scene's pixels.
         let scale = eclipse_board::read(&tree, "consoleDisc", "pixelScale").parse::<f64>().unwrap_or(f64::NAN);
         if (scale - unit).abs() > 1e-9 {

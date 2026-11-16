@@ -152,6 +152,27 @@ Item {
                             when: ownGlyph.item !== null
                         }
                     }
+                    // The pair's second glyph in the theme's own form, as glyph2 draws it in the kit's (EmuSen_Kit.md §7.54).
+                    Loader {
+                        id: ownGlyph2
+                        objectName: "ownGlyph2-" + entry.label
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
+                        active: root.glyph !== null && entry.picture.length === 0 && entry.pair >= 0
+                        visible: active
+                        sourceComponent: root.glyph
+                        Binding {
+                            target: ownGlyph2.item
+                            property: "button"
+                            value: entry.pair
+                            when: ownGlyph2.item !== null
+                        }
+                        Binding {
+                            target: ownGlyph2.item
+                            property: "family"
+                            value: root.family
+                            when: ownGlyph2.item !== null
+                        }
+                    }
                     Kit.PadGlyph {
                         id: glyph
                         objectName: "glyph-" + entry.label

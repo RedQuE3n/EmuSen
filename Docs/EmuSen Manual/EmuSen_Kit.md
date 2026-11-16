@@ -2946,6 +2946,10 @@ neither changes what an existing screen draws.
   `alignWhenCentered` on the child alone does not centre exactly); false centres exactly, for a look on a canvas whose
   unit is no pixel. Entries of different heights now share the bar's middle; before, each stood at the row's top.
 
+A theme that draws its own glyphs (`glyph`) gets the pair's second as its own glyph too, `ownGlyph2-<label>`, so LT RT
+Maker is two of the theme's boxes as Eclipse's Choose a console board draws it (added 2026-11-16; before, only the first
+was drawn).
+
 **Held to**: kit-core's `tests/glyph.rs` `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
 sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
 glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry

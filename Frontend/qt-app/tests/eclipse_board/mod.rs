@@ -173,7 +173,7 @@ pub fn typed(tree: &Tree, row: &Row, k: f64, unit: f64, tokens: &BTreeMap<String
         emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(tree.nodes[i].name.as_str()), &QString::from(p)).to_string()
     };
     match parts.as_slice() {
-        [kind @ ("glyph" | "word"), size, weight] => {
+        [kind @ ("glyph" | "word"), size, weight, shape @ ..] => {
             // The glyph's own measures, in board pixels: the Glyph under the row, or the row itself.
             let glyph = std::iter::once(node)
                 .chain(tree.nodes.iter().enumerate().filter(|(_, n)| n.parent == tree.nodes[node].id).map(|(i, _)| i))
@@ -190,6 +190,13 @@ pub fn typed(tree: &Tree, row: &Row, k: f64, unit: f64, tokens: &BTreeMap<String
             }
             if weight_of != *weight {
                 out.push(format!("glyph's weight {weight_of} where the board gives {weight}"));
+            }
+            // A named glyph's corner and its padding either side of the name, in board pixels, where the row gives them.
+            for (p, v) in ["corner", "inset"].iter().zip(shape) {
+                let (have, want) = (prop(glyph, p).parse::<f64>().unwrap_or(f64::NAN), v.parse::<f64>().unwrap() * k);
+                if !same(have, want) {
+                    out.push(format!("glyph's {p} {have} where the board gives {want}"));
+                }
             }
         }
         [weight, em, case @ ("upper" | "none")] => {

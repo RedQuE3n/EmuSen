@@ -44,6 +44,7 @@ fn words_named(name: &str) -> &'static str {
     use emusen_qt_models::words;
     match name {
         "TITLE" => words::TITLE,
+        "NAME" => words::NAME,
         "NO_GAMES" => words::NO_GAMES,
         "NO_RECENT" => words::NO_RECENT,
         "NO_FAVOURITES" => words::NO_FAVOURITES,
@@ -77,8 +78,10 @@ pub fn rows_of(table: &str) -> Vec<Row> {
         .collect()
 }
 
+/// The element of a name; of a Line (parts/Line.qml), whose words carry its name too, the words.
 fn named<'t>(tree: &'t Tree, name: &str) -> Option<&'t Node> {
-    tree.find_named(name).map(|i| &tree.nodes[i as usize])
+    let all = || tree.nodes.iter().filter(|n| n.name == name);
+    all().find(|n| n.text.is_some() && n.visible).or_else(|| all().find(|n| n.visible)).or_else(|| tree.find_named(name).map(|i| &tree.nodes[i as usize]))
 }
 
 fn same(a: f64, b: f64) -> bool {
@@ -168,7 +171,11 @@ pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<
                 }
                 "colour" => {
                     // The item's own colour where others draw over it, as the ground under the disc.
-                    let read = scene.property(&row.item, "color");
+                    // The shown element's, where a hidden screen holds the name too.
+                    let id: u64 = node.id.parse().unwrap();
+                    // Safety: the id was read from the live tree.
+                    let object = unsafe { core::pin::Pin::new_unchecked(&mut *(id as *mut cxx_qt::QObject)) };
+                    let read = emusen_qt_test::ffi::ffi::harness_property(object, &cxx_qt_lib::QString::from(row.item.as_str()), &cxx_qt_lib::QString::from("color")).to_string();
                     if Colour::parse(&read) != Colour::parse(value) {
                         out.push(format!("{}: {} colour {read}, the table {value}", row.element, row.item));
                     }

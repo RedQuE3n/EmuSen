@@ -11,7 +11,7 @@ element	board	board_h	program	status	item	checks	words
 the empty ground	EclipseEmpty:17	1200	GamesInk.emptyGround (themes/eclipse/parts/GamesInk.qml), the empty state's own	built	backdropGround	colour=#05060B	
 the rose field	EclipseEmpty:19	1200	the blurred backdrop is a kit part Home builds first (R-20261115-6); its rose is of no game	open			
 the waiting disc	EclipseEmpty:20	1200	the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml) on Eclipse's corona tokens; the board's three glows are not the tokens'	built	emptyDisc	right=190 y=250 w=600 h=600	
-the header	EclipseEmpty:22	1200	Home's Brand part with Words.title (qt-models/src/words.rs:5), which is "EMUSEN" where the board writes "EmuSen"	built	wordmark	says=TITLE	EmuSen
+the header	EclipseEmpty:22	1200	Eclipse's Brand part with Words.name (words::NAME), "EmuSen" as the board writes it	built	wordmark	says=NAME	EmuSen
 the empty heading	EclipseEmpty:29	1200	Words.noGames (qt-models/src/words.rs:63)	built	emptyHeading	x=96 y=250 w=880 font=84 ink=#F4F1EC	No games yet
 the empty line	EclipseEmpty:30	1200	Words.addFolder (qt-models/src/words.rs:66), the program's words for it (R-20261113-17); the board's sentence is not the program's; ink GamesInk.words	built	emptyLine	x=96 below=emptyHeading:14 w=880 font=25 ink=#C9CDDB	Show EmuSen the folder your games are in. ...
 the steps	EclipseEmpty:35	1200	nothing: no words of the program's for the three steps	not-drawn			1 Choose your games folder  One folder, with a folder inside it for each console  2 EmuSen reads it  It finds each game's console and gets a core for it  3 Art and facts, if you like  Fetched for the games it recognises; skip it and nothing is missing

@@ -31,8 +31,8 @@ ThemeScreen {
             // A board pixel in canvas units, Board's.
             readonly property real px: board.unit
             readonly property var focusedCell: cells.currentItem
-            // No console has a game, so the library has none: the first-run state.
-            readonly property bool noLibrary: Library.consoles.count === 0 && cells.count === 0 && !Browse.searched
+            // No console has a game (Choose a console's "With games", Words.consoleShows[1]), so the library has none: the first-run state.
+            readonly property bool noLibrary: Library.consolesBy(1, 0).count === 0 && cells.count === 0 && !Browse.searched
             // The board's measures in its pixels, constants of the design (EclipseLibrary:64-73, 88).
             readonly property real margin: 96 * root.px
             readonly property real gridX: 660 * root.px
@@ -418,7 +418,7 @@ ThemeScreen {
                                     else
                                         sortPill.forceActiveFocus()
                                 }
-                                Keys.onUpPressed: crumb.forceActiveFocus()
+                                KeyNavigation.up: crumb
                                 Keys.onDownPressed: cells.forceActiveFocus()
                                 Rectangle {
                                     objectName: "gamesFilterFill." + chip.index
@@ -518,17 +518,15 @@ ThemeScreen {
                         focus: true
                         keyNavigationWraps: false
                         highlightFollowsCurrentItem: false
-                        // The wheel moves the focus a row at a time, so the rows shown follow it; the arrows still walk the tiles.
+                        // The wheel scrolls the rows, one a notch; the arrows walk the tiles and bring the focused one back in.
                         interactive: false
                         keyNavigationEnabled: true
                         WheelHandler {
                             onWheel: (event) => {
-                                // A notch is 120 eighths of a degree (QWheelEvent::angleDelta); a row a notch, at least one.
+                                // A notch is 120 eighths of a degree (QWheelEvent::angleDelta), at least one row.
                                 const notches = Math.max(1, Math.round(Math.abs(event.angleDelta.y) / 120))
-                                const by = (event.angleDelta.y < 0 ? 1 : -1) * notches * root.columns
-                                const to = Math.max(0, Math.min(cells.count - 1, cells.currentIndex + by))
-                                cells.currentIndex = to
-                                cells.currentItem?.forceActiveFocus()
+                                const last = Math.max(0, Math.ceil(cells.count / root.columns) - root.rowsShown)
+                                cells.firstRow = Math.max(0, Math.min(last, cells.firstRow + (event.angleDelta.y < 0 ? notches : -notches)))
                             }
                         }
                         // Left from the first column reaches the buttons.
@@ -549,9 +547,13 @@ ThemeScreen {
                         // The rows shown move only when the focus leaves them, a whole row at a time.
                         property int firstRow: 0
                         readonly property int focusRow: Math.floor(Math.max(0, cells.currentIndex) / root.columns)
-                        readonly property real firstRowY: cells.originY - cells.topMargin + cells.cellHeight * cells.firstRow
                         onFocusRowChanged: cells.firstRow = Math.max(0, Math.min(cells.firstRow, cells.focusRow), cells.focusRow - root.rowsShown + 1)
-                        onFirstRowYChanged: cells.contentY = cells.firstRowY
+                        // Set when the rows change, not bound: the view's origin moves as it scrolls, which a binding on it would loop on.
+                        function showRows() { cells.contentY = cells.originY - cells.topMargin + cells.cellHeight * cells.firstRow }
+                        onFirstRowChanged: cells.showRows()
+                        onHeightChanged: cells.showRows()
+                        onWidthChanged: cells.showRows()
+                        onCountChanged: cells.showRows()
                         model: Browse.games
                         delegate: Cell {
                             id: cell

@@ -35,7 +35,8 @@ fn records() -> Library {
 /// An item's words and its ink, read from the scene's tree: a view's delegates are not found by name otherwise.
 fn words_of(scene: &mut Scene<'_>, name: &str) -> (String, String) {
     let tree = scene.tree();
-    let node = tree.find_named(name).map(|i| &tree.nodes[i as usize]).unwrap_or_else(|| panic!("{name} is in the scene"));
+    // Of a Line (parts/Line.qml), whose words carry its name too, the words.
+    let node = tree.nodes.iter().find(|n| n.name == name && n.text.is_some()).or_else(|| tree.find_named(name).map(|i| &tree.nodes[i as usize])).unwrap_or_else(|| panic!("{name} is in the scene"));
     (node.text.clone().unwrap_or_default(), node.ink.clone().unwrap_or_default())
 }
 

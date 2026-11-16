@@ -190,7 +190,7 @@ fn reached(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, count: usize) {
         let (x, y) = middle(scene, "gamesGrid");
         scene.wheel(x, y, 200);
         scene.wait(300);
-        assert!(at_tile(scene).is_some_and(|i| i < columns), "{size}: the wheel back to the first row");
+        assert!(whole(&scene.tree(), 0).is_ok(), "{size}: the wheel back to the first row");
         for row in 0..count.div_ceil(columns) {
             if row > 0 {
                 scene.wheel(x, y, -1);

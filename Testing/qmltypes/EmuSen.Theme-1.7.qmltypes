@@ -84,30 +84,26 @@ Module {
         Method {
             name: "setFilter"
             type: "bool"
-            lineNumber: 39
+            lineNumber: 40
             Parameter { name: "key"; type: "QString" }
         }
         Method {
             name: "stepSort"
             type: "bool"
-            lineNumber: 40
+            lineNumber: 41
             Parameter { name: "by"; type: "int" }
         }
         Method {
             name: "stepLetter"
             type: "bool"
-            lineNumber: 41
+            lineNumber: 42
             Parameter { name: "by"; type: "int" }
         }
         Method {
             name: "enabled"
             type: "bool"
             isMethodConstant: true
-<<<<<<<< HEAD:Testing/qmltypes/EmuSen.Theme-1.7.qmltypes
-            lineNumber: 42
-========
-            lineNumber: 40
->>>>>>>> 5cef36dd6:Testing/qmltypes/EmuSen.Theme-1.5.qmltypes
+            lineNumber: 43
             Parameter { name: "key"; type: "QString" }
         }
     }

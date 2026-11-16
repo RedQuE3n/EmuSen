@@ -387,6 +387,23 @@ pub fn options_named(list: Vec<Entry>) -> Vec<Entry> {
         .collect()
 }
 
+/// A list as Eclipse's games view's foot names and orders it (EclipseLibrary:84-86): A Start, B Back, Y Favourite; X is the Game page
+/// button the column draws, and the triggers' letters stand at the right.
+pub fn games_named(list: Vec<Entry>) -> Vec<Entry> {
+    const ORDER: [UiButton; 3] = [UiButton::Accept, UiButton::Back, UiButton::Search];
+    let mut named: Vec<Entry> = list
+        .into_iter()
+        .filter_map(|(button, label, action)| match button {
+            UiButton::Accept => Some((button, crate::words::START, action)),
+            UiButton::Back => Some((button, BACK.1, action)),
+            UiButton::Search => Some((button, label, action)),
+            _ => None,
+        })
+        .collect();
+    named.sort_by_key(|e| ORDER.iter().position(|b| *b == e.0));
+    named
+}
+
 /// The frame's action lines of a list as it stands, with the screen's unnamed actions after.
 pub fn lines_of(screen: Screen, list: &[Entry]) -> String {
     list.iter().chain(unnamed(screen)).filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()

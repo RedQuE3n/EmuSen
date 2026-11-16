@@ -21,6 +21,12 @@ Decided 2026-11-15 by the tester (R-20261115-10 to -13): a theme reads and drive
 - **`Browse.kind`** (`all`, `favourites`, `recent` or `console`) and **`Browse.emptyWords`**: which list is shown and what
   it says with nothing in it ("No favourites yet", "Nothing played yet", "No games found" for a search or filter, else
   "No games yet").
+- **`Browse.filters`' `chip`** (added role): a choice's words on Eclipse's games view's chips, "All · 214" for every game
+  (`listing::chip_name`, `words::ALL`), Favourites and Not played as named; empty for a collection, which has no chip.
+- **`Browse.sortLine`**: the sort in force with its direction, "Name, A to Z" (`listing::sort_line`).
+- **`Words.gameFactLabels`** ("Last played", "Time played", "States") and **`Words.crumb`** ("/"), the games board's words.
+- **`Help.entries(kind, {games: true})`**: A Start, B Back and Y Favourite, in that order, as Eclipse's games board's foot
+  names them (`help::games_named`, `words::START`); the action lines the list's own.
 - The module is 1.7 (1.3, 1.5 and 1.6 being held by other pieces, 1.4 the backdrop and the glow); every type keeps the minor it was added in.
 
 ## 1.5, an addition: a console's played games (2026-11-15)

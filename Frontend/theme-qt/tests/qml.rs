@@ -185,6 +185,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
                 Names::Own => want,
                 Names::Card => emusen_qt_models::help::card_named(want),
                 Names::Options => emusen_qt_models::help::options_named(want),
+                Names::Games => emusen_qt_models::help::games_named(want),
             };
             assert_eq!(added.list(), emusen_qt_models::help::with_letters(entries.screen(), want, letters), "kind {}", kind.repr);
             assert!(added.action_lines().to_string().ends_with(&emusen_qt_models::help::letter_lines(entries.screen(), letters)), "kind {}", kind.repr);

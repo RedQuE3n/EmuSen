@@ -70,13 +70,19 @@ pub const GAME_ROLES: [&str; 19] = [
     "consoleName",
 ];
 /// `Browse.filters`: the Filter page's choices (1.7).
-pub const FILTER_ROLES: [&str; 4] = ["key", "name", "count", "line"];
+pub const FILTER_ROLES: [&str; 5] = ["key", "name", "count", "line", "chip"];
 /// `Browse.letters`: the shown games' first letters (1.7).
 pub const LETTER_ROLES: [&str; 1] = ["letter"];
 
 /// The Filter page's choices as `Browse.filters` holds them.
 pub fn filters(choices: &[emusen_qt_models::listing::Choice]) -> Vec<Row> {
-    choices.iter().map(|c| vec![text(&c.key), text(&c.name), Cell::Whole(c.count as i32), Cell::Text(words::choice_line(&c.name, c.count))]).collect()
+    choices
+        .iter()
+        .map(|c| {
+            let chip = emusen_qt_models::listing::chip_name(&c.key).map_or(String::new(), |name| words::choice_line(name, c.count));
+            vec![text(&c.key), text(&c.name), Cell::Whole(c.count as i32), Cell::Text(words::choice_line(&c.name, c.count)), Cell::Text(chip)]
+        })
+        .collect()
 }
 
 /// The letters as `Browse.letters` holds them.
@@ -238,9 +244,9 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
         Cell::Flag(played),
         text(&g.system),
         Cell::Number(g.hue),
-        // Players, year, genre, rating, description and video wait on the scraper's facts in the own look's view (§3.2 as built).
+        // Players, genre, rating, description and video wait on the scraper's facts in the own look's view (§3.2 as built).
         Cell::Whole(0),
-        Cell::Whole(0),
+        Cell::Whole(g.year.parse().unwrap_or(0)),
         text(""),
         Cell::Number(0.0),
         text(""),

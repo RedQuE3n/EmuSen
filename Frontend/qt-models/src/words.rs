@@ -52,6 +52,9 @@ pub const BETWEEN: &str = "·";
 pub const SEARCH: &str = "Search";
 /// The labels of a console's facts, a row each, in their order: its games, those played, its core and its screen.
 pub const FACT_LABELS: [&str; 4] = ["Games", "Played", "Core", "Screen"];
+/// The labels of a game's facts on Eclipse's games view (EclipseLibrary:46-48), a row each: its last play, its time played and
+/// its states.
+pub const GAME_FACT_LABELS: [&str; 3] = ["Last played", "Time played", "States"];
 /// Which consoles Choose a console shows, as its chips name them (EclipseConsoles:43-45): every console a core runs, those
 /// holding games, those holding a favourite; `console_list::Show`'s order.
 pub const CONSOLE_SHOWS: [&str; 3] = ["All", "With games", "Favourites"];
@@ -85,6 +88,12 @@ pub const NO_GAMES_FOUND: &str = "No games found";
 pub const EVERY_GAME: &str = "Every game";
 pub const FAVOURITES_FILTER: &str = "Favourites";
 pub const NOT_PLAYED: &str = "Not played";
+/// Every game, as Eclipse's games view's first chip names it (EclipseLibrary:55).
+pub const ALL: &str = "All";
+/// Between the places of the path in Eclipse's games view's header (EclipseLibrary:27).
+pub const CRUMB: &str = "/";
+/// A, which plays the focused game, as Eclipse's games view names it (EclipseLibrary:51, 85).
+pub const START: &str = "Start";
 
 /// A filter's choice as a chip says it: its name and how many games it shows ("Not played · 153").
 pub fn choice_line(name: &str, count: usize) -> String {
@@ -104,7 +113,7 @@ pub fn is_fixed(words: &str) -> bool {
     let single = [
         TITLE, NAME, GAMES, CHOOSE_A_CONSOLE, GAMES_PATH, CONTINUE_PLAYING, RECENT, POWER_LINE, BETWEEN, SEARCH, EMUSEN_TAG, LIBRETRO_TAG,
         FAVOURITES_LINE, NO_GAMES, NO_RECENT, NO_CONSOLES, ADD_FOLDER, PLACES, CONTINUE_ENTRY, RECENT_ENTRY, NO_FAVOURITES,
-        NO_GAMES_FOUND, EVERY_GAME, FAVOURITES_FILTER, NOT_PLAYED,
+        NO_GAMES_FOUND, EVERY_GAME, FAVOURITES_FILTER, NOT_PLAYED, ALL, START, CRUMB,
     ];
     single.contains(&words)
         || HOME_PLACES.contains(&words)

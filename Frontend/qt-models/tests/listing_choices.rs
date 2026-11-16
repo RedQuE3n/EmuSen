@@ -101,3 +101,23 @@ fn a_collections_key_is_never_read_as_a_step_whatever_its_id() {
     assert_eq!(action_of(&key), (key.as_str(), 0));
     assert_eq!(action_of(&list_card::stepped(list_card::JUMP, -1)), (list_card::JUMP, -1), "a step is still a step");
 }
+
+#[test]
+fn eclipses_games_board_names_its_chips_its_order_and_its_foot() {
+    // The chips: every game as All, Favourites and Not played as the Filter page names them, a collection none.
+    assert_eq!(emusen_qt_models::listing::chip_name(list_card::EVERY_GAME), Some(words::ALL));
+    assert_eq!(emusen_qt_models::listing::chip_name(list_card::FAVOURITES_ONLY), Some(words::FAVOURITES_FILTER));
+    assert_eq!(emusen_qt_models::listing::chip_name(list_card::NOT_PLAYED), Some(words::NOT_PLAYED));
+    let listed = Listed { key: "collection:7".into(), name: "Couch".into(), members: Vec::new() };
+    let collection = choices(&games(), library::ALL, &[listed]).pop().unwrap();
+    assert_eq!(emusen_qt_models::listing::chip_name(&collection.key), None, "a collection has no chip");
+    // The order with its direction; one that names its own as it is.
+    assert_eq!(emusen_qt_models::listing::sort_line("Name"), "Name, A to Z");
+    assert_eq!(emusen_qt_models::listing::sort_line("Last played"), "Last played, newest first");
+    assert_eq!(emusen_qt_models::listing::sort_line("Name, ascending"), "Name, ascending");
+    // The foot: A Start, B Back, Y Favourite, in the board's order, the actions kept.
+    let foot = help::games_named(help::entries(Screen::Grid).to_vec());
+    let named: Vec<(UiButton, &str)> = foot.iter().map(|e| (e.0, e.1)).collect();
+    assert_eq!(named, [(UiButton::Accept, words::START), (UiButton::Back, help::BACK.1), (UiButton::Search, "Favourite")]);
+    assert_eq!(foot[2].2, Some(help::FAVOURITE));
+}

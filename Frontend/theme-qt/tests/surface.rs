@@ -136,6 +136,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "continueEntry",
                 "recentEntry",
                 "factLabels",
+                "gameFactLabels",
+                "crumb",
                 "consoleShows",
                 "consoleSorts",
                 "noGamesLine",
@@ -148,7 +150,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         (
             "Browse",
             &["section", "heading", "world", "hue", "countLine", "previous", "next", "focusRow", "searching", "typing", "listOpen", "games", "searched",
-              "kind", "emptyWords", "filters", "filter", "sort", "letters", "letter"],
+              "kind", "emptyWords", "filters", "filter", "sort", "sortLine", "letters", "letter"],
             &[],
         ),
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),

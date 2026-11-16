@@ -1,6 +1,6 @@
 //! `Help`, the help bar's entries for what a theme's focus is on (EmuSen_Qt.md §3.2): `entries(kind)` gives the same
 //! list each time, with the roles the kit's `HelpBar` reads and the actions `Frame` declares, from emusen-qt-models' help.rs;
-//! `entries(kind, {group, back, accept, triggers, actions, card})` the same with the shoulders' Group (the triggers' Maker
+//! `entries(kind, {group, back, accept, triggers, actions, card, options, games, letters})` the same with the shoulders' Group (the triggers' Maker
 //! with `triggers`) and B's Back added where the kind takes them, and A's entry marked not `enabled` when `accept` is false;
 //! with `actions` false, the entries carrying the screen's own actions are left out (`help::without_actions`); `card` names
 //! X and Start as Eclipse's Home does and leaves Select's search out of the bar (its action stays the frame's); `options`
@@ -114,36 +114,37 @@ pub fn screen_of(kind: HelpKind) -> Screen {
 
 /// What a list may differ by: the group's entry added (LB RB Group, or LT RT Maker), B's added, A's entry enabled, the
 /// screen's own actions kept, the entries named as a board names them (`Names`) and the triggers' letters added (1.7); a
-/// list's place in a kind's 144.
-pub const FLAGS: [(Option<Entry>, bool, bool, bool, Names, bool); 144] = {
+/// list's place in a kind's 192.
+pub const FLAGS: [(Option<Entry>, bool, bool, bool, Names, bool); 192] = {
     const G: [Option<Entry>; 3] = [None, Some(help::GROUP), Some(help::MAKER)];
-    const N: [Names; 3] = [Names::Own, Names::Card, Names::Options];
-    let mut flags = [(None, false, true, true, Names::Own, false); 144];
+    const N: [Names; 4] = [Names::Own, Names::Card, Names::Options, Names::Games];
+    let mut flags = [(None, false, true, true, Names::Own, false); 192];
     let mut f = 0;
-    while f < 144 {
-        flags[f] = (G[f % 3], (f / 3) % 2 == 1, (f / 6) % 2 == 0, (f / 12) % 2 == 0, N[(f / 24) % 3], f >= 72);
+    while f < 192 {
+        flags[f] = (G[f % 3], (f / 3) % 2 == 1, (f / 6) % 2 == 0, (f / 12) % 2 == 0, N[(f / 24) % 4], f >= 96);
         f += 1;
     }
     flags
 };
 
-/// How a list's entries are named: the screen's own words, as Eclipse's Home names them, or with Eclipse's Choose a
-/// console's Sort and Options.
+/// How a list's entries are named: the screen's own words, as Eclipse's Home names them, with Eclipse's Choose a console's
+/// Sort and Options, or as Eclipse's games view's foot names them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Names {
     Own,
     Card,
     Options,
+    Games,
 }
 
-/// A hundred and forty-four lists for each kind, one for each of `FLAGS`, the singleton's children.
+/// A hundred and ninety-two lists for each kind, one for each of `FLAGS`, the singleton's children.
 pub struct ThemeHelpRust {
-    lists: [[*mut qobject::ThemeHelpEntries; 144]; 7],
+    lists: [[*mut qobject::ThemeHelpEntries; 192]; 7],
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [[std::ptr::null_mut(); 144]; 7] }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 192]; 7] }
     }
 }
 
@@ -174,6 +175,8 @@ impl qobject::ThemeHelp {
             Names::Card
         } else if flag("options", false) {
             Names::Options
+        } else if flag("games", false) {
+            Names::Games
         } else {
             Names::Own
         };
@@ -218,6 +221,7 @@ impl qobject::ThemeHelpEntries {
         let (list, lines) = match names {
             Names::Own => (list, action_lines(screen)),
             Names::Card => (help::card_named(list), action_lines(screen)),
+            Names::Games => (help::games_named(list), action_lines(screen)),
             Names::Options => {
                 let named = help::options_named(list);
                 let lines = help::lines_of(screen, &named);

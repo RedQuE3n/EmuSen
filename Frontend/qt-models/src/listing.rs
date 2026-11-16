@@ -117,6 +117,33 @@ pub fn choices(games: &[GameRow], section: &str, collections: &[crate::list_card
     out
 }
 
+/// A sort's words with its direction, as Eclipse's games view says the order in force (EclipseLibrary:62): "Name, A to Z";
+/// an order that names its own direction (an ES-DE theme's, "Name, ascending") as it is.
+pub fn sort_line(words: &str) -> String {
+    let direction = match words {
+        _ if words.contains(", ") => return words.to_owned(),
+        "Name" => "A to Z",
+        "Last played" => "newest first",
+        "Most played" => "most first",
+        "Year" => "oldest first",
+        "Rating" => "highest first",
+        _ => return words.to_owned(),
+    };
+    format!("{words}, {direction}")
+}
+
+/// A choice's name on Eclipse's games view's chips (EclipseLibrary:55-57): every game as All, Favourites and Not played as
+/// the Filter page names them; none for a collection, which the chips do not show.
+pub fn chip_name(key: &str) -> Option<&'static str> {
+    use crate::list_card::{EVERY_GAME, FAVOURITES_ONLY, NOT_PLAYED};
+    match key {
+        EVERY_GAME => Some(crate::words::ALL),
+        FAVOURITES_ONLY => Some(crate::words::FAVOURITES_FILTER),
+        NOT_PLAYED => Some(crate::words::NOT_PLAYED),
+        _ => None,
+    }
+}
+
 /// The words a list with nothing in it says (R-20261115-13): a search or a filter that leaves none, Recent, Favourites,
 /// and any other section.
 pub fn empty_words(section: &str, narrowed: bool) -> &'static str {

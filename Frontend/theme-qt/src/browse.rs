@@ -47,6 +47,8 @@ pub mod qobject {
         #[qproperty(QString, filter, READ, NOTIFY)]
         /// The sort in force in the List card's words (1.7, R-20261115-11).
         #[qproperty(QString, sort, READ, NOTIFY)]
+        /// The sort in force with its direction, as Eclipse's games view says it: "Name, A to Z" (1.7).
+        #[qproperty(QString, sort_line, cxx_name = "sortLine", READ, NOTIFY)]
         /// The shown games' first letters in order, each a `letter`, and the focused game's (1.7, R-20261115-12).
         #[qproperty(*mut ThemeRows, letters, READ, CONSTANT)]
         #[qproperty(QString, letter, READ, NOTIFY)]
@@ -102,6 +104,7 @@ pub struct ThemeBrowseRust {
     filters: *mut ThemeRows,
     filter: QString,
     sort: QString,
+    sort_line: QString,
     letters: *mut ThemeRows,
     letter: QString,
 }
@@ -127,6 +130,7 @@ impl Default for ThemeBrowseRust {
             filters: std::ptr::null_mut(),
             filter: QString::default(),
             sort: QString::default(),
+            sort_line: QString::default(),
             letters: std::ptr::null_mut(),
             letter: QString::default(),
         }
@@ -190,6 +194,7 @@ impl qobject::ThemeBrowse {
         text!(self, empty_words, empty_words_changed, facts.empty_words);
         text!(self, filter, filter_changed, facts.filter);
         text!(self, sort, sort_changed, facts.sort);
+        text!(self, sort_line, sort_line_changed, emusen_qt_models::listing::sort_line(&facts.sort));
         text!(self, letter, letter_changed, facts.letter);
     }
 

@@ -195,7 +195,7 @@ ThemeScreen {
                                     elide: Text.ElideRight
                                     text: maker.maker
                                     color: maker.chosen ? Tokens.overAccent : ink.help
-                                    font.pixelSize: Type.size(22 * root.px, Tokens.textScale)
+                                    font.pixelSize: 22 * root.px
                                     font.weight: maker.chosen ? Font.DemiBold : Font.Normal
                                 }
                                 Text {
@@ -206,7 +206,7 @@ ThemeScreen {
                                     verticalAlignment: Text.AlignVCenter
                                     text: maker.groupSize
                                     color: maker.chosen ? Tokens.overAccent : ink.help
-                                    font.pixelSize: Type.size(18 * root.px, Tokens.textScale)
+                                    font.pixelSize: 18 * root.px
                                 }
                             }
                         }
@@ -350,7 +350,7 @@ ThemeScreen {
                                         maximumLineCount: 2
                                         elide: Text.ElideRight
                                         color: Tokens.text
-                                        font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
+                                        font.pixelSize: 21 * root.px
                                         font.weight: Font.DemiBold
                                         lineHeight: 1.15
                                     }
@@ -360,7 +360,7 @@ ThemeScreen {
                                         elide: Text.ElideRight
                                         text: Words.line([plate.year > 0 ? String(plate.year) : "", Words.games(plate.count)])
                                         color: Tokens.muted
-                                        font.pixelSize: Type.size(16 * root.px, Tokens.textScale)
+                                        font.pixelSize: 16 * root.px
                                     }
                                 }
                             }
@@ -416,7 +416,7 @@ ThemeScreen {
                                 elide: Text.ElideRight
                                 text: root.shown ? Words.line([root.shown.maker, root.shown.year > 0 ? String(root.shown.year) : ""]) : ""
                                 // Its size read once, so the spacing does not read the font it sets (a binding loop).
-                                readonly property real size: Type.size(18 * root.px, Tokens.textScale)
+                                readonly property real size: 18 * root.px
                                 color: ink.rose
                                 font.pixelSize: eyebrow.size
                                 font.weight: Font.DemiBold
@@ -432,7 +432,7 @@ ThemeScreen {
                                 elide: Text.ElideRight
                                 text: root.shown ? root.shown.displayName : ""
                                 color: Tokens.text
-                                font.pixelSize: Type.size(46 * root.px, Tokens.textScale)
+                                font.pixelSize: 46 * root.px
                                 font.weight: Font.DemiBold
                                 lineHeight: 1.08
                             }
@@ -465,7 +465,7 @@ ThemeScreen {
                                     // The facts with the played count after the games' count (R-20261115-8).
                                     text: root.shown ? Words.line([Words.facts(root.shown.maker, root.shown.year, root.shown.count, ""), Words.played(root.shown.played), Words.runsOn(root.shown.engineName, root.shown.engineKind)]) : ""
                                     color: Tokens.muted
-                                    font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
+                                    font.pixelSize: 21 * root.px
                                 }
                             }
                             Item {
@@ -526,14 +526,14 @@ ThemeScreen {
                             horizontalAlignment: Text.AlignHCenter
                             text: Words.noConsoles
                             color: Tokens.muted
-                            font.pixelSize: Type.size(22 * root.px, Tokens.textScale)
+                            font.pixelSize: 22 * root.px
                         }
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: Words.addFolder
                             color: Tokens.muted
-                            font.pixelSize: Type.size(22 * root.px, Tokens.textScale)
+                            font.pixelSize: 22 * root.px
                         }
                     }
                 }
@@ -552,7 +552,7 @@ ThemeScreen {
                     visible: root.shown !== null
                     text: root.shown ? Words.line([root.shown.maker, Words.place(root.shown.groupIndex, root.shown.groupSize)]) : ""
                     color: ink.help
-                    font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
+                    font.pixelSize: 21 * root.px
                 }
             }
         }

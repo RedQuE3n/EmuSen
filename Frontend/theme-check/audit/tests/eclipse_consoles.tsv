@@ -2,7 +2,7 @@
 # Units are design units: px x canvas::DESIGN_HEIGHT (800) / the board's height (1200). Boxes as x,y,w,h; "-" where the board leaves an edge to its contents.
 # status: built (the screen draws it from what the program holds), home (a part Home's board also draws, built on Home's piece),
 # nothing (the program holds nothing for it: not drawn), asked (waits on a decision of the tester's).
-# Every text is drawn at Type.size of the board's size, raised to the legibility floor where it is under it (R-20261115-14).
+# Every text of Consoles.qml is drawn at the board's size, with no raise to the legibility floor (R-20261115-24).
 # line	element	objectName	program source	board px	units	style	status
 17	ground	consolesBackdrop	kit Backdrop, its ground Tokens.surface	0,0,1920,1200	0,0,1280,800	#07080F	built
 19	colour field, violet	-	kit BackdropField in the focused console's glow (world::glow of its hue), at the board's blur and opacity: provisional, the tester's to judge	1250,120,900,900	833.33,80,600,600	#5B3FD6 blur 140 opacity 0.5	built

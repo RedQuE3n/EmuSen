@@ -1,9 +1,10 @@
 //! The client against the platform library built from this commit: the interface matched exactly, Galaxia's tree and
 //! models in a scratch tree, the library scanning a synthetic game, simulated pads, the firmware folders, the scrape
-//! service, Galaxia's files and Endymion's binding files, and failures carrying the words their own last_error gave.
+//! service, Galaxia's files and Endymion's binding files, the machine's battery from a made-up power_supply tree, and failures carrying the words their own last_error gave.
 
 use emusen_client_fixture::{World, library, test_core};
 use emusen_platform_client::firmware::FoldersRequest;
+use emusen_platform_client::galaxia::Battery;
 use emusen_platform_client::bindings::consts as bind;
 use emusen_platform_client::galaxia::consts::{DIR_CONFIG, DIR_LIBRARY, DIR_MEDIA, DIR_SAVE_STATES, FILE_GAMES, FILE_GRAPHICS, FILE_MEDIA, FILE_SETTINGS, MODEL_APP_SETTINGS, SAVE_PICTURE, SAVE_STATE};
 use emusen_platform_client::library::{Library, ScanRequest};
@@ -198,4 +199,24 @@ fn the_scrape_service_opens_one_scraper_reads_and_closes_it() {
     assert!(!refused.to_string().starts_with(" ("), "{refused}");
     assert!(p.scraper_close(serial).unwrap());
     assert!(!p.scraper_close(serial).unwrap(), "a closed scraper is no longer the one open");
+}
+
+#[test]
+fn the_machine_s_battery_is_read_from_the_tree_named_and_a_peripheral_s_is_not_it() {
+    let world = World::new("battery");
+    let p = Platform::load(library()).unwrap();
+    let root = world.dir("power_supply");
+    let supply = |name: &str, attributes: &[(&str, &str)]| {
+        let folder = root.join(name);
+        std::fs::create_dir_all(&folder).unwrap();
+        attributes.iter().for_each(|(k, v)| std::fs::write(folder.join(k), format!("{v}\n")).unwrap());
+    };
+    let named = root.to_str().unwrap();
+    assert_eq!(p.battery(Some(named)).unwrap(), None, "no supplies, no battery");
+    supply("hidpp_battery_0", &[("type", "Battery"), ("scope", "Device"), ("capacity", "55"), ("status", "Discharging")]);
+    assert_eq!(p.battery(Some(named)).unwrap(), None, "a mouse's battery is not the machine's");
+    supply("BAT0", &[("type", "Battery"), ("scope", "System"), ("capacity", "82"), ("status", "Discharging")]);
+    assert_eq!(p.battery(Some(named)).unwrap(), Some(Battery { level: 82, charging: false }));
+    supply("BAT0", &[("status", "Charging")]);
+    assert_eq!(p.battery(Some(named)).unwrap(), Some(Battery { level: 82, charging: true }));
 }

@@ -9,7 +9,8 @@
  * 40 Endymion reads and writes the four binding files and Galaxia names its files (EmuSen_Input.md, section 5.2); since
  * 45 Galaxia serves the front end's own settings rows (EmuSen_Galaxia.md, section 3.15); since 48 a cheat database the host
  * downloaded is installed here too, and a .cht read answers a game's own list (EmuSen_RustPlatform.md, section 56); since
- * 49 the emusen.scrape service 2.1 makes one of a game's own pictures its cover (EmuSen_Backend.md, section 30.6). The
+ * 49 the emusen.scrape service 2.1 makes one of a game's own pictures its cover (EmuSen_Backend.md, section 30.6); since
+ * 50 Galaxia reads the machine's battery (EmuSen_RustPlatform.md, section 58). The
  * rules are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
  *
  *  - The host calls and the library returns. The library never calls the host: what the C# reports through a
@@ -45,7 +46,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 49u
+#define EMUSEN_PLATFORM_ABI_VERSION 50u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -483,6 +484,17 @@ int64_t emusen_galaxia_cheat_game_list(const uint8_t *console, size_t console_le
  * "shown_with", "locked"}. The same text on every call; PARSE with words only for a build whose rows were committed broken.
  */
 int64_t emusen_galaxia_settings_rows(uint8_t *out, size_t len);
+
+/* ---- Galaxia: the machine's battery (EmuSen_RustPlatform.md, section 58; since 50) ---- */
+
+/*
+ * The machine's battery, read from the kernel's power_supply class on each call and kept nowhere: its level, 0 to
+ * 100, returned, and 1 or 0 for whether it charges written to charging when that is not null. A supply counts when its
+ * type is Battery, its scope is not Device (a pad's or a mouse's) and its present is not 0; two or more answer the mean
+ * of their levels, charging while none discharges and one charges or is full. ABSENT where the machine has none, or
+ * the system has no reader. A null root reads the kernel's own tree; a test names a made-up one.
+ */
+int32_t emusen_galaxia_battery(const uint8_t *root, size_t root_len, uint8_t *charging);
 
 /* ---- Galaxia: the error log (EmuSen_Settings_Reference.md, section 4.70) ---- */
 

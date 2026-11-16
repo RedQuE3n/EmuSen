@@ -223,6 +223,7 @@ fn qt_7_9_each_failure_is_said_on_the_notice_layer_and_said_again_when_it_happen
     assert!(scene.set_property("library", "platformLibrary", ""));
     assert!(scene.set_property("library", "platformLibrary", library().to_str().unwrap()));
     said(&mut scene, "The library could not be read: ");
+    wait_for(&mut scene, "gridGames", "count", "2", 2000);
     assert_eq!(scene.property("gridGames", "count"), "2", "the rows kept");
     mode(&games_db, 0o644);
     scene.assert_quiet();

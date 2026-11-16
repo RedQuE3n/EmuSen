@@ -944,7 +944,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 |---|---|---|
 | `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own; `played`, from 1.5, how many of its games were played; `glow`, from 1.5, its own colour, kit-core's `world::glow` for its hue); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts`, `consoleName` (the console's name alone, that `facts` begins with; 1.4) (cover and hero as file URLs); from 1.5, `consolesBy(show, order, shortened)`: the consoles `Words.consoleShows[show]` holds in `Words.consoleSorts[order]`'s order, each maker's together, by name the consoles keyed in `shortened` by their short `name`, with `consoles`' roles and `screen`, the console's screen in words ("CRT, television") |
 | `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
-| `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (-1 none), `charging`, `network`, `bigScreen`, `form` |
+| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting; from 1.5, `consoleOptions(key)`, Settings at that console's page |
 | `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting; from 1.5, `consoleOptions(key)`, Settings at that console's page; from 1.7 `setFilter(key)`, `stepSort(by)`, `stepLetter(by)` |
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
 | `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
@@ -1791,8 +1791,11 @@ status's own button. Their glyphs are `parts/Glyph.qml`, the board's: the kit's 
 2 px ring, A filled, Start's name in a capsule.
 
 **Not drawn**: the section tabs (Home, Library, Consoles, Collections, Tools) and "LB RB Sections", a piece of their
-own (R-20261115-7). Also not drawn, because the program has nothing for them: the battery, since the program feeds no
-`Device.battery` (`qt-app/src/theme.rs`, `feed_device`); "GAME ART". "1 of 24" waits for `Words.place`, which Choose a console's piece adds over
+own (R-20261115-7). Also not drawn, because the program has nothing for it: "GAME ART". The battery (Main:45-47) is drawn
+by `parts/Status.qml` (`battery` and `batteryPicture` set) while `Device.battery` is 0 or more, between the search and
+the clock: the board's body, charge and terminal as rectangles in `Tokens.text`, the charge in whole board pixels of the
+body's inner 18 (15 for 82%, as the board draws it), and the level as `Words.percent` gives it; a machine with no battery of its own draws
+none and the clock follows the search as before. "1 of 24" waits for `Words.place`, which Choose a console's piece adds over
 `game_page.rs`'s `place`; its place on Home is left empty until then. The backdrop is the board's (R-20261115-27, -28): the ground #0A1024 and the five fields of `Main.dc.html:19-23`,
 each at its place, size, corners, turn, blur and opacity, in the kit's `Backdrop` (`EmuSen_Kit.md` §7.118). Only each
 field's hue is the shown game's: the field keeps the board colour's saturation, lightness and alpha. The program reads a
@@ -1858,7 +1861,7 @@ art measured 3.06:1 to 4.46:1 on 2026-11-15), these words are accepted by R-2026
 **Words.** The wordmark is `Words.name`, the program's name in its own case; the eyebrow `Words.continueLine`, "Continue ·
 Super Nintendo" in the font's capitals; the line under the title `Words.playedFacts`, when the game was last played and,
 where games.db holds any, its time played (`Session.played`, which the host now feeds). Where the board's words differ
-from the program's and no word exists (the battery, "1 of 24", the resume
+from the program's and no word exists ("1 of 24", the resume
 point, the section tabs), Home draws the program's or nothing, as listed in the table.
 
 **What acts.** Home's `Frame` holds the help's entries, so the pad's X, Y, Select and Start reach their actions on Home as
@@ -1987,8 +1990,10 @@ oracle lays out every console of the table on a plate, below); a console whose s
 cut by the ellipsis, and the oracle fails on it. By name, the consoles stand by the names their plates show:
 `consolesBy`'s third argument is `shortened`, and `console_list::plate_name` gives the short name for a key among them;
 every other order reads no names, so its list is one whatever the plates show. A ringed glyph's box
-is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery is drawn
-where the machine has one; `Status` makes it only where a board draws it. The top navigation is a piece of its own
+is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery's level
+is drawn as the board draws it, "82%" 22 before the clock with no picture (line 37), where the machine has one; `Status`
+makes it only where a board draws it (`battery` set, `batteryPicture` not), and the oracle writes an 82% battery,
+discharging, into its world's made-up power_supply tree and holds the row. The top navigation is a piece of its own
 (R-20261115-7), and its place is left empty. theme-audit's `eclipse_consoles.rs` reads the same table and holds its rows given in plain board pixels over its own
 recording. The help line's row is 38 px tall, the ringed B's 34 and its ring (line 102), so its middle stands at 1141, 40
 px over the foot; Home's at 1137, its row the 46 px Sections pill (Main:99).

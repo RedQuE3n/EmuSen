@@ -21,6 +21,7 @@ pub mod firmware;
 pub mod savemedia;
 pub mod galaxia;
 pub mod galaxia_config;
+pub mod galaxia_power;
 mod last_error;
 // The library's stable header, emusen_library.h, exported beside this interface (EmuSen_Backend.md §28).
 pub mod library;
@@ -41,7 +42,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 49;
+pub const ABI_VERSION: u32 = 50;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -280,6 +281,7 @@ mod tests {
         exported.extend(exports_in(include_str!("disc.rs")));
         exported.extend(exports_in(include_str!("galaxia.rs")));
         exported.extend(exports_in(include_str!("galaxia_config.rs")));
+        exported.extend(exports_in(include_str!("galaxia_power.rs")));
         exported.extend(exports_in(include_str!("endymion.rs")));
         exported.extend(exports_in(include_str!("endymion_devices.rs")));
         exported.extend(exports_in(include_str!("endymion_bindings.rs")));

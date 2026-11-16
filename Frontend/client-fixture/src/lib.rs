@@ -102,7 +102,7 @@ pub fn console_core() -> &'static Path {
     &built().console_core
 }
 
-/// A test's scratch tree, with Galaxia's config and data redirected into it while the guard is held.
+/// A test's scratch tree, with Galaxia's config, data and power_supply tree redirected into it while the guard is held.
 pub struct World {
     pub root: PathBuf,
     _held: MutexGuard<'static, ()>,
@@ -118,6 +118,12 @@ impl World {
         std::fs::create_dir_all(&root).unwrap();
         redirect(&root);
         World { root, _held: held }
+    }
+
+    /// The made-up power_supply tree the battery is read from, made empty, so a test answers no battery on any machine
+    /// until it writes one: a supply is a folder of its attributes (EmuSen_RustPlatform.md §58).
+    pub fn power_supply(&self) -> PathBuf {
+        self.dir(POWER_SUPPLY)
     }
 
     /// A directory under the root, made.
@@ -161,12 +167,16 @@ pub fn image(payload: &[u8]) -> Vec<u8> {
     v
 }
 
-/// Galaxia's config and data redirects, EMUSEN_GALAXIA_OVERRIDE_CONFIG (0) and _DATA (1), moved under `root`.
+/// The power_supply tree's folder under a world's root.
+const POWER_SUPPLY: &str = "power_supply";
+
+/// Galaxia's redirects, EMUSEN_GALAXIA_OVERRIDE_CONFIG (0), _DATA (1) and _POWER_SUPPLY (3), moved under `root`.
 fn redirect(root: &Path) {
     type SetOverride = unsafe extern "C" fn(u32, *const u8, usize) -> i32;
     let lib = unsafe { libloading::Library::new(library()) }.expect("the platform library loads");
     let set: libloading::Symbol<SetOverride> = unsafe { lib.get(b"emusen_galaxia_set_override\0") }.expect("emusen_galaxia_set_override");
-    for (which, sub) in [(0u32, "Config"), (1u32, "Home")] {
+    std::fs::create_dir_all(root.join(POWER_SUPPLY)).unwrap();
+    for (which, sub) in [(0u32, "Config"), (1u32, "Home"), (3u32, POWER_SUPPLY)] {
         let d = root.join(sub);
         let text = d.to_str().unwrap();
         assert_eq!(unsafe { set(which, text.as_ptr(), text.len()) }, 0, "redirect {which}");

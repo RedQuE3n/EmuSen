@@ -244,6 +244,20 @@ Window {
             running: true
             onTriggered: clock.tick()
         }
+        // The machine's battery, asked of the platform library on start and then every `every` ms (EmuSen_RustPlatform.md §58.3).
+        Battery {
+            id: machineBattery
+            objectName: "battery"
+            platformLibrary: program.platformLibrary
+            onPlatformLibraryChanged: machineBattery.read()
+        }
+        Timer {
+            interval: machineBattery.every
+            repeat: true
+            running: true
+            triggeredOnStart: true
+            onTriggered: machineBattery.read()
+        }
         // The game, under the screens: in front on its own screen, paused under the Pause Card, and behind Home while it is suspended there, where Continue draws its picture.
         Play.Game {
             id: player
@@ -306,6 +320,8 @@ Window {
             library: library
             session: player.session
             clock: clock
+            battery: machineBattery.level
+            charging: machineBattery.charging
             grid: games
             picture: player.picture
             controllers: pads.connected
@@ -346,6 +362,8 @@ Window {
                 library: library
                 session: player.session
                 clock: clock
+                battery: machineBattery.level
+                charging: machineBattery.charging
                 grid: games
                 picture: player.picture
                 controllers: pads.connected

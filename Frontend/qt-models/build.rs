@@ -35,6 +35,7 @@ fn main() {
             "src/marks_object.rs",
             "src/screens.rs",
             "src/clock.rs",
+            "src/battery.rs",
             "src/session_model.rs",
             "src/question_model.rs",
             "src/pause_model.rs",

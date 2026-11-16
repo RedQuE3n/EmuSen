@@ -1,5 +1,5 @@
 //! Galaxia through the platform library: where the tree's directories and Galaxia's files are, a config file's path,
-//! the config models (the player's settings) as the documents Galaxia binds, the saved cheat lists' names, and the front end's own settings rows. A model crosses as JSON and stays
+//! the config models (the player's settings) as the documents Galaxia binds, the saved cheat lists' names, the front end's own settings rows, and the machine's battery. A model crosses as JSON and stays
 //! Galaxia's: its fields are not restated here, so a model has one owner.
 
 use crate::error::Result;
@@ -7,6 +7,13 @@ use crate::out::{json, string, text, to_json};
 use crate::platform::Platform;
 use serde_json::Value;
 use std::path::PathBuf;
+
+/// The machine's battery as the platform library read it: its level, 0 to 100, and whether it charges.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Battery {
+    pub level: u8,
+    pub charging: bool,
+}
 
 /// The directories of the tree, EMUSEN_GALAXIA_DIR_*, the files, EMUSEN_GALAXIA_FILE_*, and the models, EMUSEN_GALAXIA_MODEL_*.
 pub mod consts {
@@ -104,6 +111,19 @@ impl Platform {
     pub fn settings_rows(&self) -> Result<Value> {
         let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_settings_rows(o, l) })?.unwrap_or_default();
         json("settings_rows", &bytes)
+    }
+
+    /// The machine's battery now (since 50): its level, 0 to 100, and whether it charges; none where it has none
+    /// (EmuSen_RustPlatform.md §58). `root` names a made-up power_supply tree for a test; none reads the kernel's.
+    pub fn battery(&self, root: Option<&str>) -> Result<Option<Battery>> {
+        let (at, len) = root.map_or((std::ptr::null(), 0), |r| (r.as_ptr(), r.len()));
+        let mut charging = 0u8;
+        let level = unsafe { self.lib.emusen_galaxia_battery(at, len, &mut charging) };
+        if level == crate::raw::EMUSEN_PLATFORM_ABSENT {
+            return Ok(None);
+        }
+        let level = self.status(level.into())?;
+        Ok(Some(Battery { level: level as u8, charging: charging != 0 }))
     }
 
     /// A new instance of a model, every field at its initial value.

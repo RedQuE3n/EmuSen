@@ -172,7 +172,8 @@ pub fn oracle(backend: &str) {
     host::session(object(screen)).expect("Session").show_frame(frame as *mut _);
     // One pad, of the family whose letters the board draws (A, X, Y; Main:62-68).
     let family = emusen_kit_qt::kinds::family_of(emusen_kit_core::glyph::PadFamily::Xbox).repr;
-    host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, family,
+    // The machine's battery at the board's 82%, discharging (Main.dc.html:45-47).
+    host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, family, battery: 82, charging: false,
         clock: emusen_qt_models::clock::clock_time(now),
         short_time: emusen_qt_models::clock::short_time(now),
         ..DeviceFacts::default()
@@ -217,13 +218,14 @@ pub fn oracle(backend: &str) {
             differences.push(format!("{at}: the focused tile's ring is {:?}", rings.iter().map(|r| (&r.parent, &r.ty)).collect::<Vec<_>>()));
         }
 
-        // The words as drawn, the board's own literals (Main.dc.html:30, 49, 54-59, 62-68, 75, 79, 85-86, 94-97) where the
+        // The words as drawn, the board's own literals (Main.dc.html:30, 47, 49, 54-59, 62-68, 75, 79, 85-86, 94-97) where the
         // fixture's game is the board's: its first game, Aurora Drift on the Super Nintendo, suspended yesterday at 9:12 PM
         // after 3 h 20 min. "upper" words are drawn in capitals, which their type's case holds; their text is compared in them.
         // The count is the fixture's six games where the board has 24, and the other tiles are the fixture's own games.
         let mut words_of = vec![
             ("wordmark", "EmuSen", false),
             ("clock", "9:41 PM", false),
+            ("batteryLevel", "82%", false),
             ("eyebrow", "CONTINUE · SUPER NINTENDO", true),
             ("title", "Aurora Drift", false),
             ("facts", "Last played yesterday · 3 h 20 min played", false),

@@ -25,7 +25,7 @@ nav.library	30	"Library", a section	the sections are another piece's (R-20261115
 nav.consoles	31	"Consoles", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
 nav.collections	32	"Collections", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
 nav.tools	33	"Tools", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
-battery	37	"82%"	nothing: the program feeds Device.battery no charge on any machine yet (the tester's); Status draws it, before the clock by 22, where one is fed	-	-	-	-	-	-	-	-	nothing	-
+battery	37	"82%"	Device.battery as Words.percent gives it, fed from the platform library (EmuSen_RustPlatform.md §58); the level alone, no picture	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
 clock	38	"9:41 PM"	Device.shortTime, Home's Status part	Text	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
 chip.0	44	the chip pressed, "All · 124"	Words.consoleShows[0], Library.consolesBy(0, 0, []).count	Walkable	96	150	fit:chipWords.0:22	48	-	-	-	built	-
 chipFill.0	44	its fill, no line	the chip pressed: Tokens.accent	Rectangle	in:chip.0:0	top:chip.0:0	fit:chip.0:0	48	24	Tokens.accent	-	built	line 0 -

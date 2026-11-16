@@ -4867,5 +4867,5 @@ library until they are retired.
 Measured by `emusen-galaxia`'s `power` tests (no supplies, a peripheral alone, one system battery at 82 discharging,
 Charging and Full, no scope and Unknown scope, absent and silent batteries, two batteries), `emusen-platform`'s
 `galaxia_power` test of the C call, `emusen-platform-client`'s
-`the_machine_s_battery_is_read_from_the_tree_named_and_a_peripheral_s_is_not_it` against the library built from this
+`the_machine_s_battery_comes_from_the_tree_given_and_a_peripheral_s_is_skipped` against the library built from this
 commit, and Eclipse Home's oracle, whose battery rows are drawn as the board draws them when the host feeds 82.

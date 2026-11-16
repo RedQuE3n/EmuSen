@@ -202,7 +202,7 @@ fn the_scrape_service_opens_one_scraper_reads_and_closes_it() {
 }
 
 #[test]
-fn the_machine_s_battery_is_read_from_the_tree_named_and_a_peripheral_s_is_not_it() {
+fn the_machine_s_battery_comes_from_the_tree_given_and_a_peripheral_s_is_skipped() {
     let world = World::new("battery");
     let p = Platform::load(library()).unwrap();
     let root = world.dir("power_supply");

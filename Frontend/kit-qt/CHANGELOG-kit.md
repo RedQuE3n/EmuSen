@@ -21,13 +21,12 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
 - **`GlowPaint`** (C++, `QQuickPaintedItem`): the software backend's glow painted in native code, its blur made once a
   shape and tinted once a colour, in place of a Context2D canvas whose first paint of a disc's halo took minutes (§7.113); its
   sizes are `double`, a type qmllint knows, where `qreal` left Glow.qml's bindings with no type.
-- **`type_size::legible`** (Rust, for EmuSen.Theme's `Type`): a look's size never under the legibility floor (§7.121).
 - **`HelpBar.leadStyle`**, **`leadColor`**: the first entry's glyph style and colour, the others' by default, so a look draws
   its main action apart (Eclipse's board fills A in the corona, `Main.dc.html:101`).
 - **`HelpBar.glyph`**, **`HelpBar.snapped`**, **`PadGlyph.letter`**: a host's own drawing of an entry's glyph, entries
   centred exactly where a look asks, and the letter the family prints on a button (`EmuSen_Kit.md` §7.54).
-- **`type_size::legible_in`**, **`caps_in`** (Rust): the same rule with the capitals of the face and weight a look draws,
-  measured by Qt; the `Tokens` column holds a theme's type sizes with its `faceInterface` where it sets one (§7.121).
+- **`type_size::caps_in`** (Rust): the capitals of a face at a weight, measured by Qt; the `Tokens` column holds a theme's
+  type sizes with its `faceInterface` where it sets one (§7.121).
 
 ## 1.7: the face tokens, and Sora and JetBrains Mono bundled (2026-11-15)
 

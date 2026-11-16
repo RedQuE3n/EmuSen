@@ -96,21 +96,21 @@ ThemeScreen {
                         property: "focus"
                         value: tiles.count === 0
                     }
-                    Text {
+                    Line {
                         id: eyebrow
-                        objectName: "eyebrow"
+                        name: "eyebrow"
+                        unit: design.unit
                         x: 96 * design.unit
                         y: 250 * design.unit
                         width: 980 * design.unit
-                        // "Continue · Super Nintendo" in capitals, as the board draws it (Main:53).
+                        // "Continue · Super Nintendo" in capitals, as the board draws it (Main:54).
                         text: root.resuming ? Words.continueLine(Session.console) : ""
-                        font.capitalization: Font.AllUppercase
+                        capitalization: Font.AllUppercase
                         color: ink.rose
                         elide: Text.ElideRight
-                        font.pixelSize: Type.sizeIn(20 * design.unit, Tokens.textScale, Tokens.faceText, Font.DemiBold)
-                        font.family: Tokens.faceText
-                        font.weight: Font.DemiBold
-                        font.letterSpacing: 0.22 * 20 * design.unit
+                        size: 20
+                        weight: Font.DemiBold
+                        spacing: 0.22 * 20
                     }
                     // The title's line box, the board's line height of 1.02 (Main:55): the next line follows it, as the board's column does.
                     Item {
@@ -119,14 +119,15 @@ ThemeScreen {
                         x: 96 * design.unit
                         y: eyebrow.y + eyebrow.height + 26 * design.unit
                         width: 980 * design.unit
-                        height: title.lineCount * title.lineHeight
+                        height: title.lineCount * title.lineHeight * design.unit
                     }
-                    Text {
+                    Line {
                         id: title
-                        objectName: "title"
+                        name: "title"
+                        unit: design.unit
                         x: 96 * design.unit
                         // The face's own height about the line box's middle, as CSS spreads a line's leading equally above and below.
-                        anchors.verticalCenter: titleLine.verticalCenter
+                        y: titleLine.y + (titleLine.height - height) / 2
                         width: 980 * design.unit
                         text: root.resuming ? Session.title : root.currentTile?.title ?? (Library.consoles.count === 0 ? Words.addFolder : Words.noRecent)
                         color: Tokens.textStrong
@@ -135,15 +136,15 @@ ThemeScreen {
                         maximumLineCount: 2
                         elide: Text.ElideRight
                         lineHeightMode: Text.FixedHeight
-                        lineHeight: 1.02 * 112 * design.unit
-                        font.pixelSize: Type.sizeIn(112 * design.unit, Tokens.textScale, Tokens.faceText, Tokens.weightTitle)
-                        font.family: Tokens.faceText
-                        font.weight: Tokens.weightTitle
-                        font.letterSpacing: -0.02 * 112 * design.unit
+                        lineHeight: 1.02 * 112
+                        size: 112
+                        weight: Tokens.weightTitle
+                        spacing: -0.02 * 112
                     }
-                    Text {
+                    Line {
                         id: facts
-                        objectName: "facts"
+                        name: "facts"
+                        unit: design.unit
                         x: 96 * design.unit
                         y: titleLine.y + titleLine.height + 26 * design.unit
                         width: 980 * design.unit
@@ -151,9 +152,8 @@ ThemeScreen {
                         text: root.resuming ? (Device.clock.length >= 0 ? Words.playedFacts(Session.pausedSince, Session.played) : "") : root.currentTile?.facts ?? ""
                         color: Tokens.muted
                         elide: Text.ElideRight
-                        font.pixelSize: Type.sizeIn(26 * design.unit, Tokens.textScale, Tokens.faceText, Tokens.weightSentence)
-                        font.family: Tokens.faceText
-                        font.weight: Tokens.weightSentence
+                        size: 26
+                        weight: Tokens.weightSentence
                     }
                     // The resume point (Main:57-60): the suspended game's paused picture and when it was saved, while that game is shown.
                     Item {
@@ -207,15 +207,15 @@ ThemeScreen {
                             border.color: paint
                             border.width: 2 * design.unit
                         }
-                        Text {
+                        Line {
                             id: resumeWords
-                            objectName: "resumeWords"
+                            name: "resumeWords"
+                            unit: design.unit
                             x: resumePicture.width + 16 * design.unit
                             y: (resume.height - height) / 2
                             text: root.resuming ? Words.resumePoint(Session.pausedSince) : ""
                             color: ink.help
-                            font.pixelSize: Type.sizeIn(22 * design.unit, Tokens.textScale, Tokens.faceText, Font.Normal)
-                            font.family: Tokens.faceText
+                            size: 22
                         }
                     }
                     Row {
@@ -253,16 +253,16 @@ ThemeScreen {
                             }
                         }
                     }
-                    Text {
+                    Line {
                         id: recentHeading
-                        objectName: "recentHeading"
+                        name: "recentHeading"
+                        unit: design.unit
                         x: 96 * design.unit
                         y: 790 * design.unit
                         text: Words.recentEntry
                         color: Tokens.text
-                        font.pixelSize: Type.sizeIn(28 * design.unit, Tokens.textScale, Tokens.faceText, Font.DemiBold)
-                        font.family: Tokens.faceText
-                        font.weight: Font.DemiBold
+                        size: 28
+                        weight: Font.DemiBold
                     }
                     Item {
                         id: row

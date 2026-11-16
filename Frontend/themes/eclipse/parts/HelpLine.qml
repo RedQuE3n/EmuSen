@@ -36,8 +36,14 @@ Item {
         // The main action's glyph filled in the corona, its letter cut out of it, as the board draws A (Main:101).
         leadStyle: PadGlyph.Filled
         leadColor: Tokens.accent
-        labelFont.pixelSize: Type.sizeIn(root.size * root.unit, Tokens.textScale, Tokens.faceText, Font.Normal)
         labelFont.family: Tokens.faceText
+        // The words at the board's size, which a font's whole pixel size cannot hold in canvas units (parts/Line.qml).
+        label: Component {
+            Line {
+                unit: root.unit
+                size: root.size
+            }
+        }
         entrySpacing: root.spacing * root.unit
         glyphGap: root.glyphGap * root.unit
         glyphSize: root.glyphSide * root.unit

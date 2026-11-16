@@ -92,8 +92,6 @@ struct Row {
     colour: String,
     size: String,
     status: String,
-    drawn: String,
-    raised: String,
 }
 
 fn rows() -> (f64, Vec<Row>) {
@@ -107,9 +105,9 @@ fn rows() -> (f64, Vec<Row>) {
         .filter(|l| !l.starts_with('#') && !l.starts_with("name\t") && !l.trim().is_empty())
         .map(|l| {
             let c: Vec<&str> = l.split('\t').collect();
-            assert_eq!(c.len(), 16, "a row of 16 columns: {l}");
+            assert_eq!(c.len(), 13, "a row of 13 columns: {l}");
             let s = |i: usize| c[i].to_owned();
-            Row { name: s(0), part: s(4), x: s(5), y: s(6), w: s(7), h: s(8), radius: s(9), colour: s(10), size: s(11), status: s(12), drawn: s(14), raised: s(15) }
+            Row { name: s(0), part: s(4), x: s(5), y: s(6), w: s(7), h: s(8), radius: s(9), colour: s(10), size: s(11), status: s(12) }
         })
         .collect();
     (height, rows)
@@ -300,7 +298,6 @@ pub fn oracle(backend: &str) {
     host::set_token_overrides(object(screen), &package.overrides());
     host::kit_tokens(object(screen)).expect("the kit's tokens").set_form(kinds::form_of(WalkForm::BigScreen));
     let tokens = tokens(screen);
-    let text_scale: f64 = *host::kit_tokens(object(screen)).expect("the kit's tokens").text_scale();
     scene.wait(200);
     // Placed and fed, the screen has logged nothing, and comes to rest: no frame swapped for two seconds.
     scene.assert_quiet();
@@ -403,7 +400,7 @@ pub fn oracle(backend: &str) {
                 }
             }
             if let Ok(size) = row.size.parse::<f64>() {
-                // The words' size in the element's own units, the canvas's, as the harness reads the font; a help line's are its entries'.
+                // The words' size in the Text's own units, board pixels, as the harness reads the font; a help line's are its entries'.
                 let have = if row.part == "HelpBar" {
                     let inside = |n: &emusen_qt_test::tree::Node| {
                         let mut at = n.parent.clone();
@@ -415,29 +412,14 @@ pub fn oracle(backend: &str) {
                         }
                         false
                     };
-                    let sizes: Vec<f64> = tree.nodes.iter().filter(|n| n.text.as_deref().is_some_and(|t| !t.is_empty()) && inside(n)).map(|n| n.size).collect();
+                    let sizes: Vec<f64> = tree.nodes.iter().filter(|n| n.visible && n.text.as_deref().is_some_and(|t| !t.is_empty()) && inside(n)).map(|n| n.size).collect();
                     if sizes.iter().all(|s| *s == sizes[0]) { sizes.first().copied().unwrap_or(f64::NAN) } else { f64::NAN }
                 } else {
                     node.size
                 };
-                // The kit's rule for a look's size (EmuSen_Kit.md §7.121), then the whole pixel Qt draws a real size at.
-                let units = size * k;
-                // In the face and weight the element draws, as Qt writes its font: "family,point size,pixel size,hint,weight,...".
-                let font = if row.part == "HelpBar" { read(&tree, &row.name, "labelFont") } else { read(&tree, &row.name, "font") };
-                let font: Vec<&str> = font.split(',').collect();
-                let (family, weight) = (font.first().copied().unwrap_or_default(), font.get(4).and_then(|w| w.parse::<i32>().ok()).expect("the font's weight"));
-                let legible = emusen_kit_qt::type_size::legible_in(units, text_scale, &family, weight);
-                let drawn = legible.round();
-                // The table says the same, so the tester reads each size where the element is listed.
-                let raised = legible > emusen_kit_core::tokens::scaled_text(units, text_scale);
-                if row.drawn.parse::<f64>().ok() != Some(drawn) || (row.raised == "raised") != raised {
-                    differences.push(format!("{at}: {} the table gives {} {}, the rule {drawn} {raised}", row.name, row.drawn, row.raised));
-                }
-                if at.as_str() == "1280x800" {
-                    println!("type\t{}\t{family} {weight}\t{size}\t{units:.3}\t{legible}\t{drawn}\t{}", row.name, if legible > emusen_kit_core::tokens::scaled_text(units, text_scale) { "raised" } else { "-" });
-                }
-                if have != drawn {
-                    differences.push(format!("{at}: {} type {have} where the kit's rule gives {drawn} ({units:.3} on the board)", row.name));
+                // The board's size exactly, in board pixels, the Text scaled by the board's measure (R-20261115-24).
+                if have != size {
+                    differences.push(format!("{at}: {} type {have} where the board gives {size}", row.name));
                 }
             }
         }

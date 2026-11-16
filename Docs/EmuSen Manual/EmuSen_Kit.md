@@ -4299,8 +4299,16 @@ the card, and nothing inside the box. Kit 1.8.
 
 ### 7.121 A look's type size and the legibility floor (2026-11-15)
 
-Decided 2026-11-15 by the tester (R-20261115-14): any Eclipse text under the kit's legibility floor is raised to the
-smallest size that passes; larger text keeps the boards' sizes. kit-core's `tokens::legible_text(base, textScale,
+Decided 2026-11-15 by the tester (R-20261115-24, replacing R-20261115-14 and -22 for Eclipse's own screens): every text
+an Eclipse board draws is drawn at the board's size, weight, spacing and case, none raised; legibility is the tester's own
+work. Words written in the built-in Eclipse's `parts/Line.qml` under the floor, and (R-20261115-29) under their contrast,
+are accepted by those rulings (`audit::eclipse_board_words` over `ECLIPSE_LINE_SOURCES`, the `EclipseBoardType` row of
+`accepted.rs`, the exemptions "too small to read, a named exception" and "low contrast as Eclipse's board draws it"):
+the program's resources' file and the repository's, no theme of the player's, and the findings stay printed as accepted.
+The program's own screens under Eclipse (Settings, the cards) are not covered and still draw through the kit's column
+below. Test: kit-core's `tests/exempted.rs`. EmuSen.Theme's `Type` and kit-qt's
+`type_size::legible` and `legible_in`, which raised Eclipse's words, are removed, since nothing calls them. What follows
+holds the kit's own `Tokens` column, which the program's own screens read under every look, Eclipse's included. kit-core's `tokens::legible_text(base, textScale,
 caps_at)` is the rule. It takes `scaled_text` of the board's size in canvas units, then raises it by the kit's half units
 until the capitals' height of the face (`caps_at`) reaches the fit audit's floor at every size the gate runs at,
 `audit::smallest_capitals_in_units()`. The audit holds a window's capitals in its own pixels to `smallest_capitals()`
@@ -4311,10 +4319,7 @@ now owns and qt-test's harness re-exports (seen 2026-11-15 by the games view's a
 under the first rule, which held the floor at 1280 × 800 alone). kit-qt's `type_size::legible` measures the capitals with Qt (`QFontMetricsF::capHeight`, `cpp/text_width.cpp`)
 for the application's face, the one a Text with no family takes, at the whole pixel size Qt draws: a real handed to a Text's
 `font.pixelSize` is taken to the nearest, seen 2026-11-15 (74.67 drawn at 75), and a `Qt.font({ pixelSize })` truncates it
-(16.5 drawn at 16), so a part sets `labelFont.pixelSize`, never `Qt.font`. EmuSen.Theme 1.4's `Type.size(base, textScale)`
-gives it to a theme; the text scale is an argument so a binding follows `Tokens.textScale`. Once the typeface piece adds the
-look's face, `caps_at` reads that face. Tests: kit-core's `tests/legible_text.rs` holds the rule itself. qt-app's `eclipse_home`
-holds every Eclipse text at the rule's size, and its table lists which were raised.
+(16.5 drawn at 16). Tests: kit-core's `tests/legible_text.rs` holds the rule itself.
 
 **A theme's size tokens.** The same rule holds the `Tokens` sizes a theme sets: kit-core's `tokens::legible_type(form,
 bases, textScale, caps_at)` gives each big-screen type size as `legible_text` of its base, and `legible_header` the

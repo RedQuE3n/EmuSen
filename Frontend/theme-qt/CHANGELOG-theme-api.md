@@ -11,13 +11,8 @@ or shadow. 1.3 is another piece's.
 - **`Backdrop`**, **`BackdropField`**, **`Glow`** (the kit's, by name): a screen's ground with its blurred colour fields or a
   blurred picture, and a rounded box's glow or shadow, outside the box alone, with a box-shadow's offsets (`EmuSen_Kit.md`
   §7.118, §7.119). Each keeps 1.4 in the qmldir, so a theme importing 1.0 or 1.2 finds what it found before.
-- **`Type`** (singleton): `size(base, textScale)`, the size words of a design's size are drawn at, never under the kit's
-  legibility floor (`EmuSen_Kit.md` §7.121, R-20261115-14). As a type made in Rust it is exported at 1.0 like every
-  singleton of the module, so an import of 1.0 finds it too.
 - **`consoleName`** (added to every game row): the console's name alone, the same name `facts` begins with, from the
   one owner of both (`qt-models/src/library.rs`); Eclipse's Home tile draws it under the title, as its board does.
-- **`Type.sizeIn(base, textScale, family, weight)`**: `size` for words drawn in a look's face at a weight, held to the floor
-  with that face's capitals, where `size` measures the application's (`EmuSen_Kit.md` §7.121). Eclipse's texts use it.
 - **`PadGlyph.Style`** (`Outlined`, `Filled`), the kit's glyph styles by name, and the kit's **`HelpBar.leadStyle`** and
   **`leadColor`**, the first entry's glyph drawn apart: Eclipse's filled A in the help line and the filled pill.
 - **`Words.name`**, **`Words.playedFacts(at, seconds)`**, **`Words.continueLine(console)`**: the program's name in its own

@@ -1789,10 +1789,10 @@ tile's shadow and the filled button's halo and glow are the kit's `Glow` (§7.11
 
 **Shared parts.** `parts/` serves every Eclipse screen. `Board` and `Ink` hold the measure and the boards' own colours.
 `Brand` is the mark and the name. `Status` is the search and the clock, on the glass or not.
-`Pill` is a button. `HelpLine` is the help bar on the foot, with a place at its right. `TileWords` is a tile's foot: the title stands on the
-facts line, and a shade fades in over the board's 96 px, then holds the board's 0.92 from the title's top to the foot.
-With the words raised to the legibility floor, the board's 96 px gradient alone left a title at 2.4:1 over bright covers
-(theme-check, 2026-11-15). The shade's reach is provisional, the tester's to judge. The column follows the board's flow (Main:53): each
+`Pill` is a button. `HelpLine` is the help bar on the foot, with a place at its right. `Glyph` is a pad button's glyph as the
+boards draw it, and `Line` a text at the board's own size. `TileWords` is a tile's foot as the board draws it: the board's
+96 px shade from rgba(4, 5, 10, 0.92) at the foot to clear, the console line in capitals 12 px over the foot and the title
+34 px over it, each inset 18 px (`Main.dc.html:84-86`). The column follows the board's flow (Main:53): each
 line 26 px under the one before, the buttons 18 px further. The title's line box is the board's, 1.02 of 112 px for each
 line (`titleLine`); the title's own box keeps the face's height about that box's middle, where CSS spreads a short line's
 leading equally above and below, so its glyphs stand where the board's do and theme-check's fit still finds none cut. A
@@ -1813,15 +1813,13 @@ logged. `eclipse_home_gpu.rs` runs the same oracle on the graphics card. With `E
 both grab Home at 1280 × 800 and 1920 × 1200, and once more at 1920 × 1200 with the shown game one with no art. The
 six games' first five have covers, drawn by qt-test's `covers`.
 
-**Type.** Every word is drawn in the look's face, Sora (`Tokens.faceText`), at the board's weights (the title's, the played
-line's and the wordmark's by their weight tokens), and sized by `Type.sizeIn` (`EmuSen_Kit.md` §7.121): the board's size in
-canvas units, raised to the legibility floor where it is under it (R-20261115-14), the floor held with Sora's own capitals
-at the text's weight. The table's last three columns give each text's board size in units, the whole pixel size Qt draws
-it at, and whether it was raised; the oracle holds the table to the rule, reading each text's face and weight from the
-built screen. Under Sora the floor gives 17.5, drawn at 18, for every board size under it: the wordmark, the clock, the
-eyebrow, the buttons' labels, a tile's title and line, and the help line; the played line's 17.33 is drawn at 18 too.
-Measured 2026-11-15, the resting tile's console line "SUPER NINTENDO" at 18 is wider than the board's tile allows at all
-five gate sizes: the floor and the board meet there, and the oracle's one difference stands for the tester.
+**Type.** Every word is drawn in the look's face, Sora (`Tokens.faceText`), at the board's size, weight, letter spacing and
+case (R-20261115-24). A font's pixel size is a whole number (`QFont::setPixelSize`, an `int`), so a board's 20 px, 13.33
+canvas units, cannot be set on a Text in the canvas. `parts/Line.qml` draws each text at the board's pixels and scales
+it by `Board.unit`, its box the canvas's; the oracle reads each text's size in board pixels and holds it equal to the
+board's. Under the legibility floor, and under their contrast where the board puts them (a resting tile's title over its
+art measured 3.06:1 to 4.46:1 on 2026-11-15), these words are accepted by R-20261115-24 and -29 and printed as accepted
+(`EmuSen_Kit.md` §7.121); theme-check's loaded audit of Home then passes.
 
 **Words.** The wordmark is `Words.name`, the program's name in its own case; the eyebrow `Words.continueLine`, "Continue ·
 Super Nintendo" in the font's capitals; the line under the title `Words.playedFacts`, when the game was last played and,

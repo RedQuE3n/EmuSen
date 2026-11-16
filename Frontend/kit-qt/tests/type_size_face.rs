@@ -1,9 +1,10 @@
-// EmuSen_Kit.md §7.121: a look's size is held to the legibility floor with the capitals of the face it draws in, measured by
-// Qt: under Sora the smallest size whose Sora capitals reach the floor, which the application's face does not give.
+// EmuSen_Kit.md §7.121: the kit's Tokens column holds a look's size to the legibility floor with the capitals of its interface
+// face, measured by Qt (`tokens.rs`): under Sora the smallest size whose Sora capitals reach the floor, which the application's
+// face does not give.
 
 use emusen_kit_core::audit::smallest_capitals_in_units;
-use emusen_kit_core::tokens::scaled_text;
-use emusen_kit_qt::type_size::{caps, caps_in, legible_in};
+use emusen_kit_core::tokens::{legible_text, scaled_text};
+use emusen_kit_qt::type_size::{caps, caps_in};
 
 #[test]
 fn kit_7_121_a_look_s_size_is_held_with_its_own_face_s_capitals() {
@@ -15,7 +16,7 @@ fn kit_7_121_a_look_s_size_is_held_with_its_own_face_s_capitals() {
     assert!((10..40).any(|s| (caps_in("Sora", 400, f64::from(s)) - caps(f64::from(s))).abs() > 0.01), "Sora's capitals are its own");
     for base in [8.0, 10.0, 13.333, 14.0, 16.0, 17.333, 18.667, 20.0, 74.667] {
         for weight in [300, 400, 600] {
-            let size = legible_in(base, 1.0, "Sora", weight);
+            let size = legible_text(base, 1.0, |s| caps_in("Sora", weight, s));
             assert!(caps_in("Sora", weight, size) >= floor, "{base} at {weight}: Sora's capitals at {size} reach the floor {floor}");
             let smaller = size - 0.5;
             assert!(
@@ -24,6 +25,6 @@ fn kit_7_121_a_look_s_size_is_held_with_its_own_face_s_capitals() {
             );
         }
     }
-    // An empty family is the application's face, as `legible` holds it.
-    assert_eq!(legible_in(14.0, 1.0, "", 400), emusen_kit_qt::type_size::legible(14.0, 1.0));
+    // An empty family is the application's face.
+    assert_eq!(caps_in("", 400, 14.0), caps(14.0));
 }

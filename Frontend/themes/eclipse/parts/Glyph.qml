@@ -30,7 +30,7 @@ Item {
     readonly property bool named: root.letter.length > 1 || (root.letter.length === 0 && (root.button === PadGlyph.Menu || root.button === PadGlyph.Options))
     readonly property string word: root.letter.length > 1 ? root.letter : mark.name.toUpperCase()
     readonly property real outer: root.side * root.unit + (root.lead ? 0 : 2 * root.line)
-    implicitWidth: root.named ? Math.ceil(metrics.advanceWidth) + 2 * root.padding * root.unit + 2 * root.line : root.outer
+    implicitWidth: root.named ? metrics.advanceWidth * root.unit + 2 * root.padding * root.unit + 2 * root.line : root.outer
     implicitHeight: root.outer
     width: implicitWidth
     height: implicitHeight
@@ -54,13 +54,17 @@ Item {
     TextMetrics {
         id: metrics
         font.family: Tokens.faceText
-        font.pixelSize: (root.named ? root.wordSize : (root.lead ? root.leadLetterSize : root.letterSize)) * root.unit
+        // The board's size in board pixels; the shape below is scaled by the board's measure, as a font's whole pixel size cannot hold it in canvas units.
+        font.pixelSize: root.named ? root.wordSize : (root.lead ? root.leadLetterSize : root.letterSize)
         font.weight: root.lead ? root.leadWeight : Font.Normal
         text: root.named ? root.word : root.letter
     }
     // The letter or the name drawn as the kit draws a glyph's letter, a path of the face's outline centred on the glyph.
     Shape {
-        anchors.fill: parent
+        width: root.width / root.unit
+        height: root.height / root.unit
+        scale: root.unit
+        transformOrigin: Item.TopLeft
         visible: root.named || root.letter.length > 0
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
@@ -69,8 +73,8 @@ Item {
             fillRule: ShapePath.WindingFill
             PathText {
                 // Centred on its ink, as the kit's PadGlyph centres a letter; a capital's ink is the line's middle within a 25th of the size.
-                x: (root.width - metrics.tightBoundingRect.width) / 2 - metrics.tightBoundingRect.x
-                y: (root.height - metrics.tightBoundingRect.height) / 2
+                x: (root.width / root.unit - metrics.tightBoundingRect.width) / 2 - metrics.tightBoundingRect.x
+                y: (root.height / root.unit - metrics.tightBoundingRect.height) / 2
                 font: metrics.font
                 text: metrics.text
             }

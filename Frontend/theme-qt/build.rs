@@ -45,7 +45,6 @@ fn main() {
             "src/help.rs",
             "src/browse.rs",
             "src/marks.rs",
-            "src/type_size.rs",
             "src/glue.rs",
         ])
         .include_dir("cpp")

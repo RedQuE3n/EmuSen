@@ -84,15 +84,15 @@ Walkable {
         leadFill: Tokens.overAccent
         leadInk: Tokens.accent
     }
-    Text {
+    Line {
         id: wordsItem
-        objectName: "buttonLabel." + root.place
+        name: "buttonLabel." + root.place
+        unit: root.unit
         x: glyphItem.x + glyphItem.width + root.gap * root.unit
         y: (root.height - height) / 2
         text: root.label
         color: root.filled ? Tokens.overAccent : Tokens.text
-        font.pixelSize: Type.sizeIn(root.labelSize * root.unit, Tokens.textScale, Tokens.faceText, root.filled ? Font.DemiBold : Font.Normal)
-        font.family: Tokens.faceText
-        font.weight: root.filled ? Font.DemiBold : Font.Normal
+        size: root.labelSize
+        weight: root.filled ? Font.DemiBold : Font.Normal
     }
 }

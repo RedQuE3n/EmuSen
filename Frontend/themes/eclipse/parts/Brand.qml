@@ -42,17 +42,17 @@ Item {
             }
         }
     }
-    Text {
+    Line {
         id: wordmark
-        objectName: "wordmark"
+        name: "wordmark"
+        unit: root.unit
         x: mark.width + root.gap * root.unit
         y: (root.height - height) / 2
         visible: root.named
         text: Words.name
         color: Tokens.text
-        font.pixelSize: Type.sizeIn(root.nameSize * root.unit, Tokens.textScale, Tokens.faceText, Tokens.weightWordmark)
-        font.family: Tokens.faceText
-        font.weight: Tokens.weightWordmark
-        font.letterSpacing: 0.02 * root.nameSize * root.unit
+        size: root.nameSize
+        weight: Tokens.weightWordmark
+        spacing: 0.02 * root.nameSize
     }
 }

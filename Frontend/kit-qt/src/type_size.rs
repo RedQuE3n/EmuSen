@@ -1,5 +1,4 @@
-//! A look's type size never under the legibility floor, for the face Qt Quick's Text draws in by default (EmuSen_Kit.md §7.121):
-//! kit-core's `legible_text` with the face's capitals measured by Qt.
+//! A face's capitals as Qt draws them, which kit-core's `legible_text` holds the Tokens column's sizes with (EmuSen_Kit.md §7.121).
 
 #[cxx_qt::bridge]
 pub mod ffi {
@@ -14,21 +13,9 @@ pub mod ffi {
     }
 }
 
-/// The size words of a design's `base` are drawn at, at `text_scale`, in the application's face, the one a Text with no
-/// family set takes.
-pub fn legible(base: f64, text_scale: f64) -> f64 {
-    emusen_kit_core::tokens::legible_text(base, text_scale, caps)
-}
-
 /// The capitals' height of the application's face at `size`, as Qt draws it: the `caps_at` the kit's `Tokens` sizes are held with.
 pub fn caps(size: f64) -> f64 {
     ffi::cap_height(&cxx_qt_lib::QFont::default(), size)
-}
-
-/// The size words of a design's `base` are drawn at, at `text_scale`, in `family` at `weight`: the face a look's Text sets,
-/// whose capitals, not the application face's, are held to the floor.
-pub fn legible_in(base: f64, text_scale: f64, family: &str, weight: i32) -> f64 {
-    emusen_kit_core::tokens::legible_text(base, text_scale, |size| caps_in(family, weight, size))
 }
 
 /// The capitals' height of `family` at `weight` and `size`, as Qt draws it; the application's face for an empty family.

@@ -85,15 +85,15 @@ Item {
             }
         }
     }
-    Text {
+    Line {
         id: clock
-        objectName: "clock"
+        name: "clock"
+        unit: root.unit
         x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
         y: (root.height - height) / 2
         text: Device.clock
         color: Tokens.text
-        font.pixelSize: Type.sizeIn(root.size * root.unit, Tokens.textScale, Tokens.faceText, Font.DemiBold)
-        font.family: Tokens.faceText
-        font.weight: Font.DemiBold
+        size: root.size
+        weight: Font.DemiBold
     }
 }

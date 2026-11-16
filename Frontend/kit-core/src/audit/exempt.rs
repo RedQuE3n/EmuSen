@@ -1,7 +1,7 @@
 //! What the rules let pass by an exemption, item by item, so a test names each one it accepts (EmuSen_Kit.md §7.102).
 
 use super::accepted::{Accepted, Class, accepted};
-use super::fit::{CAPS_SLACK, fading_out, small_text_exception};
+use super::fit::{CAPS_SLACK, eclipse_board_words, fading_out, small_text_exception};
 use super::rules::{CONTRAST_SPARE, declared_colour, ratios};
 use super::tree::{Item, Kind};
 use crate::input::ElementId;
@@ -23,6 +23,8 @@ pub enum Exempted {
     Elided { item: ElementId },
     /// A disabled control's words under their contrast over all but `CONTRAST_SPARE` of what is behind them.
     Disabled { item: ElementId, ratio: f64, needed: f64 },
+    /// Words of the built-in Eclipse drawn as its board draws them, under their contrast over what is behind them.
+    Board { item: ElementId, ratio: f64, needed: f64 },
 }
 
 impl Exempted {
@@ -33,6 +35,7 @@ impl Exempted {
     pub const SMALL_TEXT: &'static str = "too small to read, a named exception";
     pub const ELIDED: &'static str = "data cut with an ellipsis";
     pub const DISABLED: &'static str = "low contrast on a disabled control";
+    pub const BOARD: &'static str = "low contrast as Eclipse's board draws it";
 
     /// The exemption's name, as its line begins with it.
     pub fn kind(&self) -> &'static str {
@@ -43,6 +46,7 @@ impl Exempted {
             Exempted::SmallText { .. } => Exempted::SMALL_TEXT,
             Exempted::Elided { .. } => Exempted::ELIDED,
             Exempted::Disabled { .. } => Exempted::DISABLED,
+            Exempted::Board { .. } => Exempted::BOARD,
         }
     }
 
@@ -55,6 +59,7 @@ impl Exempted {
             Exempted::SmallText { class, .. } => *class,
             Exempted::Elided { .. } => Class::DataWordsElided,
             Exempted::Disabled { .. } => Class::DimmedAndMoving,
+            Exempted::Board { .. } => Class::EclipseBoardType,
         }
     }
 
@@ -71,7 +76,8 @@ impl Exempted {
             | Exempted::Scene { item, .. }
             | Exempted::SmallText { item, .. }
             | Exempted::Elided { item }
-            | Exempted::Disabled { item, .. } => *item,
+            | Exempted::Disabled { item, .. }
+            | Exempted::Board { item, .. } => *item,
         }
     }
 }
@@ -86,6 +92,7 @@ impl fmt::Display for Exempted {
             Exempted::SmallText { item, capitals, .. } => write!(f, "{kind}: {} with capitals of {capitals:.2}", item.0),
             Exempted::Elided { item } => write!(f, "{kind}: {}", item.0),
             Exempted::Disabled { item, ratio, needed } => write!(f, "{kind}: {} at {ratio:.2}:1, needs {needed}:1", item.0),
+            Exempted::Board { item, ratio, needed } => write!(f, "{kind}: {} at {ratio:.2}:1, needs {needed}:1", item.0),
         }
     }
 }
@@ -97,7 +104,9 @@ pub fn exempted(root: &Item, declared: Option<&[Colour]>, smallest: f64) -> Vec<
     root.visit(&mut |item, ancestors| {
         if let Some((ratios, needed)) = item.legibility.as_ref().and_then(ratios) {
             let spare = ratios[((ratios.len() as f64) * CONTRAST_SPARE).floor() as usize];
-            if item.legibility.as_ref().is_some_and(|w| w.disabled) && spare < needed {
+            if eclipse_board_words(item) && spare < needed && !fading_out(item, ancestors) && !item.legibility.as_ref().is_some_and(|w| w.disabled) {
+                out.push(Exempted::Board { item: item.id, ratio: spare, needed });
+            } else if item.legibility.as_ref().is_some_and(|w| w.disabled) && spare < needed {
                 out.push(Exempted::Disabled { item: item.id, ratio: spare, needed });
             } else if fading_out(item, ancestors) && spare < needed {
                 out.push(Exempted::Fading { item: item.id, ratio: spare, needed });

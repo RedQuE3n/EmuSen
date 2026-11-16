@@ -83,6 +83,11 @@ pub trait LibrarySource: Send + Sync {
     fn collections(&self) -> Result<Vec<Collection>, String> {
         Ok(Vec::new())
     }
+    /// Each console's screen kind, by its catalog console (Serenity's `screens`: "Television" or "Lcd"); a source with no
+    /// catalogue has none.
+    fn screens(&self) -> Result<Vec<(String, String)>, String> {
+        Ok(Vec::new())
+    }
     /// How many cheats the game at `path` on `console` has in its own list (cheats.rs); a source with no lists has none.
     fn cheats(&self, _console: &str, _path: &str) -> Result<usize, String> {
         Ok(0)
@@ -163,6 +168,8 @@ pub struct LibraryRow {
     pub engine_mark: String,
     /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.18).
     pub world: String,
+    /// The screen the console drove, in words ("CRT, television"); empty where the catalogue names none.
+    pub screen: String,
     /// The row's first games as GameModel reads them, the covers Choose a console fans; empty until a refresh.
     pub fan: String,
 }
@@ -216,6 +223,8 @@ pub struct Catalog {
     pub collections: Vec<Collection>,
     /// How many cheats the game last played has in its list; 0 where none was played.
     pub last_cheats: usize,
+    /// Each console's screen kind, by its catalog console (`LibrarySource::screens`).
+    pub screens: Vec<(String, String)>,
 }
 
 /// One game as the screens show it: its title from its file name, its console, its console's hue, its cover and its facts.
@@ -415,6 +424,7 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             engine_mark: mark,
             libretro: engine.libretro,
             world: world_line_of(s),
+            screen: catalog.screens.iter().find(|(c, _)| c == &s.console).map(|(_, kind)| words::screen(kind).to_owned()).unwrap_or_default(),
             fan: String::new(),
         });
     }
@@ -504,6 +514,9 @@ impl LibrarySource for FirstLook<'_> {
     fn collections(&self) -> Result<Vec<Collection>, String> {
         self.0.collections()
     }
+    fn screens(&self) -> Result<Vec<(String, String)>, String> {
+        self.0.screens()
+    }
     fn cheats(&self, console: &str, path: &str) -> Result<usize, String> {
         self.0.cheats(console, path)
     }
@@ -549,7 +562,8 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
         (Some(g), Some(s)) => source.cheats(&s.console, &g.path)?,
         _ => 0,
     };
-    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware, names, collections, last_cheats };
+    let screens = source.screens()?;
+    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware, names, collections, last_cheats, screens };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));

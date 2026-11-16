@@ -18,6 +18,15 @@ Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played
 - **`Help.entries(kind, {triggers: true})`** (added flag): with `group`, the group's entry is LT RT Maker on the triggers
   (`help.rs`'s `MAKER`) in place of LB RB Group, as Eclipse's Choose a console steps its makers (decided 2026-11-15 by the
   tester, R-20261115-17). The pair is drawn as one glyph, LT with RT.
+- **`Library.consoles`' `screen`** (added role): the screen the console drove, in words ("CRT, television", "LCD";
+  `words::screen`), from Serenity's catalogue of screens (`emusen_serenity_filters`' `screens`, read through
+  `LibrarySource::screens` once a refresh); empty where the catalogue names none. For Eclipse's facts table
+  (EclipseConsoles:87).
+- **`Words.factLabels`** ("Games", "Played", "Core", "Screen", `words::FACT_LABELS`) and **`Words.count(n)`** (a count
+  grouped by thousands, `words::grouped`) (added), for the same table's labels and values.
+- **`Help.entries(kind, {actions: false})`** (added flag): the entries that carry the screen's own actions (Choose a
+  console's Favourites and Random game) left out (`help::without_actions`), for a board that draws neither in its bar
+  (EclipseConsoles:99-104); Open, Back and the group's entry stay.
 - **`GroupGridLayout`** (the kit's, by name; 1.5 in the qmldir): groups as a column and the chosen group's items as a
   grid, with the walk inside it (`EmuSen_Kit.md` §7.120), so a theme lays such a screen out without logic of its own.
 - The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.

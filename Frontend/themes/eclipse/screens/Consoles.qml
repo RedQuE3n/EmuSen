@@ -140,9 +140,17 @@ ThemeScreen {
                         width: root.makerWidth
                         height: root.foot - root.listTop
                         clip: true
-                        interactive: false
+                        // The wheel and a drag scroll it; the chosen maker is brought into sight as it is chosen.
+                        boundsBehavior: Flickable.StopAtBounds
                         contentHeight: layout.groups * root.makerPitch
-                        contentY: Math.max(0, Math.min(root.chosenGroup * root.makerPitch + root.makerHeight - height, contentHeight - height))
+                        function reveal() {
+                            const top = root.chosenGroup * root.makerPitch
+                            makerList.contentY = Math.max(0, Math.min(top, Math.max(makerList.contentY, top + root.makerHeight - makerList.height), makerList.contentHeight - makerList.height))
+                        }
+                        Connections {
+                            target: root
+                            function onChosenGroupChanged() { makerList.reveal() }
+                        }
                         Repeater {
                             id: makers
                             model: Library.consoles
@@ -224,10 +232,18 @@ ThemeScreen {
                         leftMargin: root.plateGap / 2
                         rightMargin: root.plateGap / 2
                         clip: true
-                        interactive: false
+                        // The wheel and a drag scroll the plates; the focused plate is brought into sight as it takes the focus.
+                        boundsBehavior: Flickable.StopAtBounds
                         readonly property real pitch: root.plateHeight + root.plateGap
                         contentHeight: Math.max(0, (layout.rows[root.chosenGroup] ?? 0) * grid.pitch - root.plateGap)
-                        contentY: root.lastPlate ? Math.max(0, Math.min(root.lastPlate.y + root.plateHeight - height, contentHeight - height)) : 0
+                        // Another maker chosen: its plates from their first row.
+                        Connections {
+                            target: root
+                            function onChosenGroupChanged() { grid.contentY = 0 }
+                        }
+                        function reveal(plate: Item) {
+                            grid.contentY = Math.max(0, Math.min(plate.y, Math.max(grid.contentY, plate.y + root.plateHeight - grid.height), grid.contentHeight - grid.height))
+                        }
                         Repeater {
                             id: plates
                             model: Library.consoles
@@ -245,6 +261,7 @@ ThemeScreen {
                                 required property string engineName
                                 required property string engineKind
                                 required property string engineMark
+                                required property string screen
                                 required property int group
                                 required property int groupIndex
                                 required property int groupSize
@@ -288,6 +305,7 @@ ThemeScreen {
                                     root.chosenGroup = plate.group
                                     root.shown = plate
                                     root.lastPlate = plate
+                                    grid.reveal(plate)
                                     Actions.focus(plate.key)
                                 }
                                 onActivated: Actions.openConsole(plate.key)
@@ -436,41 +454,59 @@ ThemeScreen {
                                 font.weight: Font.DemiBold
                                 lineHeight: 1.08
                             }
+                            // The aside's gap of 22 (board line 77) less the column's two spacings of 8 either side.
                             Item {
                                 width: parent.width
-                                height: 14 * root.px
+                                height: (22 - 2 * 8) * root.px
                             }
-                            Item {
+                            // The four facts, a label at the left and its value at the right of each row (board lines 83 to 88).
+                            Column {
+                                id: facts
+                                objectName: "consoleFacts"
                                 width: parent.width
-                                height: facts.height
-                                PlanetMark {
-                                    objectName: "consoleCoreMark"
-                                    visible: root.shown !== null && root.shown.engineMark.length > 0
-                                    // Centred on the facts' first line.
-                                    y: (factsLine.height - height) / 2
-                                    width: 24 * root.px
-                                    height: 24 * root.px
-                                    mark: root.shown ? root.shown.engineMark : ""
-                                }
-                                FontMetrics {
-                                    id: factsLine
-                                    font: facts.font
-                                }
-                                Text {
-                                    id: facts
-                                    objectName: "consoleFacts"
-                                    x: 34 * root.px
-                                    width: parent.width - x
-                                    wrapMode: Text.WordWrap
-                                    // The facts with the played count after the games' count (R-20261115-8).
-                                    text: root.shown ? Words.line([Words.facts(root.shown.maker, root.shown.year, root.shown.count, ""), Words.played(root.shown.played), Words.runsOn(root.shown.engineName, root.shown.engineKind)]) : ""
-                                    color: Tokens.muted
-                                    font.pixelSize: 21 * root.px
+                                spacing: 14 * root.px
+                                Repeater {
+                                    model: Words.factLabels
+                                    Item {
+                                        id: fact
+                                        required property int index
+                                        required property string modelData
+                                        readonly property var values: root.shown ? [Words.count(root.shown.count), Words.count(root.shown.played), root.shown.engineName, root.shown.screen] : ["", "", "", ""]
+                                        objectName: "consoleFact." + fact.index
+                                        width: facts.width
+                                        height: factLabel.height
+                                        Text {
+                                            id: factLabel
+                                            objectName: "consoleFactLabel." + fact.index
+                                            text: fact.modelData
+                                            color: Tokens.muted
+                                            font.pixelSize: 21 * root.px
+                                        }
+                                        Text {
+                                            id: factValue
+                                            objectName: "consoleFactValue." + fact.index
+                                            x: parent.width - width
+                                            text: fact.values[fact.index]
+                                            color: Tokens.text
+                                            font.pixelSize: 21 * root.px
+                                        }
+                                        // The core's planet before its name (board line 86).
+                                        PlanetMark {
+                                            objectName: "consoleCoreMark"
+                                            visible: fact.index === 2 && root.shown !== null && root.shown.engineMark.length > 0
+                                            x: factValue.x - 10 * root.px - width
+                                            y: (parent.height - height) / 2
+                                            width: 24 * root.px
+                                            height: 24 * root.px
+                                            mark: root.shown ? root.shown.engineMark : ""
+                                        }
+                                    }
                                 }
                             }
+                            // The gap of 22 and the buttons' margin of 8 (board lines 77, 89) less the two spacings of 8.
                             Item {
                                 width: parent.width
-                                height: 8 * root.px
+                                height: (22 + 8 - 2 * 8) * root.px
                             }
                             // Open, the help bar's own A entry, as a pill (board line 90).
                             Pill {
@@ -543,7 +579,8 @@ ThemeScreen {
                 objectName: "consolesHelp"
                 unit: root.px
                 controller: frame.controller
-                model: Help.entries(Help.Console, {group: true, triggers: true})
+                // The board's A, B and LT RT Maker: Favourites and Random game, the screen's own actions, are not drawn (board lines 99 to 104).
+                model: Help.entries(Help.Console, {group: true, triggers: true, actions: false})
                 ink: ink.help
                 // This board's foot: its 34 px row 40 px over the bottom (board line 99).
                 middle: 1143

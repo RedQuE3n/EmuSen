@@ -35,6 +35,7 @@ pub mod qobject {
         #[qproperty(QString, places, READ, CONSTANT)]
         #[qproperty(QString, continue_entry, cxx_name = "continueEntry", READ, CONSTANT)]
         #[qproperty(QString, recent_entry, cxx_name = "recentEntry", READ, CONSTANT)]
+        #[qproperty(QStringList, fact_labels, cxx_name = "factLabels", READ, CONSTANT)]
         /// The time the timed phrases are said against, in seconds since 1970; 0, the default, is the wall clock. The
         /// program sets it from its clock, which a test holds (decided 2026-11-09 by the tester); a theme only reads it.
         #[qproperty(f64, now, READ, NOTIFY)]
@@ -45,6 +46,9 @@ pub mod qobject {
         /// "1 game", "1,566 games".
         #[qinvokable]
         fn games(self: &ThemeWords, count: i32) -> QString;
+        /// A count grouped by thousands: "1,214".
+        #[qinvokable]
+        fn count(self: &ThemeWords, count: i32) -> QString;
         /// Parts said as one line, the empty ones left out: "Nintendo · 1990".
         #[qinvokable]
         fn line(self: &ThemeWords, parts: &QStringList) -> QString;
@@ -104,6 +108,7 @@ pub struct ThemeWordsRust {
     places: QString,
     continue_entry: QString,
     recent_entry: QString,
+    fact_labels: cxx_qt_lib::QStringList,
     now: f64,
 }
 
@@ -127,6 +132,11 @@ impl Default for ThemeWordsRust {
             places: QString::from(words::PLACES),
             continue_entry: QString::from(words::CONTINUE_ENTRY),
             recent_entry: QString::from(words::RECENT_ENTRY),
+            fact_labels: {
+                let mut labels = cxx_qt_lib::QList::<QString>::default();
+                words::FACT_LABELS.iter().for_each(|l| labels.append(QString::from(*l)));
+                cxx_qt_lib::QStringList::from(&labels)
+            },
             now: 0.0,
         }
     }
@@ -157,6 +167,10 @@ impl qobject::ThemeWords {
     pub fn line(&self, parts: &cxx_qt_lib::QStringList) -> QString {
         let parts: Vec<String> = cxx_qt_lib::QList::<QString>::from(parts).iter().map(|p| p.to_string()).collect();
         said(words::line(&parts.iter().map(String::as_str).collect::<Vec<_>>()))
+    }
+
+    pub fn count(&self, count: i32) -> QString {
+        said(words::grouped(count.max(0) as usize))
     }
 
     pub fn played(&self, count: i32) -> QString {

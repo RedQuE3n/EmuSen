@@ -136,8 +136,9 @@ fn qt_3_4_9_eclipse_s_consoles_stands_where_its_board_stands_it() {
             if let Some(fill) = items.get("makerFill.0") {
                 assert!(fill.paints.iter().any(|p| p == "#F6E7D8FF"), "{file}: the chosen maker is filled in the accent: {:?}", fill.paints);
             }
-            let facts = items.get("consoleFacts").map(|s| s.text.as_str()).unwrap_or("");
-            assert!(facts.contains(" played"), "{file}: the facts carry the played count: {facts:?}");
+            let label = |i: usize| items.get(&format!("consoleFactLabel.{i}")).map(|s| s.text.as_str()).unwrap_or("");
+            let labels: Vec<&str> = (0..4).map(label).collect();
+            assert_eq!(labels, emusen_qt_models::words::FACT_LABELS, "{file}: the facts' four labels");
             let place = items.get("consolePlace").map(|s| s.text.as_str()).unwrap_or("");
             assert!(place.contains(" of "), "{file}: the maker and the place: {place:?}");
         }

@@ -39,7 +39,8 @@ fn qt_3_2_each_list_has_the_api_s_roles_and_no_other() {
             "groupSize",
             "groupStart",
             "played",
-            "glow"
+            "glow",
+            "screen"
         ]
     );
     assert_eq!(view::PLACE_ROLES, ["key", "name", "kind", "line", "attention", "count", "available"]);

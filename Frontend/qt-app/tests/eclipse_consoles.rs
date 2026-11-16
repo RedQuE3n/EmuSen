@@ -43,6 +43,7 @@ struct Console {
     glow: String,
     engine_name: String,
     engine_kind: String,
+    screen: String,
     group: usize,
     group_index: usize,
 }
@@ -119,6 +120,7 @@ fn library_of(world: &World, cores: &std::path::Path) -> Vec<Console> {
             glow: text(r, "glow"),
             engine_name: text(r, "engineName"),
             engine_kind: text(r, "engineKind"),
+            screen: text(r, "screen"),
             group: whole(r, "group") as usize,
             group_index: whole(r, "groupIndex") as usize,
         })
@@ -190,16 +192,18 @@ fn overlap(a: [f64; 4], b: [f64; 4]) -> bool {
     a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 }
 
-/// The words a plate, the facts and the place line say for a console, from the program's words over the model's row.
-fn says(c: &Console, groups: &[usize]) -> [String; 4] {
+/// The words a plate and the place line say for a console, and its four facts' values (games, played, core, screen), from
+/// the program's words over the model's row.
+fn says(c: &Console, groups: &[usize]) -> ([String; 3], [String; 4]) {
     let year = if c.year > 0 { c.year.to_string() } else { String::new() };
-    let runs = if c.engine_name.is_empty() { String::new() } else { words::runs_on(&c.engine_name, c.engine_kind == "libretro") };
-    [
-        c.display_name.clone(),
-        words::line(&[year.as_str(), words::games(c.count).as_str()]),
-        words::line(&[words::facts(&c.maker, c.year, c.count, "").as_str(), words::played(c.played).as_str(), runs.as_str()]),
-        words::line(&[c.maker.as_str(), emusen_qt_models::game_page::place(c.group_index, groups[c.group]).as_str()]),
-    ]
+    (
+        [
+            c.display_name.clone(),
+            words::line(&[year.as_str(), words::games(c.count).as_str()]),
+            words::line(&[c.maker.as_str(), emusen_qt_models::game_page::place(c.group_index, groups[c.group]).as_str()]),
+        ],
+        [words::grouped(c.count), words::grouped(c.played), c.engine_name.clone(), c.screen.clone()],
+    )
 }
 
 /// The disc's rim and both glows in the focused console's own colour, each glow at its own strength.
@@ -336,12 +340,19 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
                 assert!(seen || !overlap(p, e), "{size}: plate.{k} {p:?} over {} {e:?}", o.name);
             }
             // Its words and the facts are the model's, the played count among them; the disc is in its colour.
-            let [name, line, facts, place] = says(c, &groups);
+            let ([name, line, place], values) = says(c, &groups);
             let said = |n: &str| shown(&tree, n).and_then(|n| n.text.clone()).unwrap_or_default();
             assert_eq!(said(&format!("plateName.{k}")), name, "{size}: plate.{k}'s name");
             assert_eq!(said(&format!("plateLine.{k}")), line, "{size}: plate.{k}'s line");
             assert_eq!(said("consoleName"), name, "{size}: the focused console's name");
-            assert_eq!(said("consoleFacts"), facts, "{size}: the facts with the played count");
+            for (i, (label, value)) in words::FACT_LABELS.iter().zip(&values).enumerate() {
+                assert_eq!(said(&format!("consoleFactLabel.{i}")), *label, "{size}: the facts' row {i}'s label");
+                assert_eq!(said(&format!("consoleFactValue.{i}")), *value, "{size}: {}'s {label}", c.display_name);
+            }
+            if c.key == "psx" {
+                assert_eq!(c.screen, words::screen("Television"), "the PlayStation drove a television (Serenity's screens)");
+            }
+            assert_eq!(shown(&tree, "consoleCoreMark").is_some(), !c.engine_name.is_empty(), "{size}: the core's planet beside its name");
             assert_eq!(said("consolePlace"), place, "{size}: the maker and the place");
             disc_holds(&tree, c, &size);
         }
@@ -384,6 +395,8 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
     let bar = edges(shown(&tree, "consolesHelp").expect("the help line"));
     let help: Vec<String> = tree.nodes.iter().filter(|n| n.visible && n.text.is_some() && overlap(edges(n), bar)).filter_map(|n| n.text.clone()).collect();
     assert!(help.iter().any(|t| t == "Maker") && !help.iter().any(|t| t == "Group"), "the help line draws LT RT Maker and no LB RB: {help:?}");
+    let entries: Vec<&String> = help.iter().filter(|t| ["Open", "Back", "Maker", "Favourites", "Random game"].contains(&t.as_str())).collect();
+    assert_eq!(entries, ["Open", "Back", "Maker"], "the board's entries, in its order, and none of the screen's own actions: {help:?}");
 
     // A on a plate opens that console's games; B comes back to it.
     let k = firsts[groups.len() - 2];

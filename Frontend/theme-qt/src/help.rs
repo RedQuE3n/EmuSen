@@ -1,7 +1,8 @@
 //! `Help`, the help bar's entries for what a theme's focus is on (EmuSen_Qt.md §3.2): `entries(kind)` gives the same
 //! list each time, with the roles the kit's `HelpBar` reads and the actions `Frame` declares, from emusen-qt-models' help.rs;
 //! `entries(kind, {group, back, accept, triggers})` the same with the shoulders' Group (the triggers' Maker with `triggers`)
-//! and B's Back added where the kind takes them, and A's entry marked not `enabled` when `accept` is false.
+//! and B's Back added where the kind takes them, and A's entry marked not `enabled` when `accept` is false; with
+//! `actions` false, the entries carrying the screen's own actions are left out (`help::without_actions`).
 
 use crate::glue::ffi;
 use crate::view::HELP_ROLES;
@@ -108,38 +109,38 @@ pub fn screen_of(kind: HelpKind) -> Screen {
     }
 }
 
-/// What a list may differ by: the group's entry added (LB RB Group, or LT RT Maker), B's added, and A's entry enabled; a
-/// list's place in a kind's twelve.
-pub const FLAGS: [(Option<Entry>, bool, bool); 12] = {
+/// What a list may differ by: the group's entry added (LB RB Group, or LT RT Maker), B's added, A's entry enabled, and
+/// the screen's own actions kept; a list's place in a kind's twenty-four.
+pub const FLAGS: [(Option<Entry>, bool, bool, bool); 24] = {
     const G: [Option<Entry>; 3] = [None, Some(help::GROUP), Some(help::MAKER)];
-    let mut flags = [(None, false, true); 12];
+    let mut flags = [(None, false, true, true); 24];
     let mut f = 0;
-    while f < 12 {
-        flags[f] = (G[f % 3], (f / 3) % 2 == 1, f < 6);
+    while f < 24 {
+        flags[f] = (G[f % 3], (f / 3) % 2 == 1, (f / 6) % 2 == 0, f < 12);
         f += 1;
     }
     flags
 };
 
-/// Twelve lists for each kind, one for each of `FLAGS`, the singleton's children.
+/// Twenty-four lists for each kind, one for each of `FLAGS`, the singleton's children.
 pub struct ThemeHelpRust {
-    lists: [[*mut qobject::ThemeHelpEntries; 12]; 7],
+    lists: [[*mut qobject::ThemeHelpEntries; 24]; 7],
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [[std::ptr::null_mut(); 12]; 7] }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 24]; 7] }
     }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeHelp {
     fn initialize(mut self: Pin<&mut Self>) {
         for (i, kind) in KINDS.into_iter().enumerate() {
-            for (f, (group, back, accept)) in FLAGS.into_iter().enumerate() {
+            for (f, (group, back, accept, actions)) in FLAGS.into_iter().enumerate() {
                 let list = ffi::new_help_entries(self.as_mut().upcast_pin());
                 // Safety: the list was just made, a child of this singleton.
                 if let Some(entries) = unsafe { list.as_mut() } {
-                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept);
+                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept, actions);
                 }
                 self.as_mut().rust_mut().lists[i][f] = list;
             }
@@ -149,18 +150,18 @@ impl cxx_qt::Initialize for qobject::ThemeHelp {
 
 impl qobject::ThemeHelp {
     pub fn entries(&self, kind: HelpKind) -> *mut qobject::ThemeHelpEntries {
-        self.list(kind, None, false, true)
+        self.list(kind, None, false, true, true)
     }
 
     pub fn entries_with(&self, kind: HelpKind, flags: &QMap<QMapPair_QString_QVariant>) -> *mut qobject::ThemeHelpEntries {
         let flag = |name: &str, unset: bool| flags.get(&QString::from(name)).and_then(|v| v.value::<bool>()).unwrap_or(unset);
         let group = flag("group", false).then_some(if flag("triggers", false) { help::MAKER } else { help::GROUP });
-        self.list(kind, group, flag("back", false), flag("accept", true))
+        self.list(kind, group, flag("back", false), flag("accept", true), flag("actions", true))
     }
 
     /// A kind's list with the entries asked for added.
-    pub fn list(&self, kind: HelpKind, group: Option<Entry>, back: bool, accept: bool) -> *mut qobject::ThemeHelpEntries {
-        let f = FLAGS.iter().position(|x| *x == (group, back, accept)).unwrap_or(0);
+    pub fn list(&self, kind: HelpKind, group: Option<Entry>, back: bool, accept: bool, actions: bool) -> *mut qobject::ThemeHelpEntries {
+        let f = FLAGS.iter().position(|x| *x == (group, back, accept, actions)).unwrap_or(0);
         KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.lists[i][f])
     }
 }
@@ -186,10 +187,11 @@ impl Default for ThemeHelpEntriesRust {
 
 impl qobject::ThemeHelpEntries {
     /// The screen whose entries the list holds, with the added entries asked for, set once when it is made.
-    fn show(mut self: Pin<&mut Self>, screen: Screen, group: Option<Entry>, back: bool, accept: bool) {
+    fn show(mut self: Pin<&mut Self>, screen: Screen, group: Option<Entry>, back: bool, accept: bool, actions: bool) {
         self.as_mut().rust_mut().screen = screen;
         self.as_mut().rust_mut().accept = accept;
-        self.as_mut().rust_mut().list = entries_grouped(screen, group, back);
+        let list = entries_grouped(screen, group, back);
+        self.as_mut().rust_mut().list = if actions { list } else { help::without_actions(list) };
         self.as_mut().rust_mut().action_lines = QString::from(action_lines(screen).as_str());
     }
 

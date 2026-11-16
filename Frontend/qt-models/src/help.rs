@@ -344,6 +344,14 @@ pub fn entries_grouped(screen: Screen, group: Option<Entry>, back: bool) -> Vec<
     list
 }
 
+/// A list with the entries that carry an action of the screen's own left out (Favourites, Random game): what a board
+/// draws in the bar where it gives those buttons other work; the entries the frame acts on itself (Open, Back, the
+/// group's) stay.
+pub fn without_actions(mut list: Vec<Entry>) -> Vec<Entry> {
+    list.retain(|e| e.2.is_none());
+    list
+}
+
 /// Start's action away from a game and a card: Home (EmuSen_BigPicture.md §51.2, §51.3).
 pub const HOME: &str = "home";
 /// The bindings page's own actions (Mistress's HintReset, HintPlayer, HintClear, HintTest).

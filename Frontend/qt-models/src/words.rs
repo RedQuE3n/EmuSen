@@ -47,6 +47,8 @@ pub const POWER_LINE: &str = "Exit";
 pub const BETWEEN: &str = "·";
 /// The search field's name, as a screen reader says it.
 pub const SEARCH: &str = "Search";
+/// The labels of a console's facts, a row each, in their order: its games, those played, its core and its screen.
+pub const FACT_LABELS: [&str; 4] = ["Games", "Played", "Core", "Screen"];
 
 /// The program's name and version, as the Home card's Power page says it under its rows (Mistress's `BigMenuFooter`).
 pub fn version_line() -> String {
@@ -113,6 +115,15 @@ fn is_status_line(words: &str) -> bool {
 /// A count of games.
 pub fn games(n: usize) -> String {
     counted(n, "game", "games")
+}
+
+/// A console's screen kind, Serenity's catalogue's name for it, in words: "CRT, television" or "LCD"; none for another.
+pub fn screen(kind: &str) -> &'static str {
+    match kind {
+        "Television" => "CRT, television",
+        "Lcd" => "LCD",
+        _ => "",
+    }
 }
 
 /// How many of a console's games were played, in the form the facts give a count: "61 played".

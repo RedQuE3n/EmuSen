@@ -1822,8 +1822,12 @@ with games, and it comes from `played` (EmuSen.Theme 1.5, decided 2026-11-15 by 
 console stands at the right. Its disc's rim and glows take the console's own colour, the `glow` role, which is kit-core's
 `world::glow` for its hue, the colour its body glows in (decided 2026-11-15 by the tester, R-20261115-9). Every console has
 a hue: the systems table's data gives one for 14 consoles, and `SystemDef::look` computes one from the id for any other
-(`Platform/systems/src/lib.rs:107`). Under the disc come its maker and year, its name, and its facts line with its core's
-`PlanetMark`. The facts line is `Words.facts`, `Words.played` and `Words.runsOn` said as one `Words.line`. Open is the help bar's own A entry.
+(`Platform/systems/src/lib.rs:107`). Under the disc come its maker and year, its name, and its four facts as the board's
+table: `Words.factLabels` (Games, Played, Core, Screen) at the left and, at the right, `Words.count` of its games and of
+those played, its core's name after its `PlanetMark`, and its `screen` (EmuSen.Theme 1.5), Serenity's screen kind for the
+console in words ("CRT, television", "LCD"). Open is the help bar's own A entry.
+The plates and the makers are each a `Flickable` the wheel and a drag scroll; a plate or a maker that takes the focus is
+brought into sight by setting `contentY`, not by a binding, so a scroll by hand is kept until the focus moves.
 At the foot's right, the maker and `Words.place` (game_page.rs's `place`, "3 of 14") say where the focused console stands.
 
 The screen holds no layout logic. The kit's `GroupGridLayout` (EmuSen_Kit.md §7.120) gives each console its column and row in
@@ -1854,8 +1858,6 @@ line, what the program holds for it, its box in board pixels and in design units
 
 - the filter chips: no console without games is listed, and no console is a favourite;
 - "Sorted by maker" and Options;
-- the four labels of the facts, for which the facts line stands;
-- "Screen".
 
 **Proof.** theme-check's `eclipse_consoles.rs` runs theme-audit on Eclipse over the canvases' eleven consoles with the focus
 on the Super Nintendo. At 1280 × 800 and 1920 × 1200 it holds every built row's box to the board's pixels times the window's

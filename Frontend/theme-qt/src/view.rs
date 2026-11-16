@@ -21,7 +21,7 @@ pub enum Cell {
 pub type Row = Vec<Cell>;
 
 /// `Library.consoles`: each console with games, in the shelves' order.
-pub const CONSOLE_ROLES: [&str; 18] = [
+pub const CONSOLE_ROLES: [&str; 19] = [
     "key",
     "name",
     "displayName",
@@ -40,6 +40,7 @@ pub const CONSOLE_ROLES: [&str; 18] = [
     "groupStart",
     "played",
     "glow",
+    "screen",
 ];
 /// `Library.places`: Home's destinations in Home's order.
 pub const PLACE_ROLES: [&str; 7] = ["key", "name", "kind", "line", "attention", "count", "available"];
@@ -145,6 +146,7 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
                 Cell::Whole(start),
                 Cell::Whole(r.played as i32),
                 Cell::Text(glow_of(r.hue)),
+                text(&r.screen),
             ]
         })
         .collect()

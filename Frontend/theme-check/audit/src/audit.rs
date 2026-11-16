@@ -257,8 +257,12 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
         for (w, h) in SIZES {
             lines.at = format!("{w}x{h} {name}");
             scene.resize(w, h);
-            // Read once every transition the resize started has ended, the sky's glow easing to its new centre too (man theme-check).
-            scene.rest();
+            // Read once every transition the resize started has ended, the sky's glow too; a held clock moves nothing (man theme-check).
+            if pass.held {
+                scene.wait(150);
+            } else {
+                scene.rest();
+            }
             let mut tree = scene.tree();
             // A title or a name may elide; the program's own words, fixed or built from its settings, may not.
             tree.root.mark_data(&words::is_own);

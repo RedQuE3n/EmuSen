@@ -1987,8 +1987,10 @@ oracle lays out every console of the table on a plate, below); a console whose s
 cut by the ellipsis, and the oracle fails on it. By name, the consoles stand by the names their plates show:
 `consolesBy`'s third argument is `shortened`, and `console_list::plate_name` gives the short name for a key among them;
 every other order reads no names, so its list is one whatever the plates show. A ringed glyph's box
-is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery is drawn
-where the machine has one; `Status` makes it only where a board draws it. The top navigation is a piece of its own
+is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery's level
+is drawn as the board draws it, "82%" 22 before the clock with no picture (line 37), where the machine has one; `Status`
+makes it only where a board draws it (`battery` set, `batteryPicture` not), and the oracle writes an 82% battery,
+discharging, into its world's made-up power_supply tree and holds the row. The top navigation is a piece of its own
 (R-20261115-7), and its place is left empty. theme-audit's `eclipse_consoles.rs` reads the same table and holds its rows given in plain board pixels over its own
 recording. The help line's row is 38 px tall, the ringed B's 34 and its ring (line 102), so its middle stands at 1141, 40
 px over the foot; Home's at 1137, its row the 46 px Sections pill (Main:99).

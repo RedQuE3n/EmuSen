@@ -366,6 +366,12 @@ pub fn oracle(backend: &str) {
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));
+    // The machine's battery at the board's 82%, discharging, in the world's made-up power_supply tree (EclipseConsoles:37).
+    let power = world.power_supply().join("BAT0");
+    std::fs::create_dir_all(&power).unwrap();
+    for (key, value) in [("type", "Battery"), ("capacity", "82"), ("status", "Discharging")] {
+        std::fs::write(power.join(key), format!("{value}\n")).unwrap();
+    }
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(&mut scene, "library", "loading", "false", 10000);
     wait_for(&mut scene, "pads", "connected", "1", 5000);
@@ -398,6 +404,17 @@ pub fn oracle(backend: &str) {
         scene.wait(50);
     }
     assert_eq!(focused(&mut scene), "plate.0", "the first maker's first console has the focus");
+    // The battery's level alone, the board's words, and none of Home's picture of it (EclipseConsoles:37).
+    let mut tree = scene.tree();
+    for _ in 0..100 {
+        if shown(&tree, "battery").is_some_and(|n| n.text.is_some()) {
+            break;
+        }
+        scene.wait(50);
+        tree = scene.tree();
+    }
+    assert_eq!(shown(&tree, "battery").and_then(|n| n.text.clone()).as_deref(), Some("82%"), "the battery's level as the board draws it");
+    assert!(shown(&tree, "batteryIcon").is_none(), "Choose a console's board draws no picture of the battery");
     board_held(&mut scene, &model[0]);
     pictures(&mut scene, backend, "eleven");
 

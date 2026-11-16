@@ -329,6 +329,7 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
     }
     assert_eq!(focused(&mut scene), "plate.0", "the first maker's first console has the focus");
     board_held(&mut scene, &model[0]);
+    pictures(&mut scene, "eleven");
 
     // The screen's plates are the model's consoles, in its order.
     let tree = scene.tree();
@@ -494,6 +495,18 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
     scene.assert_quiet();
 }
 
+/// With `EMUSEN_ECLIPSE_PICTURES` naming a folder, the screen grabbed at the board's shape and the handheld's into it.
+fn pictures(scene: &mut Scene<'_>, library: &str) {
+    let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") else { return };
+    std::fs::create_dir_all(&folder).unwrap();
+    for (width, height) in [(1920, 1200), (1280, 800)] {
+        scene.resize(width, height);
+        scene.wait(500);
+        let path = std::path::Path::new(&folder).join(format!("consoles-{library}-{width}x{height}.png"));
+        assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
+    }
+}
+
 /// Whether `name` is drawn whole inside the view `view`.
 fn whole_in(tree: &Tree, name: &str, view: &str) -> bool {
     let (Some(n), Some(v)) = (shown(tree, name), shown(tree, view)) else { return false };
@@ -530,6 +543,7 @@ fn wheel_scrolls(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, view: &Libr
         press(scene, sdl, pad, PadControl::LeftTrigger);
     }
     assert_eq!(focused(scene), "plate.0", "the first maker's first console by LT");
+    pictures(scene, "crowd");
     let at = |scene: &mut Scene<'_>, view: &str| -> f64 {
         let tree = scene.tree();
         eclipse_board::read(&tree, view, "contentY").parse().expect("a view's contentY")

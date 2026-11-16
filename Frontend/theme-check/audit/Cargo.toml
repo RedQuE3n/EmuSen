@@ -7,7 +7,7 @@ publish.workspace = true
 links = "emusen-theme-audit"
 
 # theme-check's loaded step (EmuSen_Qt.md §3.7): a theme's screens placed offscreen through the theme host on a synthetic library,
-# then the fit, pad reach, pointer reach and no-chrome audits at the gate's five sizes in both variants. A program of its own on
+# then the fit, pad reach, pointer reach and no-chrome audits at the gate's five sizes in each variant the package lists. A program of its own on
 # the Qt side, which theme-check runs as a process, since the dev module that links theme-check must never pull in Qt.
 [[bin]]
 name = "theme-audit"

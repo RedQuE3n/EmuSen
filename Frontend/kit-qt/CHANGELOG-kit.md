@@ -20,7 +20,7 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
 
 - **`Backdrop`**, **`BackdropField`**: a ground, and over it colour fields (an ellipse or a rounded box, each with its
   CSS filter blur, opacity and turn) or a picture in their place, each blurred by a `MultiEffect` on the graphics card;
-  on the software backend the fields unblurred at their opacity and no picture. `EmuSen_Kit.md` §7.118.
+  on the software backend the fields and the picture unblurred, each at its opacity. `EmuSen_Kit.md` §7.118.
 - **`Glow`**: `offsetX` and `offsetY` move the shape as a box-shadow's offsets move it, so a resting tile's shadow is a
   glow; 0 by default, so every glow drawn before is unchanged. Exported to themes in EmuSen.Theme 1.4. `EmuSen_Kit.md` §7.119.
 - **`Glow`** on the software backend blurs once a shape and only recolours on a change of colour (§7.113); `CoronaDisc`
@@ -28,7 +28,38 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
 - **`GlowPaint`** (C++, `QQuickPaintedItem`): the software backend's glow painted in native code, its blur made once a
   shape and tinted once a colour, in place of a Context2D canvas whose first paint of a disc's halo took minutes (§7.113); its
   sizes are `double`, a type qmllint knows, where `qreal` left Glow.qml's bindings with no type.
-- **`type_size::legible`** (Rust, for EmuSen.Theme's `Type`): a look's size never under the legibility floor (§7.121).
+- **`HelpBar.leadStyle`**, **`leadColor`**: the first entry's glyph style and colour, the others' by default, so a look draws
+  its main action apart (Eclipse's board fills A in the corona, `Main.dc.html:101`).
+- **`GaussianBlur`**, and `Backdrop`'s fields blurred by it on the card in place of `MultiEffect`: CSS's `blur()`, a
+  Gaussian of the field's deviation, held within 0.02 of the computed one (`shaders/gaussian.frag`, §7.118). `Backdrop`'s
+  field delegates show `deviation` in place of `radius`.
+- **`Glow`** on the card blurred by `GaussianBlur` in place of RectangularShadow, with `pixelScale`; **`FocusRing`**'s
+  `gap`, `thickness`, `glowColor`, `glowBlur`, `glowSpread` and `bandRadius`, the tokens' by default (§7.113).
+- **`CoronaDisc.pixelScale`**, and its glows on the card blurred by `GaussianBlur` as CSS's box-shadows are, within 2
+  levels of 255 of the computed ones (§7.116); on the software backend still the kit's `Glow`.
+- **`HelpBar.glyph`**, **`HelpBar.snapped`**, **`PadGlyph.letter`**: a host's own drawing of an entry's glyph, entries
+  centred exactly where a look asks, and the letter the family prints on a button (`EmuSen_Kit.md` §7.54).
+- **`type_size::caps_in`** (Rust): the capitals of a face at a weight, measured by Qt; the `Tokens` column holds a theme's
+  type sizes with its `faceInterface` where it sets one (§7.121).
+
+## 1.7: the face tokens, and Sora and JetBrains Mono bundled (2026-11-15)
+
+Decided 2026-11-14 by the tester (R-20261114-15): both fonts bundled and a face token added. An addition; the qmldir tags
+every type with 1.7, the kit's version, as each minor since 1.3 has.
+
+- **`Tokens.faceText`, `faceLabel`, `faceInterface`, `faceCode`** (registry, strings after every earlier property): the
+  family each role of text draws in; Barlow, Barlow Condensed, and the application's font for the last two in the kit's
+  column. `EmuSen_Kit.md` §7.117.
+- **`Tokens.weightTitle`, `weightSentence`, `weightWordmark`** (registry, whole numbers after the faces): the weight of a
+  title, of the pane's sentence and of the wordmark; 400, 400 and 300 in the kit's column, as the reference drew them.
+  Decided 2026-11-15 by main, provisional on the tester's word. §7.117.
+- **`MenuRow.code`** and the read-only **`MenuRow.valueFont`**: a value drawn in `faceCode`; `SettingsFrame` reads a
+  row's `code` role.
+- The style's controls, `ToneText`, and the default fonts of `MenuRow`, `ActionButton`, `HelpBar`, `Keyboard`,
+  `NoticeLayer`, `Question` and `ToolScreen` ask `faceInterface`; `Moonrise` and `CoverTile` ask `faceLabel` and
+  `faceText` and load no font of their own. Under the kit's tokens each draws the face it drew.
+- `fonts/` gains Sora (Light, Regular, SemiBold, Bold) and JetBrains Mono (Regular, Bold) with their licences, all put in
+  the application's font database once (`bundled_families`).
 
 ## 1.6: Eclipse's corona disc and the planet mark as kit parts, one glow, and every ring Gapped where a look asks (2026-11-14)
 

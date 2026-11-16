@@ -16,6 +16,7 @@
 #include <QtCore/QSignalMapper>
 #include <QtGui/QAccessible>
 #include <QtGui/QColor>
+#include <QtGui/QFontInfo>
 #include <QtGui/QFontMetricsF>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QImage>
@@ -223,6 +224,8 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
         node["bold"] = font.weight() >= QFont::Bold;
         node["face"] = font.family();
+        node["drawn"] = QFontInfo(font).family();
+        node["weight"] = QFontInfo(font).weight(); // the weight Qt matched, as a CSS weight // the family Qt matched, a fallback's where the face asked for is missing (QFontInfo)
         const QRectF laid = glyphBox(item), glyphs = item->mapRectToScene(laid);
         node["glyphs"] = QJsonArray{glyphs.x(), glyphs.y(), glyphs.width(), glyphs.height()};
         // The glyphs' own four corners in the scene, which a stack's rule holds uncovered (EmuSen_Kit.md §7.33).

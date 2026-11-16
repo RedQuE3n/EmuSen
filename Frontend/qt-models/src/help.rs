@@ -325,6 +325,19 @@ pub fn back_at(screen: Screen) -> Option<usize> {
     }
 }
 
+/// A list as Eclipse's Home names it (Main.dc.html:94-97): X the game's options and Start the Home card it opens, and no
+/// Select search, which the theme draws as its own button. The actions are the list's own.
+pub fn card_named(list: Vec<Entry>) -> Vec<Entry> {
+    list.into_iter()
+        .filter(|e| e.0 != UiButton::Options)
+        .map(|(button, label, action)| match (button, action) {
+            (UiButton::Screensaver, Some(GAME_PAGE)) => (button, crate::words::OPTIONS, action),
+            (UiButton::Menu, Some(HOME)) => (button, crate::words::HOME_CARD, action),
+            _ => (button, label, action),
+        })
+        .collect()
+}
+
 /// A screen's entries with the group's and B's added where the screen takes them, B before the group.
 pub fn entries_with(screen: Screen, group: bool, back: bool) -> Vec<Entry> {
     entries_grouped(screen, group.then_some(GROUP), back)

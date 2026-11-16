@@ -425,3 +425,43 @@ fn qt_7_8_g2_a_hidden_game_leaves_every_place_until_settings_lists_hidden_games(
     let rows = refresh(&source).unwrap().rows;
     assert_eq!(rows.iter().map(|r| r.count).collect::<Vec<_>>(), [5, 1, 4, 3, 2], "listed again with the rest");
 }
+
+#[test]
+fn eclipse_s_home_says_a_game_s_last_play_its_time_played_and_continue_as_its_board_does() {
+    use emusen_qt_models::words::{continue_line, played_facts};
+    let at = 1_000_000;
+    // Main.dc.html:56, "Last played yesterday · 3 h 20 min played".
+    assert_eq!(played_facts(at, at + 86_400, 3 * 3600 + 20 * 60), "Last played yesterday · 3 h 20 min played");
+    assert_eq!(played_facts(at, at + 720, 45 * 60), "Last played 12 minutes ago · 45 min played");
+    assert_eq!(played_facts(at, at + 7200, 2 * 3600), "Last played 2 hours ago · 2 h played");
+    assert_eq!(played_facts(at, at + 3 * 86_400, 0), "Last played 3 days ago", "no time played, no second half");
+    assert_eq!(played_facts(at, at + 30, 59), "Last played just now", "under a minute played is none");
+    // Main.dc.html:53, "CONTINUE · SUPER NINTENDO", its capitals the font's.
+    assert_eq!(continue_line("Super Nintendo"), "Continue · Super Nintendo");
+    assert_eq!(continue_line(""), "Continue");
+}
+
+#[test]
+fn eclipse_s_home_names_x_options_and_start_the_home_card_and_leaves_select_s_search_out_of_its_bar() {
+    use emusen_qt_models::help::{card_named, entries, Screen};
+    let words = |s: Screen| card_named(entries(s).to_vec()).iter().map(|e| e.1).collect::<Vec<_>>();
+    // Main.dc.html:94-97: "A Resume, X Options, Y Favourite, MENU Home card".
+    assert_eq!(words(Screen::Home), ["Resume", "Options", "Favourite", "Home card"]);
+    assert_eq!(words(Screen::HomeShelf), ["Play", "Options", "Favourite", "Home card"]);
+    let actions = |s: Screen| card_named(entries(s).to_vec()).iter().map(|e| e.2).collect::<Vec<_>>();
+    assert_eq!(actions(Screen::Home), [None, Some("gamePage"), Some("favourite"), Some("home")], "each still acts as before");
+}
+
+#[test]
+fn eclipse_s_resume_point_is_said_with_the_time_in_the_clock_s_form() {
+    use emusen_qt_models::clock::clock_time;
+    use emusen_qt_models::words::resume_point;
+    // Main.dc.html:59, "Resume point · saved 9:12 PM", the time as the program's clock writes it.
+    assert_eq!(resume_point("21:12"), "Resume point · saved 21:12");
+    let at = 1_000_000;
+    let (time, later) = (clock_time(at), clock_time(at + 3600 + 60));
+    let hm = |t: &str| -> (u32, u32) { (t[..2].parse().unwrap(), t[3..].parse().unwrap()) };
+    assert!(time.len() == 5 && &time[2..3] == ":", "hh:mm, as the clock reads the wall clock: {time}");
+    let ((h, m), (h2, m2)) = (hm(&time), hm(&later));
+    assert_eq!(((h + 1 + (m + 1) / 60) % 24, (m + 1) % 60), (h2, m2), "an hour and a minute later reads so: {time} {later}");
+}

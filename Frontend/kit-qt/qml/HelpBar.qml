@@ -13,11 +13,14 @@ Item {
     property int family: Kit.Families.Generic
     property int glyphStyle: Kit.GlyphStyles.Outlined
     // The labels' face, the gap between entries and the gap from a glyph to its label; a theme may set its own.
-    property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
+    property font labelFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontBody })
     property real entrySpacing: Kit.Tokens.paneGap
     property real glyphGap: Kit.Tokens.base * 2
     property color labelColor: Kit.Tokens.text
     property color iconColor: Kit.Tokens.text
+    // The first entry's glyph, the screen's main action, which a look may draw apart (Eclipse's filled A); the others' by default.
+    property int leadStyle: root.glyphStyle
+    property color leadColor: root.iconColor
     // Each entry's glyph, gap and label at this share of their own size.
     property real entryScale: 1
     // A glyph's side in pixels before entryScale; 0 is the glyph's own size.
@@ -26,6 +29,10 @@ Item {
     property bool pairGlyph: false
     // A host's own drawing of an entry's words, a component with `text` and `color`; null, the kit's Text in labelFont (§7.54).
     property Component label: null
+    // A host's own drawing of an entry's glyph, a component with `button`, `family` and `lead` (the first entry); null, the kit's PadGlyph (§7.54).
+    property Component glyph: null
+    // Each entry and its parts centred on the bar's middle as Qt's centre anchors put them, each half snapped to a whole unit; a look on a canvas whose unit is no pixel centres them exactly.
+    property bool snapped: true
     // The bar's own colour and radius, drawn by its backing; the paddings are its box's around the entries.
     property color color: root.glass ? Qt.alpha(Kit.Tokens.inputSurface, root.glassOpacity) : Kit.Tokens.surface
     property alias radius: backing.radius
@@ -65,12 +72,13 @@ Item {
     Row {
         id: row
         x: root.leftInset + root.horizontalPadding
-        anchors.verticalCenter: parent.verticalCenter
+        y: (root.snapped ? Math.round(root.height / 2) - Math.round(row.height / 2) : (root.height - row.height) / 2)
         spacing: root.entrySpacing
         Repeater {
             id: entries
             Button {
                 id: entry
+                required property int index
                 required property int button
                 required property string label
                 required property var model
@@ -80,6 +88,8 @@ Item {
                 // An entry whose action the host would decline: drawn at 38% and not pressed (EmuSen_Kit.md §7.28).
                 readonly property bool live: entry.model.enabled ?? true
                 objectName: "help-" + entry.label
+                // Entries of different heights share the bar's middle, as a line of glyphs and words is centred.
+                y: (root.snapped ? Math.round(row.height / 2) - Math.round(entry.height / 2) : (row.height - entry.height) / 2)
                 flat: true
                 leftPadding: 0
                 rightPadding: 0
@@ -99,10 +109,11 @@ Item {
                         root.controller.offer(entry.button)
                 }
                 contentItem: Row {
+                    id: content
                     spacing: root.glyphGap * root.entryScale
                     Image {
                         objectName: "icon-" + entry.label
-                        anchors.verticalCenter: parent.verticalCenter
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         visible: entry.picture.length > 0
                         width: glyph.width
                         height: glyph.height
@@ -115,24 +126,50 @@ Item {
                             anchors.fill: parent
                         }
                     }
+                    Loader {
+                        id: ownGlyph
+                        objectName: "ownGlyph-" + entry.label
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
+                        active: root.glyph !== null && entry.picture.length === 0
+                        visible: active
+                        sourceComponent: root.glyph
+                        Binding {
+                            target: ownGlyph.item
+                            property: "button"
+                            value: entry.button
+                            when: ownGlyph.item !== null
+                        }
+                        Binding {
+                            target: ownGlyph.item
+                            property: "family"
+                            value: root.family
+                            when: ownGlyph.item !== null
+                        }
+                        Binding {
+                            target: ownGlyph.item
+                            property: "lead"
+                            value: entry.index === 0
+                            when: ownGlyph.item !== null
+                        }
+                    }
                     Kit.PadGlyph {
                         id: glyph
                         objectName: "glyph-" + entry.label
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: entry.picture.length === 0
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
+                        visible: entry.picture.length === 0 && root.glyph === null
                         width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
                         height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
-                        style: root.glyphStyle
-                        ink: root.iconColor
+                        style: entry.index === 0 ? root.leadStyle : root.glyphStyle
+                        ink: entry.index === 0 ? root.leadColor : root.iconColor
                         button: entry.button
                         pair: root.pairGlyph ? entry.pair : -1
                         swap: Kit.PadRouter.swapAcceptBack
                     }
                     Kit.PadGlyph {
                         objectName: "glyph2-" + entry.label
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: entry.pair >= 0 && !glyph.paired
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
+                        visible: entry.pair >= 0 && !glyph.paired && root.glyph === null
                         width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
                         height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
@@ -143,7 +180,7 @@ Item {
                     }
                     Loader {
                         id: words
-                        anchors.verticalCenter: parent.verticalCenter
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         active: root.label !== null
                         visible: active
                         sourceComponent: root.label
@@ -161,7 +198,7 @@ Item {
                         }
                     }
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         visible: root.label === null
                         text: entry.label
                         color: root.labelColor

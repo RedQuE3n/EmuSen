@@ -32,23 +32,34 @@ Item {
         }
     ]
     readonly property real diameter: Math.min(root.width, root.height)
+    // Scene pixels to one of this item's units, so the card's blur runs at the pixels it draws.
+    property real pixelScale: 1
     Repeater {
         model: root.glows
-        Kit.Glow {
+        Item {
             id: glow
             required property int index
             required property Kit.CoronaGlow modelData
             objectName: "coronaGlow." + glow.index
-            anchors.centerIn: parent
-            width: root.diameter
-            height: root.diameter
+            // The list's entry can go before its delegate when a theme's engine is dropped (EmuSen_Kit.md §7.116): read as none then.
+            readonly property real blur: glow.modelData?.blur ?? 0
+            readonly property real spread: glow.modelData?.spread ?? 0
+            readonly property color color: glow.modelData?.color ?? "transparent"
+            anchors.fill: parent
             // Under the rim and the disc, each glow under those before it.
             z: -1 - glow.index
-            radius: root.diameter / 2
-            // The list's entry can go before its delegate when a theme's engine is dropped (EmuSen_Kit.md §7.116): read as none then.
-            blur: glow.modelData?.blur ?? 0
-            spread: glow.modelData?.spread ?? 0
-            color: glow.modelData?.color ?? "transparent"
+            // The disc grown by the spread and blurred, as a box-shadow is: the kit's Glow, a Gaussian of half the blur radius on
+            // the card (§7.113) and painted on the software backend.
+            Kit.Glow {
+                anchors.centerIn: parent
+                width: root.diameter
+                height: root.diameter
+                radius: root.diameter / 2
+                blur: glow.blur
+                spread: glow.spread
+                color: glow.color
+                pixelScale: root.pixelScale
+            }
         }
     }
     Rectangle {

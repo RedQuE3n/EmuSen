@@ -50,11 +50,7 @@ Item {
             verticalAlignment: Image.AlignBottom
             horizontalAlignment: root.alignRight ? Image.AlignRight : Image.AlignHCenter
         }
-        // The generated card: the title on the console's hue in the ink over art and the kit's Barlow, as Mistress draws a game it has no art for.
-        FontLoader {
-            id: face
-            source: "qrc:/emusen/fonts/Barlow-Regular.ttf"
-        }
+        // The generated card: the title on the console's hue in the ink over art and the screens' words' face (Tokens.faceText), as Mistress draws a game it has no art for.
         Rectangle {
             id: card
             visible: root.source.length === 0 || picture.status === Image.Error
@@ -76,7 +72,7 @@ Item {
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignBottom
                 color: Kit.Tokens.overArt
-                font.family: face.font.family
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontBody / Math.min(1, root.drawnScale)
             }
         }

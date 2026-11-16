@@ -111,6 +111,9 @@ pub mod qobject {
         /// The row of Choose a console the theme's focus is on, by its index in the library's rows.
         #[qsignal]
         fn selected(self: Pin<&mut ThemeFeed>, index: i32);
+        /// A game's favourite turned, by its file.
+        #[qsignal]
+        fn favourite(self: Pin<&mut ThemeFeed>, game: QString);
     }
 
     impl cxx_qt::Initialize for ThemeFeed {}
@@ -218,6 +221,8 @@ pub enum Carried {
     Selected(i32),
     /// A game's page: the game taken in hand, then its page opened (EmuSen_Qt.md §7.8).
     Page(String),
+    /// A game's favourite turned, by its file; empty for the game in hand, as the help's Y names no game.
+    Favourite(String),
 }
 
 /// The signal an action becomes, `suspended` being the game a session holds and `rows` the library's rows' keys; none
@@ -227,7 +232,7 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
         Action::Play(key) if suspended == Some(key.as_str()) => Carried::Resumed,
         Action::Play(key) => Carried::Played(key.clone()),
         Action::OpenPage(key) => Carried::Page(key.clone()),
-        Action::Favourite(_) => Carried::Acted(help::FAVOURITE.into()),
+        Action::Favourite(key) => Carried::Favourite(key.clone()),
         Action::Random(_) => Carried::Acted(help::RANDOM.into()),
         Action::OpenConsole(key) => Carried::Opened(key.clone()),
         Action::OpenPlace(key) => match view::PLACE_IDS.iter().position(|id| id == key) {
@@ -240,6 +245,7 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
         Action::OpenHomeCard => return None,
         Action::OpenListCard => Carried::Acted(screens::LIST.into()),
         Action::Search => Carried::Acted(screens::SEARCH.into()),
+        Action::Act(key) if key == help::FAVOURITE => Carried::Favourite(String::new()),
         Action::Act(key) => Carried::Acted(key.clone()),
         Action::Focus(key) => match rows.iter().position(|r| r == key) {
             Some(i) => Carried::Selected(i as i32),
@@ -249,12 +255,16 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
 }
 
 /// The theme's `Actions` as the window's signals.
-struct Sink(Rc<Cell<*mut qobject::ThemeFeed>>);
+struct Sink {
+    feed: Rc<Cell<*mut qobject::ThemeFeed>>,
+    /// The game the theme's focus is on, which the help's Y turns a favourite.
+    in_hand: String,
+}
 
 impl ActionSink for Sink {
     fn act(&mut self, action: &Action) -> bool {
         // Safety: the cell holds the feed while it lives and null after; the theme's engine runs on the feed's thread.
-        let Some(feed) = (unsafe { self.0.get().as_mut() }) else { return false };
+        let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
         let mut feed = unsafe { Pin::new_unchecked(feed) };
         let suspended = feed.session.as_ref().filter(|s| s.running).map(|s| s.game.clone());
         let rows: Vec<String> = feed.library().map(|l| l.view().rows.rows().iter().map(|r| r.key.clone()).collect()).unwrap_or_default();
@@ -267,18 +277,29 @@ impl ActionSink for Sink {
             Carried::Opened(key) => feed.as_mut().opened(QString::from(key.as_str())),
             Carried::Backed => feed.as_mut().backed(),
             Carried::Acted(key) => feed.as_mut().acted(QString::from(key.as_str())),
-            Carried::Focused(game) => feed.as_mut().focused(QString::from(game.as_str())),
+            Carried::Focused(game) => {
+                feed.as_mut().focused(QString::from(game.as_str()));
+                self.in_hand = game;
+            }
             Carried::Selected(index) => feed.as_mut().selected(index),
             Carried::Page(game) => {
                 feed.as_mut().focused(QString::from(game.as_str()));
                 feed.as_mut().acted(QString::from(help::GAME_PAGE));
+                self.in_hand = game;
+            }
+            Carried::Favourite(game) => {
+                let game = if game.is_empty() { self.in_hand.clone() } else { game };
+                if game.is_empty() {
+                    return false;
+                }
+                feed.as_mut().favourite(QString::from(game.as_str()));
             }
         }
         true
     }
 
     fn would(&self, action: &Action) -> bool {
-        !self.0.get().is_null() && carried(action, None, &[]).is_some()
+        !self.feed.get().is_null() && carried(action, None, &[]).is_some()
     }
 }
 
@@ -351,7 +372,8 @@ impl qobject::ThemeFeed {
             console: found.as_ref().map(|g| g.console.clone()).unwrap_or_default(),
             hue: found.as_ref().map_or(-1.0, |g| g.hue),
             paused_since: if running { shown.paused_at as i64 } else { 0 },
-            played: 0,
+            // games.db's seconds played, as the library last read them.
+            played: library.and_then(|l| l.view().catalog.plays.iter().find(|(p, _)| *p == shown.game).map(|(_, n)| n.seconds)).unwrap_or(0),
         };
         let Some(mut engine) = self.engine() else { return };
         if let Some(library) = host::library(engine.as_mut()) {
@@ -426,7 +448,7 @@ impl qobject::ThemeFeed {
     }
 
     pub fn attach(self: Pin<&mut Self>) {
-        let sink = Sink(self.me.clone());
+        let sink = Sink { feed: self.me.clone(), in_hand: String::new() };
         if let Some(actions) = self.engine().and_then(host::actions) {
             actions.set_sink(Some(Box::new(sink)));
         }

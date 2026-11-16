@@ -19,8 +19,8 @@ Item {
     property real offsetY: 0
     // How far past the box the glow is drawn: the spread, twice the blur and the offset, in whole units.
     readonly property real reach: Math.ceil(root.spread + 2 * root.blur + Math.max(Math.abs(root.offsetX), Math.abs(root.offsetY)))
-    // RectangularShadow's blur for a CSS blur: 1.2, a constant of Qt's RectangularShadow page, the closest of those measured (§7.113).
-    readonly property real cardBlur: 1.2
+    // Scene pixels to one of this item's units, so the card's blur runs at the pixels it draws.
+    property real pixelScale: 1
     // The software backend renders no shader effect; there the kit's GlowPaint draws the glow (§7.113).
     readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     // A glow of no blur and no spread lies under its box alone, where it is not drawn: nothing is made.
@@ -40,19 +40,34 @@ Item {
                 maskInverted: true
                 maskSource: hole
             }
-            RectangularShadow {
+            // The box grown by the spread and moved by the offset, its corners grown with it, blurred by a Gaussian of half the
+            // blur radius, as CSS draws a box-shadow (CSS Backgrounds 3 §6.1.1, §6.1.2).
+            Item {
                 objectName: "glowShadow"
-                x: root.reach
-                y: root.reach
-                width: root.width
-                height: root.height
-                radius: Math.min(root.radius, Math.min(root.width, root.height) / 2)
-                color: root.color
-                spread: root.spread
-                offset: Qt.vector2d(root.offsetX, root.offsetY)
-                blur: root.blur * root.cardBlur
-                cached: false
-                antialiasing: true
+                anchors.fill: parent
+                Item {
+                    id: grown
+                    x: root.reach - root.spread + root.offsetX
+                    y: root.reach - root.spread + root.offsetY
+                    width: root.width + 2 * root.spread
+                    height: root.height + 2 * root.spread
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Math.min(root.radius, Math.min(root.width, root.height) / 2) + root.spread
+                        color: root.color
+                        antialiasing: true
+                    }
+                }
+                Loader {
+                    active: root.blur > 0
+                    sourceComponent: Component {
+                        Kit.GaussianBlur {
+                            source: grown
+                            deviation: root.blur / 2
+                            pixelScale: root.pixelScale
+                        }
+                    }
+                }
             }
             Item {
                 id: hole

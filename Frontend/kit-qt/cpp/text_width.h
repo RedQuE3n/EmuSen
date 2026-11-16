@@ -6,3 +6,4 @@
 
 double text_width(const QFont& font, const QString& text);
 double cap_height(const QFont& font, double size);
+double cap_height_in(const QString& family, int weight, double size);

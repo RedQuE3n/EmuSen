@@ -21,9 +21,21 @@ pub const MOONRISE_SOURCE: &str = "qrc:/qt/qml/EmuSen/Kit/qml/Moonrise.qml";
 /// that lets them pass (EmuSen_Kit.md §7.102, §7.109).
 pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str, Class); 1] = [(MOONRISE_SOURCE, "moonriseCaption", Class::MoonriseCaption)];
 
-/// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item written in its file, if one does; the same name in any
-/// other file, a theme's among them, is held.
+/// The built-in Eclipse's file that draws every word of its boards at the board's size (R-20261115-24): in the program's
+/// resources, and in the repository's theme folder, which theme-check and the tests load.
+pub const ECLIPSE_LINE_SOURCES: [&str; 2] = ["qrc:/emusen/themes/eclipse/parts/Line.qml", "/Frontend/themes/eclipse/parts/Line.qml"];
+
+/// Whether words are written in the built-in Eclipse's `Line.qml`, a board's words at the board's size (R-20261115-24, -29).
+pub fn eclipse_board_words(item: &Item) -> bool {
+    item.source == ECLIPSE_LINE_SOURCES[0] || (item.source.starts_with("file://") && item.source.ends_with(ECLIPSE_LINE_SOURCES[1]))
+}
+
+/// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item written in its file, if one does, or Eclipse's board type
+/// for words written in the built-in Eclipse's `Line.qml`; the same name in any other file, a theme's among them, is held.
 pub fn small_text_exception(item: &Item) -> Option<Class> {
+    if eclipse_board_words(item) {
+        return Some(Class::EclipseBoardType);
+    }
     SMALL_TEXT_EXCEPTIONS.iter().find(|(source, name, _)| item.name == *name && item.source == *source).map(|(_, _, class)| *class)
 }
 

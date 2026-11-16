@@ -21,7 +21,7 @@ Kit.NormalizedCanvas {
         form: Kit.Forms.BigScreen
         focus: tab.inputs
         padFamily: tab.padFamily
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         controller.sections: tab.themes.kinds
@@ -41,7 +41,8 @@ Kit.NormalizedCanvas {
                 id: kind
                 required property string modelData
                 text: kind.modelData
-                font.family: faces.condensed
+                font.family: Kit.Tokens.faceLabel
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
                 focusPolicy: Qt.NoFocus
                 checkable: false
@@ -69,7 +70,7 @@ Kit.NormalizedCanvas {
                 label: row.model.label
                 value: row.model.value
                 steps: row.model.steps
-                labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontRow })
+                labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
                 current: ListView.isCurrentItem
                 focus: ListView.isCurrentItem
                 onActivated: tab.themes.accept()
@@ -111,7 +112,8 @@ Kit.NormalizedCanvas {
                 text: tab.themes.name
                 elide: Text.ElideRight
                 color: Kit.Tokens.textStrong
-                font.family: faces.condensed
+                font.family: Kit.Tokens.faceLabel
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             Label {
@@ -120,7 +122,7 @@ Kit.NormalizedCanvas {
                 text: tab.themes.line
                 wrapMode: Text.Wrap
                 color: Kit.Tokens.text
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontBody
             }
             Label {
@@ -131,7 +133,7 @@ Kit.NormalizedCanvas {
                 maximumLineCount: 8
                 elide: Text.ElideRight
                 color: Kit.Tokens.muted
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontCaption
             }
         }
@@ -152,8 +154,5 @@ Kit.NormalizedCanvas {
             target: frame.controller
             function onBackDeclined() { tab.backed() }
         }
-    }
-    Faces {
-        id: faces
     }
 }

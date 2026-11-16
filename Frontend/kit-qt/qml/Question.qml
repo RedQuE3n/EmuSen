@@ -20,10 +20,10 @@ Kit.Sheet {
     property alias helpFont: helpBar.labelFont
     property alias helpSpacing: helpBar.entrySpacing
     property alias helpGlyphGap: helpBar.glyphGap
-    property font titleFont: Qt.font({ pixelSize: Kit.Tokens.fontTitle })
-    property font bodyFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
-    property font captionFont: Qt.font({ pixelSize: Kit.Tokens.fontCaption })
-    property font rowFont: Qt.font({ pixelSize: Kit.Tokens.fontRow })
+    property font titleFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
+    property font bodyFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontBody })
+    property font captionFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontCaption })
+    property font rowFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontRow })
     // The card's width in design units, the words' distance from its border, and the room it leaves the screen.
     property real cardWidth: 720
     property real cardPadding: Kit.Tokens.base * 8

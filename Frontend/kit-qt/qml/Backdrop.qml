@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
-import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
 // A screen's backdrop as the Eclipse boards draw it: a ground, and over it blurred colour fields, or a picture blurred in their place; on the software backend each unblurred at its opacity (EmuSen_Kit.md §7.118).
@@ -43,7 +42,8 @@ Item {
                 // The field's colour, as a reader asks it.
                 // The list's entry can go before its delegate when a theme's engine is dropped (§7.116): read as none then.
                 readonly property color paint: field.modelData?.color ?? "transparent"
-                readonly property real radius: (field.modelData?.blur ?? 0) * root.radiusShare * root.pixelScale
+                // The field's CSS blur, the Gaussian's deviation in the backdrop's units (Filter Effects 1, blur()).
+                readonly property real deviation: field.modelData?.blur ?? 0
                 objectName: "backdropField." + field.index
                 x: (field.modelData?.x ?? 0)
                 y: (field.modelData?.y ?? 0)
@@ -51,37 +51,41 @@ Item {
                 height: (field.modelData?.height ?? 0)
                 rotation: (field.modelData?.rotation ?? 0)
                 opacity: (field.modelData?.opacity ?? 0)
-                layer.enabled: !root.software && field.radius > 0
-                layer.effect: MultiEffect {
-                    blurEnabled: true
-                    blur: 1
-                    blurMax: root.blurMax
-                    blurMultiplier: Math.max(0, field.radius / root.blurMax - 1)
-                    autoPaddingEnabled: true
-                }
-                Shape {
-                    objectName: "backdropEllipse"
+                // On the card each field is drawn blurred by the kit's Gaussian, its deviation the field's CSS blur; on the
+                // software backend, which renders no shader effect, the field is drawn unblurred (R-20261115-6).
+                Item {
+                    id: body
                     anchors.fill: parent
-                    visible: (field.modelData?.corner ?? -1) < 0
-                    preferredRendererType: Shape.CurveRenderer
-                    ShapePath {
-                        strokeColor: "transparent"
-                        fillColor: field.paint
-                        PathAngleArc {
-                            centerX: field.width / 2
-                            centerY: field.height / 2
-                            radiusX: field.width / 2
-                            radiusY: field.height / 2
-                            sweepAngle: 360
+                    // The ellipse its box holds: a circle as wide as the box, scaled to its height, a painted ground as the disc is.
+                    Rectangle {
+                        objectName: "backdropEllipse"
+                        width: field.width
+                        height: field.width
+                        visible: (field.modelData?.corner ?? -1) < 0
+                        radius: width / 2
+                        color: field.paint
+                        antialiasing: true
+                        transform: Scale {
+                            yScale: field.height / Math.max(1, field.width)
                         }
                     }
+                    Rectangle {
+                        objectName: "backdropBox"
+                        anchors.fill: parent
+                        visible: (field.modelData?.corner ?? -1) >= 0
+                        radius: Math.max(0, (field.modelData?.corner ?? -1))
+                        color: field.paint
+                    }
                 }
-                Rectangle {
-                    objectName: "backdropBox"
-                    anchors.fill: parent
-                    visible: (field.modelData?.corner ?? -1) >= 0
-                    radius: Math.max(0, (field.modelData?.corner ?? -1))
-                    color: field.paint
+                Loader {
+                    active: !root.software && (field.modelData?.blur ?? 0) > 0
+                    sourceComponent: Component {
+                        Kit.GaussianBlur {
+                            source: body
+                            deviation: field.deviation
+                            pixelScale: root.pixelScale
+                        }
+                    }
                 }
             }
         }

@@ -1,5 +1,5 @@
 //! The loaded audits (man theme-check): each screen a package lists placed through the theme host in an engine of its own,
-//! its views fed the synthetic library, then held at the gate's five sizes in both variants to kit-core's fit, pad reach,
+//! its views fed the synthetic library, then held at the gate's five sizes in each variant the package lists to kit-core's fit, pad reach,
 //! pointer reach, no-chrome, name and contrast rules, and once to stillness under reduced motion; then in each state a run names
 //! (man theme-check, STATES), fed through the same surfaces. One line per finding.
 
@@ -629,14 +629,16 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
         given.and_then(|(_, _, value)| Colour::parse(value)).unwrap_or(colour(Variant::Dark, t))
     };
     let mockups = asked.mockups.map(|dir| mockups_of(dir, folder)).transpose()?.unwrap_or_default();
-    let both = [Variant::Dark, Variant::Light];
+    // The variants the package lists, and no other: a dark-only theme is never judged in light (man theme-check).
+    let listed: Vec<Variant> = package.variants.iter().map(|v| if *v == emusen_theme_manifest::Variant::Dark { Variant::Dark } else { Variant::Light }).collect();
+    let first = &listed[..listed.len().min(1)];
     if let (Some((name, _)), Some((view, names))) = (asked.catalogue, library.catalogue.as_ref()) {
         let screen = Screen::Consoles;
         logged();
         let label = format!(", {name}");
         let mockup = mockups.iter().find(|(s, _)| *s == screen).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
         let lines_in = |id: u64, dark: bool| relined(id, &library, view, dark);
-        let pass = Pass { focus: asked.focus, mockup, relined: Some(&lines_in), ..Pass::plain(&both, &label, Some(names)) };
+        let pass = Pass { focus: asked.focus, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &label, Some(names)) };
         let session = library.session(view, None)?;
         let fed = Fed { session: &session, declined: &[], reduced: true, dark: true };
         match placed(&mut scene, &real, screen, |id| feed(id, &library, view, &fed, &overrides, section)) {
@@ -660,13 +662,13 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
         for screen in screens {
             logged();
             match asked_state.clock {
-                Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, &label, (state, section, &overrides), &mut lines),
+                Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, (&label, &listed), (state, section, &overrides), &mut lines),
                 None => {
                     let fed = Fed { session: &session, declined: asked_state.declined, reduced: true, dark: true };
                     let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
                     let mockup = mockups.iter().find(|(s, _)| *s == screen && default).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
                     let lines_in = |id: u64, dark: bool| relined(id, &library, &view, dark);
-                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, relined: Some(&lines_in), ..Pass::plain(&both, &label, None) };
+                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &label, None) };
                     match placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)) {
                         Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                         Ok(id) => lines.guarded(screen, |lines| {
@@ -682,7 +684,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
                     }
                     if default && screen == Screen::Consoles {
                         // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
-                        let crowd = Pass::plain(&[Variant::Dark], ", 120 consoles", Some(&library.crowd_names));
+                        let crowd = Pass::plain(first, ", 120 consoles", Some(&library.crowd_names));
                         match placed(&mut scene, &real, screen, |id| feed(id, &library, &library.crowd, &fed, &overrides, section)) {
                             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                             Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &crowd, state, lines)),
@@ -728,11 +730,11 @@ fn held(
     screen: Screen,
     (library, view, session): (&Synthetic, &LibraryView, &SessionFacts),
     ms: i64,
-    label: &str,
+    (label, variants): (&str, &[Variant]),
     (state, section, overrides): (Option<&Path>, Option<&str>, &[(bool, String, String)]),
     lines: &mut Lines<'_>,
 ) {
-    for variant in [Variant::Dark, Variant::Light] {
+    for &variant in variants {
         scene.hold_clock(Some(0));
         let fed = Fed { session, declined: &[], reduced: false, dark: variant == Variant::Dark };
         let id = placed(scene, folder, screen, |id| {

@@ -59,7 +59,7 @@ pub fn contrast(root: &Item) -> Vec<Fault> {
     let mut faults = Vec::new();
     root.visit(&mut |item, ancestors| {
         let Some(words) = &item.legibility else { return };
-        if words.disabled || super::fit::fading_out(item, ancestors) {
+        if words.disabled || super::fit::fading_out(item, ancestors) || super::fit::eclipse_board_words(item) {
             return;
         }
         let Some((ratios, needed)) = ratios(words) else { return };

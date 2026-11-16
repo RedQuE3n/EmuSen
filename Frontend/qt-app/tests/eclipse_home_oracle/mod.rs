@@ -49,7 +49,7 @@ const DOWN: i32 = 0x0100_0015;
 const CLOCK: &str = "21:41";
 
 /// The theme host and one slot filling the window, as theme-audit's scene places a screen.
-const SCENE: &str = r#"import QtQuick
+const SCENE: &str = r##"import QtQuick
 import EmuSen.ThemeHost
 Window {
     id: scene
@@ -64,13 +64,21 @@ Window {
         objectName: "host"
         onGenerationChanged: scene.placed = host.ready && host.place(ThemeHost.Home, slot)
     }
+    // The paused game's picture, which the host gives Session: two bands, as the board's stand-in for it draws (Main:58).
+    Rectangle {
+        objectName: "pausedFrame"
+        width: 640
+        height: 400
+        color: "#1FC9A8"
+        Rectangle { y: 400 - 26 * 400 / 60; width: 640; height: 26 * 400 / 60; color: "#6A4CF0" }
+    }
     Item {
         id: slot
         objectName: "slot"
         anchors.fill: parent
     }
 }
-"#;
+"##;
 
 /// One row of the table.
 struct Row {
@@ -84,8 +92,6 @@ struct Row {
     colour: String,
     size: String,
     status: String,
-    drawn: String,
-    raised: String,
 }
 
 fn rows() -> (f64, Vec<Row>) {
@@ -99,9 +105,9 @@ fn rows() -> (f64, Vec<Row>) {
         .filter(|l| !l.starts_with('#') && !l.starts_with("name\t") && !l.trim().is_empty())
         .map(|l| {
             let c: Vec<&str> = l.split('\t').collect();
-            assert_eq!(c.len(), 16, "a row of 16 columns: {l}");
+            assert_eq!(c.len(), 13, "a row of 13 columns: {l}");
             let s = |i: usize| c[i].to_owned();
-            Row { name: s(0), part: s(4), x: s(5), y: s(6), w: s(7), h: s(8), radius: s(9), colour: s(10), size: s(11), status: s(12), drawn: s(14), raised: s(15) }
+            Row { name: s(0), part: s(4), x: s(5), y: s(6), w: s(7), h: s(8), radius: s(9), colour: s(10), size: s(11), status: s(12) }
         })
         .collect();
     (height, rows)
@@ -171,10 +177,10 @@ fn synthetic(world: &World, harness: &mut emusen_qt_test::Harness) -> (LibraryVi
         .enumerate()
         .map(|(i, (title, ext))| {
             let system = first.game(&rom(world, title, ext)).expect("a game of the library").system;
-            (media.join(&system).join("covers").join(format!("{title}.png")), COVER, i, format!("{system} covers\n{title}"))
+            (media.join(&system).join("covers").join(format!("{title}.png")), COVER, i)
         })
         .collect();
-    emusen_qt_test::covers::draw(harness, &world.dir("Covers"), &covers, |_| {});
+    emusen_qt_test::covers::draw_art(harness, &world.dir("Covers"), &covers, |_| {});
     settings["EsdeMediaDirectory"] = json!(media.to_string_lossy());
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
     drop(source);
@@ -193,15 +199,14 @@ fn object(id: u64) -> Pin<&'static mut QObject> {
 
 /// Every element of the built screen by name, in canvas units.
 fn boxes(tree: &Tree, unit: f64) -> BTreeMap<String, Boxed> {
-    tree.nodes
-        .iter()
-        .filter(|n| !n.name.is_empty())
-        .map(|n| {
-            // A turned item is held by its own box about its middle, as the board places it before it turns.
-            let b = Boxed { x: n.x / unit, y: n.y / unit, w: n.w / unit, h: n.h / unit };
-            (n.name.clone(), b)
-        })
-        .collect()
+    let mut out = BTreeMap::new();
+    // A name drawn and also held by a hidden item (the frame's own help bar, not shown) is the drawn one's.
+    for n in tree.nodes.iter().filter(|n| !n.name.is_empty()) {
+        if n.visible || !out.contains_key(&n.name) {
+            out.insert(n.name.clone(), Boxed { x: n.x / unit, y: n.y / unit, w: n.w / unit, h: n.h / unit });
+        }
+    }
+    out
 }
 
 /// A rule's place on one axis: what the element's edge must be, in canvas units; none for "-".
@@ -236,7 +241,8 @@ fn tokens(screen: u64) -> BTreeMap<String, String> {
 /// A property of an element of the placed screen, as Qt writes it as text; the element by its number in the tree, since a
 /// Repeater's items are no QObject children of the screen.
 fn read(tree: &Tree, name: &str, property: &str) -> String {
-    let Some(i) = tree.find_named(name) else { return String::new() };
+    // A Line's words are named as the Line is: the last of a name in the tree, the deepest, is the words themselves.
+    let Some(i) = tree.nodes.iter().rposition(|n| n.name == name) else { return String::new() };
     let id: u64 = tree.nodes[i as usize].id.parse().unwrap();
     emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(name), &QString::from(property)).to_string()
 }
@@ -267,6 +273,8 @@ pub fn oracle(backend: &str) {
     let now = words::now();
     let first = rom(&world, GAMES[0].0, GAMES[0].1);
     let game = view.game(&first).expect("the suspended game is in the library");
+    // An hour and a half played, as games.db would hold it.
+    let session_played = 5400;
     let session = SessionFacts {
         has_game: true,
         key: first.clone(),
@@ -275,11 +283,14 @@ pub fn oracle(backend: &str) {
         console: game.console.clone(),
         hue: game.hue,
         paused_since: now - 720,
-        played: 5400,
+        played: session_played,
     };
     host::words(object(screen)).expect("Words").show_now(now as f64);
     host::library(object(screen)).expect("Library").show(&view, "[]");
     host::session(object(screen)).expect("Session").show(&session);
+    let frame: u64 = tree.nodes[tree.find_named("pausedFrame").expect("the paused picture") as usize].id.parse().unwrap();
+    // Safety: the scene's item lives as long as the scene, longer than the screen that draws it.
+    host::session(object(screen)).expect("Session").show_frame(frame as *mut _);
     // One pad, of the family whose letters the board draws (A, X, Y; Main:62-68).
     let family = emusen_kit_qt::kinds::family_of(emusen_kit_core::glyph::PadFamily::Xbox).repr;
     host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, family, clock: CLOCK.into(), ..DeviceFacts::default() });
@@ -287,11 +298,16 @@ pub fn oracle(backend: &str) {
     host::set_token_overrides(object(screen), &package.overrides());
     host::kit_tokens(object(screen)).expect("the kit's tokens").set_form(kinds::form_of(WalkForm::BigScreen));
     let tokens = tokens(screen);
-    let text_scale: f64 = *host::kit_tokens(object(screen)).expect("the kit's tokens").text_scale();
     scene.wait(200);
     // Placed and fed, the screen has logged nothing, and comes to rest: no frame swapped for two seconds.
     scene.assert_quiet();
     scene.assert_still("Eclipse's Home at rest");
+    // Under reduced motion too, nothing is redrawn for two seconds (EmuSen_Qt.md §3.4.8: a frame was once seen there).
+    host::kit_tokens(object(screen)).expect("the kit's tokens").set_reduced_motion(true);
+    scene.wait(200);
+    scene.assert_still("Eclipse's Home at rest under reduced motion");
+    host::kit_tokens(object(screen)).expect("the kit's tokens").set_reduced_motion(false);
+    scene.wait(200);
 
     let (board_height, rows) = rows();
     // A board pixel in canvas units, by the canvas's owner of its height.
@@ -305,7 +321,7 @@ pub fn oracle(backend: &str) {
         let canvas_width = width as f64 / unit;
         let got = boxes(&tree, unit);
         let at = format!("{width}x{height}");
-        let named = |n: &str| tree.find_named(n).map(|i| &tree.nodes[i as usize]);
+        let named = |n: &str| tree.nodes.iter().rev().find(|m| m.name == n && m.visible).or_else(|| tree.nodes.iter().rev().find(|m| m.name == n));
 
         // The board's state: Recent's first game, the suspended one, focused and shown.
         assert_eq!(read(&tree, "tile.0", "activeFocus"), "true", "{at}: the first tile holds the focus");
@@ -382,15 +398,15 @@ pub fn oracle(backend: &str) {
                 }
             }
             if let Some(blur) = row.size.strip_prefix("blur:") {
-                // The backdrop's blur for its picture, in canvas units (Main:19's px through the board's measure).
+                // A field's blur, the Gaussian's deviation in canvas units (Main's px through the board's measure), as the field holds it.
                 let want = blur.parse::<f64>().unwrap() * k;
-                let have: f64 = read(&tree, "backdrop", "sourceBlur").parse().unwrap_or(f64::NAN);
+                let have = read(&tree, &row.name, "deviation").parse::<f64>().unwrap_or(f64::NAN);
                 if !same(have, want) {
                     differences.push(format!("{at}: {} blur {have} where the table gives {want}", row.name));
                 }
             }
             if let Ok(size) = row.size.parse::<f64>() {
-                // The words' size in the element's own units, the canvas's, as the harness reads the font; a help line's are its entries'.
+                // The words' size in the Text's own units, board pixels, as the harness reads the font; a help line's are its entries'.
                 let have = if row.part == "HelpBar" {
                     let inside = |n: &emusen_qt_test::tree::Node| {
                         let mut at = n.parent.clone();
@@ -402,25 +418,14 @@ pub fn oracle(backend: &str) {
                         }
                         false
                     };
-                    let sizes: Vec<f64> = tree.nodes.iter().filter(|n| n.text.as_deref().is_some_and(|t| !t.is_empty()) && inside(n)).map(|n| n.size).collect();
+                    let sizes: Vec<f64> = tree.nodes.iter().filter(|n| n.visible && n.text.as_deref().is_some_and(|t| !t.is_empty()) && inside(n)).map(|n| n.size).collect();
                     if sizes.iter().all(|s| *s == sizes[0]) { sizes.first().copied().unwrap_or(f64::NAN) } else { f64::NAN }
                 } else {
                     node.size
                 };
-                // The kit's rule for a look's size (EmuSen_Kit.md §7.121), then the whole pixel Qt draws a real size at.
-                let units = size * k;
-                let legible = emusen_kit_qt::type_size::legible(units, text_scale);
-                let drawn = legible.round();
-                // The table says the same, so the tester reads each size where the element is listed.
-                let raised = legible > emusen_kit_core::tokens::scaled_text(units, text_scale);
-                if row.drawn.parse::<f64>().ok() != Some(drawn) || (row.raised == "raised") != raised {
-                    differences.push(format!("{at}: {} the table gives {} {}, the rule {drawn} {raised}", row.name, row.drawn, row.raised));
-                }
-                if at.as_str() == "1280x800" {
-                    println!("type\t{}\t{size}\t{units:.3}\t{legible}\t{drawn}\t{}", row.name, if legible > emusen_kit_core::tokens::scaled_text(units, text_scale) { "raised" } else { "-" });
-                }
-                if have != drawn {
-                    differences.push(format!("{at}: {} type {have} where the kit's rule gives {drawn} ({units:.3} on the board)", row.name));
+                // The board's size exactly, in board pixels, the Text scaled by the board's measure (R-20261115-24).
+                if have != size {
+                    differences.push(format!("{at}: {} type {have} where the board gives {size}", row.name));
                 }
             }
         }
@@ -433,12 +438,13 @@ pub fn oracle(backend: &str) {
         }
 
         // Every word is the program's.
-        let help = entries(Screen::Home);
+        let help = emusen_qt_models::help::card_named(entries(Screen::Home).to_vec());
         let mut words_of = vec![
-            ("wordmark", words::TITLE.to_owned()),
-            ("eyebrow", words::CONTINUE_PLAYING.to_owned()),
+            ("wordmark", words::NAME.to_owned()),
+            ("eyebrow", words::continue_line(&game.console)),
             ("title", game.title.clone()),
-            ("facts", words::paused_facts(&game.console, now - 720, now)),
+            ("facts", words::played_facts(now - 720, now, session_played)),
+            ("resumeWords", words::resume_point(&emusen_qt_models::clock::clock_time(now - 720))),
             ("clock", CLOCK.to_owned()),
             ("recentHeading", words::RECENT_ENTRY.to_owned()),
             ("tileFacts.0", game.console.clone()),
@@ -465,6 +471,44 @@ pub fn oracle(backend: &str) {
             }
         }
     }
+    // R-20261115-27, -28: the board's fields in the shown game's hues. At the second field's centre, which no other field nor the
+    // disc reaches, the window shows that field's board colour with the art's second hue, at its opacity over the ground: on the
+    // card blurred (3.45 deviations inside the ellipse's edge, so all but a trace of it), on the software backend unblurred
+    // (R-20261115-6). The cover's own colours are not there.
+    {
+        scene.resize(1920, 1200);
+        scene.wait(500);
+        let tree = scene.tree();
+        let hero = view.game(&first).map(|g| if g.hero.is_empty() { g.cover } else { g.hero }).unwrap_or_default();
+        let hues = emusen_qt_models::art_hues::hues_of_file(&hero, 3);
+        assert!(!hues.is_empty(), "the first cover has hues: {hero}");
+        // The board's spread where the art has fewer than three (Home.qml `hues`).
+        let second = if hues.len() == 1 { hues[0] + 83.0 } else { hues[1] };
+        let board = Colour::parse("#6A4CF0").unwrap().to_hsl();
+        let field = Colour::hsl(second, board.1, board.2, 1.0);
+        let opacity: f64 = read(&tree, "backdropField.1", "opacity").parse().expect("the field's opacity");
+        let ground = Colour::parse(&read(&tree, "backdrop", "ground")).expect("the backdrop's ground");
+        let mix = |a: u8, b: u8| (f64::from(a) * opacity + f64::from(b) * (1.0 - opacity)).round() as u8;
+        let want = Colour::rgb(mix(field.r, ground.r), mix(field.g, ground.g), mix(field.b, ground.b));
+        let centre = ((1380.0 + 380.0) * 1920.0 / 1920.0, (420.0 + 380.0) * 1200.0 / 1200.0);
+        let seen = scene.colours_at(&[centre])[0];
+        // Two levels of 255: an 8-bit blend's rounding, and on the card the blur's trace from the edge.
+        let near = |a: Colour, b: Colour| a.r.abs_diff(b.r) <= 2 && a.g.abs_diff(b.g) <= 2 && a.b.abs_diff(b.b) <= 2;
+        if !seen.is_some_and(|c| near(c, want)) {
+            differences.push(format!("{backend}: the second field's centre is {seen:?} where the art's hue {second:.1} in the board's field gives {want:?}"));
+        }
+        for band in emusen_qt_test::covers::art(0) {
+            if seen.is_some_and(|c| near(c, Colour::rgb(band.0, band.1, band.2))) {
+                differences.push(format!("{backend}: the second field's centre shows the cover's own colour {band:?}"));
+            }
+        }
+        // The disc's rim takes the first hue at the look's rim's saturation and lightness.
+        let rim = Colour::parse(&read(&tree, "disc", "rimColor")).expect("the rim's colour").to_hsl();
+        // Two degrees: the rim's colour read as 8 bits a channel, whose chroma near white leaves a step of about two degrees.
+        if emusen_kit_core::world::wrap_hue(rim.0 - hues[0]).abs() > 2.0 {
+            differences.push(format!("{backend}: the rim's hue {:.1} where the art's first is {:.1}", rim.0, hues[0]));
+        }
+    }
     if let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") {
         std::fs::create_dir_all(&folder).unwrap();
         for (width, height) in [(1280, 800), (1920, 1200)] {
@@ -473,15 +517,16 @@ pub fn oracle(backend: &str) {
             let path = std::path::Path::new(&folder).join(format!("home-{width}x{height}-{backend}.png"));
             assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
         }
-        // Once with the shown game one with no art: the ground alone behind the disc.
+        // Each game shown in turn: the first four covers' colours in the board's fields, then the sixth game's, which has no
+        // art and so takes its console's hue.
         scene.resize(1920, 1200);
-        for _ in 1..GAMES.len() {
+        for i in 1..GAMES.len() {
             scene.key(RIGHT, 0);
-            scene.wait(50);
+            scene.wait(500);
+            let name = if i + 1 == GAMES.len() { format!("home-1920x1200-no-art-{backend}.png") } else { format!("home-1920x1200-game{i}-{backend}.png") };
+            let path = std::path::Path::new(&folder).join(name);
+            assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
         }
-        scene.wait(500);
-        let path = std::path::Path::new(&folder).join(format!("home-1920x1200-no-art-{backend}.png"));
-        assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
         for _ in 1..GAMES.len() {
             scene.key(LEFT, 0);
             scene.wait(50);

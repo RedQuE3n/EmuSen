@@ -3,7 +3,7 @@
 
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QString, QTime};
+use cxx_qt_lib::{QDateTime, QString, QTimeZone};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -71,6 +71,11 @@ impl cxx_qt::Initialize for qobject::Clock {
     }
 }
 
+/// A moment, in seconds since 1970, in the form the clock reads the wall clock: the player's own hours and minutes, "hh:mm".
+pub fn clock_time(at: i64) -> String {
+    QDateTime::from_secs_since_epoch(at, &QTimeZone::system_time_zone()).time().format(&QString::from("hh:mm")).to_string()
+}
+
 impl qobject::Clock {
     pub fn paused_at(&self) -> f64 {
         if self.game_paused { self.paused_at as f64 } else { 0.0 }
@@ -86,7 +91,7 @@ impl qobject::Clock {
         let time = if self.now > 0 {
             QString::from(format!("{:02}:{:02}", self.now.rem_euclid(86_400) / 3600, self.now.rem_euclid(3600) / 60).as_str())
         } else {
-            QTime::current_time().format(&QString::from("hh:mm"))
+            QString::from(clock_time(self.at()).as_str())
         };
         if self.time != time {
             self.as_mut().rust_mut().time = time;

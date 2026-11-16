@@ -47,7 +47,7 @@ fn the_reference_comes_first_then_each_theme_of_the_store_in_name_order() {
     let ids: Vec<(&str, Kind)> = listing.rows.iter().map(|r| (r.id.as_str(), r.kind)).collect();
     assert_eq!(ids, [(REFERENCE, Kind::EmuSen), ("book", Kind::Esde), ("dawn", Kind::EmuSen)], "no folder that is not a theme, hidden, or named as the reference");
     let reference = &listing.rows[0];
-    assert_eq!((reference.name.as_str(), reference.api.as_str(), reference.variants.as_str()), ("EmuSen", "1.0", "dark and light"));
+    assert_eq!((reference.name.as_str(), reference.api.as_str(), reference.variants.as_str()), ("EmuSen", "1.3", "dark and light"));
     assert_eq!(reference.preview, "qrc:/emusen/themes/emusen/assets/previews/home.png");
     assert!(reference.current && reference.checked == Checked::Ok, "the reference is in use with nothing stored, and built clean");
     let book = &listing.rows[1];

@@ -176,10 +176,11 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         // Safety: the help's lists are its children.
         let entries = unsafe { help.entries(kind).as_ref() }.expect("a list for every kind");
         assert!(!emusen_qt_models::help::entries(entries.screen()).is_empty(), "kind {} has entries", kind.repr);
-        for (group, back, accept, actions) in emusen_theme_qt::help::FLAGS {
-            let added = unsafe { help.list(kind, group, back, accept, actions).as_ref() }.expect("a list for every kind and flag");
+        for (group, back, accept, actions, card) in emusen_theme_qt::help::FLAGS {
+            let added = unsafe { help.list(kind, group, back, accept, actions, card).as_ref() }.expect("a list for every kind and flag");
             let grouped = emusen_qt_models::help::entries_grouped(entries.screen(), group, back);
             let want = if actions { grouped } else { emusen_qt_models::help::without_actions(grouped) };
+            let want = if card { emusen_qt_models::help::card_named(want) } else { want };
             assert_eq!(added.list(), want, "kind {}", kind.repr);
             assert_eq!(added.accepts(), accept, "kind {}", kind.repr);
         }

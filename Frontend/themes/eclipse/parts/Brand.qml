@@ -24,7 +24,7 @@ Item {
         width: root.side * root.unit
         height: width
         Accessible.role: Accessible.Graphic
-        Accessible.name: Words.title
+        Accessible.name: Words.name
         Shape {
             id: shape
             // Marks' paths are drawn in a 24-unit box (qt-models/src/marks.rs).
@@ -42,16 +42,17 @@ Item {
             }
         }
     }
-    Text {
+    Line {
         id: wordmark
         objectName: "wordmark"
+        unit: root.unit
         x: mark.width + root.gap * root.unit
         y: (root.height - height) / 2
         visible: root.named
-        text: Words.title
+        text: Words.name
         color: Tokens.text
-        font.pixelSize: Type.size(root.nameSize * root.unit, Tokens.textScale)
-        font.weight: Font.DemiBold
-        font.letterSpacing: 0.02 * root.nameSize * root.unit
+        size: root.nameSize
+        weight: Tokens.weightWordmark
+        spacing: 0.02 * root.nameSize
     }
 }

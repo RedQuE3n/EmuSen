@@ -26,9 +26,13 @@ or shadow. 1.3 is another piece's.
   card" (the card it opens), and no Select search in the bar, its action still the frame's (`qt-models/src/help.rs`,
   `card_named`; the words `words::OPTIONS`, `HOME_CARD`). The kit's `HelpBar.glyph`, `snapped` and `PadGlyph.letter` reach
   themes through the kit's types.
-- **`Words.resumePoint(pausedSince)`**: "Resume point · saved 21:12", the time of pausing in the clock's own form
-  (`qt-models/src/words.rs`, `resume_point`; `qt-models/src/clock.rs`, `clock_time`). Eclipse's Home draws it beside the
+- **`Words.resumePoint(pausedSince)`**: "Resume point · saved 9:12 PM", the time of pausing in the machine's short form
+  (`qt-models/src/words.rs`, `resume_point`; `qt-models/src/clock.rs`, `short_time`). Eclipse's Home draws it beside the
   paused picture, as its board does (Main.dc.html:59).
+- **`Device.shortTime`**, **`Words.shortTime(at)`**: the time, and a moment in seconds since 1970, in the machine's zone
+  and its locale's short form (`QLocale::system()`, `QLocale::ShortFormat`): "9:41 PM" under en_US, "21:41" under de_DE.
+  `Device.clock` keeps the program's "hh:mm", so the other themes' clocks are unchanged (R-20261114-21). Eclipse's status
+  draws `Device.shortTime` (Main.dc.html:49).
 - The module is 1.4 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.4.*`.
 
 ## 1.3, an addition: the face tokens (2026-11-15)

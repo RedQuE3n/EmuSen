@@ -1762,17 +1762,20 @@ keeps its distance from the right edge. Recent shows as many tiles as fit before
 
 **What it draws.** Over the ground (#0A1024, `parts/Ink.qml`) and the shown game's art is the kit's `CoronaDisc`, 2100 board pixels at (-900, -450),
 with the look's corona, since the model holds no game's corona yet. Then the header: the crescent mark and `Words.title`,
-and at the right the status glass with the search (`Actions.search`) and `Device.clock`. Then the shown game: the eyebrow
+and at the right the status glass with the search (`Actions.search`) and `Device.shortTime`. Then the shown game: the eyebrow
 `Words.continuePlaying` while it is the suspended game, its title, and its facts (`Words.pausedFacts`, or the row's
 `facts`). While the shown game is the suspended one, the resume point follows: `Session.frame`, the paused
-picture, cut at its centre to 96 × 60 with the board's inset rim, and `Words.resumePoint`, "Resume point · saved 21:12", the
-time of pausing in the clock's own form (`qt-models/src/clock.rs`, `clock_time`). Under them, the first three entries of `Help.entries` as pill buttons: A plays the game, and the others press
+picture, cut at its centre to 96 × 60 with the board's inset rim, and `Words.resumePoint`, "Resume point · saved 9:12 PM", the
+time of pausing in the machine's short form. Both times are the machine's own: `qt-models/src/clock.rs`, `short_time`, asks
+`QLocale::system()` for `toString(time, QLocale::ShortFormat)`, whose en_US form is "h:mm AP" (doc.qt.io/qt-6/qlocale.html,
+`timeFormat`, read 2026-11-15); Qt 6.11's locale data writes the gap before AM or PM as U+202F, a narrow no-break space Sora
+has no glyph for, so the one function turns it (and U+00A0) to the face's space, as the boards write "9:41 PM". Under them, the first three entries of `Help.entries` as pill buttons: A plays the game, and the others press
 their own button, as the help line does. Then `Words.recentEntry` and the Recent row, `Library.recent` with the suspended
 game first as the board puts it. The shown tile is 312 × 196 board pixels and the others 264 × 165, each with its hero
 cropped, the shade, its title and its row's `facts`. Last, the help line, the kit's `HelpBar` on the board's foot. The pad
 walks the tiles, Up to the buttons, then Up to the search. Every word is the program's. Where the board's differ, the
-program's are drawn: "EMUSEN" for "EmuSen", "CONTINUE PLAYING" for "CONTINUE · SUPER NINTENDO", the paused facts for "Last
-played yesterday · 3 h 20 min played", and "hh:mm" for "9:41 PM". The buttons and the help line read
+program's are drawn: "EMUSEN" for "EmuSen", "CONTINUE PLAYING" for "CONTINUE · SUPER NINTENDO", and the paused facts for "Last
+played yesterday · 3 h 20 min played". The buttons and the help line read
 `Help.entries(kind, { card: true })`: X "Options", still opening the game's page, and Start "Home card", which opens the
 Home card (`qt-models/src/screens.rs`, Home's `home` action), with no Select search in the line; the search is the
 status's own button. Their glyphs are `parts/Glyph.qml`, the board's: the kit's letter for the pad's family in Sora in a

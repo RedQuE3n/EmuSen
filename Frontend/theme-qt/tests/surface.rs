@@ -76,7 +76,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let api: [(&str, &[&str], &[&str]); 12] = [
         ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead"], &["gamesOf", "search", "firstOf", "artHues"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
-        ("Device", &["controllers", "family", "clock", "battery", "charging", "network", "bigScreen", "form"], &[]),
+        ("Device", &["controllers", "family", "clock", "shortTime", "battery", "charging", "network", "bigScreen", "form"], &[]),
         (
             "Actions",
             &[],
@@ -123,7 +123,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "now",
                 "name",
             ],
-            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint"],
+            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "shortTime"],
         ),
         ("Help", &[], &["entries"]),
         (

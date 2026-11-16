@@ -91,7 +91,7 @@ Item {
         unit: root.unit
         x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
         y: (root.height - height) / 2
-        text: Device.clock
+        text: Device.shortTime
         color: Tokens.text
         size: root.size
         weight: Font.DemiBold

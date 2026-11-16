@@ -426,15 +426,14 @@ fn eclipse_s_home_names_x_options_and_start_the_home_card_and_leaves_select_s_se
 }
 
 #[test]
-fn eclipse_s_resume_point_is_said_with_the_time_in_the_clock_s_form() {
-    use emusen_qt_models::clock::clock_time;
+fn eclipse_s_times_are_said_in_the_locale_s_short_form() {
+    use emusen_qt_models::clock::short_time_in;
     use emusen_qt_models::words::resume_point;
-    // Main.dc.html:59, "Resume point · saved 9:12 PM", the time as the program's clock writes it.
-    assert_eq!(resume_point("21:12"), "Resume point · saved 21:12");
-    let at = 1_000_000;
-    let (time, later) = (clock_time(at), clock_time(at + 3600 + 60));
-    let hm = |t: &str| -> (u32, u32) { (t[..2].parse().unwrap(), t[3..].parse().unwrap()) };
-    assert!(time.len() == 5 && &time[2..3] == ":", "hh:mm, as the clock reads the wall clock: {time}");
-    let ((h, m), (h2, m2)) = (hm(&time), hm(&later));
-    assert_eq!(((h + 1 + (m + 1) / 60) % 24, (m + 1) % 60), (h2, m2), "an hour and a minute later reads so: {time} {later}");
+    // 1970-01-01 21:41 and 21:12 UTC: the board's status (Main.dc.html:49) and resume row (:59) under en_US.
+    let (status, saved) = (21 * 3600 + 41 * 60, 21 * 3600 + 12 * 60);
+    assert_eq!(short_time_in(status, true, "en_US"), "9:41 PM");
+    assert_eq!(resume_point(&short_time_in(saved, true, "en_US")), "Resume point · saved 9:12 PM");
+    // A 24-hour locale gives its own form, so no form is the program's.
+    assert_eq!(short_time_in(status, true, "de_DE"), "21:41");
+    assert_eq!(short_time_in(status, true, "en_GB"), "21:41");
 }

@@ -205,8 +205,8 @@ pub fn continue_line(console: &str) -> String {
     }
 }
 
-/// The line beside a suspended game's picture on Eclipse's Home (Main.dc.html:59): "Resume point · saved 21:12", the time in
-/// the clock's own form (`clock::clock_time`).
+/// The line beside a suspended game's picture on Eclipse's Home (Main.dc.html:59): "Resume point · saved 9:12 PM", the time in
+/// the machine's short form (`clock::short_time`).
 pub fn resume_point(time: &str) -> String {
     format!("{RESUME_POINT} {BETWEEN} saved {time}")
 }

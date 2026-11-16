@@ -29,7 +29,7 @@ status	40	the status glass	none: the board's own colour	Rectangle	-	mid:80	right
 search	41	the search button	Actions.search() (theme-qt/src/actions.rs), named by Words.search	Walkable	in:status:22	mid:80	44	44	-	-	-	built
 searchIcon	42	the magnifier	the theme's own drawing	Item	in:search:10	mid:80	24	24	-	Tokens.text	-	built
 battery	45	the battery and "82%"	Device.battery, which the program never feeds (qt-app/src/theme.rs:390); no words say a charge	-	-	-	-	-	-	-	-	nothing
-clock	49	"9:41 PM"	Device.clock, "hh:mm" (qt-models/src/clock.rs:89)	Text	after:search:22	mid:80	inright:status:22	-	-	Tokens.text	22	built
+clock	49	"9:41 PM"	Device.shortTime, the machine's short form (qt-models/src/clock.rs short_time)	Text	after:search:22	mid:80	inright:status:22	-	-	Tokens.text	22	built
 eyebrow	54	"CONTINUE · SUPER NINTENDO"	Words.continuePlaying, "CONTINUE PLAYING" (qt-models/src/words.rs:36)	Text	96	250	-	-	-	#FFF3C9D2	20	built
 titleLine	55	"Aurora Drift"'s line box, 112 px at the board's line height of 1.02	the title's line height, times its lines	Item	96	below:eyebrow:26	980	114.24	-	-	-	built
 title	55	"Aurora Drift", the face's own height about the line box's middle, as CSS spreads the leading (Main:55)	Session.title, or the focused game row's title	Text	96	mid:titleLine	-	-	-	Tokens.textStrong	112	built
@@ -37,7 +37,7 @@ facts	56	"Last played yesterday · 3 h 20 min played"	Words.pausedFacts (qt-mode
 resume	57	the resume point's row, 60 high, while the suspended game is shown	Session.hasGame and the shown tile its key	Item	96	below:facts:26	980	60	-	-	-	built
 resumePicture	58	the resume point's picture, 96 by 60 at radius 10	Session.frame, the paused picture, cut at its centre	Shape	in:resume:0	mid:resume	96	60	10	-	-	built
 resumeRim	58	its inset rim, 2 px of rgba(246, 231, 216, 0.5)	none: the board's own colour	Rectangle	in:resume:0	mid:resume	96	60	10	#80F6E7D8	-	built
-resumeWords	59	"Resume point · saved 9:12 PM"	Words.resumePoint(Session.pausedSince) (qt-models/src/words.rs resume_point), the time in the clock's form (qt-models/src/clock.rs clock_time)	Text	after:resumePicture:16	mid:resume	-	-	-	#FFD8DBE6	22	built
+resumeWords	59	"Resume point · saved 9:12 PM"	Words.resumePoint(Session.pausedSince) (qt-models/src/words.rs resume_point), the time in the machine's short form (qt-models/src/clock.rs short_time)	Text	after:resumePicture:16	mid:resume	-	-	-	#FFD8DBE6	22	built
 button.0	61	Resume, filled	Help.entries(Help.Continue), first row (qt-models/src/help.rs:103)	Pill	96	below:resume:44	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built
 buttonGlyph.0	62	the A disc	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.0:14	mid:button.0	46	46	-	-	-	built
 buttonLabel.0	62	"Resume"	the row's label	Text	after:buttonGlyph.0:16	mid:button.0	-	-	-	Tokens.overAccent	26	built

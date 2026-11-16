@@ -45,8 +45,10 @@ const RIGHT: i32 = 0x0100_0014;
 const LEFT: i32 = 0x0100_0012;
 const DOWN: i32 = 0x0100_0015;
 
-/// The clock the device is fed, in the program's "hh:mm".
-const CLOCK: &str = "21:41";
+/// The moment the board shows, day 20000 at 21:41 in the zone the oracle sets, and the suspended game's pause the day
+/// before at 21:12 (Main.dc.html:49, 56, 59).
+const NOW: i64 = 20_000 * 86_400 + 21 * 3600 + 41 * 60;
+const PAUSED: i64 = NOW - 86_400 - 29 * 60;
 
 /// The theme host and one slot filling the window, as theme-audit's scene places a screen.
 const SCENE: &str = r##"import QtQuick
@@ -255,6 +257,9 @@ fn painted(tree: &Tree, name: &str) -> Option<Colour> {
 /// Places Eclipse's Home on the synthetic library and holds it to the table; with `EMUSEN_ECLIPSE_PICTURES` naming a folder,
 /// grabs it at the board's shape and the handheld's into that folder, each named by the size and `backend`.
 pub fn oracle(backend: &str) {
+    // The machine's locale and zone, as `QLocale::system()` and the local zone read them: the board's, en_US in UTC.
+    std::env::set_var("LC_ALL", "en_US.UTF-8");
+    std::env::set_var("TZ", "UTC");
     let world = World::new("qt-app-eclipse-home");
     let mut harness = emusen_qt_test::Harness::new();
     let (view, media) = synthetic(&world, &mut harness);
@@ -270,11 +275,11 @@ pub fn oracle(backend: &str) {
     let screen: u64 = tree.nodes[tree.find_named("homeScreen").expect("Eclipse's Home is placed") as usize].id.parse().unwrap();
 
     // The views fed as the program's host feeds them: the library, the first game suspended twelve minutes ago, the clock.
-    let now = words::now();
+    let now = NOW;
     let first = rom(&world, GAMES[0].0, GAMES[0].1);
     let game = view.game(&first).expect("the suspended game is in the library");
-    // An hour and a half played, as games.db would hold it.
-    let session_played = 5400;
+    // Three hours and twenty minutes played, as games.db would hold it (Main.dc.html:56).
+    let session_played = 12_000;
     let session = SessionFacts {
         has_game: true,
         key: first.clone(),
@@ -282,7 +287,7 @@ pub fn oracle(backend: &str) {
         console_id: game.system.clone(),
         console: game.console.clone(),
         hue: game.hue,
-        paused_since: now - 720,
+        paused_since: PAUSED,
         played: session_played,
     };
     host::words(object(screen)).expect("Words").show_now(now as f64);
@@ -293,7 +298,11 @@ pub fn oracle(backend: &str) {
     host::session(object(screen)).expect("Session").show_frame(frame as *mut _);
     // One pad, of the family whose letters the board draws (A, X, Y; Main:62-68).
     let family = emusen_kit_qt::kinds::family_of(emusen_kit_core::glyph::PadFamily::Xbox).repr;
-    host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, family, clock: CLOCK.into(), ..DeviceFacts::default() });
+    host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, family,
+        clock: emusen_qt_models::clock::clock_time(now),
+        short_time: emusen_qt_models::clock::short_time(now),
+        ..DeviceFacts::default()
+    });
     let package = emusen_theme_host::package::read(&std::fs::read_to_string(format!("{ECLIPSE}/theme.json")).unwrap()).unwrap();
     host::set_token_overrides(object(screen), &package.overrides());
     host::kit_tokens(object(screen)).expect("the kit's tokens").set_form(kinds::form_of(WalkForm::BigScreen));
@@ -443,9 +452,9 @@ pub fn oracle(backend: &str) {
             ("wordmark", words::NAME.to_owned()),
             ("eyebrow", words::continue_line(&game.console)),
             ("title", game.title.clone()),
-            ("facts", words::played_facts(now - 720, now, session_played)),
-            ("resumeWords", words::resume_point(&emusen_qt_models::clock::clock_time(now - 720))),
-            ("clock", CLOCK.to_owned()),
+            ("facts", "Last played yesterday · 3 h 20 min played".to_owned()),
+            ("resumeWords", "Resume point · saved 9:12 PM".to_owned()),
+            ("clock", "9:41 PM".to_owned()),
             ("recentHeading", words::RECENT_ENTRY.to_owned()),
             ("tileFacts.0", game.console.clone()),
         ];

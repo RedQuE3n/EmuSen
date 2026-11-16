@@ -118,6 +118,8 @@ HelpBar
     property real glyphSize
     property bool pairGlyph
     property Component label
+    property Component glyph
+    property bool snapped
     property color color
     property alias radius
     property real horizontalPadding
@@ -130,6 +132,7 @@ HelpBar
     objectName "helpGlassRule"
     objectName "help-" + entry.label
     objectName "icon-" + entry.label
+    objectName "ownGlyph-" + entry.label
     objectName "glyph-" + entry.label
     objectName "glyph2-" + entry.label
 MenuPanel
@@ -182,6 +185,7 @@ PadGlyph
     readonly property alias paired
     property color ink
     readonly property alias name
+    readonly property alias letter
     readonly property real sideShare
 Scene
 Keyboard
@@ -548,3 +552,13 @@ Backdrop
     objectName "backdropEllipse"
     objectName "backdropBox"
     objectName "backdropPicture"
+GaussianBlur
+    required property Item source
+    property real deviation
+    property real pixelScale
+    readonly property real reach
+    readonly property real deviationPixels
+    readonly property real texel
+    readonly property real texels
+    readonly property size grid
+    objectName "gaussianDown"

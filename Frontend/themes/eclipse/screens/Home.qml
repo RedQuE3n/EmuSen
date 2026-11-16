@@ -38,20 +38,48 @@ ThemeScreen {
             Ink {
                 id: ink
             }
-            // The ground, and the shown game's art blurred over it: the board's colour fields stand for that art (Main:19-23, 75); its blur
-            // and opacity are the board's first field's, 90 px at 0.85 (Main:19), provisional until the tester judges them. A game
-            // with no art leaves the ground alone.
+            // The board's hues for the shown game (Main:19-23): its art's three most prominent, spread by the board's own offsets where
+            // the art has fewer, else its console's hue the same way, else none and the board's own colours (EmuSen_Qt.md §3.4.8).
+            readonly property var artHues: Library.artHuesRead >= 0 && root.currentTile ? Library.artHues(root.currentTile.key, 3) : []
+            readonly property var hues: {
+                const art = root.artHues.length > 0 ? root.artHues : (root.currentTile ? [root.currentTile.consoleHue] : [])
+                if (art.length === 0)
+                    return []
+                // The board's three hues, 168, 251 and 218 degrees: the second 83 past the first, the third 50 past it.
+                const spread = (from, to) => from + ((((to - from) % 360) + 540) % 360 - 180) * 50 / 83
+                if (art.length === 1)
+                    return [art[0], art[0] + 83, art[0] + 50]
+                if (art.length === 2)
+                    return [art[0], art[1], spread(art[0], art[1])]
+                return art
+            }
+            // A board field's colour with the shown game's hue: the field's own saturation, lightness and alpha; the streaks take
+            // the hues of the two fields they are pale tints of (Main:22 of 19, Main:23 of 20).
+            function fieldColor(index: int): color {
+                const board = ink.fields[index]
+                if (root.hues.length === 0)
+                    return board
+                const hue = root.hues[[0, 1, 2, 0, 1][index]]
+                return Qt.hsla((((hue % 360) + 360) % 360) / 360, board.hslSaturation, board.hslLightness, board.a)
+            }
+            // The ground and the board's five blurred colour fields, each at its place, size, turn, blur and opacity (Main:17-23).
             Backdrop {
                 objectName: "backdrop"
                 anchors.fill: parent
                 ground: ink.ground
                 pixelScale: canvas.unit
-                source: root.currentTile?.hero ?? ""
-                sourceBlur: 90 * design.unit
-                sourceOpacity: 0.85
+                fields: [
+                    BackdropField { x: 1060 * design.unit; y: -140 * design.unit; width: 900 * design.unit; height: 760 * design.unit; color: root.fieldColor(0); blur: 90 * design.unit; opacity: 0.85 },
+                    BackdropField { x: 1380 * design.unit; y: 420 * design.unit; width: 760 * design.unit; height: 760 * design.unit; color: root.fieldColor(1); blur: 110 * design.unit; opacity: 0.9 },
+                    BackdropField { x: 900 * design.unit; y: -260 * design.unit; width: 700 * design.unit; height: 520 * design.unit; color: root.fieldColor(2); blur: 100 * design.unit; opacity: 0.8 },
+                    BackdropField { x: 1240 * design.unit; y: 250 * design.unit; width: 620 * design.unit; height: 46 * design.unit; corner: 40 * design.unit; color: root.fieldColor(3); blur: 22 * design.unit; opacity: 0.55; rotation: -18 },
+                    BackdropField { x: 1330 * design.unit; y: 380 * design.unit; width: 520 * design.unit; height: 30 * design.unit; corner: 40 * design.unit; color: root.fieldColor(4); blur: 18 * design.unit; opacity: 0.5; rotation: -14 }
+                ]
             }
             CoronaDisc {
                 objectName: "disc"
+                // The shown game's first hue at the look's rim's own saturation and lightness; its glows take it at their own strengths (R-20261114-38, R-20261115-27).
+                corona: root.hues.length > 0 ? Qt.hsla((((root.hues[0] % 360) + 360) % 360) / 360, Tokens.coronaColor.hslSaturation, Tokens.coronaColor.hslLightness, 1) : "transparent"
                 x: -900 * design.unit
                 y: -450 * design.unit
                 width: 2100 * design.unit
@@ -283,6 +311,7 @@ ThemeScreen {
                                 required property string title
                                 required property string hero
                                 required property string consoleName
+                                required property real consoleHue
                                 readonly property bool big: tile.index === root.current
                                 readonly property real radius: 18 * design.unit
                                 controller: frame.controller

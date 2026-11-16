@@ -199,15 +199,14 @@ fn object(id: u64) -> Pin<&'static mut QObject> {
 
 /// Every element of the built screen by name, in canvas units.
 fn boxes(tree: &Tree, unit: f64) -> BTreeMap<String, Boxed> {
-    tree.nodes
-        .iter()
-        .filter(|n| !n.name.is_empty())
-        .map(|n| {
-            // A turned item is held by its own box about its middle, as the board places it before it turns.
-            let b = Boxed { x: n.x / unit, y: n.y / unit, w: n.w / unit, h: n.h / unit };
-            (n.name.clone(), b)
-        })
-        .collect()
+    let mut out = BTreeMap::new();
+    // A name drawn and also held by a hidden item (the frame's own help bar, not shown) is the drawn one's.
+    for n in tree.nodes.iter().filter(|n| !n.name.is_empty()) {
+        if n.visible || !out.contains_key(&n.name) {
+            out.insert(n.name.clone(), Boxed { x: n.x / unit, y: n.y / unit, w: n.w / unit, h: n.h / unit });
+        }
+    }
+    out
 }
 
 /// A rule's place on one axis: what the element's edge must be, in canvas units; none for "-".
@@ -315,7 +314,7 @@ pub fn oracle(backend: &str) {
         let canvas_width = width as f64 / unit;
         let got = boxes(&tree, unit);
         let at = format!("{width}x{height}");
-        let named = |n: &str| tree.find_named(n).map(|i| &tree.nodes[i as usize]);
+        let named = |n: &str| tree.nodes.iter().find(|m| m.name == n && m.visible).or_else(|| tree.find_named(n).map(|i| &tree.nodes[i as usize]));
 
         // The board's state: Recent's first game, the suspended one, focused and shown.
         assert_eq!(read(&tree, "tile.0", "activeFocus"), "true", "{at}: the first tile holds the focus");
@@ -392,9 +391,9 @@ pub fn oracle(backend: &str) {
                 }
             }
             if let Some(blur) = row.size.strip_prefix("blur:") {
-                // The backdrop's blur for its picture, in canvas units (Main:19's px through the board's measure).
+                // A field's blur, the Gaussian's deviation in canvas units (Main's px through the board's measure), as the field holds it.
                 let want = blur.parse::<f64>().unwrap() * k;
-                let have: f64 = read(&tree, "backdrop", "sourceBlur").parse().unwrap_or(f64::NAN);
+                let have = read(&tree, &row.name, "deviation").parse::<f64>().unwrap_or(f64::NAN);
                 if !same(have, want) {
                     differences.push(format!("{at}: {} blur {have} where the table gives {want}", row.name));
                 }
@@ -465,43 +464,42 @@ pub fn oracle(backend: &str) {
             }
         }
     }
-    if backend == "software" {
-        // R-20261115-6: on the software backend the shown game's art is its own colours, unblurred, dimmed to the backdrop's
-        // opacity over the ground. The first cover is three bands of qt-test's `covers::art`, a third of its height each,
-        // cropped to fill the window; read at the window's right edge in the middle of each band and two cover pixels either side
-        // of the bands' edge, where an unblurred picture has changed and a blur of the board's reach (90 px) would still mix.
-        // Image's smooth scaling was seen on 2026-11-15 still mixing 4.4 px from the edge (green 168 for 171); its span is not known.
-        scene.resize(1280, 800);
-        scene.wait(300);
+    // R-20261115-27, -28: the board's fields in the shown game's hues. At the second field's centre, which no other field nor the
+    // disc reaches, the window shows that field's board colour with the art's second hue, at its opacity over the ground: on the
+    // card blurred (3.45 deviations inside the ellipse's edge, so all but a trace of it), on the software backend unblurred
+    // (R-20261115-6). The cover's own colours are not there.
+    {
+        scene.resize(1920, 1200);
+        scene.wait(500);
         let tree = scene.tree();
-        let opacity: f64 = read(&tree, "backdrop", "sourceOpacity").parse().expect("the backdrop's opacity");
+        let hero = view.game(&first).map(|g| if g.hero.is_empty() { g.cover } else { g.hero }).unwrap_or_default();
+        let hues = emusen_qt_models::art_hues::hues_of_file(&hero, 3);
+        assert!(!hues.is_empty(), "the first cover has hues: {hero}");
+        // The board's spread where the art has fewer than three (Home.qml `hues`).
+        let second = if hues.len() == 1 { hues[0] + 83.0 } else { hues[1] };
+        let board = Colour::parse("#6A4CF0").unwrap().to_hsl();
+        let field = Colour::hsl(second, board.1, board.2, 1.0);
+        let opacity: f64 = read(&tree, "backdropField.1", "opacity").parse().expect("the field's opacity");
         let ground = Colour::parse(&read(&tree, "backdrop", "ground")).expect("the backdrop's ground");
-        let over = |c: (u8, u8, u8)| {
-            let mix = |a: u8, b: u8| (f64::from(a) * opacity + f64::from(b) * (1.0 - opacity)).round() as u8;
-            Colour::rgb(mix(c.0, ground.r), mix(c.1, ground.g), mix(c.2, ground.b))
-        };
-        // Image.PreserveAspectCrop: the cover scaled to cover the window, its middle shown.
-        let (cw, ch) = (f64::from(COVER.0), f64::from(COVER.1));
-        let scale = (1280.0 / cw).max(800.0 / ch);
-        let top = (ch * scale - 800.0) / 2.0;
-        let edge = |k: f64| k * ch / 3.0 * scale - top;
-        let x = 1279.0 - 0.5;
-        let past = 2.0 * scale;
-        let art = emusen_qt_test::covers::art(0);
-        let points = [
-            ("the top band", (x, edge(1.0) / 2.0), art[0]),
-            ("the middle band", (x, (edge(1.0) + edge(2.0)) / 2.0), art[1]),
-            ("the bottom band", (x, (edge(2.0) + 800.0) / 2.0), art[2]),
-            ("above the first edge", (x, edge(1.0) - past), art[0]),
-            ("below the first edge", (x, edge(1.0) + past), art[1]),
-        ];
-        let seen = scene.colours_at(&points.iter().map(|p| p.1).collect::<Vec<_>>());
-        // One level of 255 is an 8-bit blend's rounding.
-        let near = |a: Option<Colour>, b: Colour| a.is_some_and(|a| a.r.abs_diff(b.r) <= 1 && a.g.abs_diff(b.g) <= 1 && a.b.abs_diff(b.b) <= 1);
-        for ((what, at, colour), got) in points.iter().zip(seen) {
-            if !near(got, over(*colour)) {
-                differences.push(format!("software backdrop: {what} at {at:?} is {got:?} where the art dimmed to {opacity} over the ground gives {:?}", over(*colour)));
+        let mix = |a: u8, b: u8| (f64::from(a) * opacity + f64::from(b) * (1.0 - opacity)).round() as u8;
+        let want = Colour::rgb(mix(field.r, ground.r), mix(field.g, ground.g), mix(field.b, ground.b));
+        let centre = ((1380.0 + 380.0) * 1920.0 / 1920.0, (420.0 + 380.0) * 1200.0 / 1200.0);
+        let seen = scene.colours_at(&[centre])[0];
+        // Two levels of 255: an 8-bit blend's rounding, and on the card the blur's trace from the edge.
+        let near = |a: Colour, b: Colour| a.r.abs_diff(b.r) <= 2 && a.g.abs_diff(b.g) <= 2 && a.b.abs_diff(b.b) <= 2;
+        if !seen.is_some_and(|c| near(c, want)) {
+            differences.push(format!("{backend}: the second field's centre is {seen:?} where the art's hue {second:.1} in the board's field gives {want:?}"));
+        }
+        for band in emusen_qt_test::covers::art(0) {
+            if seen.is_some_and(|c| near(c, Colour::rgb(band.0, band.1, band.2))) {
+                differences.push(format!("{backend}: the second field's centre shows the cover's own colour {band:?}"));
             }
+        }
+        // The disc's rim takes the first hue at the look's rim's saturation and lightness.
+        let rim = Colour::parse(&read(&tree, "disc", "rimColor")).expect("the rim's colour").to_hsl();
+        // Two degrees: the rim's colour read as 8 bits a channel, whose chroma near white leaves a step of about two degrees.
+        if emusen_kit_core::world::wrap_hue(rim.0 - hues[0]).abs() > 2.0 {
+            differences.push(format!("{backend}: the rim's hue {:.1} where the art's first is {:.1}", rim.0, hues[0]));
         }
     }
     if let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") {
@@ -512,15 +510,16 @@ pub fn oracle(backend: &str) {
             let path = std::path::Path::new(&folder).join(format!("home-{width}x{height}-{backend}.png"));
             assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
         }
-        // Once with the shown game one with no art: the ground alone behind the disc.
+        // Each game shown in turn: the first four covers' colours in the board's fields, then the sixth game's, which has no
+        // art and so takes its console's hue.
         scene.resize(1920, 1200);
-        for _ in 1..GAMES.len() {
+        for i in 1..GAMES.len() {
             scene.key(RIGHT, 0);
-            scene.wait(50);
+            scene.wait(500);
+            let name = if i + 1 == GAMES.len() { format!("home-1920x1200-no-art-{backend}.png") } else { format!("home-1920x1200-game{i}-{backend}.png") };
+            let path = std::path::Path::new(&folder).join(name);
+            assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
         }
-        scene.wait(500);
-        let path = std::path::Path::new(&folder).join(format!("home-1920x1200-no-art-{backend}.png"));
-        assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
         for _ in 1..GAMES.len() {
             scene.key(LEFT, 0);
             scene.wait(50);

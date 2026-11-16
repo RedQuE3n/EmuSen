@@ -4256,16 +4256,21 @@ picture filling the box at `sourceBlur`, in the fields' place. A field's blur is
 standard deviation (Filter Effects 1, `blur()`: "The passed parameter defines the value of the standard deviation to the
 Gaussian function"; w3.org/TR/filter-effects-1, read 2026-11-15).
 
-- *On the graphics card* each field is a layer blurred by a `MultiEffect` with `blur` 1, `blurMax` 64 and a
-  `blurMultiplier` of the radius over 64 less one. Qt's page (qml-qtquick-effects-multieffect, read 2026-11-15) says that
-  `blurMax` is "the maximum pixel radius that blur with value 1.0 will reach", meaningful "from 2 (subtle blur) to 64 (high
-  blur)". It says that the multiplier "extends the blur radius, but decreases the blur quality" and is "more performant
-  ... for a bigger blur radius than blurMax". It gives no formula for either. The radius is read as a box-shadow's blur
-  radius, twice the deviation (CSS Backgrounds 3 §6.1.2). How close the result is to the Gaussian is printed by
-  `tests/backdrop_gpu.rs` beside the rule and is not asserted. Measured 2026-11-15 on the desktop's RX 6800, a field of
-  blur 40 across its straight edge, the field's share against the rule's: 0.92/0.84 40 inside, 0.46/0.50 at the edge,
-  0.17/0.31 20 past it, 0.06/0.16 at 40, 0.006/0.023 at 80. The card's blur is narrower than the CSS filter's, about
-  half its reach. Reading MultiEffect's radius as the deviation itself, not twice it, was not measured.
+- *On the graphics card* each field is blurred by the kit's `GaussianBlur` (2026-11-15), a Gaussian of the field's
+  deviation out to three deviations, as CSS's `blur()` is. It replaced a `MultiEffect`, which is not a Gaussian: Qt's page
+  (qml-qtquick-effects-multieffect, read 2026-11-15) gives `blurMax` as "the maximum pixel radius that blur with value 1.0
+  will reach" and no kernel, and its source (qtdeclarative v6.11.2 `src/effects/qquickmultieffect.cpp:1610-1631`,
+  `calculateLod` and `getBlurWeights`; `src/effects/data/shaders/bluritems.frag`, `.vert`) blends up to five
+  half-resolution four-tap box passes by weights of a level of detail, `sqrt(blur × blurMax / 64) × 1.2 − 0.2`. With
+  `blur` 1 the least radius is `blurMax` itself, so no deviation under it could be drawn (the streaks, 18 and 22 px, came
+  out at 64 and vanished). Measured 2026-11-15 on the RX 6800 with MultiEffect, a field of blur 40, the share 20 px past
+  its edge was 0.17 where the Gaussian gives 0.31. `GaussianBlur` draws the field into a texture of a texel of up to an
+  eighth of the deviation (`ShaderEffectSource.textureSize`), runs two separable passes of `shaders/gaussian.frag`
+  (`ShaderEffect`, baked by `qsb` in `build.rs`) of eight texels' deviation less the variance the coarse drawing and the
+  bilinear reading add (a twelfth and a sixth of a texel squared), and draws the result in the field's place: at most 49
+  taps a pass whatever the deviation. `tests/backdrop_gpu.rs` holds an ellipse's drawn share at eight distances across its
+  edge against the ellipse convolved with the Gaussian, summed in the test at half-pixel steps: worst 0.0163, held within
+  0.02 (measured 2026-11-15; 0.6423 drawn for 0.6260 at 20 px inside the edge).
   In a theme's engine the sandbox lets through exactly the four files of Qt's own that MultiEffect's blur loads: `qrc:/data/BlurItem.qml`, its folder's
   `qmldir`, and `qrc:/data/shaders/bluritems.vert.qsb` and `.frag.qsb` (`theme-host/src/policy.rs`, `QT_FILES`;
   qtdeclarative v6.11.2 `src/effects/qquickmultieffect.cpp:1763-1765`). Without them no theme could blur.
@@ -4277,7 +4282,9 @@ Gaussian function"; w3.org/TR/filter-effects-1, read 2026-11-15).
 
 Tests: `tests/backdrop.rs` (software) holds the ground, each field's colour at its opacity over the ground, its sharp
 edge, the streak's turn, and a picture drawn at its opacity in the fields' place. `tests/backdrop_gpu.rs` (the card, a GPU job) holds the field
-blurred past its edge, the ground where no field reaches, and the picture in the fields' place. Kit 1.8, Theme 1.4.
+blurred past its edge as the Gaussian is, the ground where no field reaches, and the picture in the fields' place. A
+picture in the fields' place (`source`) is still blurred by `MultiEffect`; Eclipse's Home no longer draws one. Kit 1.8,
+Theme 1.4.
 
 ### 7.119 Glow for themes, and its offset (2026-11-15)
 

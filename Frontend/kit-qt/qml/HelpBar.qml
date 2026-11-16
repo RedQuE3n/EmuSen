@@ -31,7 +31,7 @@ Item {
     property Component label: null
     // A host's own drawing of an entry's glyph, a component with `button`, `family` and `lead` (the first entry); null, the kit's PadGlyph (§7.54).
     property Component glyph: null
-    // Each entry and its parts centred on the bar's middle snapped to a whole unit (Qt's alignWhenCentered); a look on a canvas whose unit is no pixel centres them exactly.
+    // Each entry and its parts centred on the bar's middle as Qt's centre anchors put them, each half snapped to a whole unit; a look on a canvas whose unit is no pixel centres them exactly.
     property bool snapped: true
     // The bar's own colour and radius, drawn by its backing; the paddings are its box's around the entries.
     property color color: root.glass ? Qt.alpha(Kit.Tokens.inputSurface, root.glassOpacity) : Kit.Tokens.surface
@@ -46,10 +46,6 @@ Item {
     property bool glass: false
     readonly property real glassOpacity: 0.72
     signal pressed(int button)
-    // Where a box of `inner` stands centred in `outer`: as Qt's centre anchors put it, each half snapped to a whole unit, or exactly.
-    function centred(outer: real, inner: real): real {
-        return root.snapped ? Math.round(outer / 2) - Math.round(inner / 2) : (outer - inner) / 2
-    }
     implicitWidth: root.leftInset + 2 * root.horizontalPadding + row.implicitWidth
     implicitHeight: root.fitted ? row.implicitHeight + 2 * root.verticalPadding : Kit.Tokens.helpBar
     // A clear colour draws no backing at all: on Vulkan a clear Rectangle cleared its strip to alpha 0 (EmuSen_Kit.md §7.28).
@@ -76,7 +72,7 @@ Item {
     Row {
         id: row
         x: root.leftInset + root.horizontalPadding
-        y: root.centred(root.height, row.height)
+        y: (root.snapped ? Math.round(root.height / 2) - Math.round(row.height / 2) : (root.height - row.height) / 2)
         spacing: root.entrySpacing
         Repeater {
             id: entries
@@ -93,7 +89,7 @@ Item {
                 readonly property bool live: entry.model.enabled ?? true
                 objectName: "help-" + entry.label
                 // Entries of different heights share the bar's middle, as a line of glyphs and words is centred.
-                y: root.centred(row.height, entry.height)
+                y: (root.snapped ? Math.round(row.height / 2) - Math.round(entry.height / 2) : (row.height - entry.height) / 2)
                 flat: true
                 leftPadding: 0
                 rightPadding: 0
@@ -117,7 +113,7 @@ Item {
                     spacing: root.glyphGap * root.entryScale
                     Image {
                         objectName: "icon-" + entry.label
-                        y: root.centred(content.height, height)
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         visible: entry.picture.length > 0
                         width: glyph.width
                         height: glyph.height
@@ -132,8 +128,8 @@ Item {
                     }
                     Loader {
                         id: ownGlyph
-                        objectName: ownGlyph.active ? "ownGlyph-" + entry.label : ""
-                        y: root.centred(content.height, height)
+                        objectName: "ownGlyph-" + entry.label
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         active: root.glyph !== null && entry.picture.length === 0
                         visible: active
                         sourceComponent: root.glyph
@@ -159,7 +155,7 @@ Item {
                     Kit.PadGlyph {
                         id: glyph
                         objectName: "glyph-" + entry.label
-                        y: root.centred(content.height, height)
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         visible: entry.picture.length === 0 && root.glyph === null
                         width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
                         height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
@@ -172,7 +168,7 @@ Item {
                     }
                     Kit.PadGlyph {
                         objectName: "glyph2-" + entry.label
-                        y: root.centred(content.height, height)
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         visible: entry.pair >= 0 && !glyph.paired && root.glyph === null
                         width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
                         height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
@@ -184,7 +180,7 @@ Item {
                     }
                     Loader {
                         id: words
-                        y: root.centred(content.height, height)
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         active: root.label !== null
                         visible: active
                         sourceComponent: root.label
@@ -202,7 +198,7 @@ Item {
                         }
                     }
                     Text {
-                        y: root.centred(content.height, height)
+                        y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
                         visible: root.label === null
                         text: entry.label
                         color: root.labelColor

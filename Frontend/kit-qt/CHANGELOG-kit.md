@@ -23,6 +23,9 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
   sizes are `double`, a type qmllint knows, where `qreal` left Glow.qml's bindings with no type.
 - **`HelpBar.leadStyle`**, **`leadColor`**: the first entry's glyph style and colour, the others' by default, so a look draws
   its main action apart (Eclipse's board fills A in the corona, `Main.dc.html:101`).
+- **`GaussianBlur`**, and `Backdrop`'s fields blurred by it on the card in place of `MultiEffect`: CSS's `blur()`, a
+  Gaussian of the field's deviation, held within 0.02 of the computed one (`shaders/gaussian.frag`, §7.118). `Backdrop`'s
+  field delegates show `deviation` in place of `radius`.
 - **`HelpBar.glyph`**, **`HelpBar.snapped`**, **`PadGlyph.letter`**: a host's own drawing of an entry's glyph, entries
   centred exactly where a look asks, and the letter the family prints on a button (`EmuSen_Kit.md` §7.54).
 - **`type_size::caps_in`** (Rust): the capitals of a face at a weight, measured by Qt; the `Tokens` column holds a theme's

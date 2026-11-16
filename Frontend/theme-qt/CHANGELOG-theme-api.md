@@ -19,6 +19,9 @@ or shadow. 1.3 is another piece's.
   case, "EmuSen", Eclipse's wordmark, where `title` stays "EMUSEN" for the other screens; a game's last play and its time
   played, "Last played yesterday · 3 h 20 min played"; and "Continue · Super Nintendo" (`qt-models/src/words.rs`). The host
   now feeds `Session.played` from games.db's seconds played. Eclipse's Home draws all three, as its board does.
+- **`Library.artHues(key, most)`**, **`Library.artHuesRead`**: a game's art's hues in degrees, most prominent first, read
+  once a picture off the GUI thread by `qt-models/src/art_hues.rs`; `artHuesRead` moves when a reading lands or the
+  library is fed, so a binding asks again. Eclipse's Home colours its backdrop's fields and its disc's corona with them.
 - **`Help.entries(kind, { card: true })`**: the kind's entries as Eclipse's Home names them, X "Options" and Start "Home
   card" (the card it opens), and no Select search in the bar, its action still the frame's (`qt-models/src/help.rs`,
   `card_named`; the words `words::OPTIONS`, `HOME_CARD`). The kit's `HelpBar.glyph`, `snapped` and `PadGlyph.letter` reach

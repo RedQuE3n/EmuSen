@@ -440,7 +440,7 @@ Module {
     }
     Component {
         file: "library.cxxqt.h"
-        lineNumber: 15
+        lineNumber: 24
         name: "ThemeLibrary"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -454,7 +454,7 @@ Module {
             isPointer: true
             read: "getConsoles"
             index: 0
-            lineNumber: 21
+            lineNumber: 30
             isReadonly: true
             isPropertyConstant: true
         }
@@ -464,7 +464,7 @@ Module {
             isPointer: true
             read: "getPlaces"
             index: 1
-            lineNumber: 22
+            lineNumber: 31
             isReadonly: true
             isPropertyConstant: true
         }
@@ -474,7 +474,7 @@ Module {
             isPointer: true
             read: "getShelves"
             index: 2
-            lineNumber: 23
+            lineNumber: 32
             isReadonly: true
             isPropertyConstant: true
         }
@@ -484,7 +484,7 @@ Module {
             isPointer: true
             read: "getRecent"
             index: 3
-            lineNumber: 24
+            lineNumber: 33
             isReadonly: true
             isPropertyConstant: true
         }
@@ -494,7 +494,7 @@ Module {
             isPointer: true
             read: "getFavourites"
             index: 4
-            lineNumber: 25
+            lineNumber: 34
             isReadonly: true
             isPropertyConstant: true
         }
@@ -504,7 +504,7 @@ Module {
             isPointer: true
             read: "getCollections"
             index: 5
-            lineNumber: 26
+            lineNumber: 35
             isReadonly: true
             isPropertyConstant: true
         }
@@ -514,31 +514,48 @@ Module {
             isPointer: true
             read: "getShelf"
             index: 6
-            lineNumber: 27
+            lineNumber: 36
             isReadonly: true
             isPropertyConstant: true
         }
+        Property {
+            name: "artHuesRead"
+            type: "int"
+            read: "getArtHuesRead"
+            notify: "artHuesReadChanged"
+            index: 7
+            lineNumber: 37
+            isReadonly: true
+        }
+        Signal { name: "artHuesReadChanged"; lineNumber: 50 }
         Method {
             name: "gamesOf"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 39
+            lineNumber: 51
             Parameter { name: "id"; type: "QString" }
         }
         Method {
             name: "search"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 40
+            lineNumber: 52
             Parameter { name: "words"; type: "QString" }
         }
         Method {
             name: "firstOf"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 41
+            lineNumber: 53
             Parameter { name: "id"; type: "QString" }
             Parameter { name: "count"; type: "int" }
+        }
+        Method {
+            name: "artHues"
+            type: "QList_f64"
+            lineNumber: 54
+            Parameter { name: "key"; type: "QString" }
+            Parameter { name: "most"; type: "int" }
         }
     }
     Component {

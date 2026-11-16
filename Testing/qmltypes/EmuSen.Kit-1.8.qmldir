@@ -49,3 +49,4 @@ CoronaGlow 1.8 qml/CoronaGlow.qml
 CoronaDisc 1.8 qml/CoronaDisc.qml
 BackdropField 1.8 qml/BackdropField.qml
 Backdrop 1.8 qml/Backdrop.qml
+GaussianBlur 1.8 qml/GaussianBlur.qml

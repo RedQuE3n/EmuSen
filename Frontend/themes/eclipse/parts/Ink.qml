@@ -4,6 +4,8 @@ import QtQuick
 QtObject {
     // The ground of Home and the games (Main:17, EclipseLibrary:17); Consoles' (EclipseConsoles:17) is Tokens.surface, read from the token.
     readonly property color ground: "#0A1024"
+    // Home's five colour fields (Main:19-23): their saturation, lightness and alpha are the board's; a game's art gives the hue.
+    readonly property list<color> fields: ["#1FC9A8", "#6A4CF0", "#1D6BF2", "#B8FFE9", "#D9C8FF"]
     // The ground of an empty library (EclipseEmpty:17).
     readonly property color emptyGround: "#05060B"
     // Home's eyebrow (Main:54).

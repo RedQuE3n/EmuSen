@@ -1781,10 +1781,17 @@ status's own button. Their glyphs are `parts/Glyph.qml`, the board's: the kit's 
 **Not drawn**: the section tabs (Home, Library, Consoles, Collections, Tools) and "LB RB Sections", a piece of their
 own (R-20261115-7). Also not drawn, because the program has nothing for them: the battery, since the program feeds no
 `Device.battery` (`qt-app/src/theme.rs`, `feed_device`); "GAME ART". "1 of 24" waits for `Words.place`, which Choose a console's piece adds over
-`game_page.rs`'s `place`; its place on Home is left empty until then. The blurred colour fields are the kit's `Backdrop` (`EmuSen_Kit.md` §7.118, R-20261115-6). The board labels them the
-shown game's art (`Main.dc.html:75`), so Home gives the backdrop the shown tile's hero, blurred 90 px at 0.85 opacity, the
-board's first field (`Main.dc.html:19`). These are provisional values, the tester's to judge from pictures. On the
-software backend the picture is unblurred at the same opacity. A game with no art leaves the ground alone. A resting
+`game_page.rs`'s `place`; its place on Home is left empty until then. The backdrop is the board's (R-20261115-27, -28): the ground #0A1024 and the five fields of `Main.dc.html:19-23`,
+each at its place, size, corners, turn, blur and opacity, in the kit's `Backdrop` (`EmuSen_Kit.md` §7.118). Only each
+field's hue is the shown game's: the field keeps the board colour's saturation, lightness and alpha. The program reads a
+game's art (its hero, else its cover) once, off the GUI thread, for its hues, most prominent first (`qt-models/src/art_hues.rs`,
+`Library.artHues`); the three large fields take the first three and the two streaks, pale tints of the first two fields on
+the board, take those two hues. Where the art has fewer than three, the board's own offsets spread them: its hues are 168,
+251 and 218 degrees, the second 83 past the first and the third 50 past it, so one hue h gives h, h + 83 and h + 50, and two
+give h1, h2 and the point 50/83 of the way from h1 to h2 the short way round. Art with no hue (greys) or a game with no art
+takes its console's hue (`consoleHue`) by the same rule, and with no game shown the fields are the board's own colours. The
+disc's rim takes the first hue at the look's rim's saturation and lightness, and its two glows take it at their own
+strengths (R-20261114-38). The cover's own pixels are never drawn behind the disc. A resting
 tile's shadow and the filled button's halo and glow are the kit's `Glow` (§7.119).
 
 **Shared parts.** `parts/` serves every Eclipse screen. `Board` and `Ink` hold the measure and the boards' own colours.
@@ -1839,11 +1846,10 @@ games.db then records as last played. The harness feeds no game picture, so a st
 program is loaded again after each start. With no game on the row the title's words take a second line and the search
 holds the focus (theme-audit's 50 states, `qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has`).
 
-**The art on the software backend.** R-20261115-6 rules the software backdrop the same colours, dimmed and unblurred.
-The oracle draws its covers with qt-test's `covers::draw_art`, three bands of colours each, and on the software backend
-reads the backdrop at the window's right edge in each band and two cover pixels either side of a band's edge: each is the
-art's colour at the backdrop's opacity (0.85, the board's first field's, `Main.dc.html:19`) over the ground. The light
-stripe seen there in the pictures of 2026-11-15 was the earlier fixture cover's own white rim, cropped into view.
+**The art on the software backend.** R-20261115-6 rules the software backdrop the same colours, dimmed and unblurred: there
+each field is drawn unblurred at its opacity. The oracle reads, on both backends, the second field's centre, which no other
+field nor the disc reaches: it is that field's board colour with the first cover's second hue at its opacity over the
+ground, within two levels of 255, and none of the cover's own colours; it reads the rim's hue against the art's first.
 
 **A tile's line is the console alone.** The board's tile draws `{{t.system}}` under the title (Main.dc.html line 86), so
 the tile draws the row's `consoleName` (EmuSen.Theme 1.4), the same name the row's `facts` begin with, from the one owner

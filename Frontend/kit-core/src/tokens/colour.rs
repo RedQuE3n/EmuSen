@@ -55,6 +55,13 @@ impl Colour {
         Colour { r: rgb.red, g: rgb.green, b: rgb.blue, a: channel(alpha) }
     }
 
+    /// The colour's hue in degrees (0 to 360), saturation and lightness (0 to 1), as `hsl` takes them.
+    pub fn to_hsl(self) -> (f64, f64, f64) {
+        let rgb = Srgb::new(self.r, self.g, self.b).into_format::<f32>();
+        let hsl = Hsl::from_color(rgb);
+        (f64::from(hsl.hue.into_positive_degrees()), f64::from(hsl.saturation), f64::from(hsl.lightness))
+    }
+
     /// The colour as `#RRGGBB`, or `#AARRGGBB` when it is not opaque.
     pub fn to_hex(self) -> String {
         if self.a == 255 {

@@ -261,7 +261,7 @@ fn font_of(text: &str) -> Option<(f64, f64, i32, i32, f64)> {
 }
 
 /// What differs from a row's type: its words' weight, spacing and case, or its glyph's size and weight.
-fn typed(tree: &Tree, row: &Row) -> Vec<String> {
+fn typed(tree: &Tree, row: &Row, k: f64, unit: f64, tokens: &BTreeMap<String, String>) -> Vec<String> {
     let parts: Vec<&str> = row.kind.split(' ').collect();
     let mut out = Vec::new();
     // The drawn one where a hidden item holds the name too (the frame's own help bar, not shown).
@@ -309,7 +309,7 @@ fn typed(tree: &Tree, row: &Row) -> Vec<String> {
                 out.push(format!("glyph's weight {weight_of} where the board gives {weight}"));
             }
         }
-        [weight, em, case] => {
+        [weight, em, case @ ("upper" | "none")] => {
             let want_weight: f64 = weight.parse().unwrap();
             let em: f64 = em.parse().unwrap();
             for &i in &texts {
@@ -331,6 +331,105 @@ fn typed(tree: &Tree, row: &Row) -> Vec<String> {
             }
             if texts.is_empty() {
                 out.push("has no words drawn".to_owned());
+            }
+        }
+        ["field", turn, corner, _, _] => {
+            let number = |p: &str| prop(node, p).parse::<f64>().unwrap_or(f64::NAN);
+            let (turn, corner): (f64, f64) = (turn.parse().unwrap(), corner.parse().unwrap());
+            if !same(number("rotation"), turn) {
+                out.push(format!("turned {} where the board turns it {turn}", number("rotation")));
+            }
+            // The shape drawn: the ellipse its box holds (a circle of the box's width, its radius half that, scaled to the box's
+            // height), or the box at the board's corner in canvas units; the other hidden.
+            let under = |name: &str| {
+                let id = tree.nodes[node].id.clone();
+                tree.nodes.iter().position(|n| {
+                    n.name == name && {
+                        let mut at = n.parent.clone();
+                        let mut inside = false;
+                        while let Some(p) = tree.nodes.iter().find(|p| p.id == at) {
+                            if p.id == id {
+                                inside = true;
+                                break;
+                            }
+                            at = p.parent.clone();
+                        }
+                        inside
+                    }
+                })
+            };
+            let (shown, hidden) = if corner < 0.0 { ("backdropEllipse", "backdropBox") } else { ("backdropBox", "backdropEllipse") };
+            match (under(shown), under(hidden)) {
+                (Some(a), Some(b)) if tree.nodes[a].visible && !tree.nodes[b].visible => {
+                    let n = |p: &str| prop(a, p).parse::<f64>().unwrap_or(f64::NAN);
+                    let want = if corner < 0.0 { n("width") / 2.0 } else { corner * k };
+                    if !same(n("radius"), want) {
+                        out.push(format!("{shown}'s corner {} where the board gives {want}", n("radius")));
+                    }
+                }
+                _ => out.push(format!("is not drawn as the board's {shown}")),
+            }
+        }
+        ["glow", blur, spread, dx, dy] => {
+            for (p, v) in [("blur", blur), ("spread", spread), ("offsetX", dx), ("offsetY", dy)] {
+                let (have, want) = (prop(node, p).parse::<f64>().unwrap_or(f64::NAN), v.parse::<f64>().unwrap() * k);
+                if !same(have, want) {
+                    out.push(format!("{p} {have} where the board gives {want}"));
+                }
+            }
+            // The Gaussian runs at the scene's pixels: a canvas unit's.
+            let scale = prop(node, "pixelScale").parse::<f64>().unwrap_or(f64::NAN);
+            if !same(scale, unit) {
+                out.push(format!("blurred at {scale} pixels a unit where the scene draws {unit}"));
+            }
+        }
+        ["ring", gap, thickness, blur, spread, band, glow, gap_colour, ring_colour] => {
+            for (p, v) in [("gap", gap), ("thickness", thickness), ("glowBlur", blur), ("glowSpread", spread), ("bandRadius", band)] {
+                let (have, want) = (prop(node, p).parse::<f64>().unwrap_or(f64::NAN), v.parse::<f64>().unwrap() * k);
+                if !same(have, want) {
+                    out.push(format!("{p} {have} where the board gives {want}"));
+                }
+            }
+            if Colour::parse(&prop(node, "glowColor")) != Colour::parse(glow) {
+                out.push(format!("glow colour {} where the board gives {glow}", prop(node, "glowColor")));
+            }
+            // The gap is filled in the ring's gap colour, the ring in the accent: the kit's tokens, which must be the board's.
+            for (token, want) in [("ringGapColor", gap_colour), ("accent", ring_colour)] {
+                if tokens.get(token).and_then(|v| Colour::parse(v)) != Colour::parse(want) {
+                    out.push(format!("{token} {:?} where the board gives {want}", tokens.get(token)));
+                }
+            }
+            // The gap and the band drawn round the tile by their widths, and the glow under them at the scene's pixels.
+            let child = |name: &str| {
+                let mut found = None;
+                for (i, n) in tree.nodes.iter().enumerate() {
+                    if n.name == name && n.parent == tree.nodes[node].id {
+                        found = Some(i);
+                    }
+                }
+                found
+            };
+            let box_of = |i: usize| (tree.nodes[i].x / unit, tree.nodes[i].y / unit, tree.nodes[i].w / unit, tree.nodes[i].h / unit);
+            let ring = box_of(node);
+            for (name, out_by) in [("focusGap", gap.parse::<f64>().unwrap()), ("focusBand", gap.parse::<f64>().unwrap() + thickness.parse::<f64>().unwrap())] {
+                let Some(i) = child(name) else {
+                    out.push(format!("draws no {name}"));
+                    continue;
+                };
+                let (x, y, w, h) = box_of(i);
+                let d = out_by * k;
+                if !(same(x, ring.0 - d) && same(y, ring.1 - d) && same(w, ring.2 + 2.0 * d) && same(h, ring.3 + 2.0 * d)) || !tree.nodes[i].visible {
+                    out.push(format!("{name} at {:?} where the board grows the tile {d} on each side", (x, y, w, h)));
+                }
+            }
+            match child("focusGlow") {
+                Some(i) => {
+                    let scale = prop(i, "pixelScale").parse::<f64>().unwrap_or(f64::NAN);
+                    if !same(scale, unit) {
+                        out.push(format!("glow blurred at {scale} pixels a unit where the scene draws {unit}"));
+                    }
+                }
+                None => out.push("draws no focusGlow".to_owned()),
             }
         }
         _ => panic!("{}: no such type {:?}", row.name, row.kind),
@@ -539,7 +638,7 @@ pub fn oracle(backend: &str) {
 
         // Each text's weight, letter spacing and case, and each glyph's letter size and weight, as the board's CSS gives them.
         for row in rows.iter().filter(|r| r.status == "built" && r.kind != "-") {
-            for problem in typed(&tree, row) {
+            for problem in typed(&tree, row, k, unit, &tokens) {
                 differences.push(format!("{at}: {} {problem}", row.name));
             }
         }
@@ -623,43 +722,75 @@ pub fn oracle(backend: &str) {
             }
         }
     }
-    // R-20261115-27, -28: the board's fields in the shown game's hues. At the second field's centre, which no other field nor the
-    // disc reaches, the window shows that field's board colour with the art's second hue, at its opacity over the ground: on the
-    // card blurred (3.45 deviations inside the ellipse's edge, so all but a trace of it), on the software backend unblurred
-    // (R-20261115-6). The cover's own colours are not there.
+    // R-20261115-27, -28: the board's fields in the shown game's hues, over the first two covers. Each field's colour is its
+    // board colour's saturation and lightness with the art hue the table gives it, the art's three spread by the board's
+    // offsets where it has fewer (Home.qml `hues`). At the second field's centre, which no other field nor the disc reaches,
+    // the window shows that colour at its opacity over the ground: on the card blurred (3.45 deviations inside the ellipse's
+    // edge, so all but a trace of it), on the software backend unblurred (R-20261115-6). The cover's own colours are not there.
     {
         scene.resize(1920, 1200);
         scene.wait(500);
-        let tree = scene.tree();
-        let hero = view.game(&first).map(|g| if g.hero.is_empty() { g.cover } else { g.hero }).unwrap_or_default();
-        let hues = emusen_qt_models::art_hues::hues_of_file(&hero, 3);
-        assert!(!hues.is_empty(), "the first cover has hues: {hero}");
-        // The board's spread where the art has fewer than three (Home.qml `hues`).
-        let second = if hues.len() == 1 { hues[0] + 83.0 } else { hues[1] };
-        let board = Colour::parse("#6A4CF0").unwrap().to_hsl();
-        let field = Colour::hsl(second, board.1, board.2, 1.0);
-        let opacity: f64 = read(&tree, "backdropField.1", "opacity").parse().expect("the field's opacity");
-        let ground = Colour::parse(&read(&tree, "backdrop", "ground")).expect("the backdrop's ground");
-        let mix = |a: u8, b: u8| (f64::from(a) * opacity + f64::from(b) * (1.0 - opacity)).round() as u8;
-        let want = Colour::rgb(mix(field.r, ground.r), mix(field.g, ground.g), mix(field.b, ground.b));
-        let centre = ((1380.0 + 380.0) * 1920.0 / 1920.0, (420.0 + 380.0) * 1200.0 / 1200.0);
-        let seen = scene.colours_at(&[centre])[0];
-        // Two levels of 255: an 8-bit blend's rounding, and on the card the blur's trace from the edge.
-        let near = |a: Colour, b: Colour| a.r.abs_diff(b.r) <= 2 && a.g.abs_diff(b.g) <= 2 && a.b.abs_diff(b.b) <= 2;
-        if !seen.is_some_and(|c| near(c, want)) {
-            differences.push(format!("{backend}: the second field's centre is {seen:?} where the art's hue {second:.1} in the board's field gives {want:?}"));
-        }
-        for band in emusen_qt_test::covers::art(0) {
-            if seen.is_some_and(|c| near(c, Colour::rgb(band.0, band.1, band.2))) {
-                differences.push(format!("{backend}: the second field's centre shows the cover's own colour {band:?}"));
+        let fields: Vec<(&Row, Colour, usize)> = rows
+            .iter()
+            .filter(|r| r.kind.starts_with("field "))
+            .map(|r| {
+                let p: Vec<&str> = r.kind.split(' ').collect();
+                (r, Colour::parse(p[3]).expect("a field's board colour"), p[4].parse().expect("a field's hue"))
+            })
+            .collect();
+        assert_eq!(fields.len(), 5, "the board's five fields");
+        for (cover, (title, ext)) in GAMES.iter().take(2).enumerate() {
+            if cover > 0 {
+                scene.key(RIGHT, 0);
+                scene.wait(500);
+            }
+            let tree = scene.tree();
+            let game = view.game(&rom(&world, title, ext)).expect("a game of the library");
+            let hero = if game.hero.is_empty() { game.cover } else { game.hero };
+            let art = emusen_qt_models::art_hues::hues_of_file(&hero, 3);
+            assert!(!art.is_empty(), "cover {cover} has hues: {hero}");
+            // The board's three hues, 168, 251 and 218 degrees: the second 83 past the first, the third 50 past it.
+            let spread = |from: f64, to: f64| from + (((to - from) % 360.0 + 540.0) % 360.0 - 180.0) * 50.0 / 83.0;
+            let hues = match art.len() {
+                1 => vec![art[0], art[0] + 83.0, art[0] + 50.0],
+                2 => vec![art[0], art[1], spread(art[0], art[1])],
+                _ => art.clone(),
+            };
+            for (row, board, which) in &fields {
+                let have = Colour::parse(&read(&tree, &row.name, "paint")).expect("a field's paint").to_hsl();
+                let (want, board) = (hues[*which], board.to_hsl());
+                // Two degrees and a hundredth of saturation and lightness: the colour read back as 8 bits a channel.
+                if emusen_kit_core::world::wrap_hue(have.0 - want).abs() > 2.0 || (have.1 - board.1).abs() > 0.01 || (have.2 - board.2).abs() > 0.01 {
+                    differences.push(format!("{backend}: cover {cover}: {} painted {have:?} where the board's colour with hue {want:.1} gives {:?}", row.name, (want, board.1, board.2)));
+                }
+            }
+            let board = fields[1].1.to_hsl();
+            let field = Colour::hsl(hues[1], board.1, board.2, 1.0);
+            let opacity: f64 = read(&tree, "backdropField.1", "opacity").parse().expect("the field's opacity");
+            let ground = Colour::parse(&read(&tree, "backdrop", "ground")).expect("the backdrop's ground");
+            let mix = |a: u8, b: u8| (f64::from(a) * opacity + f64::from(b) * (1.0 - opacity)).round() as u8;
+            let want = Colour::rgb(mix(field.r, ground.r), mix(field.g, ground.g), mix(field.b, ground.b));
+            let centre = (1380.0 + 380.0, 420.0 + 380.0);
+            let seen = scene.colours_at(&[centre])[0];
+            // Two levels of 255: an 8-bit blend's rounding, and on the card the blur's trace from the edge.
+            let near = |a: Colour, b: Colour| a.r.abs_diff(b.r) <= 2 && a.g.abs_diff(b.g) <= 2 && a.b.abs_diff(b.b) <= 2;
+            if !seen.is_some_and(|c| near(c, want)) {
+                differences.push(format!("{backend}: cover {cover}: the second field's centre is {seen:?} where the art's hue {:.1} in the board's field gives {want:?}", hues[1]));
+            }
+            for band in emusen_qt_test::covers::art(cover) {
+                if seen.is_some_and(|c| near(c, Colour::rgb(band.0, band.1, band.2))) {
+                    differences.push(format!("{backend}: cover {cover}: the second field's centre shows the cover's own colour {band:?}"));
+                }
+            }
+            // The disc's rim takes the first hue at the look's rim's saturation and lightness.
+            let rim = Colour::parse(&read(&tree, "disc", "rimColor")).expect("the rim's colour").to_hsl();
+            // Two degrees: the rim's colour read as 8 bits a channel, whose chroma near white leaves a step of about two degrees.
+            if emusen_kit_core::world::wrap_hue(rim.0 - hues[0]).abs() > 2.0 {
+                differences.push(format!("{backend}: cover {cover}: the rim's hue {:.1} where the art's first is {:.1}", rim.0, hues[0]));
             }
         }
-        // The disc's rim takes the first hue at the look's rim's saturation and lightness.
-        let rim = Colour::parse(&read(&tree, "disc", "rimColor")).expect("the rim's colour").to_hsl();
-        // Two degrees: the rim's colour read as 8 bits a channel, whose chroma near white leaves a step of about two degrees.
-        if emusen_kit_core::world::wrap_hue(rim.0 - hues[0]).abs() > 2.0 {
-            differences.push(format!("{backend}: the rim's hue {:.1} where the art's first is {:.1}", rim.0, hues[0]));
-        }
+        scene.key(LEFT, 0);
+        scene.wait(500);
     }
     if let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") {
         std::fs::create_dir_all(&folder).unwrap();

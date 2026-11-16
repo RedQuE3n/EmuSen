@@ -113,6 +113,7 @@ ThemeScreen {
                         unit: design.unit
                         controller: frame.controller
                         glassColor: ink.glass
+                        pixelScale: canvas.unit
                         x: parent.width - 96 * design.unit - width
                         y: 80 * design.unit - height / 2
                         below: root.firstButton ?? root.currentTile
@@ -287,6 +288,7 @@ ThemeScreen {
                                 controller: frame.controller
                                 objectName: "button." + pill.index
                                 place: pill.index
+                                pixelScale: canvas.unit
                                 visible: pill.index < root.gameButtons
                                 live: pill.model.enabled ?? true
                                 filled: pill.index === 0
@@ -378,6 +380,7 @@ ThemeScreen {
                                     color: "#73000000"
                                     blur: 30 * design.unit
                                     offsetY: 10 * design.unit
+                                    pixelScale: canvas.unit
                                 }
                                 RoundPicture {
                                     objectName: "tileArt." + tile.index
@@ -412,6 +415,7 @@ ThemeScreen {
                                     glowBlur: 40 * design.unit
                                     glowSpread: 10 * design.unit
                                     bandRadius: tile.radius + 7 * design.unit
+                                    pixelScale: canvas.unit
                                     visible: tile.activeFocus
                                 }
                             }

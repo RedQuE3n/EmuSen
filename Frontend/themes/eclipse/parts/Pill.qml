@@ -11,6 +11,8 @@ Walkable {
     property bool filled: false
     // Whether a filled pill draws the boards' halo and glow (Main:61); Consoles' Open draws neither (EclipseConsoles:90).
     property bool glows: true
+    // Scene pixels to a canvas unit, so the glows' blur runs at the pixels drawn (EmuSen_Kit.md §7.119).
+    property real pixelScale: 1
     property real tall: 72
     // The glyph's side inside its ring, in board pixels.
     property real glyphSide: 44
@@ -52,6 +54,7 @@ Walkable {
         radius: root.radius
         color: "#2EF6E7D8"
         spread: 6 * root.unit
+        pixelScale: root.pixelScale
     }
     Glow {
         objectName: "buttonGlow." + root.place
@@ -61,10 +64,12 @@ Walkable {
         color: "#73F0B4C4"
         blur: 46 * root.unit
         spread: 6 * root.unit
+        pixelScale: root.pixelScale
     }
     FocusRing {
         anchors.fill: parent
         radius: root.radius
+        pixelScale: root.pixelScale
         visible: root.activeFocus
     }
     Glyph {

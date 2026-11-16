@@ -1827,6 +1827,17 @@ logged. `eclipse_home_gpu.rs` runs the same oracle on the graphics card. With `E
 both grab Home at 1280 × 800 and 1920 × 1200, and once more at 1920 × 1200 with the shown game one with no art. The
 six games' first five have covers, drawn by qt-test's `covers`.
 
+**What the oracle holds besides boxes (2026-11-15).** The table's `type` column carries the board's CSS for what a box
+cannot: each text's weight, letter spacing in em and case, read from the drawn Text's font (Qt keeps a spacing in 64ths
+of a pixel, so it is held within one); each glyph's letter size and weight; each field's turn, corner (the ellipse drawn
+as one, the bars as boxes at 40 px) and which of the art's hues it takes; each glow's blur, spread and offsets and the
+scene pixels its Gaussian runs at; and the focused tile's ring, its gap, thickness, glow, band radius and colours, with
+the gap and the band drawn round the tile by their widths. The words are the board's own literals where the fixture's
+first game is the board's ("9:41 PM", "Resume point · saved 9:12 PM", "Last played yesterday · 3 h 20 min played",
+"GAME ART · AURORA DRIFT"), with the locale set to en_US and the zone to UTC. The five fields' colours are held over the
+first two covers, and the second field's centre is read from the window for both. The pointer's presses are held on the
+real program by `eclipse_home_pad.rs`.
+
 **Type.** Every word is drawn in the look's face, Sora (`Tokens.faceText`), at the board's size, weight, letter spacing and
 case (R-20261115-24). A font's pixel size is a whole number (`QFont::setPixelSize`, an `int`), so a board's 20 px, 13.33
 canvas units, cannot be set on a Text in the canvas. `parts/Line.qml` draws each text at the board's pixels and scales

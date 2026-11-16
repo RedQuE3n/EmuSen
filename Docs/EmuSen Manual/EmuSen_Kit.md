@@ -4069,7 +4069,9 @@ drawn alpha against the recipe: the ring's 0.2000/0.1985 at 5.5 px, the disc's g
 0.1271/0.1258 at 30.5. `FocusRing` takes `gap`, `thickness`, `glowColor`, `glowBlur`, `glowSpread` and `bandRadius`, the
 tokens' (and the kit's own corners, the box's grown by the gap) by default, so a board that draws a ring apart sets its own:
 Eclipse's Home tile, 4 px of gap, 3 of ring and 40 px of glow 10 px out at 0.5 (`Main.dc.html:113`), the corners grown by
-the whole 7 px. Kit 1.8.
+the whole 7 px. `FocusRing.pixelScale` hands the scale to its glow; Eclipse's Home sets the canvas's unit on every glow it
+draws (the pills' halo and glow, the tiles' shadow and ring, the search's ring), which before 2026-11-15 ran at 1, a grid of
+canvas units coarser than the pixels at every size above 800 high. Kit 1.8.
 
 ### 7.114 A button's corners (2026-11-14)
 

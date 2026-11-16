@@ -4173,8 +4173,8 @@ error function, summed at a tenth of a pixel): within 2 levels (measured worst 2
 holds its entries as guarded pointers, so an entry deleted while the disc lives, as a theme's dropped engine deletes them,
 leaves a null the delegate still reads. `tests/corona_disc.rs` deletes a disc's one glow while the disc lives and holds the
 log quiet; with one guard removed it logs "TypeError: Cannot read property 'blur' of null" (seen 2026-11-15). Eclipse's
-own drop no longer reaches the read since the delegate became an `Item` over a nested `Glow` in 2026-11-15's work, which is
-why the case is held in the kit.
+own drop under `qt-app/tests/eclipse.rs` no longer logs it with the guard removed (seen 2026-11-15); which order of
+deletion changed is not known, so the case is held in the kit.
 
 ### 7.117 The face tokens: Sora and JetBrains Mono bundled, a face for each role (2026-11-15)
 

@@ -131,7 +131,7 @@ Module {
     }
     Component {
         file: "browse.cxxqt.h"
-        lineNumber: 176
+        lineNumber: 239
         name: "ThemeBrowse"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -145,7 +145,7 @@ Module {
             read: "getSection"
             notify: "sectionChanged"
             index: 0
-            lineNumber: 182
+            lineNumber: 245
             isReadonly: true
         }
         Property {
@@ -154,7 +154,7 @@ Module {
             read: "getHeading"
             notify: "headingChanged"
             index: 1
-            lineNumber: 183
+            lineNumber: 246
             isReadonly: true
         }
         Property {
@@ -163,7 +163,7 @@ Module {
             read: "getWorld"
             notify: "worldChanged"
             index: 2
-            lineNumber: 184
+            lineNumber: 247
             isReadonly: true
         }
         Property {
@@ -172,7 +172,7 @@ Module {
             read: "getHue"
             notify: "hueChanged"
             index: 3
-            lineNumber: 185
+            lineNumber: 248
             isReadonly: true
         }
         Property {
@@ -181,7 +181,7 @@ Module {
             read: "getCountLine"
             notify: "countLineChanged"
             index: 4
-            lineNumber: 186
+            lineNumber: 249
             isReadonly: true
         }
         Property {
@@ -190,7 +190,7 @@ Module {
             read: "getPrevious"
             notify: "previousChanged"
             index: 5
-            lineNumber: 187
+            lineNumber: 250
             isReadonly: true
         }
         Property {
@@ -199,7 +199,7 @@ Module {
             read: "getNext"
             notify: "nextChanged"
             index: 6
-            lineNumber: 188
+            lineNumber: 251
             isReadonly: true
         }
         Property {
@@ -208,7 +208,7 @@ Module {
             read: "getFocusRow"
             notify: "focusRowChanged"
             index: 7
-            lineNumber: 189
+            lineNumber: 252
             isReadonly: true
         }
         Property {
@@ -217,7 +217,7 @@ Module {
             read: "getSearching"
             notify: "searchingChanged"
             index: 8
-            lineNumber: 190
+            lineNumber: 253
             isReadonly: true
         }
         Property {
@@ -226,7 +226,7 @@ Module {
             read: "getTyping"
             notify: "typingChanged"
             index: 9
-            lineNumber: 191
+            lineNumber: 254
             isReadonly: true
         }
         Property {
@@ -235,7 +235,7 @@ Module {
             read: "getListOpen"
             notify: "listOpenChanged"
             index: 10
-            lineNumber: 192
+            lineNumber: 255
             isReadonly: true
         }
         Property {
@@ -244,7 +244,7 @@ Module {
             isPointer: true
             read: "getGames"
             index: 11
-            lineNumber: 193
+            lineNumber: 256
             isReadonly: true
             isPropertyConstant: true
         }
@@ -254,7 +254,7 @@ Module {
             read: "getSearched"
             notify: "searchedChanged"
             index: 12
-            lineNumber: 194
+            lineNumber: 257
             isReadonly: true
         }
         Property {
@@ -263,7 +263,7 @@ Module {
             read: "getKind"
             notify: "kindChanged"
             index: 13
-            lineNumber: 195
+            lineNumber: 258
             isReadonly: true
         }
         Property {
@@ -272,7 +272,7 @@ Module {
             read: "getEmptyWords"
             notify: "emptyWordsChanged"
             index: 14
-            lineNumber: 196
+            lineNumber: 259
             isReadonly: true
         }
         Property {
@@ -281,7 +281,7 @@ Module {
             isPointer: true
             read: "getFilters"
             index: 15
-            lineNumber: 197
+            lineNumber: 260
             isReadonly: true
             isPropertyConstant: true
         }
@@ -291,7 +291,7 @@ Module {
             read: "getFilter"
             notify: "filterChanged"
             index: 16
-            lineNumber: 198
+            lineNumber: 261
             isReadonly: true
         }
         Property {
@@ -300,7 +300,7 @@ Module {
             read: "getSort"
             notify: "sortChanged"
             index: 17
-            lineNumber: 199
+            lineNumber: 262
             isReadonly: true
         }
         Property {
@@ -309,7 +309,7 @@ Module {
             read: "getSortLine"
             notify: "sortLineChanged"
             index: 18
-            lineNumber: 200
+            lineNumber: 263
             isReadonly: true
         }
         Property {
@@ -318,7 +318,7 @@ Module {
             isPointer: true
             read: "getLetters"
             index: 19
-            lineNumber: 201
+            lineNumber: 264
             isReadonly: true
             isPropertyConstant: true
         }
@@ -328,27 +328,97 @@ Module {
             read: "getLetter"
             notify: "letterChanged"
             index: 20
-            lineNumber: 202
+            lineNumber: 265
             isReadonly: true
         }
-        Signal { name: "sectionChanged"; lineNumber: 228 }
-        Signal { name: "headingChanged"; lineNumber: 229 }
-        Signal { name: "worldChanged"; lineNumber: 230 }
-        Signal { name: "hueChanged"; lineNumber: 231 }
-        Signal { name: "countLineChanged"; lineNumber: 232 }
-        Signal { name: "previousChanged"; lineNumber: 233 }
-        Signal { name: "nextChanged"; lineNumber: 234 }
-        Signal { name: "focusRowChanged"; lineNumber: 235 }
-        Signal { name: "searchingChanged"; lineNumber: 236 }
-        Signal { name: "typingChanged"; lineNumber: 237 }
-        Signal { name: "listOpenChanged"; lineNumber: 238 }
-        Signal { name: "searchedChanged"; lineNumber: 239 }
-        Signal { name: "kindChanged"; lineNumber: 240 }
-        Signal { name: "emptyWordsChanged"; lineNumber: 241 }
-        Signal { name: "filterChanged"; lineNumber: 242 }
-        Signal { name: "sortChanged"; lineNumber: 243 }
-        Signal { name: "sortLineChanged"; lineNumber: 244 }
-        Signal { name: "letterChanged"; lineNumber: 245 }
+        Property {
+            name: "factsKey"
+            type: "QString"
+            read: "getFactsKey"
+            notify: "factsKeyChanged"
+            index: 21
+            lineNumber: 266
+            isReadonly: true
+        }
+        Property {
+            name: "year"
+            type: "QString"
+            read: "getYear"
+            notify: "yearChanged"
+            index: 22
+            lineNumber: 267
+            isReadonly: true
+        }
+        Property {
+            name: "genre"
+            type: "QString"
+            read: "getGenre"
+            notify: "genreChanged"
+            index: 23
+            lineNumber: 268
+            isReadonly: true
+        }
+        Property {
+            name: "players"
+            type: "QString"
+            read: "getPlayers"
+            notify: "playersChanged"
+            index: 24
+            lineNumber: 269
+            isReadonly: true
+        }
+        Property {
+            name: "description"
+            type: "QString"
+            read: "getDescription"
+            notify: "descriptionChanged"
+            index: 25
+            lineNumber: 270
+            isReadonly: true
+        }
+        Property {
+            name: "timePlayed"
+            type: "QString"
+            read: "getTimePlayed"
+            notify: "timePlayedChanged"
+            index: 26
+            lineNumber: 271
+            isReadonly: true
+        }
+        Property {
+            name: "states"
+            type: "int"
+            read: "getStates"
+            notify: "statesChanged"
+            index: 27
+            lineNumber: 272
+            isReadonly: true
+        }
+        Signal { name: "sectionChanged"; lineNumber: 305 }
+        Signal { name: "headingChanged"; lineNumber: 306 }
+        Signal { name: "worldChanged"; lineNumber: 307 }
+        Signal { name: "hueChanged"; lineNumber: 308 }
+        Signal { name: "countLineChanged"; lineNumber: 309 }
+        Signal { name: "previousChanged"; lineNumber: 310 }
+        Signal { name: "nextChanged"; lineNumber: 311 }
+        Signal { name: "focusRowChanged"; lineNumber: 312 }
+        Signal { name: "searchingChanged"; lineNumber: 313 }
+        Signal { name: "typingChanged"; lineNumber: 314 }
+        Signal { name: "listOpenChanged"; lineNumber: 315 }
+        Signal { name: "searchedChanged"; lineNumber: 316 }
+        Signal { name: "kindChanged"; lineNumber: 317 }
+        Signal { name: "emptyWordsChanged"; lineNumber: 318 }
+        Signal { name: "filterChanged"; lineNumber: 319 }
+        Signal { name: "sortChanged"; lineNumber: 320 }
+        Signal { name: "sortLineChanged"; lineNumber: 321 }
+        Signal { name: "letterChanged"; lineNumber: 322 }
+        Signal { name: "factsKeyChanged"; lineNumber: 323 }
+        Signal { name: "yearChanged"; lineNumber: 324 }
+        Signal { name: "genreChanged"; lineNumber: 325 }
+        Signal { name: "playersChanged"; lineNumber: 326 }
+        Signal { name: "descriptionChanged"; lineNumber: 327 }
+        Signal { name: "timePlayedChanged"; lineNumber: 328 }
+        Signal { name: "statesChanged"; lineNumber: 329 }
     }
     Component {
         file: "cues.cxxqt.h"

@@ -20,6 +20,17 @@ ThemeScreen {
         required property bool played
         required property string lastPlayedWords
     }
+    // A fact's chip as the board draws it (EclipseLibrary:41-42): its words 16 px in, 38 high, a 2 px line, no fill.
+    component Chip: Rectangle {
+        required property real unit
+        required property color line
+        width: childrenRect.width + 2 * 16 * unit
+        height: 38 * unit
+        radius: 19 * unit
+        color: "transparent"
+        border.width: 2 * unit
+        border.color: line
+    }
     NormalizedCanvas {
         id: canvas
         objectName: "gridCanvas"
@@ -318,28 +329,34 @@ ThemeScreen {
                             objectName: "gamesChips"
                             visible: root.factsHere && (Browse.genre.length > 0 || Browse.players.length > 0)
                             spacing: 10 * root.px
-                            Repeater {
-                                model: [{ name: "genreChip", words: root.factsHere ? Browse.genre : "" }, { name: "playersChip", words: root.factsHere ? Browse.players : "" }]
-                                Rectangle {
-                                    required property var modelData
-                                    objectName: modelData.name
-                                    visible: modelData.words.length > 0
-                                    width: chipWords.width + 2 * 16 * root.px
-                                    height: 38 * root.px
-                                    radius: 19 * root.px
-                                    color: "transparent"
-                                    border.width: 2 * root.px
-                                    border.color: ink.chipLine
-                                    Line {
-                                        id: chipWords
-                                        objectName: parent.modelData.name + "Words"
-                                        unit: root.px
-                                        x: 16 * root.px
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: parent.modelData.words
-                                        color: Tokens.text
-                                        size: 18
-                                    }
+                            Chip {
+                                objectName: "genreChip"
+                                unit: root.px
+                                line: ink.chipLine
+                                visible: root.factsHere && Browse.genre.length > 0
+                                Line {
+                                    objectName: "genreChipWords"
+                                    unit: root.px
+                                    x: 16 * root.px
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.factsHere ? Browse.genre : ""
+                                    color: Tokens.text
+                                    size: 18
+                                }
+                            }
+                            Chip {
+                                objectName: "playersChip"
+                                unit: root.px
+                                line: ink.chipLine
+                                visible: root.factsHere && Browse.players.length > 0
+                                Line {
+                                    objectName: "playersChipWords"
+                                    unit: root.px
+                                    x: 16 * root.px
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.factsHere ? Browse.players : ""
+                                    color: Tokens.text
+                                    size: 18
                                 }
                             }
                         }

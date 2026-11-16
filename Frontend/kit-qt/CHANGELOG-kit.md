@@ -7,6 +7,8 @@ section of `EmuSen_Kit.md` that records it.
 
 ## 1.9: groups as a column and the chosen group as a grid (2026-11-15)
 
+- **`HelpBar`**: a help entry's pair is drawn in a theme's own glyph too (`ownGlyph2-<label>`), as `glyph2` draws it in the
+  kit's (EmuSen_Kit.md §7.54; 2026-11-16).
 - **`GroupGridLayout`**: kit-core's `group_grid` on Qt, read from a list model's group and place roles (`group` and
   `groupIndex` by default) at a given number of columns. Each item's column and row in its group's grid, its four
   neighbours inside that grid, each group's first item and its rows, as lists a screen binds to by index. Exported to

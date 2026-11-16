@@ -479,6 +479,7 @@ Glow
     property real offsetX
     property real offsetY
     readonly property real reach
+    readonly property real cardBlur
     property real pixelScale
     readonly property bool software
     readonly property bool glows

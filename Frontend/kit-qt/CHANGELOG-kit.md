@@ -29,6 +29,7 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
 - **`Glow`** on the card blurred by `GaussianBlur` in place of RectangularShadow, with `pixelScale`; **`FocusRing`**'s
   `gap`, `thickness`, `glowColor`, `glowBlur`, `glowSpread` and `bandRadius`, the tokens' by default, and `pixelScale`,
   handed to its glow (§7.113).
+- **`Glow.cardBlur`** is kept, now 1: the card's blur as a share of the given blur, since the glow is drawn as a Gaussian (§7.119).
 - **`CoronaDisc.pixelScale`**, and its glows on the card blurred by `GaussianBlur` as CSS's box-shadows are, within 2
   levels of 255 of the computed ones (§7.116); on the software backend still the kit's `Glow`.
 - **`HelpBar.glyph`**, **`HelpBar.snapped`**, **`PadGlyph.letter`**: a host's own drawing of an entry's glyph, entries

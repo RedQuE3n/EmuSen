@@ -1855,12 +1855,14 @@ each field is drawn unblurred at its opacity. The oracle reads, on both backends
 field nor the disc reaches: it is that field's board colour with the first cover's second hue at its opacity over the
 ground, within two levels of 255, and none of the cover's own colours; it reads the rim's hue against the art's first.
 
-**Every size, and the help line by pointer.** `eclipse_home_pad.rs` walks, at each of the gate's five sizes, Right through
-all six tiles and Left back, Up to the buttons and through them, Up to the search and Down again; at 1280 × 800 it presses
-the help line's Options, Favourite and Home card with the pointer, which open the shown game's page, turn its heart and open
-the Home card. Not known (2026-11-15): after the Home card opened by the line's Home card is closed with B, a second pointer
-press of the line's Favourite turns nothing, where the pad's Y does; what would settle it is reading which item takes that
-press.
+**Every size, and every press by pointer.** `eclipse_home_pad.rs` walks, at each of the gate's five sizes, Right through
+all six tiles and Left back, Up to the buttons and through them, Up to the search and Down again. At 1280 × 800 it presses
+with the pointer the help line's Options and Favourite, the Options and Favourite pills and the search, which open the
+shown game's page, turn its heart and open the search; then the line's Home card, closed at once with B, and every one of
+them again; then, each in a program loaded afresh, the line's first entry, the Resume pill and a tile, which start their
+game. A pointer press of the line's Favourite after the card did nothing until 2026-11-15: the card, closed while it still
+slid in, stayed drawn over Home, and its help band's Back, at the place of Home's Favourite, took the press (§7.2,
+`MenuCard`'s slide); the test now also waits for the card to leave the screen.
 
 **At rest under reduced motion.** Theme-check's audit logs of 03:04 and 07:32 on 2026-11-15 recorded Home swapping a frame
 while at rest under reduced motion; ten audit runs after did not show it, and its cause is not known: what would settle it
@@ -5570,7 +5572,9 @@ built on it too:
   the List card's rows after Left on Sort: the reset made new delegates under the walk (a seeded fault below).
 - `qt-app/qml/MenuCard.qml` draws it: the scrim, the panel at 40% with its shadow, the title row (an optional cover, the
   breadcrumb above the title), the rows as the kit's `MenuRow`s, the pane at 576,156, the 98-unit band with its help bar,
-  and the slide (Enter in, Exit out, nothing under reduced motion). Its words are its host's properties, its pane is
+  and the slide (Enter in, Exit out, nothing under reduced motion). Each way stops the other: a card closed while it
+  still slid in had its Exit finish first and its Enter carry on to the end, so it stayed drawn over Home, its help band
+  taking the pointer presses meant for Home's help line (found 2026-11-15 by Eclipse's pad test, Start then B). Its words are its host's properties, its pane is
   lines or a picture or the host's own items (its default property, for the Pause Card's reel and slots), and its
   signals are `chosen`, `stepped(index, by, held)`, `focused`, `backed`, `acted` and `gone`, each answered in one call.
   **The shadow falls over the help band** beside the panel, as Mistress's does (the tester's note on stage 1's Pause

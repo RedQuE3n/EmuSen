@@ -53,7 +53,16 @@ FocusScope {
     signal gone()
     Accessible.role: Accessible.Pane
     Accessible.name: root.title
-    onOpenChanged: root.open ? enter.restart() : exit.restart()
+    // Each way stops the other, so a card closed while it still slides in leaves (EmuSen_Qt.md §7.2).
+    onOpenChanged: {
+        if (root.open) {
+            exit.stop()
+            enter.restart()
+        } else {
+            enter.stop()
+            exit.restart()
+        }
+    }
     onCurrentChanged: list.currentIndex = root.current
     NumberAnimation {
         id: enter

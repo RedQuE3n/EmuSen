@@ -136,16 +136,11 @@ THE LOADED STEP
     was added on 2026-11-15: over a column of makers beside the chosen
     maker's grid, every row's Left ended on its maker and Down went to the
     next maker, so the rows heard 4 of 11 consoles that the pad reaches.
-    To stand on an element again, the sweep first checks that the focus
-    really landed there. Qt gives no focus to an item that is hidden, as a
-    maker's tiles are once another maker is chosen. When focusing it
-    directly does not take, the sweep goes back to the element it first
-    reached this one from and presses the same button again. Because the
-    second part starts where the rows ended, at the last maker, the
-    side-column fixture binds Up between its makers as well as Down. Qt's
-    written-back Up did not take there (Up from the last maker stayed put,
-    measured 2026-11-15), so without it the sweep heard 46 and then 28 of
-    120 consoles.
+    Because the second part starts where the rows ended, at the last
+    maker, the side-column fixture binds Up between its makers as well as
+    Down. Qt's written-back Up did not take there (Up from the last maker
+    stayed put, measured 2026-11-15), so without it the sweep heard 46 and
+    then 28 of 120 consoles.
     A console counts as
     reached when the name a reader hears for the focused element
     (Accessible.name, else the first words under it) is its name and the

@@ -350,7 +350,8 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
                 assert_eq!(said(&format!("consoleFactValue.{i}")), *value, "{size}: {}'s {label}", c.display_name);
             }
             if c.key == "psx" {
-                assert_eq!(c.screen, words::screen("Television"), "the PlayStation drove a television (Serenity's screens)");
+                // Serenity's screens name the PlayStation a television: the row says so in words, and the table draws them.
+                assert!(!c.screen.is_empty() && c.screen == words::screen("Television"), "the PlayStation's screen: {:?}", c.screen);
             }
             assert_eq!(shown(&tree, "consoleCoreMark").is_some(), !c.engine_name.is_empty(), "{size}: the core's planet beside its name");
             assert_eq!(said("consolePlace"), place, "{size}: the maker and the place");

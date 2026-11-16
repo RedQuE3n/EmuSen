@@ -519,16 +519,21 @@ ThemeScreen {
                         focus: true
                         keyNavigationWraps: false
                         highlightFollowsCurrentItem: false
-                        // The wheel scrolls the rows, one a notch; the arrows walk the tiles and bring the focused one back in.
-                        interactive: false
+                        // The wheel scrolls the rows, one a notch, and a drag moves them and settles on a whole row; the arrows walk the tiles.
                         keyNavigationEnabled: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        // The last row that can stand first, so the last rows fill the view.
+                        readonly property int lastFirst: Math.max(0, Math.ceil(cells.count / root.columns) - root.rowsShown)
                         WheelHandler {
                             onWheel: (event) => {
                                 // A notch is 120 eighths of a degree (QWheelEvent::angleDelta), at least one row.
                                 const notches = Math.max(1, Math.round(Math.abs(event.angleDelta.y) / 120))
-                                const last = Math.max(0, Math.ceil(cells.count / root.columns) - root.rowsShown)
-                                cells.firstRow = Math.max(0, Math.min(last, cells.firstRow + (event.angleDelta.y < 0 ? notches : -notches)))
+                                cells.firstRow = Math.max(0, Math.min(cells.lastFirst, cells.firstRow + (event.angleDelta.y < 0 ? notches : -notches)))
                             }
+                        }
+                        onMovementEnded: {
+                            cells.firstRow = Math.max(0, Math.min(cells.lastFirst, Math.round((cells.contentY - cells.originY + cells.topMargin) / cells.cellHeight)))
+                            cells.placeRows()
                         }
                         // Left from the first column reaches the buttons.
                         Keys.onLeftPressed: (event) => {
@@ -550,18 +555,19 @@ ThemeScreen {
                         readonly property int focusRow: Math.floor(Math.max(0, cells.currentIndex) / root.columns)
                         onFocusRowChanged: cells.firstRow = Math.max(0, Math.min(cells.firstRow, cells.focusRow), cells.focusRow - root.rowsShown + 1)
                         // Set when the rows change, not bound: the view's origin moves as it scrolls, which a binding on it would loop on.
-                        function showRows() { cells.contentY = cells.originY - cells.topMargin + cells.cellHeight * cells.firstRow }
-                        onFirstRowChanged: cells.showRows()
-                        onHeightChanged: cells.showRows()
-                        onWidthChanged: cells.showRows()
-                        onCountChanged: cells.showRows()
+                        signal placeRows()
+                        onPlaceRows: cells.contentY = cells.originY - cells.topMargin + cells.cellHeight * cells.firstRow
+                        onFirstRowChanged: cells.placeRows()
+                        onHeightChanged: cells.placeRows()
+                        onWidthChanged: cells.placeRows()
+                        onCountChanged: cells.placeRows()
                         model: Browse.games
                         delegate: Cell {
                             id: cell
                             readonly property bool lit: cell.GridView.isCurrentItem && cells.activeFocus
                             readonly property int row: Math.floor(cell.index / root.columns)
-                            // Only the rows shown are drawn: the list's margin for the ring would show a part of the next.
-                            visible: cell.row >= cells.firstRow && cell.row < cells.firstRow + root.rowsShown
+                            // Only the rows shown are drawn, but while a drag moves them: the list's margin for the ring would show a part of the next.
+                            visible: cells.moving || (cell.row >= cells.firstRow && cell.row < cells.firstRow + root.rowsShown)
                             controller: frame.controller
                             objectName: "gamesTile." + cell.index
                             Accessible.name: cell.title

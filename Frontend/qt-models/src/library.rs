@@ -100,6 +100,44 @@ pub trait LibrarySource: Send + Sync {
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
         Ok(Vec::new())
     }
+    /// How many saved states `game` has, slots and the automatic one, where Galaxia's save paths put them; a source with no
+    /// saves has none.
+    fn state_count(&self, _game: &GameFile) -> Result<usize, String> {
+        Ok(0)
+    }
+}
+
+/// The facts a games view draws beside its focused game (EmuSen_Qt.md §3.4.10), each empty or 0 where the program holds none.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GameFacts {
+    /// The game's file, whose facts these are.
+    pub path: String,
+    /// The scraper's genre, as it keeps it.
+    pub genre: String,
+    /// The scraper's players, in words: "1 to 2 players" (`words::players`).
+    pub players: String,
+    /// The scraper's description.
+    pub description: String,
+    /// Its time played, games.db's, in words: "3 h 20 min" (`words::time_played`); empty under a minute.
+    pub time_played: String,
+    /// How many saved states it has.
+    pub states: usize,
+}
+
+/// The facts of one game: its metadata by one scraper answer, its seconds played from the catalog as last read, and its
+/// states counted where they are saved. Run off the GUI thread.
+pub fn facts_of(source: &dyn LibrarySource, game: &GameFile, catalog: &Catalog) -> Result<GameFacts, String> {
+    let metadata = source.metadata(std::slice::from_ref(game))?.into_iter().next().map(|(_, m)| m).unwrap_or_default();
+    let field = |key: &str| metadata.get(key).cloned().unwrap_or_default();
+    let seconds = catalog.plays.iter().find(|(p, _)| *p == game.path).map_or(0, |(_, n)| n.seconds);
+    Ok(GameFacts {
+        path: game.path.clone(),
+        genre: field("genre"),
+        players: words::players(&field("players")),
+        description: field("description"),
+        time_played: words::time_played(seconds).unwrap_or_default(),
+        states: source.state_count(game)?,
+    })
 }
 
 /// An engine as a tile shows it: its name from its own info, and whether it is a hosted libretro core.

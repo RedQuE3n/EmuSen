@@ -148,3 +148,50 @@ fn a_refresh_reads_the_collections_and_the_last_games_cheats_and_play_time_is_ke
     assert_eq!(source.played_for(game, 30_000.0, 24).unwrap(), Some(30_000.0), "24 is no limit");
     assert_eq!(source.library.record(game).unwrap().unwrap().play_seconds, 30_090.0);
 }
+
+#[test]
+fn a_games_facts_are_its_scraped_genre_players_and_description_its_time_played_and_its_states() {
+    use emusen_platform_client::galaxia::consts::{SAVE_RESUME_STATE, SAVE_STATE};
+    use emusen_qt_models::library::{facts_of, refresh, GameFacts, LibrarySource};
+    let world = World::new("models-clients-facts");
+    let roms = world.dir("Roms");
+    let path = library().to_str().unwrap();
+    let platform = Platform::load(path).unwrap();
+    let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
+    settings["RomDirectory"] = serde_json::json!(roms.to_str().unwrap());
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    let mut image = b"NES\x1a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
+    image.resize(16 + 16384, 0);
+    for name in ["Facts.nes", "Bare.nes"] {
+        std::fs::write(world.dir("Roms/NES").join(name), &image).unwrap();
+    }
+    let none = Config { development: false, cores: Some(Vec::new()), player_cores: Some(Vec::new()) };
+    let source = ClientSource::open(path, &none).unwrap();
+    let read = refresh(&source).unwrap();
+    let game = |name: &str| read.catalog.games.iter().find(|g| g.path.ends_with(name)).unwrap().clone();
+    let (facts, bare) = (game("Facts.nes"), game("Bare.nes"));
+    assert_eq!(facts_of(&source, &bare, &read.catalog).unwrap(), GameFacts { path: bare.path.clone(), ..GameFacts::default() }, "a game with none has none");
+
+    // Its facts as edits in games.db, which the scraper's metadata reads first; 3 h 20 min played; two slots and the automatic state.
+    let changes = serde_json::json!({ "genre": "Action", "players": "1-2", "description": "Made for the test." });
+    source.library.change(&serde_json::json!({ "op": "save_edits", "path": facts.path, "changes": changes, "at": "2026-11-16T00:00:00Z" })).unwrap();
+    source.started(&facts.path).unwrap();
+    assert_eq!(source.played_for(&facts.path, 12_000.0, 24).unwrap(), Some(12_000.0));
+    for (kind, slot) in [(SAVE_STATE, 1), (SAVE_STATE, 4), (SAVE_RESUME_STATE, 0)] {
+        let file = platform.save_path(kind, &facts.path, None, slot).unwrap();
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, b"state").unwrap();
+    }
+    let read = refresh(&source).unwrap();
+    assert_eq!(read.catalog.plays.iter().find(|(p, _)| *p == facts.path).map(|(_, n)| (n.count, n.seconds)), Some((1, 12_000)), "games.db's real seconds read whole");
+    let want = GameFacts {
+        path: facts.path.clone(),
+        genre: "Action".into(),
+        players: "1 to 2 players".into(),
+        description: "Made for the test.".into(),
+        time_played: "3 h 20 min".into(),
+        states: 3,
+    };
+    assert_eq!(facts_of(&source, &facts, &read.catalog).unwrap(), want);
+    assert_eq!(source.state_count(&bare).unwrap(), 0);
+}

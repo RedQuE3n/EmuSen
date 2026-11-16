@@ -228,15 +228,34 @@ pub fn when_ago(at: i64, now: i64) -> String {
     }
 }
 
-/// A time played, as Eclipse's boards write it (Main.dc.html:56): "3 h 20 min played", "45 min played", "2 h played"; none
-/// for under a minute.
-pub fn played_for(seconds: i64) -> Option<String> {
+/// A time played as Eclipse's games board writes it (EclipseLibrary.dc.html:47): "3 h 20 min", "45 min", "2 h"; none for
+/// under a minute.
+pub fn time_played(seconds: i64) -> Option<String> {
     let minutes = seconds.max(0) / 60;
     match (minutes / 60, minutes % 60) {
         (0, 0) => None,
-        (0, m) => Some(format!("{m} min played")),
-        (h, 0) => Some(format!("{h} h played")),
-        (h, m) => Some(format!("{h} h {m} min played")),
+        (0, m) => Some(format!("{m} min")),
+        (h, 0) => Some(format!("{h} h")),
+        (h, m) => Some(format!("{h} h {m} min")),
+    }
+}
+
+/// A time played, as Eclipse's Home writes it (Main.dc.html:56): "3 h 20 min played", "45 min played", "2 h played"; none
+/// for under a minute.
+pub fn played_for(seconds: i64) -> Option<String> {
+    time_played(seconds).map(|t| format!("{t} played"))
+}
+
+/// The scraper's players ("1", "1-2", as ES-DE keeps them) as Eclipse's games board says them: "1 player", "1 to 2 players";
+/// any other text as it is, and none for none.
+pub fn players(scraped: &str) -> String {
+    let scraped = scraped.trim();
+    let number = |n: &str| n.trim().parse::<u32>().ok();
+    match scraped.split_once('-') {
+        Some((a, b)) if number(a).is_some() && number(b).is_some() => format!("{} to {} players", a.trim(), b.trim()),
+        None if number(scraped) == Some(1) => "1 player".to_owned(),
+        None if number(scraped).is_some() => format!("{scraped} players"),
+        _ => scraped.to_owned(),
     }
 }
 

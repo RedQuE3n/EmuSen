@@ -140,7 +140,7 @@ fn console_cells(shown: &[&LibraryRow]) -> Vec<Row> {
             vec![
                 text(&r.key),
                 text(&r.name),
-                text(if r.full_name.is_empty() { &r.name } else { &r.full_name }),
+                text(r.shown_name()),
                 text(&r.maker),
                 Cell::Whole(r.year),
                 Cell::Whole(r.count as i32),

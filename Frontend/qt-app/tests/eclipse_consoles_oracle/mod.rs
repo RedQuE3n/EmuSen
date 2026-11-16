@@ -711,7 +711,15 @@ fn chips_sort_and_options(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, mo
     scene.click(x, y);
     scene.wait(200);
     assert_eq!(said(scene, "sortWords"), words::CONSOLE_SORTS[2], "the entry pressed by the pointer steps it too");
-    assert_eq!(plate_names(scene), source_names(Show::All, Order::Name), "the plates by name");
+    // By the names read from the screen: each maker's plates in the alphabet's order of the names they show.
+    let drawn = plate_names(scene);
+    let maker = |name: &String| model.iter().find(|c| &c.display_name == name).map(|c| c.maker.clone()).expect("a console of the model");
+    for run in drawn.chunk_by(|a, b| maker(a) == maker(b)) {
+        let mut sorted = run.to_vec();
+        sorted.sort_by_key(|n| n.to_lowercase());
+        assert_eq!(run, sorted.as_slice(), "the plates by the names they show");
+    }
+    assert_eq!(drawn.len(), model.len(), "every console by name");
     for _ in 0..2 {
         let (x, y) = middle(scene, "sort");
         scene.click(x, y);

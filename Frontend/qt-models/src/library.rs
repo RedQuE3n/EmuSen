@@ -176,6 +176,13 @@ pub struct LibraryRow {
     pub fan: String,
 }
 
+impl LibraryRow {
+    /// The name a console's tile shows: its full name where it has one, else its short one (`Library.consoles`' displayName).
+    pub fn shown_name(&self) -> &str {
+        if self.full_name.is_empty() { &self.name } else { &self.full_name }
+    }
+}
+
 impl Keyed for LibraryRow {
     fn key(&self) -> &str {
         &self.key

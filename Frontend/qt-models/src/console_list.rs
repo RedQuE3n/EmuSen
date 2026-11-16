@@ -47,7 +47,8 @@ impl Order {
         match self {
             Order::Maker => Ordering::Equal,
             Order::Year => a.year.cmp(&b.year),
-            Order::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            // By the name the plates show.
+            Order::Name => a.shown_name().to_lowercase().cmp(&b.shown_name().to_lowercase()),
             Order::Games => b.count.cmp(&a.count),
         }
     }

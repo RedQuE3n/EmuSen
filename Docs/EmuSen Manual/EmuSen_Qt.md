@@ -1887,6 +1887,17 @@ a hue: the systems table's data gives one for 14 consoles, and `SystemDef::look`
 table: `Words.factLabels` (Games, Played, Core, Screen) at the left and, at the right, `Words.count` of its games and of
 those played, its core's name after its `PlanetMark`, and its `screen` (EmuSen.Theme 1.5), Serenity's screen kind for the
 console in words ("CRT, television", "LCD"). Open is the help bar's own A entry.
+The chips and Y (EclipseConsoles:42-51) are the listing `Library.consolesBy(show, order)` gives (EmuSen.Theme 1.5): the
+consoles a core runs, the runtime's shelves, with those holding no game among them (`library.rs`'s `cored`), filtered by the
+chip (All, With games, Favourites: those holding a favourite game) and ordered by maker, year, name or games, each maker's
+consoles kept together so the makers' column and LT RT stay as they are (`qt-models/src/console_list.rs`). A chip's count is
+its list's `count`; its words are `Words.consoleShows`, the order's `Words.consoleSorts`. The pressed chip and the order are
+the screen's own properties. A chip is pressed by A or the pointer, and Up from a plate's first row reaches the chips. Y is
+declared by the frame's help list with `options` (`help::options_named`): Y's action steps the order and X's opens the
+focused console's options, the Options pill pressed by A or the pointer does the same. Options is `Actions.consoleOptions`:
+the host asks Screens for `consoleOptions:<system>`, which shows Settings with that console's page open over the consoles'
+section (`SettingsModel.openConsole`), and B from Settings comes back to Choose a console. A plate with no game says "no
+games yet" after its year in the board's dimmer ink. A chip that holds nothing shows the program's empty words.
 The plates and the makers are each an interactive `Flickable`, so the wheel and a drag scroll them. Their `contentY`
 binding brings the focused plate and the chosen maker back into sight when the focus moves. No test holds the wheel yet:
 the real program's fixture shelves too few consoles for any grid to overflow.
@@ -1909,8 +1920,8 @@ sections, which are a piece of their own not built yet: until then LB and RB are
 help line draws no entry for them. This is open. The header
 is Eclipse's `Brand` and `Status`, the foot is its `HelpLine` with the place line at its right, the two colour fields are
 the kit's `Backdrop`, and Open is a filled `Pill` without its halo and glow. The fields take the focused console's
-`glow`, each at its board's blur and opacity (140 px at 0.5, 150 px at 0.35, board lines 19 and 20); the board's own two
-colours are sample colours and are not drawn. This is provisional, for the tester to judge from the pictures. Every word
+`glow` hue at their own board colour's saturation, lightness and opacity (`FieldInk`; 140 px at 0.5, 150 px at 0.35, board
+lines 19 and 20), as Home's fields take a game's art (R-20261115-28). Every word
 the screen's own file draws is at the board's size, with no raise to the legibility floor (decided 2026-11-15 by the
 tester, R-20261115-24, replacing R-20261115-14 and -22 for this screen); the shared parts' words are Home's piece.
 

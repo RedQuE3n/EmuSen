@@ -1,7 +1,8 @@
 //! What a theme sees of the library, as plain rows (EmuSen_Qt.md §3.2): each list's roles written once here and its rows
 //! curated from emusen-qt-models' view, a cell for each role in the role's order. No Qt.
 
-use emusen_qt_models::library::{self, GameRow, Kind, LibraryView};
+use emusen_qt_models::console_list::{self, Order, Show};
+use emusen_qt_models::library::{self, GameRow, Kind, LibraryRow, LibraryView};
 use emusen_qt_models::listing::{self, Listing};
 use emusen_qt_models::game_model::cover_url;
 use emusen_qt_models::words;
@@ -71,7 +72,7 @@ pub const GAME_ROLES: [&str; 19] = [
 /// `Library.collections`: the player's collections.
 pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
 /// `Help.entries`: the help bar's entries, as the kit's `HelpBar` reads them.
-pub const HELP_ROLES: [&str; 4] = ["button", "label", "pair", "enabled"];
+pub const HELP_ROLES: [&str; 5] = ["button", "label", "pair", "enabled", "action"];
 
 /// Home's destinations' keys, in Home's order: Games, the four tools as their summaries name them, Settings, Power.
 pub const PLACE_IDS: [&str; 7] =
@@ -121,7 +122,16 @@ pub fn glow_of(hue: f64) -> String {
 
 /// The consoles with games, each with the systems table's facts, the engine it runs now and its maker's group.
 pub fn consoles(view: &LibraryView) -> Vec<Row> {
-    let shown: Vec<_> = view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).collect();
+    console_cells(&view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).collect::<Vec<_>>())
+}
+
+/// The consoles a core runs that `show` holds, in `order`, each as `consoles` gives a console (Choose a console's chips and Y).
+pub fn consoles_listed(view: &LibraryView, show: Show, order: Order) -> Vec<Row> {
+    console_cells(&console_list::listed(&view.cored, show, order))
+}
+
+/// The consoles' rows with their makers' groups, in the order given.
+fn console_cells(shown: &[&LibraryRow]) -> Vec<Row> {
     let groups = maker_groups(&shown.iter().map(|r| r.maker.as_str()).collect::<Vec<_>>());
     shown
         .iter()

@@ -36,6 +36,9 @@ pub mod qobject {
         #[qproperty(QString, continue_entry, cxx_name = "continueEntry", READ, CONSTANT)]
         #[qproperty(QString, recent_entry, cxx_name = "recentEntry", READ, CONSTANT)]
         #[qproperty(QStringList, fact_labels, cxx_name = "factLabels", READ, CONSTANT)]
+        #[qproperty(QStringList, console_shows, cxx_name = "consoleShows", READ, CONSTANT)]
+        #[qproperty(QString, no_games_line, cxx_name = "noGamesLine", READ, CONSTANT)]
+        #[qproperty(QStringList, console_sorts, cxx_name = "consoleSorts", READ, CONSTANT)]
         /// The time the timed phrases are said against, in seconds since 1970; 0, the default, is the wall clock. The
         /// program sets it from its clock, which a test holds (decided 2026-11-09 by the tester); a theme only reads it.
         #[qproperty(f64, now, READ, NOTIFY)]
@@ -56,6 +59,9 @@ pub mod qobject {
         /// How many of a console's games were played: "61 played".
         #[qinvokable]
         fn played(self: &ThemeWords, count: i32) -> QString;
+        /// A battery's charge: "82%"; empty below 0, where the machine has none.
+        #[qinvokable]
+        fn percent(self: &ThemeWords, charge: i32) -> QString;
         /// Where an item stands among its list: "3 of 14", for the item at `index` from 0.
         #[qinvokable]
         fn place(self: &ThemeWords, index: i32, count: i32) -> QString;
@@ -124,6 +130,9 @@ pub struct ThemeWordsRust {
     continue_entry: QString,
     recent_entry: QString,
     fact_labels: cxx_qt_lib::QStringList,
+    console_shows: cxx_qt_lib::QStringList,
+    no_games_line: QString,
+    console_sorts: cxx_qt_lib::QStringList,
     now: f64,
 }
 
@@ -148,11 +157,10 @@ impl Default for ThemeWordsRust {
             places: QString::from(words::PLACES),
             continue_entry: QString::from(words::CONTINUE_ENTRY),
             recent_entry: QString::from(words::RECENT_ENTRY),
-            fact_labels: {
-                let mut labels = cxx_qt_lib::QList::<QString>::default();
-                words::FACT_LABELS.iter().for_each(|l| labels.append(QString::from(*l)));
-                cxx_qt_lib::QStringList::from(&labels)
-            },
+            fact_labels: string_list(&words::FACT_LABELS),
+            console_shows: string_list(&words::CONSOLE_SHOWS),
+            no_games_line: QString::from(words::NO_GAMES_LINE),
+            console_sorts: string_list(&words::CONSOLE_SORTS),
             now: 0.0,
         }
     }
@@ -187,6 +195,10 @@ impl qobject::ThemeWords {
 
     pub fn count(&self, count: i32) -> QString {
         said(words::grouped(count.max(0) as usize))
+    }
+
+    pub fn percent(&self, charge: i32) -> QString {
+        said(words::percent(charge))
     }
 
     pub fn played(&self, count: i32) -> QString {
@@ -244,4 +256,11 @@ impl qobject::ThemeWords {
     pub fn splash_caption(&self, consoles: i32) -> QString {
         said(words::splash_caption(consoles.max(0) as usize))
     }
+}
+
+/// Words as a QML list of strings.
+fn string_list(words: &[&str]) -> cxx_qt_lib::QStringList {
+    let mut list = cxx_qt_lib::QList::<QString>::default();
+    words.iter().for_each(|w| list.append(QString::from(*w)));
+    cxx_qt_lib::QStringList::from(&list)
 }

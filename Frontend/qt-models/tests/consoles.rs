@@ -404,6 +404,22 @@ fn qt_7_7_e_the_shoulders_step_the_consoles_an_engine_runs_and_reset_forgets_the
 }
 
 #[test]
+fn qt_3_4_9_a_console_s_options_open_settings_at_its_page_by_a_system_it_holds() {
+    let world = World::new();
+    let mut view = view(&world);
+    let running: Vec<(String, String)> =
+        view.read.consoles.consoles.iter().filter(|c| c.runs()).map(|c| (c.systems[0].clone(), c.name.clone())).collect();
+    let idle = view.read.consoles.consoles.iter().find(|c| !c.runs()).map(|c| c.systems[0].clone()).expect("a console no engine runs");
+    assert!(running.len() >= 2, "{running:?}");
+    for (system, name) in &running {
+        assert!(view.open_console(system), "{system}");
+        assert_eq!(view.trail(), ["Consoles", name.as_str()], "{system}'s page over the consoles' section");
+    }
+    assert!(!view.open_console(&idle) && !view.open_console("no such system"), "nothing opens for a console no engine runs");
+    assert_eq!(view.trail(), ["Consoles", running.last().unwrap().1.as_str()], "and nothing changed");
+}
+
+#[test]
 fn qt_7_7_e_the_pause_cards_memory_cards_are_the_same_description_slots_first() {
     let world = World::new();
     let read = consoles::read(&world).unwrap();

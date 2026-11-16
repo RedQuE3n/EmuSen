@@ -23,7 +23,8 @@ use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::tree::{colour, Tree};
 use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
 use emusen_qt_test::Scene;
-use emusen_theme_qt::view::{consoles, Cell, CONSOLE_ROLES};
+use emusen_qt_models::console_list::{Order, Show};
+use emusen_theme_qt::view::{consoles_listed, Cell, CONSOLE_ROLES};
 use serde_json::json;
 
 /// SDL's trigger axes (SDL_GAMEPAD_AXIS_LEFT_TRIGGER and _RIGHT_TRIGGER) and a full pull.
@@ -35,6 +36,7 @@ const PULLED: i16 = i16::MAX;
 #[derive(Clone, Debug)]
 struct Console {
     key: String,
+    name: String,
     display_name: String,
     maker: String,
     year: i32,
@@ -76,6 +78,10 @@ fn written(world: &World) -> Vec<String> {
     for (n, id) in CONSOLES.iter().enumerate() {
         let system = systems.iter().find(|s| s.id == *id).expect("a canvas console in the table");
         let ext = system.extensions.first().unwrap_or_else(|| panic!("{id} takes an extension"));
+        // The Nintendo 64, which a core runs, holds no game, so the All chip holds one With games does not.
+        if *id == "n64" {
+            continue;
+        }
         let mut image = vec![0u8; 4096];
         image[0x143] = if *id == "gbc" { 0x80 } else { 0 };
         for g in 0..=(n % 3) {
@@ -105,13 +111,17 @@ fn library_of(world: &World, cores: &std::path::Path) -> Vec<Console> {
     for (i, path) in played.iter().enumerate() {
         records.change(&json!({ "op": "started", "path": path, "at": words::utc(words::now() - 3600 * (i as i64 + 1)) })).unwrap();
     }
+    // One favourite, so the Favourites chip holds its console alone.
+    records.change(&json!({ "op": "toggle_favourite", "path": played[0] })).unwrap();
     let mut view = LibraryView::empty();
     view.apply(refresh(&source));
     assert!(view.problem.is_empty(), "{}", view.problem);
-    consoles(&view)
+    // Eclipse shows the All chip in maker order first: every console a core runs, each maker's together.
+    consoles_listed(&view, Show::All, Order::Maker)
         .iter()
         .map(|r| Console {
             key: text(r, "key"),
+            name: text(r, "name"),
             display_name: text(r, "displayName"),
             maker: text(r, "maker"),
             year: whole(r, "year"),
@@ -160,7 +170,13 @@ fn go_to(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, grid: &emusen_kit_c
     for _ in 0..64 {
         let now = focused(scene);
         let Some(f) = now.strip_prefix("plate.").and_then(|n| n.parse::<usize>().ok()) else {
-            press(scene, sdl, pad, if now == "consoleOpen" { PadControl::Left } else { PadControl::Right });
+            let control = match now.as_str() {
+                "consoleOpen" | "consoleOptions" => PadControl::Left,
+                "sort" => PadControl::Down,
+                n if n.starts_with("chip.") => PadControl::Down,
+                _ => PadControl::Right,
+            };
+            press(scene, sdl, pad, control);
             continue;
         };
         let (from, to) = (grid.items[f], grid.items[k]);
@@ -178,9 +194,10 @@ fn go_to(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, grid: &emusen_kit_c
     panic!("plate.{k} reached again; the focus is on {}", focused(scene));
 }
 
-/// The visible items of the tree by name.
+/// The visible item of the tree by name; of a Line (parts/Line.qml), whose words carry its name too, the words.
 fn shown<'a>(tree: &'a Tree, name: &str) -> Option<&'a emusen_qt_test::tree::Node> {
-    tree.nodes.iter().find(|n| n.name == name && n.visible)
+    let named = || tree.nodes.iter().filter(|n| n.name == name && n.visible);
+    named().find(|n| n.text.is_some()).or_else(|| named().next())
 }
 
 /// A box's edges: left, top, right, bottom.
@@ -199,7 +216,7 @@ fn says(c: &Console, groups: &[usize]) -> ([String; 3], [String; 4]) {
     (
         [
             c.display_name.clone(),
-            words::line(&[year.as_str(), words::games(c.count).as_str()]),
+            words::line(&[year.as_str(), if c.count > 0 { words::games(c.count) } else { words::NO_GAMES_LINE.to_owned() }.as_str()]),
             words::line(&[c.maker.as_str(), emusen_qt_models::game_page::place(c.group_index, groups[c.group]).as_str()]),
         ],
         [words::grouped(c.count), words::grouped(c.played), c.engine_name.clone(), c.screen.clone()],
@@ -275,7 +292,7 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
     let drawn: Vec<(String, String, f64, f64)> = tree
         .nodes
         .iter()
-        .filter(|n| n.name.starts_with("plateName."))
+        .filter(|n| n.name.starts_with("plateName.") && n.text.is_some())
         .map(|n| (n.name.clone(), n.text.clone().unwrap_or_default(), n.x, n.y))
         .collect();
     for (k, c) in model.iter().enumerate() {
@@ -304,11 +321,11 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
             let c = &model[k];
             let last_row = item.row + 1 >= grid.rows[c.group];
             // Where each press lands: the walk inside the grid; past its left edge the maker, past its right Open, down
-            // from the last row the next maker's first; up from the first row nowhere.
+            // from the last row the next maker's first; up from the first row the chip pressed, All.
             let want = [
                 (PadControl::Left, item.left.map_or(format!("maker.{}", c.group), |t| format!("plate.{t}"))),
                 (PadControl::Right, item.right.map_or("consoleOpen".to_owned(), |t| format!("plate.{t}"))),
-                (PadControl::Up, item.up.map_or(format!("plate.{k}"), |t| format!("plate.{t}"))),
+                (PadControl::Up, item.up.map_or("chip.0".to_owned(), |t| format!("plate.{t}"))),
                 (
                     PadControl::Down,
                     item.down.or(if last_row { firsts.get(c.group + 1).copied() } else { None }).map_or(format!("plate.{k}"), |t| format!("plate.{t}")),
@@ -413,6 +430,131 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
         scene.wait(50);
     }
     assert_eq!(focused(&mut scene), format!("plate.{k}"), "back on the console it opened");
+    chips_sort_and_options(&mut scene, &sdl, &pad, &model, &world, &cores);
     sdl.detach(pad);
     scene.assert_quiet();
+}
+
+/// The plates' names drawn, in order.
+fn plate_names(scene: &mut Scene<'_>) -> Vec<String> {
+    let tree = scene.tree();
+    let mut named: Vec<(usize, String)> = tree
+        .nodes
+        .iter()
+        .filter(|n| n.text.is_some())
+        .filter_map(|n| n.name.strip_prefix("plateName.").and_then(|k| k.parse().ok()).map(|k| (k, n.text.clone().unwrap_or_default())))
+        .collect();
+    named.sort();
+    named.dedup();
+    named.into_iter().map(|(_, t)| t).collect()
+}
+
+/// The middle of a shown element, where a pointer presses it.
+fn middle(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
+    let tree = scene.tree();
+    let n = tree.nodes.iter().find(|n| n.name == name && n.visible).unwrap_or_else(|| panic!("{name} shown"));
+    (n.x + n.w / 2.0, n.y + n.h / 2.0)
+}
+
+/// The chips, Y and X, each pressed by the pad and by the pointer: a chip shows its consoles with their count, Y and the
+/// order's entry step the order, X and the Options pill open Settings at the console's page, and B comes back.
+fn chips_sort_and_options(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, model: &[Console], world: &World, cores: &std::path::Path) {
+    let _ = world;
+    let source_names = |show: Show, order: Order| -> Vec<String> {
+        let source = emusen_qt_models::clients::source_for(&library().to_string_lossy(), cores.to_str().unwrap()).unwrap();
+        let mut view = LibraryView::empty();
+        view.apply(refresh(&source));
+        consoles_listed(&view, show, order).iter().map(|r| text(r, "displayName")).collect()
+    };
+    let all: Vec<String> = model.iter().map(|c| c.display_name.clone()).collect();
+    let with: Vec<String> = model.iter().filter(|c| c.count > 0).map(|c| c.display_name.clone()).collect();
+    let favourites = source_names(Show::Favourites, Order::Maker);
+    assert!(with.len() < all.len() && favourites.len() == 1, "the fixture: {all:?} {with:?} {favourites:?}");
+    let said = |scene: &mut Scene<'_>, name: &str| {
+        let tree = scene.tree();
+        shown(&tree, name).and_then(|n| n.text.clone()).unwrap_or_default()
+    };
+    for (i, n) in [all.len(), with.len(), favourites.len()].into_iter().enumerate() {
+        assert_eq!(said(scene, &format!("chipWords.{i}")), words::line(&[words::CONSOLE_SHOWS[i], &words::grouped(n)]), "chip {i}'s words and count");
+    }
+    assert_eq!(plate_names(scene), all, "All shows every console a core runs, the one with no game among them");
+
+    // By the pad: Up from a plate's first row to the chips, Right along them, A presses one.
+    for _ in 0..8 {
+        if focused(scene).starts_with("chip.") {
+            break;
+        }
+        press(scene, sdl, pad, PadControl::Up);
+    }
+    assert_eq!(focused(scene), "chip.0", "Up from the plates' first row reaches the pressed chip");
+    press(scene, sdl, pad, PadControl::Right);
+    assert_eq!(focused(scene), "chip.1");
+    press(scene, sdl, pad, PadControl::South);
+    scene.wait(200);
+    assert_eq!(plate_names(scene), with, "With games by the pad");
+    for _ in 0..8 {
+        if focused(scene) == "chip.1" {
+            break;
+        }
+        press(scene, sdl, pad, PadControl::Up);
+    }
+    press(scene, sdl, pad, PadControl::Right);
+    press(scene, sdl, pad, PadControl::South);
+    scene.wait(200);
+    assert_eq!(plate_names(scene), favourites, "Favourites by the pad");
+    // By the pointer: All again.
+    let (x, y) = middle(scene, "chip.0");
+    scene.click(x, y);
+    scene.wait(200);
+    assert_eq!(plate_names(scene), all, "All by the pointer");
+
+    // Y by the pad, then the entry by the pointer: the order steps, the entry says it, the plates follow it.
+    assert_eq!(said(scene, "sortWords"), words::CONSOLE_SORTS[0]);
+    for _ in 0..8 {
+        if focused(scene).starts_with("plate.") {
+            break;
+        }
+        press(scene, sdl, pad, PadControl::Down);
+    }
+    press(scene, sdl, pad, PadControl::North);
+    scene.wait(200);
+    assert_eq!(said(scene, "sortWords"), words::CONSOLE_SORTS[1], "Y steps to the next order");
+    assert_eq!(plate_names(scene), source_names(Show::All, Order::Year), "the plates by year");
+    let (x, y) = middle(scene, "sort");
+    scene.click(x, y);
+    scene.wait(200);
+    assert_eq!(said(scene, "sortWords"), words::CONSOLE_SORTS[2], "the entry pressed by the pointer steps it too");
+    assert_eq!(plate_names(scene), source_names(Show::All, Order::Name), "the plates by name");
+    for _ in 0..2 {
+        let (x, y) = middle(scene, "sort");
+        scene.click(x, y);
+        scene.wait(100);
+    }
+    assert_eq!(said(scene, "sortWords"), words::CONSOLE_SORTS[0], "round to the maker's order");
+
+    // X by the pad on a plate, then Options by the pointer: Settings at the console's page; B twice comes back.
+    for by_pad in [true, false] {
+        for _ in 0..8 {
+            if focused(scene).starts_with("plate.") {
+                break;
+            }
+            press(scene, sdl, pad, PadControl::Down);
+        }
+        let k: usize = focused(scene).strip_prefix("plate.").and_then(|k| k.parse().ok()).expect("a plate focused");
+        if by_pad {
+            press(scene, sdl, pad, PadControl::West);
+        } else {
+            let (x, y) = middle(scene, "consoleOptions");
+            scene.click(x, y);
+        }
+        wait_for(scene, "screens", "shown", "Settings", 2000);
+        assert_eq!(scene.property("screens", "settingsAt"), model[k].key, "Settings asked at {}'s page", model[k].display_name);
+        // The page's trail names the console as Settings lists it, the systems table's short name.
+        let tree = scene.tree();
+        let texts: Vec<&str> = tree.nodes.iter().filter(|n| n.visible).filter_map(|n| n.text.as_deref()).collect();
+        assert!(texts.contains(&model[k].name.as_str()), "{}'s page open over the consoles' section: {texts:?}", model[k].name);
+        press(scene, sdl, pad, PadControl::East);
+        press(scene, sdl, pad, PadControl::East);
+        wait_for(scene, "screens", "shown", "Consoles", 2000);
+    }
 }

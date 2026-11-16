@@ -74,7 +74,7 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
     let api: [(&str, &[&str], &[&str]); 12] = [
-        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead"], &["gamesOf", "search", "firstOf", "artHues"]),
+        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead"], &["gamesOf", "search", "firstOf", "artHues", "consolesBy"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
         ("Device", &["controllers", "family", "clock", "battery", "charging", "network", "bigScreen", "form"], &[]),
         (
@@ -86,6 +86,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "favourite",
                 "random",
                 "openConsole",
+                "consoleOptions",
                 "openPlace",
                 "home",
                 "back",
@@ -121,10 +122,13 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "continueEntry",
                 "recentEntry",
                 "factLabels",
+                "consoleShows",
+                "consoleSorts",
+                "noGamesLine",
                 "now",
                 "name",
             ],
-            &["games", "count", "line", "played", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint"],
+            &["games", "count", "line", "played", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "percent"],
         ),
         ("Help", &[], &["entries"]),
         (

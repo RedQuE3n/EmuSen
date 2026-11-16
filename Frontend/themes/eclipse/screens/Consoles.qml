@@ -4,7 +4,7 @@ import QtQuick.Shapes
 import EmuSen.Theme
 import "../parts"
 
-// Eclipse's Choose a console: the makers in a column, the chosen maker's consoles as plates laid out by the kit's GroupGridLayout, the focused console's disc, name and facts beside them (EmuSen_Qt.md §3.4.9).
+// Eclipse's Choose a console: the chips and the order at the top, the makers in a column, the chosen maker's consoles as plates laid out by the kit's GroupGridLayout, the focused console's disc, name and facts beside them (EmuSen_Qt.md §3.4.9).
 ThemeScreen {
     id: screen
     objectName: "consolesScreen"
@@ -20,7 +20,7 @@ ThemeScreen {
             objectName: "consoles"
             anchors.fill: parent
             focus: true
-            // A board pixel in canvas units (the table is eclipse_consoles.tsv).
+            // A board pixel in canvas units (the table is eclipse/consoles.tsv).
             readonly property real px: board.unit
             // The board's measures in its pixels, constants of the design itself.
             readonly property real margin: 96 * root.px
@@ -41,6 +41,11 @@ ThemeScreen {
             readonly property real asideX: root.width - root.margin - root.asideWidth
             readonly property real gridWidth: root.asideX - root.asideGap - root.gridX
             readonly property int columns: Math.max(1, Math.floor((root.gridWidth + root.plateGap) / (root.plateWidth + root.plateGap)))
+            // The chip pressed (Words.consoleShows' order) and the order in force (Words.consoleSorts'), the theme's own.
+            property int show: 0
+            property int order: 0
+            // The consoles the chip and the order give, each maker's together.
+            readonly property var listing: Library.consolesBy(root.show, root.order)
             // The chosen maker's group, the console the aside shows, and the plate last focused.
             property int chosenGroup: 0
             property Item shown: null
@@ -48,6 +53,19 @@ ThemeScreen {
             // The plate the screen opens on: the console last opened, else the first maker's first console; and the maker focused.
             property Item firstPlate: null
             property Item focusedMaker: null
+            // The help's actions for Y and X (Help.entries' `action`), read from the frame's own list.
+            property string sortAction
+            property string optionsAction
+            // The frame's declared action, by its key: Y the next order, X the console's options, any other the host's.
+            signal invoked(string key)
+            onInvoked: (key) => {
+                if (key === root.sortAction)
+                    root.order = (root.order + 1) % Words.consoleSorts.length
+                else if (key === root.optionsAction)
+                    Actions.consoleOptions(root.shown?.key ?? "")
+                else
+                    Actions.act(key)
+            }
             Board {
                 id: board
                 designHeight: canvas.designHeight
@@ -57,16 +75,26 @@ ThemeScreen {
             }
             GroupGridLayout {
                 id: layout
-                model: Library.consoles
+                model: root.listing
                 columns: root.columns
             }
             Connections {
-                target: Library.consoles
+                target: root.listing
                 function onModelReset() { layout.read() }
                 function onDataChanged() { layout.read() }
             }
-            // The two colour fields behind (board lines 19 and 20), each in the focused console's own colour at its board's blur and
-            // opacity: provisional, the tester's to judge (the board's sample colours are not typed in).
+            // The two colour fields behind (board lines 19 and 20): each the board's place, size, blur, saturation, lightness and
+            // opacity, the hue the focused console's (R-20261115-28).
+            FieldInk {
+                id: field0
+                board: "#5B3FD6"
+                hue: root.shown ? Qt.color(root.shown.glow).hslHue * 360 : NaN
+            }
+            FieldInk {
+                id: field1
+                board: "#C0486F"
+                hue: root.shown ? Qt.color(root.shown.glow).hslHue * 360 : NaN
+            }
             Backdrop {
                 objectName: "consolesBackdrop"
                 // Drawn behind everything, as a sky is, not beside it.
@@ -80,7 +108,7 @@ ThemeScreen {
                         y: 120 * root.px
                         width: 900 * root.px
                         height: 900 * root.px
-                        color: root.shown ? root.shown.glow : "transparent"
+                        color: root.shown ? field0.color : "transparent"
                         blur: 140 * root.px
                         opacity: 0.5
                     },
@@ -89,7 +117,7 @@ ThemeScreen {
                         y: 520 * root.px
                         width: 620 * root.px
                         height: 620 * root.px
-                        color: root.shown ? root.shown.glow : "transparent"
+                        color: root.shown ? field1.color : "transparent"
                         blur: 150 * root.px
                         opacity: 0.35
                     }
@@ -103,10 +131,32 @@ ThemeScreen {
                 padFamily: Device.family
                 focus: true
                 controller.navigationShown: false
+                // Declares the screen's buttons: Y the order and X the options, as the board gives them (EclipseConsoles:46-50, 94).
+                help: Help.entries(Help.Console, {group: true, triggers: true, options: true})
                 Connections {
                     target: frame.controller
                     function onBackDeclined() { Actions.back() }
-                    function onActionInvoked(key) { Actions.act(key) }
+                    function onActionInvoked(key) { root.invoked(key) }
+                }
+                Repeater {
+                    model: frame.help
+                    Item {
+                        id: declared
+                        required property int button
+                        required property string action
+                        Binding {
+                            when: declared.button === PadGlyph.Search
+                            target: root
+                            property: "sortAction"
+                            value: declared.action
+                        }
+                        Binding {
+                            when: declared.button === PadGlyph.Screensaver
+                            target: root
+                            property: "optionsAction"
+                            value: declared.action
+                        }
+                    }
                 }
                 Item {
                     x: -frame.safeX
@@ -114,7 +164,7 @@ ThemeScreen {
                     width: root.width
                     height: root.height
 
-                    // The header: the mark and the program's name, and the status at the right (board lines 22 to 40); the sections' place is left empty (R-20261115-7).
+                    // The header: the mark and the program's name, and the battery and the clock at the right (board lines 22 to 40); the sections' place is left empty (R-20261115-17).
                     Brand {
                         objectName: "consolesBrand"
                         unit: root.px
@@ -127,8 +177,104 @@ ThemeScreen {
                         controller: frame.controller
                         searchable: false
                         glass: false
+                        battery: true
+                        // No glass, so no inset: the clock ends at the margin (board line 35).
+                        pad: 0
                         x: root.width - root.margin - width
                         y: 80 * root.px - height / 2
+                    }
+
+                    // The chips: every console a core runs, those with games, those holding a favourite, each with its count (board lines 42 to 47).
+                    Row {
+                        id: chips
+                        objectName: "chips"
+                        x: root.margin
+                        y: 150 * root.px
+                        spacing: 14 * root.px
+                        Repeater {
+                            id: chipRow
+                            model: Words.consoleShows
+                            Walkable {
+                                id: chip
+                                required property int index
+                                required property string modelData
+                                readonly property bool pressed: chip.index === root.show
+                                // A button's box holds its line (CSS's border-box): the pressed chip has none (board lines 43 to 45).
+                                readonly property real line: chip.pressed ? 0 : 2 * root.px
+                                controller: frame.controller
+                                objectName: "chip." + chip.index
+                                Accessible.name: chipWords.text
+                                width: chipWords.width + 2 * (22 * root.px + chip.line)
+                                height: 48 * root.px
+                                // Along the row, Down to the plates; the pressed chip shows its consoles.
+                                KeyNavigation.left: chipRow.itemAt(chip.index - 1)
+                                KeyNavigation.right: chip.index + 1 < chipRow.count ? chipRow.itemAt(chip.index + 1) : sortEntry
+                                KeyNavigation.down: root.lastPlate ?? root.firstPlate
+                                onActivated: root.show = chip.index
+                                Rectangle {
+                                    objectName: "chipFill." + chip.index
+                                    anchors.fill: parent
+                                    radius: height / 2
+                                    color: chip.pressed ? Tokens.accent : "transparent"
+                                    border.width: chip.line
+                                    border.color: ink.chipLine
+                                }
+                                Line {
+                                    id: chipWords
+                                    objectName: "chipWords." + chip.index
+                                    unit: root.px
+                                    x: 22 * root.px + chip.line
+                                    y: (parent.height - height) / 2
+                                    text: Words.line([chip.modelData, Words.count(Library.consolesBy(chip.index, 0).count)])
+                                    color: chip.pressed ? Tokens.overAccent : ink.tileFacts
+                                    size: 21
+                                    weight: chip.pressed ? Font.DemiBold : Font.Normal
+                                }
+                                FocusRing {
+                                    anchors.fill: parent
+                                    radius: height / 2
+                                    visible: chip.activeFocus
+                                }
+                            }
+                        }
+                    }
+                    // The order in force at the right, Y its button: pressed, it steps to the next (board lines 48 to 51).
+                    Walkable {
+                        id: sortEntry
+                        objectName: "sort"
+                        controller: frame.controller
+                        Accessible.name: sortWords.text
+                        x: root.width - root.margin - width
+                        y: chips.y + (48 * root.px - height) / 2
+                        width: sortWords.x + sortWords.width
+                        height: sortGlyph.height
+                        KeyNavigation.left: chipRow.itemAt(chipRow.count - 1)
+                        KeyNavigation.down: root.lastPlate ?? root.firstPlate
+                        onActivated: root.invoked(root.sortAction)
+                        Glyph {
+                            id: sortGlyph
+                            objectName: "sortGlyph"
+                            unit: root.px
+                            button: PadGlyph.Search
+                            side: 34
+                            letterSize: 16
+                            ink: ink.help
+                        }
+                        Line {
+                            id: sortWords
+                            objectName: "sortWords"
+                            unit: root.px
+                            x: sortGlyph.width + 12 * root.px
+                            y: (parent.height - height) / 2
+                            text: Words.consoleSorts[root.order]
+                            color: ink.help
+                            size: 21
+                        }
+                        FocusRing {
+                            anchors.fill: parent
+                            radius: height / 2
+                            visible: sortEntry.activeFocus
+                        }
                     }
 
                     // The makers, one row each at its group's place, the chosen one filled (board lines 54 to 60).
@@ -146,7 +292,7 @@ ThemeScreen {
                         contentY: Math.max(0, Math.min(root.chosenGroup * root.makerPitch + root.makerHeight - height, contentHeight - height))
                         Repeater {
                             id: makers
-                            model: Library.consoles
+                            model: root.listing
                             Walkable {
                                 id: maker
                                 required property int index
@@ -172,11 +318,11 @@ ThemeScreen {
                                         root.chosenGroup = maker.group
                                 }
                                 // Right its first console, LT (the key Home) and RT (End) the makers' first consoles, Up and Down the
-                                // makers; a plate focused chooses its own maker.
+                                // makers, Up from the first the chips; a plate focused chooses its own maker.
                                 Keys.onPressed: (event) => {
                                     const at = [Qt.Key_Right, Qt.Key_Home, Qt.Key_End, Qt.Key_Up, Qt.Key_Down].indexOf(event.key)
                                     const to = at >= 0 && at < 3 ? [maker.first, maker.before, maker.after][at] : -1
-                                    const item = to >= 0 ? plates.itemAt(to) : (at === 3 ? makers.itemAt(maker.before) : (at === 4 ? makers.itemAt(maker.after) : null))
+                                    const item = to >= 0 ? plates.itemAt(to) : (at === 3 ? (makers.itemAt(maker.before) ?? chipRow.itemAt(root.show)) : (at === 4 ? makers.itemAt(maker.after) : null))
                                     event.accepted = item !== null
                                     item?.forceActiveFocus()
                                 }
@@ -187,27 +333,27 @@ ThemeScreen {
                                     radius: 14 * root.px
                                     color: maker.chosen ? Tokens.accent : "transparent"
                                 }
-                                Text {
+                                Line {
                                     objectName: "makerName." + maker.group
+                                    unit: root.px
                                     x: 18 * root.px
-                                    width: parent.width - 2 * x - makerCount.implicitWidth - 12 * root.px
-                                    height: parent.height
-                                    verticalAlignment: Text.AlignVCenter
+                                    y: (parent.height - height) / 2
+                                    width: parent.width - 2 * 18 * root.px - makerCount.width - 12 * root.px
                                     elide: Text.ElideRight
                                     text: maker.maker
                                     color: maker.chosen ? Tokens.overAccent : ink.help
-                                    font.pixelSize: 22 * root.px
-                                    font.weight: maker.chosen ? Font.DemiBold : Font.Normal
+                                    size: 22
+                                    weight: maker.chosen ? Font.DemiBold : Font.Normal
                                 }
-                                Text {
+                                Line {
                                     id: makerCount
                                     objectName: "makerCount." + maker.group
+                                    unit: root.px
                                     x: parent.width - 18 * root.px - width
-                                    height: parent.height
-                                    verticalAlignment: Text.AlignVCenter
+                                    y: (parent.height - height) / 2
                                     text: maker.groupSize
                                     color: maker.chosen ? Tokens.overAccent : ink.help
-                                    font.pixelSize: 18 * root.px
+                                    size: 18
                                 }
                             }
                         }
@@ -232,7 +378,7 @@ ThemeScreen {
                         contentY: root.lastPlate ? Math.max(0, Math.min(root.lastPlate.y + root.plateHeight - height, contentHeight - height)) : 0
                         Repeater {
                             id: plates
-                            model: Library.consoles
+                            model: root.listing
                             onItemAdded: (index, item) => root.firstPlate = item.opening ? item : root.firstPlate
                             Walkable {
                                 id: plate
@@ -273,15 +419,15 @@ ThemeScreen {
                                 y: (layout.rowOf[plate.index] ?? 0) * grid.pitch
                                 width: root.plateWidth
                                 height: root.plateHeight
-                                // Inside the grid by the layout's walk; past its left edge the maker, past its right Open.
-                                // The layout's walk, past the left edge the maker, past the right Open, Down from the last row the next
-                                // maker's first console; LT and RT the makers' first consoles (R-20261115-17); LB and RB are left to the
-                                // sections. No KeyNavigation, which writes back links of its own and skips a plate not shown (EmuSen_Qt.md §3.4.9).
+                                // The layout's walk, past the left edge the maker, past the right Open, up from the first row the chips,
+                                // Down from the last row the next maker's first console; LT and RT the makers' first consoles
+                                // (R-20261115-17); LB and RB are left to the sections. No KeyNavigation, which writes back links of its
+                                // own and skips a plate not shown (EmuSen_Qt.md §3.4.9).
                                 Keys.onPressed: (event) => {
                                     const at = [Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End].indexOf(event.key)
                                     const below = plate.downIndex >= 0 ? plate.downIndex : (plate.rowOf + 1 >= plate.rows ? plate.nextFirst : -1)
                                     const to = at >= 0 ? [plate.leftIndex, plate.rightIndex, plate.upIndex, below, plate.previousFirst, plate.nextFirst][at] : -1
-                                    const item = to >= 0 ? plates.itemAt(to) : (at === 0 ? makers.itemAt(layout.firsts[plate.group] ?? -1) : (at === 1 ? openButton : null))
+                                    const item = to >= 0 ? plates.itemAt(to) : [makers.itemAt(layout.firsts[plate.group] ?? -1), openButton, chipRow.itemAt(root.show), null, null, null][at] ?? null
                                     event.accepted = item !== null
                                     item?.forceActiveFocus()
                                 }
@@ -345,25 +491,28 @@ ThemeScreen {
                                     // At the plate's foot as the board stands it, never over the ring when a long name takes two lines.
                                     y: Math.max(shareRing.y + shareRing.height, parent.height - 20 * root.px - height)
                                     spacing: 6 * root.px
-                                    Text {
+                                    Line {
                                         objectName: "plateName." + plate.index
+                                        unit: root.px
                                         width: parent.width
                                         text: plate.displayName
                                         wrapMode: Text.WordWrap
                                         maximumLineCount: 2
                                         elide: Text.ElideRight
                                         color: Tokens.text
-                                        font.pixelSize: 21 * root.px
-                                        font.weight: Font.DemiBold
+                                        size: 21
+                                        weight: Font.DemiBold
                                         lineHeight: 1.15
                                     }
-                                    Text {
+                                    // "1990 · 214 games", or "1986 · no games yet" in the dimmer ink (board lines 128, 129).
+                                    Line {
                                         objectName: "plateLine." + plate.index
+                                        unit: root.px
                                         width: parent.width
                                         elide: Text.ElideRight
-                                        text: Words.line([plate.year > 0 ? String(plate.year) : "", Words.games(plate.count)])
-                                        color: Tokens.muted
-                                        font.pixelSize: 16 * root.px
+                                        text: Words.line([plate.year > 0 ? String(plate.year) : "", plate.count > 0 ? Words.games(plate.count) : Words.noGamesLine])
+                                        color: plate.count > 0 ? Tokens.muted : ink.emptyLine
+                                        size: 16
                                     }
                                 }
                             }
@@ -390,7 +539,7 @@ ThemeScreen {
                         radius: 18 * root.px
                     }
 
-                    // The focused console: its disc, its maker and year, its name, its facts with its core's mark, and Open (board lines 77 to 97).
+                    // The focused console: its disc, its maker and year, its name, its facts with its core's mark, Open and Options (board lines 77 to 97).
                     Item {
                         id: aside
                         objectName: "consoleAside"
@@ -412,32 +561,33 @@ ThemeScreen {
                             y: disc.height + (22 + 12) * root.px
                             width: parent.width
                             spacing: 8 * root.px
-                            Text {
+                            Line {
                                 id: eyebrow
                                 objectName: "consoleEyebrow"
+                                unit: root.px
                                 width: parent.width
                                 elide: Text.ElideRight
                                 text: root.shown ? Words.line([root.shown.maker, root.shown.year > 0 ? String(root.shown.year) : ""]) : ""
-                                // Its size read once, so the spacing does not read the font it sets (a binding loop).
-                                readonly property real size: 18 * root.px
                                 color: ink.rose
-                                font.pixelSize: eyebrow.size
-                                font.weight: Font.DemiBold
+                                size: 18
+                                weight: Font.DemiBold
                                 // The board's 0.2 em (line 80).
-                                font.letterSpacing: 0.2 * eyebrow.size
-                                font.capitalization: Font.AllUppercase
+                                spacing: 0.2 * 18
+                                capitalization: Font.AllUppercase
                             }
-                            Text {
+                            Line {
                                 objectName: "consoleName"
+                                unit: root.px
                                 width: parent.width
                                 wrapMode: Text.WordWrap
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
                                 text: root.shown ? root.shown.displayName : ""
                                 color: Tokens.text
-                                font.pixelSize: 46 * root.px
-                                font.weight: Font.DemiBold
-                                lineHeight: 1.08
+                                size: 46
+                                weight: Font.DemiBold
+                                lineHeightMode: Text.FixedHeight
+                                lineHeight: 1.08 * 46
                             }
                             // The aside's gap of 22 (board line 77) less the column's two spacings of 8 either side.
                             Item {
@@ -460,20 +610,22 @@ ThemeScreen {
                                         objectName: "consoleFact." + fact.index
                                         width: facts.width
                                         height: factLabel.height
-                                        Text {
+                                        Line {
                                             id: factLabel
                                             objectName: "consoleFactLabel." + fact.index
+                                            unit: root.px
                                             text: fact.modelData
                                             color: Tokens.muted
-                                            font.pixelSize: 21 * root.px
+                                            size: 21
                                         }
-                                        Text {
+                                        Line {
                                             id: factValue
                                             objectName: "consoleFactValue." + fact.index
+                                            unit: root.px
                                             x: parent.width - width
                                             text: fact.values[fact.index]
                                             color: Tokens.text
-                                            font.pixelSize: 21 * root.px
+                                            size: 21
                                         }
                                         // The core's planet before its name (board line 86).
                                         PlanetMark {
@@ -493,29 +645,55 @@ ThemeScreen {
                                 width: parent.width
                                 height: (22 + 8 - 2 * 8) * root.px
                             }
-                            // Open, the help bar's own A entry, as a pill (board line 90).
-                            Pill {
-                                id: openButton
-                                objectName: "consoleOpen"
-                                controller: frame.controller
-                                unit: root.px
-                                button: PadGlyph.Accept
-                                label: acceptWords.text
-                                filled: true
-                                tall: 64
-                                glyphSide: 42
-                                // This board's Open has no halo and no glow (board line 90).
-                                glows: false
-                                labelSize: 23
-                                lead: 12
-                                trail: 28
-                                gap: 12
-                                Keys.onLeftPressed: root.lastPlate?.forceActiveFocus()
-                                onActivated: Actions.openConsole(root.shown?.key ?? "")
+                            Row {
+                                spacing: 14 * root.px
+                                // Open, the help bar's own A entry, as a pill (board line 90).
+                                Pill {
+                                    id: openButton
+                                    objectName: "consoleOpen"
+                                    controller: frame.controller
+                                    unit: root.px
+                                    button: PadGlyph.Accept
+                                    label: acceptWords.text
+                                    filled: true
+                                    tall: 64
+                                    glyphSide: 42
+                                    leadLetterSize: 19
+                                    // This board's Open has no halo and no glow (board line 90).
+                                    glows: false
+                                    labelSize: 23
+                                    lead: 12
+                                    trail: 28
+                                    gap: 12
+                                    place: 0
+                                    Keys.onLeftPressed: root.lastPlate?.forceActiveFocus()
+                                    KeyNavigation.right: optionsButton
+                                    onActivated: Actions.openConsole(root.shown?.key ?? "")
+                                }
+                                // Options, X: Settings' page of the console (board line 93).
+                                Pill {
+                                    id: optionsButton
+                                    objectName: "consoleOptions"
+                                    controller: frame.controller
+                                    unit: root.px
+                                    button: PadGlyph.Screensaver
+                                    label: optionsWords.text
+                                    outline: ink.pillLine
+                                    tall: 64
+                                    glyphSide: 40
+                                    letterSize: 18
+                                    labelSize: 23
+                                    lead: 12
+                                    trail: 26
+                                    gap: 12
+                                    place: 1
+                                    KeyNavigation.left: openButton
+                                    onActivated: root.invoked(root.optionsAction)
+                                }
                             }
-                            // The A entry's words, read from the help bar's own list.
+                            // The A and X entries' words, read from the help's own lists.
                             Repeater {
-                                model: Help.entries(Help.Console)
+                                model: frame.help
                                 Item {
                                     id: entry
                                     required property int button
@@ -526,35 +704,48 @@ ThemeScreen {
                                         property: "text"
                                         value: entry.label
                                     }
+                                    Binding {
+                                        when: entry.button === PadGlyph.Screensaver
+                                        target: optionsWords
+                                        property: "text"
+                                        value: entry.label
+                                    }
                                 }
                             }
                             QtObject {
                                 id: acceptWords
                                 property string text
                             }
+                            QtObject {
+                                id: optionsWords
+                                property string text
+                            }
                         }
                     }
 
-                    // No console holds a game: the program's empty words.
+                    // No console is shown: the program's empty words (a chip that holds none, or no core at all).
                     Column {
                         objectName: "noConsoles"
-                        visible: Library.consoles.count === 0
+                        visible: root.listing.count === 0
                         y: 537 * root.px
                         width: root.width
                         spacing: 12 * root.px
-                        Text {
+                        Line {
+                            unit: root.px
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
-                            text: Words.noConsoles
+                            text: root.show === 0 ? Words.noConsoles : Words.noGames
                             color: Tokens.muted
-                            font.pixelSize: 22 * root.px
+                            size: 22
                         }
-                        Text {
+                        Line {
+                            unit: root.px
                             width: parent.width
+                            visible: root.show === 0
                             horizontalAlignment: Text.AlignHCenter
                             text: Words.addFolder
                             color: Tokens.muted
-                            font.pixelSize: 22 * root.px
+                            size: 22
                         }
                     }
                 }
@@ -564,17 +755,18 @@ ThemeScreen {
                 objectName: "consolesHelp"
                 unit: root.px
                 controller: frame.controller
-                // The board's A, B and LT RT Maker: Favourites and Random game, the screen's own actions, are not drawn (board lines 99 to 104).
+                // The board's A, B and LT RT Maker: the screen's own actions, Y and X, are drawn above, not in the bar (board lines 99 to 104).
                 model: Help.entries(Help.Console, {group: true, triggers: true, actions: false})
                 ink: ink.help
                 // This board's foot: its 34 px row 40 px over the bottom (board line 99).
                 middle: 1143
-                Text {
+                Line {
                     objectName: "consolePlace"
+                    unit: root.px
                     visible: root.shown !== null
                     text: root.shown ? Words.line([root.shown.maker, Words.place(root.shown.groupIndex, root.shown.groupSize)]) : ""
                     color: ink.help
-                    font.pixelSize: 21 * root.px
+                    size: 21
                 }
             }
         }

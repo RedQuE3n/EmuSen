@@ -14,6 +14,9 @@ Walkable {
     property real tall: 72
     // The glyph's side inside its ring, in board pixels.
     property real glyphSide: 44
+    // The glyph's letter, outlined and filled, in board pixels (Main:63, 66; EclipseConsoles:91, 94 draw 19 and 18).
+    property real letterSize: 20
+    property real leadLetterSize: 22
     property real labelSize: 24
     property real lead: 14
     property real trail: 30
@@ -77,8 +80,8 @@ Walkable {
         side: root.glyphSide
         lead: root.filled
         // The filled pill's glyph a disc in the ground's dark, its letter the pill's colour (Main:63); the others' letters 20 px in the pill's words' colour (Main:66).
-        letterSize: 20
-        leadLetterSize: 22
+        letterSize: root.letterSize
+        leadLetterSize: root.leadLetterSize
         leadWeight: Font.DemiBold
         ink: Tokens.text
         leadFill: Tokens.overAccent

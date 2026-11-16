@@ -338,6 +338,23 @@ pub fn card_named(list: Vec<Entry>) -> Vec<Entry> {
         .collect()
 }
 
+/// Choose a console's list as Eclipse's board gives its buttons (EclipseConsoles:46-50, 94): Y steps the order (`SORT`) and
+/// X opens the focused console's options (`CONSOLE_OPTIONS`), in place of Favourites and Random game.
+pub fn options_named(list: Vec<Entry>) -> Vec<Entry> {
+    list.into_iter()
+        .map(|(button, label, action)| match (button, action) {
+            (UiButton::Search, Some(crate::library::FAVOURITES)) => (button, crate::words::SORT, Some(SORT)),
+            (UiButton::Screensaver, Some(RANDOM)) => (button, crate::words::OPTIONS, Some(CONSOLE_OPTIONS)),
+            _ => (button, label, action),
+        })
+        .collect()
+}
+
+/// The frame's action lines of a list as it stands, with the screen's unnamed actions after.
+pub fn lines_of(screen: Screen, list: &[Entry]) -> String {
+    list.iter().chain(unnamed(screen)).filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
+}
+
 /// A screen's entries with the group's and B's added where the screen takes them, B before the group.
 pub fn entries_with(screen: Screen, group: bool, back: bool) -> Vec<Entry> {
     entries_grouped(screen, group.then_some(GROUP), back)
@@ -381,6 +398,10 @@ pub const DELETE: &str = "delete";
 /// X in a game's page's media viewer (EmuSen_Interface.md §18.2): the picture shown made the game's cover.
 pub const SET_COVER: &str = "setCover";
 pub const RANDOM: &str = "random";
+/// Y on Eclipse's Choose a console: the next order of the consoles, which the theme keeps.
+pub const SORT: &str = "sort";
+/// X on Eclipse's Choose a console: the focused console's options, Settings' page of it.
+pub const CONSOLE_OPTIONS: &str = "consoleOptions";
 
 /// The shoulders on the grid: the console before and the console after (Mistress's `StepSection`).
 pub const PREVIOUS: &str = "previous";
@@ -402,7 +423,7 @@ pub fn pair_of(button: UiButton) -> Option<UiButton> {
 
 /// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.19).
 pub fn action_lines(screen: Screen) -> String {
-    entries(screen).iter().chain(unnamed(screen)).filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
+    lines_of(screen, entries(screen))
 }
 
 /// A screen's actions its help bar does not name: Start on Choose a console goes Home, as Mistress's

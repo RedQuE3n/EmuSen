@@ -8,6 +8,7 @@ use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
+use emusen_qt_models::console_list::{ORDERS, SHOWS};
 use emusen_qt_models::library::{LibraryView, FAVOURITES, RECENT};
 use emusen_qt_models::words;
 use std::collections::HashMap;
@@ -52,6 +53,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "firstOf"]
         fn first_of(self: Pin<&mut ThemeLibrary>, id: &QString, count: i32) -> *mut ThemeRows;
+        /// The consoles a core runs that a chip shows (0 every one, 1 those with games, 2 those holding a favourite), in an
+        /// order (0 by maker, 1 by year, 2 by name, 3 by games), each maker's together; the same list each time it is asked.
+        #[qinvokable]
+        #[cxx_name = "consolesBy"]
+        fn consoles_by(self: Pin<&mut ThemeLibrary>, show: i32, order: i32) -> *mut ThemeRows;
 
         /// The hues of a game's art (its hero, else its cover), most prominent first, at most `most`, in degrees; none
         /// while they are read off the GUI thread (`artHuesRead` moves when they are) and for art with no colour or none.
@@ -77,6 +83,7 @@ pub struct ThemeLibraryRust {
     collections: *mut ThemeRows,
     games: HashMap<String, *mut ThemeRows>,
     firsts: HashMap<(String, usize), *mut ThemeRows>,
+    listed: HashMap<(usize, usize), *mut ThemeRows>,
     found: *mut ThemeRows,
     words: String,
     view: LibraryView,
@@ -102,6 +109,7 @@ impl Default for ThemeLibraryRust {
             collections: none,
             games: HashMap::new(),
             firsts: HashMap::new(),
+            listed: HashMap::new(),
             found: none,
             words: String::new(),
             view: LibraryView::empty(),
@@ -201,8 +209,11 @@ impl qobject::ThemeLibrary {
             fill(*list, view::first_of(view, id, *count, now));
         }
         fill(self.found, view::search(view, &self.words, now));
+        for ((show, order), list) in &self.listed {
+            fill(*list, view::consoles_listed(view, SHOWS[*show], ORDERS[*order]));
+        }
         // The own look reads the rows, the systems and the catalog alone; the lists' texts and the ES-DE state are not copied (EmuSen_Qt.md §4.15).
-        self.as_mut().rust_mut().view = LibraryView { rows: view.rows.clone(), systems: view.systems.clone(), catalog: view.catalog.clone(), ..LibraryView::default() };
+        self.as_mut().rust_mut().view = LibraryView { rows: view.rows.clone(), cored: view.cored.clone(), systems: view.systems.clone(), catalog: view.catalog.clone(), ..LibraryView::default() };
         self.as_mut().rust_mut().lines = lines;
         // The games' art may have changed with the view: a binding on `artHues` asks again.
         let read = self.art_hues_read.wrapping_add(1);
@@ -245,6 +256,17 @@ impl qobject::ThemeLibrary {
         let list = self.as_mut().made(&view::GAME_ROLES);
         fill(list, view::first_of(&self.view, &key.0, key.1, words::now()));
         self.as_mut().rust_mut().firsts.insert(key, list);
+        list
+    }
+
+    pub fn consoles_by(mut self: Pin<&mut Self>, show: i32, order: i32) -> *mut ThemeRows {
+        let key = (show.clamp(0, SHOWS.len() as i32 - 1) as usize, order.clamp(0, ORDERS.len() as i32 - 1) as usize);
+        if let Some(list) = self.listed.get(&key) {
+            return *list;
+        }
+        let list = self.as_mut().made(&view::CONSOLE_ROLES);
+        fill(list, view::consoles_listed(&self.view, SHOWS[key.0], ORDERS[key.1]));
+        self.as_mut().rust_mut().listed.insert(key, list);
         list
     }
 

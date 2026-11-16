@@ -11,6 +11,7 @@ use emusen_client_fixture::World;
 use emusen_kit_core::tokens::Variant;
 use emusen_qt_test::Harness;
 use emusen_theme_qt::actions::{Action, ActionSink};
+use emusen_theme_qt::help::Names;
 use emusen_theme_qt::bells::Striker;
 use emusen_theme_qt::cues::{Cue, CuePlayer};
 use emusen_theme_qt::device::DeviceFacts;
@@ -176,11 +177,15 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         // Safety: the help's lists are its children.
         let entries = unsafe { help.entries(kind).as_ref() }.expect("a list for every kind");
         assert!(!emusen_qt_models::help::entries(entries.screen()).is_empty(), "kind {} has entries", kind.repr);
-        for (group, back, accept, actions, card) in emusen_theme_qt::help::FLAGS {
-            let added = unsafe { help.list(kind, group, back, accept, actions, card).as_ref() }.expect("a list for every kind and flag");
+        for (group, back, accept, actions, names) in emusen_theme_qt::help::FLAGS {
+            let added = unsafe { help.list(kind, group, back, accept, actions, names).as_ref() }.expect("a list for every kind and flag");
             let grouped = emusen_qt_models::help::entries_grouped(entries.screen(), group, back);
             let want = if actions { grouped } else { emusen_qt_models::help::without_actions(grouped) };
-            let want = if card { emusen_qt_models::help::card_named(want) } else { want };
+            let want = match names {
+                Names::Own => want,
+                Names::Card => emusen_qt_models::help::card_named(want),
+                Names::Options => emusen_qt_models::help::options_named(want),
+            };
             assert_eq!(added.list(), want, "kind {}", kind.repr);
             assert_eq!(added.accepts(), accept, "kind {}", kind.repr);
         }

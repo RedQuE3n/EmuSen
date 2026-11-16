@@ -34,6 +34,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openConsole"]
         fn open_console(self: Pin<&mut ThemeActions>, id: &QString) -> bool;
+        /// A console's options: Settings opened at the console's page.
+        #[qinvokable]
+        #[cxx_name = "consoleOptions"]
+        fn console_options(self: Pin<&mut ThemeActions>, id: &QString) -> bool;
         /// Opens a place of `places` or `shelves` by its id, of any kind.
         #[qinvokable]
         #[cxx_name = "openPlace"]
@@ -73,6 +77,7 @@ pub enum Action {
     Favourite(String),
     Random(String),
     OpenConsole(String),
+    ConsoleOptions(String),
     OpenPlace(String),
     Home,
     Back,
@@ -126,6 +131,10 @@ impl qobject::ThemeActions {
 
     pub fn open_console(self: Pin<&mut Self>, id: &QString) -> bool {
         self.take(Action::OpenConsole(id.to_string()))
+    }
+
+    pub fn console_options(self: Pin<&mut Self>, id: &QString) -> bool {
+        self.take(Action::ConsoleOptions(id.to_string()))
     }
 
     pub fn open_place(self: Pin<&mut Self>, id: &QString) -> bool {

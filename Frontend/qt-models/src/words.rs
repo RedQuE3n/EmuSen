@@ -52,6 +52,12 @@ pub const BETWEEN: &str = "·";
 pub const SEARCH: &str = "Search";
 /// The labels of a console's facts, a row each, in their order: its games, those played, its core and its screen.
 pub const FACT_LABELS: [&str; 4] = ["Games", "Played", "Core", "Screen"];
+/// Which consoles Choose a console shows, as its chips name them (EclipseConsoles:43-45): every console a core runs, those
+/// holding games, those holding a favourite; `console_list::Show`'s order.
+pub const CONSOLE_SHOWS: [&str; 3] = ["All", "With games", "Favourites"];
+/// The orders Choose a console steps through with Y, as its entry says the one in force (EclipseConsoles:49);
+/// `console_list::Order`'s order.
+pub const CONSOLE_SORTS: [&str; 4] = ["Sorted by maker", "Sorted by year", "Sorted by name", "Sorted by games"];
 
 /// The program's name and version, as the Home card's Power page says it under its rows (Mistress's `BigMenuFooter`).
 pub fn version_line() -> String {
@@ -130,6 +136,18 @@ pub fn screen(kind: &str) -> &'static str {
 }
 
 /// How many of a console's games were played, in the form the facts give a count: "61 played".
+/// A battery's charge as the status says it: "82%"; none below 0, where the machine has no battery.
+pub fn percent(n: i32) -> String {
+    if n < 0 {
+        String::new()
+    } else {
+        format!("{n}%")
+    }
+}
+
+/// A console plate's line where it holds no game, after its year: "1986 · no games yet" (EclipseConsoles:129).
+pub const NO_GAMES_LINE: &str = "no games yet";
+
 pub fn played(n: usize) -> String {
     format!("{} played", grouped(n))
 }
@@ -231,6 +249,9 @@ pub fn continue_line(console: &str) -> String {
 pub fn resume_point(time: &str) -> String {
     format!("{RESUME_POINT} {BETWEEN} saved {time}")
 }
+
+/// Y on Eclipse's Choose a console, the next order (EclipseConsoles:46-50).
+pub const SORT: &str = "Sort";
 
 /// X on a game, the game's page, as Eclipse's Home names it (Main.dc.html:66, 95).
 pub const OPTIONS: &str = "Options";

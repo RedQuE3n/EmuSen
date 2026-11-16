@@ -47,39 +47,45 @@ Module {
             Parameter { name: "id"; type: "QString" }
         }
         Method {
-            name: "openPlace"
+            name: "consoleOptions"
             type: "bool"
             lineNumber: 30
             Parameter { name: "id"; type: "QString" }
         }
-        Method { name: "home"; type: "bool"; lineNumber: 31 }
-        Method { name: "back"; type: "bool"; lineNumber: 32 }
+        Method {
+            name: "openPlace"
+            type: "bool"
+            lineNumber: 31
+            Parameter { name: "id"; type: "QString" }
+        }
+        Method { name: "home"; type: "bool"; lineNumber: 32 }
+        Method { name: "back"; type: "bool"; lineNumber: 33 }
         Method {
             name: "stepSection"
             type: "bool"
-            lineNumber: 33
+            lineNumber: 34
             Parameter { name: "by"; type: "int" }
         }
-        Method { name: "openHomeCard"; type: "bool"; lineNumber: 34 }
-        Method { name: "openListCard"; type: "bool"; lineNumber: 35 }
-        Method { name: "search"; type: "bool"; lineNumber: 36 }
+        Method { name: "openHomeCard"; type: "bool"; lineNumber: 35 }
+        Method { name: "openListCard"; type: "bool"; lineNumber: 36 }
+        Method { name: "search"; type: "bool"; lineNumber: 37 }
         Method {
             name: "act"
             type: "bool"
-            lineNumber: 37
+            lineNumber: 38
             Parameter { name: "key"; type: "QString" }
         }
         Method {
             name: "focus"
             type: "bool"
-            lineNumber: 38
+            lineNumber: 39
             Parameter { name: "game"; type: "QString" }
         }
         Method {
             name: "enabled"
             type: "bool"
             isMethodConstant: true
-            lineNumber: 39
+            lineNumber: 40
             Parameter { name: "key"; type: "QString" }
         }
     }
@@ -551,9 +557,17 @@ Module {
             Parameter { name: "count"; type: "int" }
         }
         Method {
+            name: "consolesBy"
+            type: "ThemeRows"
+            isPointer: true
+            lineNumber: 54
+            Parameter { name: "show"; type: "int" }
+            Parameter { name: "order"; type: "int" }
+        }
+        Method {
             name: "artHues"
             type: "QList_f64"
-            lineNumber: 54
+            lineNumber: 55
             Parameter { name: "key"; type: "QString" }
             Parameter { name: "most"; type: "int" }
         }
@@ -946,57 +960,91 @@ Module {
             isPropertyConstant: true
         }
         Property {
+            name: "consoleShows"
+            type: "QStringList"
+            read: "getConsoleShows"
+            index: 18
+            lineNumber: 47
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "noGamesLine"
+            type: "QString"
+            read: "getNoGamesLine"
+            index: 19
+            lineNumber: 48
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "consoleSorts"
+            type: "QStringList"
+            read: "getConsoleSorts"
+            index: 20
+            lineNumber: 49
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
             name: "now"
             type: "double"
             read: "getNow"
             notify: "nowChanged"
-            index: 18
-            lineNumber: 47
+            index: 21
+            lineNumber: 50
             isReadonly: true
         }
         Property {
             name: "name"
             type: "QString"
             read: "getName"
-            index: 19
-            lineNumber: 48
+            index: 22
+            lineNumber: 51
             isReadonly: true
             isPropertyConstant: true
         }
-        Signal { name: "nowChanged"; lineNumber: 73 }
+        Signal { name: "nowChanged"; lineNumber: 79 }
         Method {
             name: "games"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 74
+            lineNumber: 80
             Parameter { name: "count"; type: "int" }
         }
         Method {
             name: "count"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 75
+            lineNumber: 81
             Parameter { name: "count"; type: "int" }
         }
         Method {
             name: "line"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 76
+            lineNumber: 82
             Parameter { name: "parts"; type: "QStringList" }
         }
         Method {
             name: "played"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 77
+            lineNumber: 83
             Parameter { name: "count"; type: "int" }
+        }
+        Method {
+            name: "percent"
+            type: "QString"
+            isMethodConstant: true
+            lineNumber: 84
+            Parameter { name: "charge"; type: "int" }
         }
         Method {
             name: "place"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 78
+            lineNumber: 85
             Parameter { name: "index"; type: "int" }
             Parameter { name: "count"; type: "int" }
         }
@@ -1004,14 +1052,14 @@ Module {
             name: "ago"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 79
+            lineNumber: 86
             Parameter { name: "at"; type: "double" }
         }
         Method {
             name: "pausedFacts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 80
+            lineNumber: 87
             Parameter { name: "console"; type: "QString" }
             Parameter { name: "paused_since"; type: "double" }
         }
@@ -1019,7 +1067,7 @@ Module {
             name: "facts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 81
+            lineNumber: 88
             Parameter { name: "maker"; type: "QString" }
             Parameter { name: "year"; type: "int" }
             Parameter { name: "count"; type: "int" }
@@ -1029,7 +1077,7 @@ Module {
             name: "runsOn"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 82
+            lineNumber: 89
             Parameter { name: "engine_name"; type: "QString" }
             Parameter { name: "engine_kind"; type: "QString" }
         }
@@ -1037,7 +1085,7 @@ Module {
             name: "statusLine"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 83
+            lineNumber: 90
             Parameter { name: "controllers"; type: "int" }
             Parameter { name: "clock"; type: "QString" }
         }
@@ -1045,14 +1093,14 @@ Module {
             name: "splashCaption"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 84
+            lineNumber: 91
             Parameter { name: "consoles"; type: "int" }
         }
         Method {
             name: "summary"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 85
+            lineNumber: 92
             Parameter { name: "consoles"; type: "int" }
             Parameter { name: "games"; type: "int" }
         }
@@ -1060,14 +1108,14 @@ Module {
             name: "pausedAgo"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 86
+            lineNumber: 93
             Parameter { name: "paused_since"; type: "double" }
         }
         Method {
             name: "playedFacts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 87
+            lineNumber: 94
             Parameter { name: "at"; type: "double" }
             Parameter { name: "seconds"; type: "double" }
         }
@@ -1075,14 +1123,14 @@ Module {
             name: "continueLine"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 88
+            lineNumber: 95
             Parameter { name: "console"; type: "QString" }
         }
         Method {
             name: "resumePoint"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 89
+            lineNumber: 96
             Parameter { name: "paused_since"; type: "double" }
         }
     }

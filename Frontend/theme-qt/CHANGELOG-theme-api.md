@@ -27,6 +27,13 @@ Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played
 - **`Help.entries(kind, {actions: false})`** (added flag): the entries that carry the screen's own actions (Choose a
   console's Favourites and Random game) left out (`help::without_actions`), for a board that draws neither in its bar
   (EclipseConsoles:99-104); Open, Back and the group's entry stay.
+- **`Library.consolesBy(show, order)`** (added): the consoles a core runs, those with no game among them, as Choose a
+  console's chips show them (0 All, 1 With games, 2 Favourites) in an order (0 maker, 1 year, 2 name, 3 games), each
+  maker's together (`console_list.rs`); **`Words.consoleShows`**, **`Words.consoleSorts`** ("Sorted by maker"),
+  **`Words.noGamesLine`** ("no games yet") and **`Words.percent(charge)`** ("82%") (added).
+- **`Help.entries(kind, {options: true})`** (added flag): Choose a console's Y named Sort and X Options, their actions
+  `sort` and `consoleOptions`, the list's action lines its own; the entries' new **`action`** role names each entry's
+  action. **`Actions.consoleOptions(key)`** (added): Settings opened at the console's page.
 - **`GroupGridLayout`** (the kit's, by name; 1.5 in the qmldir): groups as a column and the chosen group's items as a
   grid, with the walk inside it (`EmuSen_Kit.md` §7.120), so a theme lays such a screen out without logic of its own.
 - The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.

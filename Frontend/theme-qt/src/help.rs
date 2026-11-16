@@ -3,7 +3,8 @@
 //! `entries(kind, {group, back, accept, triggers, actions, card})` the same with the shoulders' Group (the triggers' Maker
 //! with `triggers`) and B's Back added where the kind takes them, and A's entry marked not `enabled` when `accept` is false;
 //! with `actions` false, the entries carrying the screen's own actions are left out (`help::without_actions`); `card` names
-//! X and Start as Eclipse's Home does and leaves Select's search out of the bar (its action stays the frame's).
+//! X and Start as Eclipse's Home does and leaves Select's search out of the bar (its action stays the frame's); `options`
+//! gives Y and X Eclipse's Choose a console's Sort and Options, its action lines the list's own (`help::options_named`).
 
 use crate::glue::ffi;
 use crate::view::HELP_ROLES;
@@ -111,37 +112,47 @@ pub fn screen_of(kind: HelpKind) -> Screen {
 }
 
 /// What a list may differ by: the group's entry added (LB RB Group, or LT RT Maker), B's added, A's entry enabled, the
-/// screen's own actions kept, and the entries named as Eclipse's Home names them (`card`); a list's place in a kind's 48.
-pub const FLAGS: [(Option<Entry>, bool, bool, bool, bool); 48] = {
+/// screen's own actions kept, and the entries named as a board names them (`Names`); a list's place in a kind's 72.
+pub const FLAGS: [(Option<Entry>, bool, bool, bool, Names); 72] = {
     const G: [Option<Entry>; 3] = [None, Some(help::GROUP), Some(help::MAKER)];
-    let mut flags = [(None, false, true, true, false); 48];
+    const N: [Names; 3] = [Names::Own, Names::Card, Names::Options];
+    let mut flags = [(None, false, true, true, Names::Own); 72];
     let mut f = 0;
-    while f < 48 {
-        flags[f] = (G[f % 3], (f / 3) % 2 == 1, (f / 6) % 2 == 0, (f / 12) % 2 == 0, f >= 24);
+    while f < 72 {
+        flags[f] = (G[f % 3], (f / 3) % 2 == 1, (f / 6) % 2 == 0, (f / 12) % 2 == 0, N[f / 24]);
         f += 1;
     }
     flags
 };
 
-/// Forty-eight lists for each kind, one for each of `FLAGS`, the singleton's children.
+/// How a list's entries are named: the screen's own words, as Eclipse's Home names them, or with Eclipse's Choose a
+/// console's Sort and Options.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Names {
+    Own,
+    Card,
+    Options,
+}
+
+/// Seventy-two lists for each kind, one for each of `FLAGS`, the singleton's children.
 pub struct ThemeHelpRust {
-    lists: [[*mut qobject::ThemeHelpEntries; 48]; 7],
+    lists: [[*mut qobject::ThemeHelpEntries; 72]; 7],
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [[std::ptr::null_mut(); 48]; 7] }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 72]; 7] }
     }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeHelp {
     fn initialize(mut self: Pin<&mut Self>) {
         for (i, kind) in KINDS.into_iter().enumerate() {
-            for (f, (group, back, accept, actions, card)) in FLAGS.into_iter().enumerate() {
+            for (f, (group, back, accept, actions, names)) in FLAGS.into_iter().enumerate() {
                 let list = ffi::new_help_entries(self.as_mut().upcast_pin());
                 // Safety: the list was just made, a child of this singleton.
                 if let Some(entries) = unsafe { list.as_mut() } {
-                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept, actions, card);
+                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept, actions, names);
                 }
                 self.as_mut().rust_mut().lists[i][f] = list;
             }
@@ -151,18 +162,25 @@ impl cxx_qt::Initialize for qobject::ThemeHelp {
 
 impl qobject::ThemeHelp {
     pub fn entries(&self, kind: HelpKind) -> *mut qobject::ThemeHelpEntries {
-        self.list(kind, None, false, true, true, false)
+        self.list(kind, None, false, true, true, Names::Own)
     }
 
     pub fn entries_with(&self, kind: HelpKind, flags: &QMap<QMapPair_QString_QVariant>) -> *mut qobject::ThemeHelpEntries {
         let flag = |name: &str, unset: bool| flags.get(&QString::from(name)).and_then(|v| v.value::<bool>()).unwrap_or(unset);
         let group = flag("group", false).then_some(if flag("triggers", false) { help::MAKER } else { help::GROUP });
-        self.list(kind, group, flag("back", false), flag("accept", true), flag("actions", true), flag("card", false))
+        let names = if flag("card", false) {
+            Names::Card
+        } else if flag("options", false) {
+            Names::Options
+        } else {
+            Names::Own
+        };
+        self.list(kind, group, flag("back", false), flag("accept", true), flag("actions", true), names)
     }
 
     /// A kind's list with the entries asked for added.
-    pub fn list(&self, kind: HelpKind, group: Option<Entry>, back: bool, accept: bool, actions: bool, card: bool) -> *mut qobject::ThemeHelpEntries {
-        let f = FLAGS.iter().position(|x| *x == (group, back, accept, actions, card)).unwrap_or(0);
+    pub fn list(&self, kind: HelpKind, group: Option<Entry>, back: bool, accept: bool, actions: bool, names: Names) -> *mut qobject::ThemeHelpEntries {
+        let f = FLAGS.iter().position(|x| *x == (group, back, accept, actions, names)).unwrap_or(0);
         KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.lists[i][f])
     }
 }
@@ -188,13 +206,22 @@ impl Default for ThemeHelpEntriesRust {
 
 impl qobject::ThemeHelpEntries {
     /// The screen whose entries the list holds, with the added entries asked for, set once when it is made.
-    fn show(mut self: Pin<&mut Self>, screen: Screen, group: Option<Entry>, back: bool, accept: bool, actions: bool, card: bool) {
+    fn show(mut self: Pin<&mut Self>, screen: Screen, group: Option<Entry>, back: bool, accept: bool, actions: bool, names: Names) {
         self.as_mut().rust_mut().screen = screen;
         self.as_mut().rust_mut().accept = accept;
         let list = entries_grouped(screen, group, back);
         let list = if actions { list } else { help::without_actions(list) };
-        self.as_mut().rust_mut().list = if card { help::card_named(list) } else { list };
-        self.as_mut().rust_mut().action_lines = QString::from(action_lines(screen).as_str());
+        let (list, lines) = match names {
+            Names::Own => (list, action_lines(screen)),
+            Names::Card => (help::card_named(list), action_lines(screen)),
+            Names::Options => {
+                let named = help::options_named(list);
+                let lines = help::lines_of(screen, &named);
+                (named, lines)
+            }
+        };
+        self.as_mut().rust_mut().list = list;
+        self.as_mut().rust_mut().action_lines = QString::from(lines.as_str());
     }
 
     /// The help bar's screen, for the host's tests.
@@ -213,7 +240,7 @@ impl qobject::ThemeHelpEntries {
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some((button, label, _)) = self.list.get(index.row() as usize) else {
+        let Some((button, label, action)) = self.list.get(index.row() as usize) else {
             return QVariant::default();
         };
         match role {
@@ -221,6 +248,7 @@ impl qobject::ThemeHelpEntries {
             1 => QVariant::from(&QString::from(*label)),
             2 => QVariant::from(&help::pair_of(*button).map_or(-1, |b| b.index() as i32)),
             3 => QVariant::from(&(self.accept || *button != UiButton::Accept)),
+            4 => QVariant::from(&QString::from(action.unwrap_or_default())),
             _ => QVariant::default(),
         }
     }

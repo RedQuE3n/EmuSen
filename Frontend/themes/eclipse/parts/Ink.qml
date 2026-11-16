@@ -22,6 +22,10 @@ QtObject {
     readonly property color resumeRim: "#80F6E7D8"
     // An outlined pill's line (Main:65, 68).
     readonly property color pillLine: "#5A6076"
+    // A chip's line, unpressed (EclipseConsoles:44, 45).
+    readonly property color chipLine: "#4A5068"
+    // A console plate's line where it holds no game (EclipseConsoles:129).
+    readonly property color emptyLine: "#8E94AB"
     // A tile's title and its facts (Main:85, 86).
     readonly property color tileTitle: "#FFFFFF"
     readonly property color tileFacts: "#E3E6F0"

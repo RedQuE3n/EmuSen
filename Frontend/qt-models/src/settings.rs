@@ -1424,6 +1424,22 @@ impl SettingsView {
         None
     }
 
+    /// The section of the consoles, with the page of the console that holds the system `system` open over it, as A on its
+    /// row opens it; false, and nothing changed, for a console no engine runs or none the section lists.
+    pub fn open_console(&mut self, system: &str) -> bool {
+        let Some(row) = self.running_row(system) else { return false };
+        let c = &self.read.consoles.consoles[row];
+        let page = (Page::Console(c.console.clone()), c.name.clone(), row);
+        self.choose_section(self.section_of("consoles"));
+        self.pages = vec![page];
+        true
+    }
+
+    /// The consoles' row of the console that holds the system `system`, where an engine runs it.
+    pub fn running_row(&self, system: &str) -> Option<usize> {
+        self.read.consoles.consoles.iter().position(|c| c.runs() && c.systems.iter().any(|s| s == system))
+    }
+
     /// LB or RB on a console's page: the console before or after it among those an engine runs, its page in place of
     /// this one; elsewhere nothing, the shoulders being the strip's.
     pub fn shoulder(&mut self, by: i32) -> bool {

@@ -86,7 +86,7 @@ impl SettingsView {
         self.card = CardPlace { page: Some(page), section, pages, depth, focus: 0 };
     }
 
-    fn section_of(&self, id: &str) -> usize {
+    pub(crate) fn section_of(&self, id: &str) -> usize {
         self.description_at(&["sections"]).as_array().and_then(|s| s.iter().position(|s| s["id"] == id)).unwrap_or(0)
     }
 

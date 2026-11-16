@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Theme
 
-// The header's status at its right: the search, where a board offers it, and the clock, on the glass where a board draws it (Main:40-50, EclipseLibrary:32-34, EclipseConsoles:36-39; EmuSen_Qt.md §3.4.8).
+// The header's status at its right: the search, where a board offers it, the machine's battery where it has one, and the clock, on the glass where a board draws it (Main:40-50, EclipseLibrary:32-34, EclipseConsoles:36-39; EmuSen_Qt.md §3.4.8).
 Item {
     id: root
     // A board pixel in canvas units, Board.unit.
@@ -88,11 +88,70 @@ Item {
             }
         }
     }
+    Item {
+        id: battery
+        objectName: "battery"
+        visible: Device.battery >= 0
+        x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
+        y: (root.height - height) / 2
+        width: level.x + level.width
+        height: Math.max(batteryIcon.height, level.height)
+        Item {
+            id: batteryIcon
+            objectName: "batteryIcon"
+            // The colour the battery is drawn in.
+            readonly property color ink: Tokens.text
+            y: (battery.height - height) / 2
+            width: 30 * root.unit
+            height: 18 * root.unit
+            Rectangle {
+                // The board's body, a rect of 24 by 16 at (1, 1) stroked 2 about its edge, so 26 by 18 with its corner 4 + 1 (Main:45).
+                objectName: "batteryBody"
+                readonly property color ink: batteryIcon.ink
+                width: 26 * root.unit
+                height: 18 * root.unit
+                radius: 5 * root.unit
+                color: "transparent"
+                border.color: ink
+                border.width: 2 * root.unit
+            }
+            Rectangle {
+                // The charge, at most the body's inner 18 less its gaps, in whole board pixels as the board draws 15 for 82 (Main:45).
+                objectName: "batteryCharge"
+                x: 4 * root.unit
+                y: 4 * root.unit
+                width: Math.round(18 * Math.min(Device.battery, 100) / 100) * root.unit
+                height: 10 * root.unit
+                radius: 2 * root.unit
+                color: batteryIcon.ink
+            }
+            Rectangle {
+                // The terminal, 2.5 by 6 at (27, 6), its corner 1 (Main:45).
+                objectName: "batteryNub"
+                x: 27 * root.unit
+                y: 6 * root.unit
+                width: 2.5 * root.unit
+                height: 6 * root.unit
+                radius: 1 * root.unit
+                color: batteryIcon.ink
+            }
+        }
+        Line {
+            id: level
+            objectName: "batteryLevel"
+            unit: root.unit
+            x: batteryIcon.width + 8 * root.unit
+            y: (battery.height - height) / 2
+            text: Device.battery.toLocaleString(Qt.locale(), "f", 0) + Qt.locale().percent
+            color: Tokens.text
+            size: root.size
+        }
+    }
     Line {
         id: clock
         objectName: "clock"
         unit: root.unit
-        x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
+        x: battery.visible ? battery.x + battery.width + root.gap * root.unit : root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
         y: (root.height - height) / 2
         text: Device.shortTime
         color: Tokens.text

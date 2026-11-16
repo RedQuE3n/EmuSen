@@ -19,6 +19,9 @@ Item {
     property Item picture
     property alias controllers: feed.controllers
     property alias family: feed.family
+    // The machine's battery, -1 for none, and whether it charges, as the window's Battery reads them.
+    property alias battery: feed.battery
+    property alias charging: feed.charging
     property alias reducedMotion: feed.reducedMotion
     property alias swap: feed.swap
     // Whether a shown screen takes the keys: not while the splash holds them.

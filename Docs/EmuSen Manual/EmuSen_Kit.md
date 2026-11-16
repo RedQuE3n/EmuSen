@@ -4148,6 +4148,16 @@ largest difference measured on 2026-11-14 on the software backend, 0.0192; the b
 2026-11-15 by the tester, R-20261115-1, §7.113), and black past the halo's reach. The pixel
 ratio is one under the headless harness. Kit 1.6.
 
+**The glows on the card as CSS draws them (2026-11-15).** Each glow is the disc grown by its spread, blurred by the kit's
+`GaussianBlur` (§7.118) with a deviation of half its blur radius, as a box-shadow is (CSS Backgrounds 3 §6.1.2: "a
+Gaussian blur with a standard deviation equal to half the blur radius"), under the disc, which hides what falls inside.
+`pixelScale` (scene pixels a unit) lets the blur run at the pixels drawn; Eclipse's Home sets the canvas's unit. On the
+software backend each glow is still the kit's `Glow`. Drawn by `Glow`'s RectangularShadow, the board's two glows
+(`Main.dc.html:25`) stood up to 9 levels of 255 under CSS's between 4 and 32 px past the edge (measured 2026-11-15 on
+the RX 6800). `tests/corona_gpu.rs` (a GPU job) draws the board's disc, rim and glows over Home's ground and holds the
+colour at thirteen distances past the edge against the two box-shadows computed in the test (each chord's share by the
+error function, summed at a tenth of a pixel): within 2 levels (measured worst 2). Kit 1.8.
+
 ### 7.117 The face tokens: Sora and JetBrains Mono bundled, a face for each role (2026-11-15)
 
 Decided 2026-11-14 by the tester (R-20261114-15): "Bundle both fonts and add the face token": Eclipse's typeface is Sora,

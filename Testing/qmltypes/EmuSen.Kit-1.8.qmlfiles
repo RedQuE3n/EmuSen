@@ -522,6 +522,8 @@ CoronaDisc
     property real rim
     property list<Kit.CoronaGlow> glows
     readonly property real diameter
+    property real pixelScale
+    readonly property bool software
     objectName "coronaGlow." + glow.index
     objectName "coronaRim"
     objectName "coronaDisc"

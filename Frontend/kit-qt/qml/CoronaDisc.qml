@@ -32,23 +32,58 @@ Item {
         }
     ]
     readonly property real diameter: Math.min(root.width, root.height)
+    // Scene pixels to one of this item's units, so the card's blur runs at the pixels it draws.
+    property real pixelScale: 1
+    // The software backend renders no shader effect; there the kit's Glow paints each glow (§7.113).
+    readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     Repeater {
         model: root.glows
-        Kit.Glow {
+        Item {
             id: glow
             required property int index
             required property Kit.CoronaGlow modelData
             objectName: "coronaGlow." + glow.index
-            anchors.centerIn: parent
-            width: root.diameter
-            height: root.diameter
+            // The list's entry can go before its delegate when a theme's engine is dropped (EmuSen_Kit.md §7.116): read as none then.
+            readonly property real blur: glow.modelData?.blur ?? 0
+            readonly property real spread: glow.modelData?.spread ?? 0
+            readonly property color color: glow.modelData?.color ?? "transparent"
+            anchors.fill: parent
             // Under the rim and the disc, each glow under those before it.
             z: -1 - glow.index
-            radius: root.diameter / 2
-            // The list's entry can go before its delegate when a theme's engine is dropped (EmuSen_Kit.md §7.116): read as none then.
-            blur: glow.modelData?.blur ?? 0
-            spread: glow.modelData?.spread ?? 0
-            color: glow.modelData?.color ?? "transparent"
+            Kit.Glow {
+                anchors.centerIn: parent
+                width: root.diameter
+                height: root.diameter
+                visible: root.software
+                radius: root.diameter / 2
+                blur: glow.blur
+                spread: glow.spread
+                color: glow.color
+            }
+            // On the card the disc grown by the spread, blurred by a Gaussian of half the blur radius, as a box-shadow is (CSS
+            // Backgrounds 3 §6.1.2); the disc over it hides what falls inside.
+            Item {
+                id: grown
+                anchors.centerIn: parent
+                width: root.diameter + 2 * glow.spread
+                height: width
+                visible: !root.software
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: glow.color
+                }
+            }
+            Loader {
+                active: !root.software && glow.color.a > 0 && glow.blur > 0
+                sourceComponent: Component {
+                    Kit.GaussianBlur {
+                        source: grown
+                        deviation: glow.blur / 2
+                        pixelScale: root.pixelScale
+                    }
+                }
+            }
         }
     }
     Rectangle {

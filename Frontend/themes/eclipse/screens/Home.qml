@@ -80,6 +80,7 @@ ThemeScreen {
                 objectName: "disc"
                 // The shown game's first hue at the look's rim's own saturation and lightness; its glows take it at their own strengths (R-20261114-38, R-20261115-27).
                 corona: root.hues.length > 0 ? Qt.hsla((((root.hues[0] % 360) + 360) % 360) / 360, Tokens.coronaColor.hslSaturation, Tokens.coronaColor.hslLightness, 1) : "transparent"
+                pixelScale: canvas.unit
                 x: -900 * design.unit
                 y: -450 * design.unit
                 width: 2100 * design.unit

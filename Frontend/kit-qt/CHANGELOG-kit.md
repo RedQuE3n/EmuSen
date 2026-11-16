@@ -26,6 +26,8 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
 - **`GaussianBlur`**, and `Backdrop`'s fields blurred by it on the card in place of `MultiEffect`: CSS's `blur()`, a
   Gaussian of the field's deviation, held within 0.02 of the computed one (`shaders/gaussian.frag`, §7.118). `Backdrop`'s
   field delegates show `deviation` in place of `radius`.
+- **`CoronaDisc.pixelScale`**, and its glows on the card blurred by `GaussianBlur` as CSS's box-shadows are, within 2
+  levels of 255 of the computed ones (§7.116); on the software backend still the kit's `Glow`.
 - **`HelpBar.glyph`**, **`HelpBar.snapped`**, **`PadGlyph.letter`**: a host's own drawing of an entry's glyph, entries
   centred exactly where a look asks, and the letter the family prints on a button (`EmuSen_Kit.md` §7.54).
 - **`type_size::caps_in`** (Rust): the capitals of a face at a weight, measured by Qt; the `Tokens` column holds a theme's

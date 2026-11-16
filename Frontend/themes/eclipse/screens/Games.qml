@@ -32,7 +32,7 @@ ThemeScreen {
             readonly property real px: board.unit
             readonly property var focusedCell: cells.currentItem
             // No console has a game (Choose a console's "With games", Words.consoleShows[1]), so the library has none: the first-run state.
-            readonly property bool noLibrary: Library.consolesBy(1, 0).count === 0 && cells.count === 0 && !Browse.searched
+            readonly property bool noLibrary: Library.consolesBy(1, 0, []).count === 0 && cells.count === 0 && !Browse.searched
             // The board's measures in its pixels, constants of the design (EclipseLibrary:64-73, 88).
             readonly property real margin: 96 * root.px
             readonly property real gridX: 660 * root.px

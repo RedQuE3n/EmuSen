@@ -540,33 +540,40 @@ impl Sweep {
         after.is_some() && after != before
     }
 
-    /// Stands on `at` again: the focus is already there, or is given there directly and took (an item hidden, as a chosen
-    /// group's tiles are once another group is chosen, takes no focus), or else the press it was first reached by is
-    /// pressed again from the element it was reached from, stood on the same way. False when none of these lands on it.
+    /// Stands on `at` again: the focus is already there, or else the nearest element on the way it was first reached that
+    /// is shown (an item hidden, as a chosen group's tiles are once another group is chosen, takes no focus) is focused
+    /// directly and the presses from it are pressed again. False when the focus does not end on `at`.
     fn stand_on(&mut self, scene: &mut Scene<'_>, at: &Landed) -> bool {
         let here = |scene: &mut Scene<'_>, size| Sweep::look(scene, size).is_some_and(|(now, _, _)| &now == at);
         if here(scene, self.size) {
             return true;
         }
         let tree = scene.tree();
-        let named = (0..tree.nodes.len() as u32).find(|&i| {
-            let n = &tree.nodes[i as usize];
-            (if n.name.is_empty() { format!("#{}", tree.id_of(i)) } else { n.name.clone() }) == at.0 && spoken(&tree, i) == at.1
-        });
-        if named.is_some_and(|i| scene.focus_item(&tree, i)) && here(scene, self.size) {
-            return true;
-        }
-        // The way the element was first reached: its parent stood on, then the same press. The chain ends at the sweep's
-        // start, which `came` does not hold, so the walk back is finite.
-        let Some((from, button)) = self.came.remove(at) else { return false };
-        let stood = self.stand_on(scene, &from) && {
-            scene.key(key_of(button), 0);
-            let tree = scene.tree();
-            scene.settle(&tree);
-            here(scene, self.size)
+        let index = |l: &Landed| {
+            (0..tree.nodes.len() as u32).find(|&i| {
+                let n = &tree.nodes[i as usize];
+                (if n.name.is_empty() { format!("#{}", tree.id_of(i)) } else { n.name.clone() }) == l.0 && spoken(&tree, i) == l.1
+            })
         };
-        self.came.insert(at.clone(), (from, button));
-        stood
+        // The way back to the first shown element, at most as long as the elements found; the start has no way back.
+        let mut presses = Vec::new();
+        let mut from = at.clone();
+        let mut shown = index(&from).filter(|&i| tree.nodes[i as usize].visible);
+        while shown.is_none() && presses.len() <= self.found.len() {
+            let Some((parent, button)) = self.came.get(&from).cloned() else { break };
+            presses.push(button);
+            from = parent;
+            shown = index(&from).filter(|&i| tree.nodes[i as usize].visible);
+        }
+        let Some(start) = shown else { return false };
+        scene.focus_item(&tree, start);
+        // A press moves the focus as it is handled; the view is let settle once, where the presses end.
+        for button in presses.into_iter().rev() {
+            scene.key(key_of(button), 0);
+        }
+        let tree = scene.tree();
+        scene.settle(&tree);
+        here(scene, self.size)
     }
 
     /// Each press from `at`, following every new landing before coming back by the opposite press, so the focus ends on `at`.

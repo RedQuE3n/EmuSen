@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 
-// A fixture: the help bar's entries change while a frame clock runs, as a theme's help changes with the focus over its sky (EmuSen_Kit.md §7.49).
+// A fixture: the help bar's entries change while a resting motion runs, so frames swap and `rest` has nothing to wait for (EmuSen_Kit.md §7.49).
 Window {
     id: scene
     objectName: "scene"
@@ -22,9 +22,17 @@ Window {
         ListElement { button: 2; label: "Search"; enabled: true }
         ListElement { button: 8; label: "Home"; enabled: true }
     }
-    FrameAnimation {
-        objectName: "clock"
-        running: true
+    Rectangle {
+        objectName: "pulse"
+        width: 8
+        height: 8
+        color: "#FFFFFF"
+        NumberAnimation on opacity {
+            from: 0.2
+            to: 1
+            duration: 800
+            loops: Animation.Infinite
+        }
     }
     Kit.HelpBar {
         objectName: "bar"

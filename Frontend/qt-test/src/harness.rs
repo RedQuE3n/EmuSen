@@ -485,7 +485,8 @@ impl Scene<'_> {
         ffi::harness_running(self.window()).to_string().lines().map(str::to_owned).collect()
     }
 
-    /// Waits until no transition runs: every running animation loops without end (a design's resting motion), and with none
+    /// Waits until no transition runs: every running animation declares it loops without end (a design's resting motion; a
+    /// `FrameAnimation` declares no end, so it is waited for until it stops), and with none
     /// running, the window swaps no frame for 100 ms; it fails past `SETTLE_MS`, naming what still runs (EmuSen_Kit.md §7.11).
     pub fn rest(&mut self) {
         let mut waited = 0;

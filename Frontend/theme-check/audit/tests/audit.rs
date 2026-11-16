@@ -410,17 +410,8 @@ fn built_in(theme: &str) {
 fn whole(ran: &Ran, folder: &Path, theme: &str) -> String {
     let real = std::fs::canonicalize(folder).unwrap().display().to_string();
     let given = folder.display().to_string();
-    let words = ran.err.lines().filter(|l| l.starts_with("theme-audit: ")).map(unmeasured);
-    ran.out.lines().map(str::to_owned).chain(words).map(|l| format!("{}\n", l.replace(&given, &format!("themes/{theme}")).replace(&real, &format!("themes/{theme}")))).collect()
-}
-
-/// An accepted line with its contrast ratio written `_`: trunk's own runs differ in its last digit (man theme-check).
-fn unmeasured(line: &str) -> String {
-    let accepted = line.starts_with("theme-audit: accepted by ");
-    match line.split_once(" at ").filter(|_| accepted).and_then(|(head, tail)| tail.split_once(":1, needs ").map(|(ratio, rest)| (head, ratio, rest))) {
-        Some((head, ratio, rest)) if ratio.parse::<f64>().is_ok() => format!("{head} at _:1, needs {rest}"),
-        _ => line.to_owned(),
-    }
+    let words = ran.err.lines().filter(|l| l.starts_with("theme-audit: "));
+    ran.out.lines().chain(words).map(|l| format!("{}\n", l.replace(&given, &format!("themes/{theme}")).replace(&real, &format!("themes/{theme}")))).collect()
 }
 
 #[test]

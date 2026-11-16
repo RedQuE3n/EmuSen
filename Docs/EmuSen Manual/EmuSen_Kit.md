@@ -2835,9 +2835,24 @@ from a cover to a place moved the glow. The tree was read between the change and
 The light variant, whose sky is not drawn, waited for frames and read the row as drawn.
 
 **The rule.** `harness_tree` waits for a scheduled polish first (`QQuickTest::qWaitForPolish`, Qt's own test API), so the
-tree is the one the next frame draws, whatever is running. The audit's rules are unchanged. That `rest` cannot tell the
-sky's easing from a resting motion stays as it was: a frame clock declares neither, and the polish wait is what the tree
-needed.
+tree is the one the next frame draws, whatever is running. The audit's rules are unchanged. That `rest` could not tell the
+sky's easing from a resting motion was left as it was then: the polish wait is what the tree needed (changed 2026-11-16,
+below).
+
+**A frame clock is waited for** (2026-11-16). Taking every `FrameAnimation` for a resting motion let theme-audit read
+Choose a console at a ratio that changed from run to run: two runs of trunk 385db3952 over Orrery wrote one accepted
+contrast line at 4.39:1 and at 4.41:1. The audit read each size 150 ms after its resize; the resize changes the sky's
+`glowX` (the canvas's width in design units changes with the window's shape), the glow eases to its new centre over Pan
+(320 ms, CubicOut) on a clock summed from the frames' `frameTime`s, so how far it had eased at the read, and the glow's
+colour behind the maker's name under the hub, depended on how many frames the machine had drawn by then. Listing the
+running animations at that read on 2026-11-16 found the sky's `FrameAnimation` running at 1920 × 1200, 1920 × 1080,
+1280 × 720 and 3840 × 2160 dark, the states of the varying lines. A `FrameAnimation` declares no end, so `looping`
+now counts only an animation whose `loops` is infinite (or a group's that is): `rest` waits for a running frame clock as
+for any transition and fails past `SETTLE_MS` naming it, and theme-audit rests after each resize in place of the 150 ms.
+The kit's two frame clocks both stop by themselves (`Sky`'s once its glow settles, Moonrise's once the splash ends; a
+held clock's passes never rest). `PolishScene.qml` stands for a resting motion with a `NumberAnimation` of infinite
+`loops`, so `polish.rs` still holds the tree read while frames swap and `rest` has nothing to wait for. Two runs of the
+changed audit over Orrery wrote byte-identical accounts.
 
 **Why the polish is the moment.** Qt Quick places an item in two steps: a property change marks a positioner or layout
 dirty and asks for a polish, and the polish, run on the GUI thread just before the scene graph is synchronised for a

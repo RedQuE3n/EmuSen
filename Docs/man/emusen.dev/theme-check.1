@@ -151,18 +151,37 @@ THE LOADED STEP
     the ratio of an accepted contrast line, whose last digit trunk's
     own two runs over Orrery do not repeat (4.39:1 and 4.41:1); the
     three tests that hold Horizon, Meridian and Orrery to their mockups
-    compare the whole account with Testing/themes/audit, that ratio
-    written _. In the front end's gate (gate.sh, ordinary tests four at
+    compare the whole account with Testing/themes/audit, every word of
+    it. In the front end's gate (gate.sh, ordinary tests four at
     a time) on 2026-11-16, the Horizon test took 184 s and Meridian's
     292 s, against 480 s and 647 s for trunk's gate the same day;
     Orrery's took 1204 s there and 386 s run by itself after the change
     (cargo test --release --test audit, beside another gate). Run side
     by side with the other built-in themes, the audit over Orrery took
-    1512 s and 1500 s on trunk and 448 s after. In that gate the Orrery
-    audit stopped at 27 s on a SIGSEGV in QQuickItem::geometryChange
-    under Scene::resize, the same top frames (a width set through
-    anchors.fill) a trunk binary died on once in three runs over Orrery,
-    there under the walk's put_back; its cause is not known.
+    1512 s and 1500 s on trunk and 448 s after.
+
+    Each size of a state is read once the screen rests after its
+    resize (the harness's rest), no longer 150 ms after it. The ratio
+    that varied was read while the sky's glow still eased to the centre
+    the resize gave it: the canvas's width in design units follows the
+    window's shape, so glowX changes, and the glow eases over Pan
+    (320 ms) on a clock summed from frame times, so the glow behind the
+    maker's name under Choose a console's hub depended on how many
+    frames had been drawn by the read. The running animations listed at
+    that read on 2026-11-16 held the sky's FrameAnimation at every size
+    of the dark states whose lines varied; the harness took every
+    FrameAnimation for a resting motion and did not wait for it, and
+    now does (EmuSen_Kit.md section 7.49). Recorded again with the
+    change, the three accounts differ from trunk's only in the ratios of
+    accepted contrast lines (Horizon's in none, Meridian's in 2,
+    Orrery's in 23 lines), and two runs over Orrery wrote them byte for
+    byte. The audit over Orrery had stopped about once in three runs on
+    a SIGSEGV in QQuickItem::geometryChange under Scene::resize: the
+    dial's EdgeFade deleted its layer inside the resize that widened it
+    (EmuSen_Kit.md section 7.35). Run with glibc's thread cache off and
+    freed memory overwritten, the old build stopped there on every run,
+    38 s in, and the fixed one ran to its end, its account the same as
+    without the tunables.
 
     The loaded step's kinds, each line naming the screen's file, line 1
     (Qt keeps no line for an item), the size and the variant:

@@ -942,7 +942,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 
 | Name | Kind | What it holds |
 |---|---|---|
-| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own; `played`, from 1.5, how many of its games were played; `glow`, from 1.5, its own colour, kit-core's `world::glow` for its hue); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts`, `consoleName` (the console's name alone, that `facts` begins with; 1.4) (cover and hero as file URLs); from 1.5, `consolesBy(show, order)`: the consoles `Words.consoleShows[show]` holds in `Words.consoleSorts[order]`'s order, each maker's together, with `consoles`' roles and `screen`, the console's screen in words ("CRT, television") |
+| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own; `played`, from 1.5, how many of its games were played; `glow`, from 1.5, its own colour, kit-core's `world::glow` for its hue); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts`, `consoleName` (the console's name alone, that `facts` begins with; 1.4) (cover and hero as file URLs); from 1.5, `consolesBy(show, order, shortened)`: the consoles `Words.consoleShows[show]` holds in `Words.consoleSorts[order]`'s order, each maker's together, by name the consoles keyed in `shortened` by their short `name`, with `consoles`' roles and `screen`, the console's screen in words ("CRT, television") |
 | `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
 | `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (-1 none), `charging`, `network`, `bigScreen`, `form` |
 | `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting; from 1.5, `consoleOptions(key)`, Settings at that console's page; from 1.7 `setFilter(key)`, `stepSort(by)`, `stepLetter(by)` |
@@ -1044,6 +1044,9 @@ deprecated, in the changelog and its doc comment, for one minor, then removed at
 written for in `theme.json` (`"api": "1.0"`); a theme written for a newer major than the build has is refused with words
 naming both; one written for an older minor of the same major loads, its minors being additive after the first release;
 before it a later minor may have removed what the theme uses, each removal listed in the changelog. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`. The API is the newest of what the module exports and the newest minor that changelog heads a section with, and nothing the module exports is newer, so a minor whose additions are members of types exported earlier is still that minor (decided 2026-11-11 by the tester, R-20261111-107; theme-check's `registry.rs`).
+`theme-qt/build.rs` registers each of the module's files at the minor it was added in, so a theme importing EmuSen.Theme
+1.0 still finds every 1.0 type. The help bar draws a pair of buttons as one entry (`help::pair_of`): LB with RB, as the
+approved render draws the shoulders, the d-pad's Left with Right, and LT with RT.
 
 ### 3.4 The package
 
@@ -1912,7 +1915,7 @@ a hue: the systems table's data gives one for 14 consoles, and `SystemDef::look`
 table: `Words.factLabels` (Games, Played, Core, Screen) at the left and, at the right, `Words.count` of its games and of
 those played, its core's name after its `PlanetMark`, and its `screen` (EmuSen.Theme 1.5), Serenity's screen kind for the
 console in words ("CRT, television", "LCD"). Open is the help bar's own A entry.
-The chips and Y (EclipseConsoles:42-51) are the listing `Library.consolesBy(show, order)` gives (EmuSen.Theme 1.5): the
+The chips and Y (EclipseConsoles:42-51) are the listing `Library.consolesBy(show, order, shortened)` gives (EmuSen.Theme 1.5): the
 consoles a core runs, the runtime's shelves, with those holding no game among them (`library.rs`'s `cored`), filtered by the
 chip (All, With games, Favourites: those holding a favourite game) and ordered by maker, year, name or games, each maker's
 consoles kept together so the makers' column and LT RT stay as they are (`qt-models/src/console_list.rs`). A chip's count is
@@ -1922,7 +1925,12 @@ declared by the frame's help list with `options` (`help::options_named`): Y's ac
 focused console's options, the Options pill pressed by A or the pointer does the same. Options is `Actions.consoleOptions`:
 the host asks Screens for `consoleOptions:<system>`, which shows Settings with that console's page open over the consoles'
 section (`SettingsModel.openConsole`), and B from Settings comes back to Choose a console. A plate with no game says "no
-games yet" after its year in the board's dimmer ink. A chip that holds nothing shows the program's empty words.
+games yet" after its year in the board's dimmer ink. A chip that holds nothing shows the program's empty words as the first-run board draws "No games yet"
+(`EclipseEmpty.dc.html` lines 28 to 30; decided 2026-11-16 by the tester, R-20261116-9): the headline at 96, 250, 880 wide,
+84 px, weight 600, letter spacing -0.02 em, line height 1.04, in `Tokens.text`, saying `Words.noConsoles` under All and
+`Words.noGames` under another chip; under All, 14 px below it, `Words.addFolder` as the board's paragraph (25 px, light,
+line height 1.45, `Ink.emptyAbout` #C9CDDB); no folder buttons. Nothing Consoles draws stands there while a chip holds
+none: the makers' column and the plates are empty and the aside shows no console. The table's rows of status `empty` hold it.
 The plates and the makers are each an interactive `Flickable`, so the wheel and a drag scroll them. Their `contentY`
 binding brings the focused plate and the chosen maker back into sight when the focus moves; the wheel's own scrolling
 moves `contentY` from inside the `Flickable` and leaves the binding in place (seen 2026-11-16: the wheel test below passed
@@ -1962,7 +1970,23 @@ disc's glows' blur, spread and strength. The board draws its disc's glows at 40 
 at 0.4 and its plate's ring with a gap of 4, a band of 3 and a glow of 40 spread 10 (lines 64 and 78): the screen sets
 these on its `CoronaDisc` and `FocusRing` rather than the tokens' Home measures. A plate's name is two lines at most at
 CSS's line height of 1.15 of its size, a fixed line height in Qt (`Text.lineHeightMode`), since Qt's proportional line
-height multiplies the face's own height (seen 2026-11-16: the plate's line stood 3 board pixels low). A ringed glyph's box
+height multiplies the face's own height (seen 2026-11-16: the plate's line stood 3 board pixels low). No console's name is
+cut (decided 2026-11-16 by the tester, R-20261116-5). Beside the disc the name has no line limit and no elide, and the
+facts and buttons below it flow down the column as the board's flex column does (line 80 gives the 374 px column no line
+limit). On a plate, whose 178 px the board fixes (line 64), the full name stands where the plate's two lines hold it, else
+the console's short name. The screen decides by laying each console's full name out as the plate does, in a `Line` not
+drawn (`plateMeasure.<key>`, one for each console a core runs, from `Library.consolesBy(0, 0, [])`): the plate's width
+less its padding, its type, `Text.WordWrap`, `maximumLineCount: 2` and `elide`. Qt's `Text.truncated` says whether the
+layout cut the words by the line count or the elide (Qt 6 documentation, "Text QML Type", property `truncated`,
+https://doc.qt.io/qt-6/qml-qtquick-text.html#truncated-prop, read 2026-11-16), and a word wider than the box overflows
+without truncating, which `contentWidth` over `width` says. The keys so cut are the screen's `shortened`; `Repeater.itemAt`
+notifies nothing, so each measure made, removed or changed moves `measured`, which the list reads. Seen 2026-11-16: the
+Nintendo Entertainment System's full name takes three lines on a plate and its plate says NES; beside the disc it takes
+three lines whole. Every short name of the systems table stands in a plate's two lines at every gate size (qt-app's
+oracle lays out every console of the table on a plate, below); a console whose short name too would be cut would draw it
+cut by the ellipsis, and the oracle fails on it. By name, the consoles stand by the names their plates show:
+`consolesBy`'s third argument is `shortened`, and `console_list::plate_name` gives the short name for a key among them;
+every other order reads no names, so its list is one whatever the plates show. A ringed glyph's box
 is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery is drawn
 where the machine has one; `Status` makes it only where a board draws it. The top navigation is a piece of its own
 (R-20261115-7), and its place is left empty. theme-audit's `eclipse_consoles.rs` reads the same table and holds its rows given in plain board pixels over its own
@@ -1987,9 +2011,34 @@ A opens the console's games and B comes back to it; Down from the chips after a 
 first console. Before the walk, at each of the gate's sizes, every row of `eclipse/consoles.tsv` is held to the screen,
 and both fields are painted in the board's saturation and lightness with the focused console's hue. Then the theme's
 `Library` is shown a crowd of forty more consoles of the first maker and twenty more makers: the wheel over the plates and
-over the makers scrolls each, and the pad's next press brings the plate or the maker it lands on back into sight. The program reads its library from the platform library's systems
+over the makers scrolls each, and the pad's next press brings the plate or the maker it lands on back into sight. At every
+plate of the walk no plate's name and not the focused console's name beside the disc is cut, and the facts and buttons
+stand below that name; the first console's plate says its short name and its name beside the disc takes three lines; by
+name, each maker's plates stand in the alphabet's order of the names they show. Last, `Library` is shown every console of
+the systems table, and at each of the gate's sizes no plate's name is cut and only a console with a short name of its own
+gives way to it. Then a chip that holds none: All over a library where no core runs a console, and Favourites, pressed
+by the pointer, over the table's consoles with no favourite; at each of the gate's sizes the table's `empty` rows are held,
+the words are the program's, and no maker or aside stands under the headline. The program reads its library from the platform library's systems
 table, so a library of 120 consoles exists only in theme-audit's crowd (`theme-check/audit/src/crowd.rs`), and the
 120-console run is theme-audit's.
+
+**The tests' means.** `eclipse_board/mod.rs` reads an element's property by its number in the tree, since a `Repeater`'s
+items are no QObject children of the screen, and a QFont from the text Qt writes for it (family, point size, pixel size,
+style hint, weight, style, underline, strike out, fixed pitch, 0, capitalization, letter spacing's type, letter spacing):
+the weight, the case (1, all capitals) and the absolute spacing. It holds two measures equal to a millionth: Qt maps an
+item to the scene through a matrix of floats, whose precision is a part in about 1.7e7 (seen 2026-11-15: 64.0000011 for 64
+at 3840 by 2160). A circle's row is drawn as the ellipse its box holds (the box's width, its radius half that, scaled to
+the box's height); a turned element is held by its own box about its middle, in canvas units, and the tree gives the box
+it turns into. qt-app's oracle writes the eleven consoles' games in each console's ES-DE folder, which settles an
+extension two consoles share (`Platform/library/src/scan.rs`, `route`): one game more for each console in the canvas's
+order up to three, the first of each played and the second of the first console too, and a Game Boy Color game carries
+its header's colour flag (0x143). A control is pressed as a hand does: held down until the router holds it (or the
+screen it opens is shown, whose frame holds nothing yet), then up until the router has let it go. Eclipse's `Glyph` draws
+a lettered button's letter in the face inside a 2 px ring or on a filled disc, Menu and View named in a 2 px capsule,
+the shoulders and triggers named in a 2 px box (EclipseConsoles:103, Main:63-69, 94-97, 100), any other the kit's mark in
+the ring; the letter and the name are the kit's for the pad's family. The crowd's makers-and-grid fixture
+(`theme-check/tests/themes/side-column`) puts the makers in a column at the left and the chosen maker's consoles in a grid
+beside it, Left from a first-column console to its maker, Up and Down from a maker to its neighbours (man theme-check).
 
 #### 3.4.10 Eclipse's games view **[M 2026-11-16]**
 

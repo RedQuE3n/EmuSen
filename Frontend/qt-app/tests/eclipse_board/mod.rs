@@ -1,6 +1,4 @@
-//! The table of an Eclipse board and its check against a placed screen: each row's box by the board's rule, its colour,
-//! its type size, the part that draws it, and its words' weight, spacing and case. Used by the oracles of Home and Choose a
-//! console (eclipse_home_oracle, eclipse_consoles_oracle).
+//! The table of an Eclipse board and its check against a placed screen, for Home's and Choose a console's oracles (EmuSen_Qt.md §3.4.8).
 #![allow(dead_code)]
 
 use core::pin::Pin;
@@ -69,8 +67,7 @@ impl Boxed {
     }
 }
 
-/// Equal but for the last bits of the scene's arithmetic: Qt maps an item to the scene through a matrix of floats, whose
-/// precision is a part in about 1.7e7 (seen 2026-11-15: 64.0000011 for 64 at 3840 by 2160), so a millionth is that and no more.
+/// Equal to a millionth, the float precision of Qt's item-to-scene matrix (EmuSen_Qt.md §3.4.9, the tests' means).
 pub fn same(a: f64, b: f64) -> bool {
     (a - b).abs() <= 1e-6 * b.abs().max(1.0)
 }
@@ -126,8 +123,7 @@ pub fn tokens(screen: u64) -> BTreeMap<String, String> {
     Scene::constants(tokens.upcast_pin()).into_iter().collect()
 }
 
-/// A property of an element of the placed screen, as Qt writes it as text; the element by its number in the tree, since a
-/// Repeater's items are no QObject children of the screen.
+/// A property of a placed screen's element, as Qt writes it as text, the element by its number in the tree (EmuSen_Qt.md §3.4.9).
 pub fn read(tree: &Tree, name: &str, property: &str) -> String {
     // A Line's words are named as the Line is: the last of a name in the tree, the deepest, is the words themselves.
     let Some(i) = tree.nodes.iter().rposition(|n| n.name == name) else { return String::new() };
@@ -135,8 +131,7 @@ pub fn read(tree: &Tree, name: &str, property: &str) -> String {
     emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(name), &QString::from(property)).to_string()
 }
 
-/// A QFont as Qt writes it: family, point size, pixel size, style hint, weight, style, underline, strike out, fixed pitch, 0,
-/// capitalization, letter spacing's type, letter spacing, ...; the weight, the case (1, all capitals) and the absolute spacing.
+/// A QFont's weight, case, absolute letter spacing and sizes, from the text Qt writes for it (EmuSen_Qt.md §3.4.9).
 pub fn font_of(text: &str) -> Option<(f64, f64, i32, i32, f64)> {
     let f: Vec<&str> = text.split(',').collect();
     let n = |i: usize| f.get(i).and_then(|v| v.parse::<f64>().ok());
@@ -229,8 +224,7 @@ pub fn typed(tree: &Tree, row: &Row, k: f64, unit: f64, tokens: &BTreeMap<String
             if !same(number("rotation"), turn) {
                 out.push(format!("turned {} where the board turns it {turn}", number("rotation")));
             }
-            // The shape drawn: the ellipse its box holds (a circle of the box's width, its radius half that, scaled to the box's
-            // height), or the box at the board's corner in canvas units; the other hidden.
+            // The shape drawn: the ellipse its box holds, or the box at the board's corner in canvas units; the other hidden.
             let under = |name: &str| {
                 let id = tree.nodes[node].id.clone();
                 tree.nodes.iter().position(|n| {
@@ -359,8 +353,7 @@ pub fn painted(tree: &Tree, name: &str) -> Option<Colour> {
     })
 }
 
-/// Every built row of the table held to the tree at one size, `at`; each difference pushed. `may_hide` says whether a row
-/// whose element is hidden is allowed to be, given its x and width in canvas units (a tile past the window's edge).
+/// Every built row held to the tree at size `at`, each difference pushed; `may_hide` allows a hidden tile past the window's edge.
 pub fn held(
     tree: &Tree,
     rows: &[Row],
@@ -391,8 +384,7 @@ pub fn held(
             continue;
         };
         let mut b = got[&row.name];
-        // A turned element is held by its own box about its middle, as the board places it before it turns; its own size is
-        // in the canvas's units, and the tree gives the box it turns into.
+        // A turned element is held by its own box about its middle, in canvas units, as the board places it before it turns.
         if read(tree, &row.name, "rotation").parse::<f64>().is_ok_and(|r| r != 0.0) {
             let (w, h): (f64, f64) = (read(tree, &row.name, "width").parse().unwrap(), read(tree, &row.name, "height").parse().unwrap());
             b = Boxed { x: b.x + (b.w - w) / 2.0, y: b.y + (b.h - h) / 2.0, w, h };

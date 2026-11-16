@@ -1,5 +1,4 @@
-//! Choose a console's listing (EmuSen_Qt.md §3.4.9): which consoles a core runs are shown, by its chips, and in what order,
-//! by its Y; read from the library's rows, nothing kept here.
+//! Choose a console's listing by its chips and Y, read from the library's rows, nothing kept here (EmuSen_Qt.md §3.4.9).
 
 use crate::library::LibraryRow;
 use std::cmp::Ordering;
@@ -15,8 +14,7 @@ pub enum Show {
     Favourites,
 }
 
-/// The order the consoles stand in, in `words::CONSOLE_SORTS`' order. The makers keep their order and each maker's consoles
-/// are ordered among themselves, so the makers' column and LT RT stay as they were.
+/// The order the consoles stand in, `words::CONSOLE_SORTS`' order, each maker's consoles kept together (EmuSen_Qt.md §3.4.9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Order {
     /// The shelves' order.
@@ -43,20 +41,24 @@ impl Show {
 }
 
 impl Order {
-    fn cmp(self, a: &LibraryRow, b: &LibraryRow) -> Ordering {
+    fn cmp(self, a: &LibraryRow, b: &LibraryRow, short: &[String]) -> Ordering {
         match self {
             Order::Maker => Ordering::Equal,
             Order::Year => a.year.cmp(&b.year),
             // By the name the plates show.
-            Order::Name => a.shown_name().to_lowercase().cmp(&b.shown_name().to_lowercase()),
+            Order::Name => plate_name(a, short).to_lowercase().cmp(&plate_name(b, short).to_lowercase()),
             Order::Games => b.count.cmp(&a.count),
         }
     }
 }
 
-/// The consoles `show` holds, each maker's together in the order its first console stands, ordered within by `order`;
-/// an empty maker is a group of its own, as `view::maker_groups` has it.
-pub fn listed<'a>(consoles: &'a [LibraryRow], show: Show, order: Order) -> Vec<&'a LibraryRow> {
+/// The name a console's plate shows: its short name where its key is among `short`, else its shown name (EmuSen_Qt.md §3.4.9).
+pub fn plate_name<'a>(row: &'a LibraryRow, short: &[String]) -> &'a str {
+    if short.iter().any(|k| *k == row.key) { &row.name } else { row.shown_name() }
+}
+
+/// The consoles `show` holds, each maker's together, ordered within by `order`, by name as `plate_name` gives (EmuSen_Qt.md §3.4.9).
+pub fn listed<'a>(consoles: &'a [LibraryRow], show: Show, order: Order, short: &[String]) -> Vec<&'a LibraryRow> {
     let shown: Vec<&LibraryRow> = consoles.iter().filter(|r| show.holds(r)).collect();
     let mut makers: Vec<&str> = Vec::new();
     let mut group = |r: &'a LibraryRow| match makers.iter().position(|m| !r.maker.is_empty() && *m == r.maker) {
@@ -67,7 +69,7 @@ pub fn listed<'a>(consoles: &'a [LibraryRow], show: Show, order: Order) -> Vec<&
         }
     };
     let mut placed: Vec<(usize, usize, &LibraryRow)> = shown.iter().enumerate().map(|(i, r)| (group(r), i, *r)).collect();
-    placed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| order.cmp(a.2, b.2)).then(a.1.cmp(&b.1)));
+    placed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| order.cmp(a.2, b.2, short)).then(a.1.cmp(&b.1)));
     placed.into_iter().map(|(_, _, r)| r).collect()
 }
 

@@ -39,15 +39,14 @@ ThemeScreen {
             readonly property real asideX: root.width - root.margin - root.asideWidth
             readonly property real gridWidth: root.asideX - root.asideGap - root.gridX
             readonly property int columns: Math.max(1, Math.floor((root.gridWidth + root.plateGap) / (root.plateWidth + root.plateGap)))
-            // As many whole rows of plates and of makers as stand between the list's top and the foot, so none is cut by the
-            // view's edge or lies under the help line; the focus brings the next row in whole.
+            // Only whole rows of plates and makers between the list's top and the foot (EmuSen_Qt.md §3.4.9).
             readonly property real platesHeight: Math.max(1, Math.floor((root.foot - root.listTop + root.plateGap) / (root.plateHeight + root.plateGap))) * (root.plateHeight + root.plateGap) - root.plateGap
             readonly property real makersHeight: Math.max(1, Math.floor((root.foot - root.listTop + root.makerPitch - root.makerHeight) / root.makerPitch)) * root.makerPitch - (root.makerPitch - root.makerHeight)
             // The chip pressed (Words.consoleShows' order) and the order in force (Words.consoleSorts'), the theme's own.
             property int show: 0
             property int order: 0
-            // The consoles the chip and the order give, each maker's together.
-            readonly property var listing: Library.consolesBy(root.show, root.order)
+            // The consoles the chip and the order give, each maker's together, by name by the names the plates show.
+            readonly property var listing: Library.consolesBy(root.show, root.order, root.shortened)
             // The chosen maker's group, the console the aside shows, and the plate last focused.
             property int chosenGroup: 0
             property Item shown: null
@@ -59,8 +58,7 @@ ThemeScreen {
             // The help's actions for Y and X (Help.entries' `action`), read from the frame's own list.
             property string sortAction
             property string optionsAction
-            // The plate under the chips: the one last focused where its maker is still the chosen one, else the chosen maker's first
-            // (a maker focused chooses its group and hides the plate last focused, which KeyNavigation would skip past).
+            // The plate under the chips: the last focused of the chosen maker, else its first (EmuSen_Qt.md §3.4.9).
             property Item chosenFirst: null
             readonly property Item belowChips: (root.lastPlate !== null && root.lastPlate.group === root.chosenGroup ? root.lastPlate : root.chosenFirst) ?? root.firstPlate
             // The frame's declared action, by its key: Y the next order, X the console's options, any other the host's.
@@ -72,6 +70,44 @@ ThemeScreen {
                     Actions.consoleOptions(root.shown?.key ?? "")
                 else
                     Actions.act(key)
+            }
+            // Each console's full name laid out as its plate lays it, to choose the short name (EmuSen_Qt.md §3.4.9).
+            Repeater {
+                id: measures
+                model: Library.consolesBy(0, 0, [])
+                // Repeater.itemAt notifies nothing, so each measure made, and each that changes, reads the keys again.
+                onItemAdded: root.measured += 1
+                onItemRemoved: root.measured += 1
+                Line {
+                    required property string key
+                    objectName: "plateMeasure." + key
+                    required property string displayName
+                    readonly property bool cut: truncated || words.contentWidth > words.width
+                    onCutChanged: root.measured += 1
+                    visible: false
+                    unit: root.px
+                    width: root.plateWidth - 40 * root.px
+                    text: displayName
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    size: 21
+                    weight: Font.DemiBold
+                    lineHeightMode: Text.FixedHeight
+                    lineHeight: 1.15 * 21
+                }
+            }
+            // The keys of the consoles whose plates show their short name, read again as `measured` moves.
+            property int measured: 0
+            readonly property var shortened: {
+                const keys = []
+                void root.measured
+                for (let i = 0; i < measures.count; ++i) {
+                    const line = measures.itemAt(i)
+                    if (line && line.cut)
+                        keys.push(line.key)
+                }
+                return keys
             }
             Board {
                 id: board
@@ -90,8 +126,7 @@ ThemeScreen {
                 function onModelReset() { layout.read() }
                 function onDataChanged() { layout.read() }
             }
-            // The two colour fields behind (board lines 19 and 20): each the board's place, size, blur, saturation, lightness and
-            // opacity, the hue the focused console's (R-20261115-28).
+            // The two colour fields behind, the board's lines 19 and 20 in the focused console's hue (R-20261115-28).
             FieldInk {
                 id: field0
                 board: "#5B3FD6"
@@ -235,7 +270,7 @@ ThemeScreen {
                                     unit: root.px
                                     x: 22 * root.px + chip.line
                                     y: (parent.height - height) / 2
-                                    text: Words.line([chip.modelData, Words.count(Library.consolesBy(chip.index, 0).count)])
+                                    text: Words.line([chip.modelData, Words.count(Library.consolesBy(chip.index, 0, []).count)])
                                     color: chip.pressed ? Tokens.overAccent : ink.tileFacts
                                     size: 21
                                     weight: chip.pressed ? Font.DemiBold : Font.Normal
@@ -329,8 +364,7 @@ ThemeScreen {
                                         root.chosenFirst = plates.itemAt(maker.first)
                                     }
                                 }
-                                // Right its first console, LT (the key Home) and RT (End) the makers' first consoles, Up and Down the
-                                // makers, Up from the first the chips; a plate focused chooses its own maker.
+                                // A maker's keys: Right, LT, RT, Up and Down (EmuSen_Qt.md §3.4.9).
                                 Keys.onPressed: (event) => {
                                     const at = [Qt.Key_Right, Qt.Key_Home, Qt.Key_End, Qt.Key_Up, Qt.Key_Down].indexOf(event.key)
                                     const to = at >= 0 && at < 3 ? [maker.first, maker.before, maker.after][at] : -1
@@ -396,6 +430,7 @@ ThemeScreen {
                                 id: plate
                                 required property int index
                                 required property string key
+                                required property string name
                                 required property string displayName
                                 required property string maker
                                 required property int year
@@ -431,10 +466,7 @@ ThemeScreen {
                                 y: (layout.rowOf[plate.index] ?? 0) * grid.pitch
                                 width: root.plateWidth
                                 height: root.plateHeight
-                                // The layout's walk, past the left edge the maker, past the right Open, up from the first row the chips,
-                                // Down from the last row the next maker's first console; LT and RT the makers' first consoles
-                                // (R-20261115-17); LB and RB are left to the sections. No KeyNavigation, which writes back links of its
-                                // own and skips a plate not shown (EmuSen_Qt.md §3.4.9).
+                                // A plate's keys: the layout's walk, LT and RT, and no KeyNavigation (EmuSen_Qt.md §3.4.9).
                                 Keys.onPressed: (event) => {
                                     const at = [Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End].indexOf(event.key)
                                     const below = plate.downIndex >= 0 ? plate.downIndex : (plate.rowOf + 1 >= plate.rows ? plate.nextFirst : -1)
@@ -513,7 +545,8 @@ ThemeScreen {
                                         objectName: "plateName." + plate.index
                                         unit: root.px
                                         width: parent.width
-                                        text: plate.displayName
+                                        // The full name where it stands in two lines, else the short one (R-20261116-5).
+                                        text: root.shortened.indexOf(plate.key) >= 0 ? plate.name : plate.displayName
                                         wrapMode: Text.WordWrap
                                         maximumLineCount: 2
                                         elide: Text.ElideRight
@@ -582,8 +615,7 @@ ThemeScreen {
                             x: (parent.width - width) / 2
                             width: 300 * root.px
                             height: 300 * root.px
-                            // The focused console's own colour for the rim and both glows (R-20261115-9), at this board's rim of 2,
-                            // glow of 40 spread 8 at 0.6 and halo of 150 spread 40 at 0.4 (line 78), not Home's.
+                            // The console's own colour at this board's rim and glows, not Home's (R-20261115-9; EmuSen_Qt.md §3.4.9).
                             corona: root.shown ? root.shown.glow : "transparent"
                             rim: 2 * root.px
                             pixelScale: canvas.unit
@@ -622,9 +654,8 @@ ThemeScreen {
                                 objectName: "consoleName"
                                 unit: root.px
                                 width: parent.width
+                                // As many lines as the name needs, the column below flowing (board line 80, R-20261116-5).
                                 wrapMode: Text.WordWrap
-                                maximumLineCount: 2
-                                elide: Text.ElideRight
                                 text: root.shown ? root.shown.displayName : ""
                                 color: Tokens.text
                                 size: 46
@@ -766,29 +797,40 @@ ThemeScreen {
                         }
                     }
 
-                    // No console is shown: the program's empty words (a chip that holds none, or no core at all).
+                    // No console shown: the first-run board's headline and words (EclipseEmpty:28-31, R-20261116-9).
                     Column {
                         objectName: "noConsoles"
                         visible: root.listing.count === 0
-                        y: 537 * root.px
-                        width: root.width
-                        spacing: 12 * root.px
+                        x: 96 * root.px
+                        y: 250 * root.px
+                        width: 880 * root.px
+                        spacing: 14 * root.px
                         Line {
+                            objectName: "noConsolesWords"
                             unit: root.px
                             width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
                             text: root.show === 0 ? Words.noConsoles : Words.noGames
-                            color: Tokens.muted
-                            size: 22
+                            color: Tokens.text
+                            size: 84
+                            weight: Font.DemiBold
+                            // The board's -0.02 em and CSS's line height of 1.04 of the size.
+                            spacing: -0.02 * 84
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 1.04 * 84
                         }
                         Line {
+                            objectName: "noConsolesAbout"
                             unit: root.px
                             width: parent.width
                             visible: root.show === 0
-                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
                             text: Words.addFolder
-                            color: Tokens.muted
-                            size: 22
+                            color: ink.emptyAbout
+                            size: 25
+                            weight: Font.Light
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 1.45 * 25
                         }
                     }
                 }

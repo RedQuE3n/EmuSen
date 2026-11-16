@@ -83,8 +83,7 @@ pub trait LibrarySource: Send + Sync {
     fn collections(&self) -> Result<Vec<Collection>, String> {
         Ok(Vec::new())
     }
-    /// Each console's screen kind, by its catalog console (Serenity's `screens`: "Television" or "Lcd"); a source with no
-    /// catalogue has none.
+    /// Each console's screen kind by its catalog console (Serenity's `screens`); none from a source with no catalogue.
     fn screens(&self) -> Result<Vec<(String, String)>, String> {
         Ok(Vec::new())
     }
@@ -108,13 +107,14 @@ pub trait LibrarySource: Send + Sync {
 pub struct Engine {
     /// The name the choice stores.
     pub id: String,
-    /// The name shown: a libretro core's corename, an EmuSen core's info name less the port's "RT".
+    /// The name shown: a libretro core's corename, an EmuSen core's original name (`without_port_mark`).
     pub name: String,
     pub libretro: bool,
 }
 
-/// An EmuSen core's info name as shown: VenusRT reads Venus, the one named exception of §24.6.
+/// A core's original name as shown: VenusRT and "VenusRT (Rust)" read Venus (EmuSen_Interface.md §24.6, R-20261116-14).
 pub fn without_port_mark(name: &str) -> &str {
+    let name = name.strip_suffix(" (Rust)").unwrap_or(name);
     match name.strip_suffix("RT") {
         Some(rest) if rest.chars().last().is_some_and(char::is_lowercase) => rest,
         _ => name,

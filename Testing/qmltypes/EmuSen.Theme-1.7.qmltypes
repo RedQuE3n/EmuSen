@@ -671,6 +671,7 @@ Module {
             lineNumber: 54
             Parameter { name: "show"; type: "int" }
             Parameter { name: "order"; type: "int" }
+            Parameter { name: "shortened"; type: "QStringList" }
         }
         Method {
             name: "artHues"

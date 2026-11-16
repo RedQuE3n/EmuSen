@@ -2,8 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Theme
 
-// The makers in a column at the left and the chosen maker's consoles as a grid beside it; Left from a first-column console goes
-// to its maker, Up and Down from a maker to the makers beside it. Every console is reached by the pad.
+// Makers in a column and the chosen maker's consoles as a grid beside it, all reached by the pad (man theme-check).
 ThemeScreen {
     objectName: "Consoles"
     role: ThemeScreen.Consoles

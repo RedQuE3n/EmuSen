@@ -1,6 +1,4 @@
-//! Eclipse's Choose a console in the running program on the graphics card (EmuSen_Qt.md §3.4.9), in a compositor of the
-//! test's own: the same oracle as eclipse_consoles.rs, so the disc's glows and the fields blur at the scene's pixels on the
-//! card, and the pictures when a folder is named. A GPU job.
+//! Eclipse's Choose a console on the graphics card, eclipse_consoles_oracle in a compositor of its own; a GPU job (EmuSen_Qt.md §3.4.9).
 
 mod common;
 mod eclipse_board;

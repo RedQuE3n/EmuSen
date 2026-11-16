@@ -201,6 +201,7 @@ fn a_paused_game_is_said_as_mistress_s_home_says_it() {
 #[test]
 fn an_engine_is_named_by_its_own_info_and_the_port_s_mark_is_dropped() {
     assert_eq!((without_port_mark("VenusRT"), without_port_mark("PCSX2"), without_port_mark("RT")), ("Venus", "PCSX2", "RT"));
+    assert_eq!((without_port_mark("MercuryRT (Rust)"), without_port_mark("Mesen (Rust)")), ("Mercury", "Mesen"));
     let own = CoreRow { engine: Some("Venus".into()), name: Some("VenusRT".into()), ..CoreRow::default() };
     let hosted = CoreRow {
         engine: Some("pcsx2".into()),
@@ -212,6 +213,9 @@ fn an_engine_is_named_by_its_own_info_and_the_port_s_mark_is_dropped() {
     assert_eq!(engine_shown("Venus", &cores), Engine { id: "Venus".into(), name: "Venus".into(), libretro: false });
     assert_eq!(engine_shown("pcsx2", &cores), Engine { id: "pcsx2".into(), name: "PCSX2".into(), libretro: true });
     assert_eq!(engine_shown("Moon", &cores).name, "Moon", "an engine the listing lacks keeps its stored name");
+    let lacked = engine_shown("MoonRT (Rust)", &cores);
+    assert_eq!(lacked, Engine { id: "MoonRT (Rust)".into(), name: "Moon".into(), libretro: false }, "a lacked port shows its original name");
+    assert_eq!(engine_shown("MarsRT", &[]).name, "Mars", "an empty listing too");
 }
 
 #[test]

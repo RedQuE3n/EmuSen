@@ -1424,8 +1424,7 @@ impl SettingsView {
         None
     }
 
-    /// The section of the consoles, with the page of the console that holds the system `system` open over it, as A on its
-    /// row opens it; false, and nothing changed, for a console no engine runs or none the section lists.
+    /// The consoles' section with `system`'s console page open, as A on its row opens it; false and nothing changed where none.
     pub fn open_console(&mut self, system: &str) -> bool {
         let Some(row) = self.running_row(system) else { return false };
         let c = &self.read.consoles.consoles[row];

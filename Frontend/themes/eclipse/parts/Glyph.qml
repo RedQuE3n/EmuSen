@@ -2,10 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Theme
 
-// A pad button's glyph as the boards draw it (Main:63-69, 94-97): a lettered button's letter in the face inside a 2 px ring or
-// on a filled disc, Menu and View named in a 2 px capsule, the shoulders and triggers named in a 2 px box (EclipseConsoles:103,
-// Main:100), any other the kit's mark in
-// the ring. The letter and the name are the kit's for the pad's family; every measure in board pixels (EmuSen_Qt.md §3.4.8).
+// A pad button's glyph as the boards draw it, every measure in board pixels (EmuSen_Qt.md §3.4.9, the tests' means).
 Item {
     id: root
     // A board pixel in canvas units, Board.unit.

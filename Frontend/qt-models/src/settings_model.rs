@@ -250,8 +250,7 @@ pub mod qobject {
         #[cxx_name = "cardAct"]
         fn card_act(self: Pin<&mut SettingsModel>, index: i32, by: i32);
 
-        /// The consoles' section with `console`'s page open, as Choose a console's options ask for it; false where no
-        /// engine runs the console.
+        /// The consoles' section with `console`'s page open, as Choose a console's options ask; false where no engine runs it.
         #[qinvokable]
         #[cxx_name = "openConsole"]
         fn open_console(self: Pin<&mut SettingsModel>, console: &QString) -> bool;

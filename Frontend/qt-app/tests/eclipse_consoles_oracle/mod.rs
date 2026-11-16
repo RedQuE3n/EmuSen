@@ -1,8 +1,4 @@
-//! Eclipse's Choose a console in the running program (EmuSen_Qt.md §3.4.9), driven by an SDL pad inside this process over a
-//! library of the eleven canvas consoles, some games played: at each of the gate's sizes every press from every plate lands
-//! where the layout's walk puts it and every plate is reached, none cut or overlapping; A opens the console's games; LT and
-//! RT step the makers; the disc's rim and glows are the focused console's own colour; a plate's words and the played count
-//! are the model's. One test, as the harness is one per process.
+//! Eclipse's Choose a console in the running program, driven by an SDL pad in this process (EmuSen_Qt.md §3.4.9, Proof).
 
 
 use crate::common::{approved_console_core, wait_for, CONSOLES};
@@ -31,10 +27,11 @@ use serde_json::json;
 /// The board's elements, one a row (eclipse/consoles.tsv), held by eclipse_board's rules.
 const BOARD: &str = include_str!("../eclipse/consoles.tsv");
 
-/// Every row of the board's table held to the screen at each of the gate's sizes, with `c` focused: its box, colour, type
-/// and part; and both fields painted in the board's saturation and lightness with `c`'s hue (R-20261115-28).
+/// Every row of the board's table held at each gate size with `c` focused, and both fields in `c`'s hue (R-20261115-28).
 fn board_held(scene: &mut Scene<'_>, c: &Console) {
     let (board_height, rows) = crate::eclipse_board::rows(BOARD);
+    // The rows of a chip that holds none are held in that state alone (`empty_held`).
+    let rows: Vec<_> = rows.into_iter().filter(|r| r.status != "empty").collect();
     let k = DESIGN_HEIGHT / board_height;
     let hue = Colour::parse(&c.glow).expect("the console's glow").to_hsl().0;
     let mut differences = Vec::new();
@@ -90,20 +87,18 @@ fn board_held(scene: &mut Scene<'_>, c: &Console) {
             differences.push(format!("{}: {:?} (width, colour, start, turn, cap) where the board gives {}", row.name, checks, row.kind));
         }
     }
-    // A name's line height is CSS's, of its size, and a long name wraps: the plate's 1.15 of 21 at two lines at most, the console's 1.08 of 46.
-    for (name, size, height, lines) in [("plateName.0", 21.0, 1.15, Some(2)), ("consoleName", 46.0, 1.08, None)] {
+    // CSS's line height of each size; the NES's plate gives way to its short name, its name by the disc takes three lines (R-20261116-5).
+    for (name, size, height, lines) in [("plateName.0", 21.0, 1.15, 1), ("consoleName", 46.0, 1.08, 3)] {
         let mode = crate::eclipse_board::read(&tree, name, "lineHeightMode");
         let have = crate::eclipse_board::read(&tree, name, "lineHeight").parse::<f64>().unwrap_or(f64::NAN);
         if mode != "FixedHeight" || (have - size * height).abs() > 1e-6 {
             differences.push(format!("{name}: line height {have} (mode {mode}) where the board gives {} fixed", size * height));
         }
-        if let Some(lines) = lines {
-            let count = crate::eclipse_board::read(&tree, name, "lineCount");
-            // The fixture's first console is the Nintendo Entertainment System, whose name takes the plate's two lines.
-            assert_eq!(c.display_name, "Nintendo Entertainment System", "the fixture's long name on plate.0");
-            if count != lines.to_string() {
-                differences.push(format!("{name}: {count} lines for {:?} where a long name wraps to {lines}", c.display_name));
-            }
+        let count = crate::eclipse_board::read(&tree, name, "lineCount");
+        // The fixture's first console is the Nintendo Entertainment System.
+        assert_eq!(c.display_name, "Nintendo Entertainment System", "the fixture's long name on plate.0");
+        if count != lines.to_string() || crate::eclipse_board::read(&tree, name, "truncated") != "false" {
+            differences.push(format!("{name}: {count} lines (truncated {}) for {:?} where it wraps to {lines} whole", crate::eclipse_board::read(&tree, name, "truncated"), crate::eclipse_board::read(&tree, name, "text")));
         }
     }
     // Drawn, at the scene's pixels: just past the rim, where the glow is brightest, the window shows the console's hue.
@@ -157,9 +152,7 @@ fn whole(row: &[Cell], role: &str) -> i32 {
     }
 }
 
-/// The eleven consoles' games, in each console's ES-DE folder, which settles an extension two consoles share
-/// (`Platform/library/src/scan.rs`, `route`): one more for each console in the canvas's order up to three, the first of each
-/// played and the second of the first console too. A Game Boy Color game carries its header's colour flag (0x143).
+/// The eleven consoles' games in their ES-DE folders, some played (EmuSen_Qt.md §3.4.9, the tests' means).
 fn written(world: &World) -> Vec<String> {
     let source = ClientSource::open(&library().to_string_lossy(), &Config::default()).unwrap();
     let systems = source.systems().unwrap();
@@ -184,8 +177,7 @@ fn written(world: &World) -> Vec<String> {
     played
 }
 
-/// The library written, the fixture's PlayStation core approved in `cores` beside the build's own, and its plays recorded
-/// through the real clients; the consoles as `Library.consoles` gives them: those of the eleven a core runs.
+/// The library written, the fixture's PlayStation core approved, its plays recorded; the consoles `Library.consoles` gives.
 fn library_of(world: &World, cores: &std::path::Path) -> (Vec<Console>, LibraryView) {
     let platform = Platform::load(library()).unwrap();
     let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
@@ -206,7 +198,7 @@ fn library_of(world: &World, cores: &std::path::Path) -> (Vec<Console>, LibraryV
     view.apply(refresh(&source));
     assert!(view.problem.is_empty(), "{}", view.problem);
     // Eclipse shows the All chip in maker order first: every console a core runs, each maker's together.
-    let model = consoles_listed(&view, Show::All, Order::Maker)
+    let model = consoles_listed(&view, Show::All, Order::Maker, &[])
         .iter()
         .map(|r| Console {
             key: text(r, "key"),
@@ -272,13 +264,40 @@ fn overlap(a: [f64; 4], b: [f64; 4]) -> bool {
     a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 }
 
-/// The words a plate and the place line say for a console, and its four facts' values (games, played, core, screen), from
-/// the program's words over the model's row.
-fn says(c: &Console, groups: &[usize]) -> ([String; 3], [String; 4]) {
+/// Whether the Line `name` lays its words out whole: not `truncated`, and no word wider than its box (EmuSen_Qt.md §3.4.9).
+fn whole_words(tree: &Tree, name: &str) -> bool {
+    let read = |p: &str| crate::eclipse_board::read(tree, name, p);
+    let number = |p: &str| read(p).parse::<f64>().unwrap_or(f64::NAN);
+    read("truncated") == "false" && number("contentWidth") <= number("width") + 1e-6
+}
+
+/// The name a console's plate shows, as Qt lays out its measure `plateMeasure.<key>` (EmuSen_Qt.md §3.4.9).
+fn plate_name(tree: &Tree, c: &Console) -> String {
+    if whole_words(tree, &format!("plateMeasure.{}", c.key)) { c.display_name.clone() } else { c.name.clone() }
+}
+
+/// No name on a plate or beside the disc is cut, and what follows the name beside the disc stands below it.
+fn names_whole(tree: &Tree, plates: usize, size: &str) {
+    for k in 0..plates {
+        let name = format!("plateName.{k}");
+        if tree.nodes.iter().any(|n| n.name == name) {
+            assert!(whole_words(tree, &name), "{size}: {name} {:?} is cut", crate::eclipse_board::read(tree, &name, "text"));
+        }
+    }
+    assert!(whole_words(tree, "consoleName"), "{size}: the focused console's name {:?} is cut", crate::eclipse_board::read(tree, "consoleName", "text"));
+    let name = edges(shown(tree, "consoleName").expect("the focused console's name"));
+    for below in ["consoleFacts", "consoleOpen", "consoleOptions"] {
+        let e = edges(shown(tree, below).unwrap_or_else(|| panic!("{size}: {below} shown")));
+        assert!(e[1] >= name[3] - 1e-6, "{size}: {below} {e:?} stands below the name {name:?}");
+    }
+}
+
+/// The words a plate and the place line say for a console, and its four facts, from the program's words over the model's row.
+fn says(c: &Console, groups: &[usize], plate: String) -> ([String; 3], [String; 4]) {
     let year = if c.year > 0 { c.year.to_string() } else { String::new() };
     (
         [
-            c.display_name.clone(),
+            plate,
             words::line(&[year.as_str(), if c.count > 0 { words::games(c.count) } else { words::NO_GAMES_LINE.to_owned() }.as_str()]),
             words::line(&[c.maker.as_str(), emusen_qt_models::game_page::place(c.group_index, groups[c.group]).as_str()]),
         ],
@@ -321,8 +340,7 @@ pub fn oracle(backend: &str) {
     wait_for(&mut scene, "pads", "connected", "1", 5000);
     scene.run_pad_clock();
 
-    // Home's Games place by the pad (Down from the played games to the places, Left to the first), then Eclipse chosen over
-    // it: its own Choose a console is placed.
+    // Home's Games place by the pad, then Eclipse chosen over it, which places its own Choose a console.
     for _ in 0..40 {
         if !focused(&mut scene).is_empty() {
             break;
@@ -361,9 +379,10 @@ pub fn oracle(backend: &str) {
         .map(|n| (n.name.clone(), n.text.clone().unwrap_or_default(), n.x, n.y))
         .collect();
     for (k, c) in model.iter().enumerate() {
-        let name = drawn.iter().find(|d| d.0 == format!("plateName.{k}")).map(|d| d.1.as_str());
-        assert_eq!(name, Some(c.display_name.as_str()), "plate.{k} is the model's: {drawn:?}");
+        let name = drawn.iter().find(|d| d.0 == format!("plateName.{k}")).map(|d| d.1.clone());
+        assert_eq!(name, Some(plate_name(&tree, c)), "plate.{k} is the model's: {drawn:?}");
     }
+    assert_eq!(plate_name(&tree, &model[0]), model[0].name, "the Nintendo Entertainment System's plate gives way to its short name");
     let places: Vec<(usize, usize)> = model.iter().map(|c| (c.group, c.group_index)).collect();
     let firsts: Vec<usize> = (0..groups.len()).map(|g| model.iter().position(|c| c.group == g && c.group_index == 0).unwrap()).collect();
     for (w, h) in SIZES {
@@ -385,8 +404,7 @@ pub fn oracle(backend: &str) {
             let item = grid.items[k];
             let c = &model[k];
             let last_row = item.row + 1 >= grid.rows[c.group];
-            // Where each press lands: the walk inside the grid; past its left edge the maker, past its right Open, down
-            // from the last row the next maker's first; up from the first row the chip pressed, All.
+            // Where each press lands: the walk in the grid, the maker, Open, the next maker's first, or All (EmuSen_Qt.md §3.4.9).
             let want = [
                 (PadControl::Left, item.left.map_or(format!("maker.{}", c.group), |t| format!("plate.{t}"))),
                 (PadControl::Right, item.right.map_or("consoleOpen".to_owned(), |t| format!("plate.{t}"))),
@@ -422,11 +440,12 @@ pub fn oracle(backend: &str) {
                 assert!(seen || !overlap(p, e), "{size}: plate.{k} {p:?} over {} {e:?}", o.name);
             }
             // Its words and the facts are the model's, the played count among them; the disc is in its colour.
-            let ([name, line, place], values) = says(c, &groups);
+            let ([name, line, place], values) = says(c, &groups, plate_name(&tree, c));
             let said = |n: &str| shown(&tree, n).and_then(|n| n.text.clone()).unwrap_or_default();
             assert_eq!(said(&format!("plateName.{k}")), name, "{size}: plate.{k}'s name");
             assert_eq!(said(&format!("plateLine.{k}")), line, "{size}: plate.{k}'s line");
-            assert_eq!(said("consoleName"), name, "{size}: the focused console's name");
+            assert_eq!(said("consoleName"), c.display_name, "{size}: the focused console's full name");
+            names_whole(&tree, model.len(), &size);
             for (i, (label, value)) in words::FACT_LABELS.iter().zip(&values).enumerate() {
                 assert_eq!(said(&format!("consoleFactLabel.{i}")), *label, "{size}: the facts' row {i}'s label");
                 assert_eq!(said(&format!("consoleFactValue.{i}")), *value, "{size}: {}'s {label}", c.display_name);
@@ -495,8 +514,7 @@ pub fn oracle(backend: &str) {
         scene.wait(50);
     }
     assert_eq!(focused(&mut scene), format!("plate.{k}"), "back on the console it opened");
-    // The last maker's first console by RT, Left to its maker, Up through the makers (each chosen in turn) to the chips, and
-    // Down: the first maker's first console, not the plate last focused, which choosing another maker hid.
+    // RT, Left, Up through the makers to the chips, then Down: the first maker's first console, not a hidden plate (§3.4.9).
     press(&mut scene, &sdl, &pad, PadControl::RightTrigger);
     assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 1]), "RT to the last maker's first console");
     press(&mut scene, &sdl, &pad, PadControl::Left);
@@ -535,13 +553,11 @@ fn whole_in(tree: &Tree, name: &str, view: &str) -> bool {
     n[0] >= v[0] - 1e-6 && n[1] >= v[1] - 1e-6 && n[2] <= v[2] + 1e-6 && n[3] <= v[3] + 1e-6
 }
 
-/// The wheel scrolls the plates and the makers, each under the pointer, and the pad's next press brings what it lands on
-/// back into sight. Over a crowd shown to the theme's Library directly, since the program shelves only the consoles a core
-/// runs: forty more consoles of the first maker and twenty makers more, so both columns are longer than the screen.
+/// The wheel scrolls the plates and the makers, and the pad's next press brings its landing back into sight (EmuSen_Qt.md §3.4.9, Proof).
 fn wheel_scrolls(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, view: &LibraryView, backend: &str) {
     scene.resize(1280, 800);
     scene.wait(200);
-    let first = text(&consoles_listed(view, Show::All, Order::Maker)[0], "key");
+    let first = text(&consoles_listed(view, Show::All, Order::Maker, &[])[0], "key");
     let seed = view.cored.iter().find(|r| r.key == first).expect("the first maker's first console").clone();
     let mut crowd = view.clone();
     for n in 0..60 {
@@ -588,6 +604,73 @@ fn wheel_scrolls(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, view: &Libr
     press(scene, sdl, pad, PadControl::RightTrigger);
     assert!(focused(scene).starts_with("plate."), "RT to the next maker's first console");
     assert!(whole_in(&scene.tree(), "maker.1", "makers"), "the maker RT chose is brought back into sight");
+    every_system_whole(scene, view, screen);
+    empty_held(scene, view, screen);
+}
+
+/// A chip that holds none, drawn as the first-run board, the table's `empty` rows at every gate size (R-20261116-9; EmuSen_Qt.md §3.4.9).
+fn empty_held(scene: &mut Scene<'_>, view: &LibraryView, screen: u64) {
+    let (board_height, rows) = crate::eclipse_board::rows(BOARD);
+    let rows: Vec<_> = rows.into_iter().filter(|r| r.status == "empty").map(|mut r| {
+        r.status = "built".into();
+        r
+    }).collect();
+    assert_eq!(rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["noConsolesWords", "noConsolesAbout"]);
+    let k = DESIGN_HEIGHT / board_height;
+    let library = |cored: Vec<emusen_qt_models::library::LibraryRow>| {
+        let mut shown = view.clone();
+        shown.cored = cored;
+        emusen_theme_qt::host::library(crate::eclipse_board::object(screen)).expect("the theme's Library").show(&shown, "[]");
+    };
+    let mut differences = Vec::new();
+    let every = emusen_qt_models::library::console_rows(&view.systems, &Default::default(), &[]);
+    for (chip, cored, held, words_said) in [(0, Vec::new(), 2, (words::NO_CONSOLES, words::ADD_FOLDER)), (2, every, 1, (words::NO_GAMES, ""))] {
+        library(cored);
+        scene.wait(300);
+        let (x, y) = middle(scene, &format!("chip.{chip}"));
+        scene.click(x, y);
+        scene.wait(300);
+        for (width, height) in SIZES {
+            scene.resize(width, height);
+            scene.wait(300);
+            let tree = scene.tree();
+            let at = format!("{width}x{height}, chip {chip}");
+            assert!(!tree.nodes.iter().any(|n| n.visible && n.name.starts_with("plate.")), "{at}: the chip holds no console");
+            let said = |n: &str| shown(&tree, n).and_then(|n| n.text.clone()).unwrap_or_default();
+            assert_eq!((said("noConsolesWords").as_str(), said("noConsolesAbout").as_str()), words_said, "{at}: the chip's own words");
+            let unit: f64 = crate::eclipse_board::read(&tree, "consolesCanvas", "unit").parse().expect("the canvas's unit");
+            let id: u64 = tree.nodes[tree.find_named("consolesScreen").expect("Eclipse's Choose a console") as usize].id.parse().unwrap();
+            let tokens = crate::eclipse_board::tokens(id);
+            crate::eclipse_board::held(&tree, &rows[..held], k, unit, f64::from(width) / unit, &tokens, &at, &|_, _, _| false, &mut differences);
+            // Nothing else stands where the words do: no maker, no plate, no aside.
+            let headline = edges(shown(&tree, "noConsolesWords").expect("the headline"));
+            let under: Vec<&str> = tree.nodes.iter().filter(|n| n.visible && (n.name.starts_with("maker.") || n.name == "consoleAside") && overlap(headline, edges(n))).map(|n| n.name.as_str()).collect();
+            assert!(under.is_empty(), "{at}: the headline {headline:?} over {under:?}");
+        }
+    }
+    assert!(differences.is_empty(), "{} differences from the board:\n{}", differences.len(), differences.join("\n"));
+}
+
+/// Every console of the systems table on a plate, its name whole or its short one, at every gate size (R-20261116-5).
+fn every_system_whole(scene: &mut Scene<'_>, view: &LibraryView, screen: u64) {
+    let mut every = view.clone();
+    every.cored = emusen_qt_models::library::console_rows(&view.systems, &Default::default(), &[]);
+    assert!(every.cored.len() > view.cored.len(), "the table holds more consoles than the fixture shelves");
+    emusen_theme_qt::host::library(crate::eclipse_board::object(screen)).expect("the theme's Library").show(&every, "[]");
+    scene.wait(300);
+    for (width, height) in SIZES {
+        scene.resize(width, height);
+        scene.wait(300);
+        let tree = scene.tree();
+        let size = format!("{width}x{height}");
+        names_whole(&tree, every.cored.len(), &size);
+        for r in &every.cored {
+            let measure = format!("plateMeasure.{}", r.key);
+            if !whole_words(&tree, &measure) {
+                assert_ne!(r.name, r.shown_name(), "{size}: {}'s full name is cut and it has no short one", r.shown_name());
+            }
+        }
+    }
 }
 
 /// The plates' names drawn, in order.
@@ -611,18 +694,20 @@ fn middle(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
     (n.x + n.w / 2.0, n.y + n.h / 2.0)
 }
 
-/// The chips, Y and X, each pressed by the pad and by the pointer: a chip shows its consoles with their count, Y and the
-/// order's entry step the order, X and the Options pill open Settings at the console's page, and B comes back.
+/// The chips, Y and X, each by the pad and by the pointer, and B back from Settings (EmuSen_Qt.md §3.4.9).
 fn chips_sort_and_options(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, model: &[Console], world: &World, cores: &std::path::Path) {
     let _ = world;
+    let tree = scene.tree();
+    let plate = |c: &Console| plate_name(&tree, c);
+    let of_key = |key: &str| model.iter().find(|c| c.key == key).expect("a console of the model");
     let source_names = |show: Show, order: Order| -> Vec<String> {
         let source = emusen_qt_models::clients::source_for(&library().to_string_lossy(), cores.to_str().unwrap()).unwrap();
         let mut view = LibraryView::empty();
         view.apply(refresh(&source));
-        consoles_listed(&view, show, order).iter().map(|r| text(r, "displayName")).collect()
+        consoles_listed(&view, show, order, &[]).iter().map(|r| plate(of_key(&text(r, "key")))).collect()
     };
-    let all: Vec<String> = model.iter().map(|c| c.display_name.clone()).collect();
-    let with: Vec<String> = model.iter().filter(|c| c.count > 0).map(|c| c.display_name.clone()).collect();
+    let all: Vec<String> = model.iter().map(plate).collect();
+    let with: Vec<String> = model.iter().filter(|c| c.count > 0).map(plate).collect();
     let favourites = source_names(Show::Favourites, Order::Maker);
     assert!(with.len() < all.len() && favourites.len() == 1, "the fixture: {all:?} {with:?} {favourites:?}");
     let said = |scene: &mut Scene<'_>, name: &str| {
@@ -681,7 +766,7 @@ fn chips_sort_and_options(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, mo
     assert_eq!(said(scene, "sortWords"), words::CONSOLE_SORTS[2], "the entry pressed by the pointer steps it too");
     // By the names read from the screen: each maker's plates in the alphabet's order of the names they show.
     let drawn = plate_names(scene);
-    let maker = |name: &String| model.iter().find(|c| &c.display_name == name).map(|c| c.maker.clone()).expect("a console of the model");
+    let maker = |name: &String| model.iter().find(|c| &plate(c) == name).map(|c| c.maker.clone()).expect("a console of the model");
     for run in drawn.chunk_by(|a, b| maker(a) == maker(b)) {
         let mut sorted = run.to_vec();
         sorted.sort_by_key(|n| n.to_lowercase());
@@ -716,8 +801,7 @@ fn chips_sort_and_options(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, mo
         let tree = scene.tree();
         let texts: Vec<&str> = tree.nodes.iter().filter(|n| n.visible).filter_map(|n| n.text.as_deref()).collect();
         assert!(texts.contains(&model[k].name.as_str()), "{}'s page open over the consoles' section: {texts:?}", model[k].name);
-        // B closes the console's page, then leaves Settings for Choose a console.
-        // As a hand does, B once Settings holds the focus: its screen is made as it is shown (Main.qml's settingsSlot).
+        // B once Settings holds the focus closes the console's page, then leaves Settings (Main.qml's settingsSlot).
         let mut seen = Vec::new();
         for _ in 0..2 {
             for _ in 0..40 {

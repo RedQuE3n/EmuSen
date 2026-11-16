@@ -147,8 +147,8 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
 }
 
 /// The consoles a core runs that `show` holds, in `order`, each as `consoles` gives a console (Choose a console's chips and Y).
-pub fn consoles_listed(view: &LibraryView, show: Show, order: Order) -> Vec<Row> {
-    console_cells(&console_list::listed(&view.cored, show, order))
+pub fn consoles_listed(view: &LibraryView, show: Show, order: Order, short: &[String]) -> Vec<Row> {
+    console_cells(&console_list::listed(&view.cored, show, order, short))
 }
 
 /// The consoles' rows with their makers' groups, in the order given.

@@ -1,6 +1,4 @@
-//! Groups as a column, and the chosen group's items as a grid of a given number of columns: each item's column and row in
-//! its group's grid, its four neighbours inside that grid, each group's first item and its rows (EmuSen_Kit.md §7.120).
-//! It names no console: the host hands it each item's group and its place in the group, in the model's order.
+//! Groups as a column and the chosen group's items as a grid, with each item's four neighbours; names no console (EmuSen_Kit.md §7.120).
 
 /// One item's place in its group's grid and its neighbours there, by the item's index in the model; none past the grid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

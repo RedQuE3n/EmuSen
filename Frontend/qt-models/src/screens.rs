@@ -107,8 +107,7 @@ pub fn search_shoulder(on_keys: bool, key: &str) -> Option<bool> {
         _ => None,
     }
 }
-/// A console's options asked for on Choose a console (Eclipse's X, EclipseConsoles:94): `consoleOptions:<console>`, which
-/// opens Settings at that console's page; the console it names, none for every other action.
+/// The console `consoleOptions:<console>` names (Eclipse's X, EclipseConsoles:94); none for every other action.
 pub fn console_options(action: &str) -> Option<&str> {
     action.strip_prefix(crate::help::CONSOLE_OPTIONS)?.strip_prefix(':').filter(|c| !c.is_empty())
 }

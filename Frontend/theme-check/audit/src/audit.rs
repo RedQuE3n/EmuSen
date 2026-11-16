@@ -221,7 +221,7 @@ fn still(scene: &mut Scene<'_>) -> Option<String> {
 struct Pass<'a> {
     variants: &'a [Variant],
     label: &'a str,
-    consoles: Option<&'a [String]>,
+    consoles: Option<&'a [(String, String)]>,
     /// The name of the element the pad walks the focus to before the state is judged.
     focus: Option<&'a str>,
     /// A held press of A on the focus while the state is judged.
@@ -239,7 +239,7 @@ struct Pass<'a> {
 }
 
 impl<'a> Pass<'a> {
-    fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [String]>) -> Pass<'a> {
+    fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [(String, String)]>) -> Pass<'a> {
         Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[], mockup: None, relined: None }
     }
 }
@@ -444,16 +444,18 @@ fn spoken(tree: &Tree, index: u32) -> String {
 /// Down, Left and Right, each new landing followed before the sweep comes back by the opposite press, so a layout the rows do
 /// not fit (a side column beside a grid) is still swept whole. None when every console's name was heard on the focus while
 /// it was inside the window, landed on by a press; else how many were and the first few that were not.
-fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option<String> {
+fn swept(scene: &mut Scene<'_>, consoles: &[(String, String)], size: (f64, f64)) -> Option<String> {
     let mut sweep = Sweep { heard: Vec::new(), found: Vec::new(), size };
+    // A console is heard by its short name or its full one, whichever its tile says.
+    let unheard = |sweep: &Sweep, c: &(String, String)| !sweep.heard.contains(&c.0) && !sweep.heard.contains(&c.1);
     sweep.rows(scene, consoles.len() * 3 + 40);
-    if consoles.iter().any(|c| !sweep.heard.contains(c)) {
+    if consoles.iter().any(|c| unheard(&sweep, c)) {
         if let Some(start) = sweep.landed(scene) {
             sweep.found.push(start.clone());
             sweep.from(scene, start);
         }
     }
-    let missed: Vec<&String> = consoles.iter().filter(|c| !sweep.heard.contains(c)).collect();
+    let missed: Vec<&String> = consoles.iter().filter(|c| unheard(&sweep, c)).map(|c| &c.0).collect();
     (!missed.is_empty()).then(|| {
         let first: Vec<&str> = missed.iter().take(5).map(|s| s.as_str()).collect();
         format!("the pad's sweep heard {} of {} consoles on the screen; not {}", consoles.len() - missed.len(), consoles.len(), first.join(", "))

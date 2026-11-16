@@ -118,7 +118,9 @@ fn qt_3_4_9_eclipse_s_consoles_stands_where_its_board_stands_it() {
                     let Some(want) = want else { continue };
                     // At the board's shape a right edge stands where the board's does, so every edge is the board's px times the unit.
                     let want = want * unit;
-                    if written(want) != written(got) {
+                    // A centre is made of the spec's y and half its height, each written to two places: 0.005 and 0.0025 apart at most.
+                    let apart = if i == 1 && middle { (want - got).abs() > 0.0075 + 1e-9 } else { written(want) != written(got) };
+                    if apart {
                         differences.push(format!("{file}: {name} edge {i}: the board {}, the screen {got}", written(want)));
                     }
                 }

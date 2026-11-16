@@ -215,6 +215,8 @@ ThemeScreen {
                                 readonly property real line: chip.pressed ? 0 : 2 * root.px
                                 controller: frame.controller
                                 objectName: "chip." + chip.index
+                                // With no console listed the pressed chip holds the focus, as a plate does otherwise.
+                                focus: root.listing.count === 0 && chip.pressed
                                 Accessible.name: chipWords.text
                                 width: chipWords.width + 2 * (22 * root.px + chip.line)
                                 height: 48 * root.px

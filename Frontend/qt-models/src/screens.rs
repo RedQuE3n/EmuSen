@@ -107,6 +107,11 @@ pub fn search_shoulder(on_keys: bool, key: &str) -> Option<bool> {
         _ => None,
     }
 }
+/// The console `consoleOptions:<console>` names (Eclipse's X, EclipseConsoles:94); none for every other action.
+pub fn console_options(action: &str) -> Option<&str> {
+    action.strip_prefix(crate::help::CONSOLE_OPTIONS)?.strip_prefix(':').filter(|c| !c.is_empty())
+}
+
 /// Settings' door to the Themes tab, by its name in the screen's description.
 pub const THEMES: &str = "themes";
 /// Settings' door to the cheats of the game last played: that game's page, opened at Options' Cheats.
@@ -163,6 +168,7 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::SearchGrid, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (Shown::Consoles, Ask::Open(key)) => Some((Shown::Grid, Some(key.clone()))),
         (Shown::Consoles, Ask::Act(key)) if key == crate::library::FAVOURITES => Some((Shown::Grid, Some(key.clone()))),
+        (Shown::Consoles, Ask::Act(key)) if console_options(key).is_some() => Some((Shown::Settings, None)),
         (Shown::Consoles, Ask::Back) => Some((Shown::Home, None)),
         (Shown::Grid, Ask::Back) => Some((Shown::Consoles, None)),
         (Shown::Home | Shown::Grid | Shown::Pause | Shown::List | Shown::Search | Shown::SearchGrid, Ask::Play) => Some((Shown::Game, None)),
@@ -313,6 +319,8 @@ pub mod qobject {
         /// at (`cheats`), empty for the page's first.
         #[qproperty(QString, page_game, cxx_name = "pageGame", READ, NOTIFY)]
         #[qproperty(QString, page_at, cxx_name = "pageAt", READ, NOTIFY)]
+        /// The console whose page Settings opens at, asked for from Choose a console; empty where Settings opens at its start.
+        #[qproperty(QString, settings_at, cxx_name = "settingsAt", READ, NOTIFY)]
         type Screens = super::ScreensRust;
     }
 
@@ -393,6 +401,9 @@ pub struct ScreensRust {
     tool_origin: Option<Shown>,
     /// Settings opened over the Pause Card, whose B returns to it.
     over_card: bool,
+    settings_at: QString,
+    /// Settings opened at a console's page from Choose a console, whose B returns to it.
+    over_consoles: bool,
 }
 
 impl Default for ScreensRust {
@@ -411,6 +422,8 @@ impl Default for ScreensRust {
             page_origin: Shown::Home,
             tool_origin: None,
             over_card: false,
+            settings_at: QString::default(),
+            over_consoles: false,
         }
     }
 }
@@ -548,11 +561,24 @@ impl qobject::Screens {
         let stepped = match was {
             Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| (s, None)),
             Shown::Settings if self.over_card && ask == Ask::Back => Some((Shown::Pause, None)),
+            Shown::Settings if self.over_consoles && ask == Ask::Back => Some((Shown::Consoles, None)),
             _ => tool_back(self.themed, self.tool_origin, was, &ask).map(|s| (s, None)).or_else(|| step_in(self.themed, was, &ask)),
         };
         let Some((shown, key)) = stepped else { return };
         if matches!(shown, Shown::Cores | Shown::Themes | Shown::Tool) && shown != was {
             self.as_mut().rust_mut().tool_origin = Some(was);
+        }
+        if shown != was && (shown == Shown::Settings || was == Shown::Settings) {
+            let at = match (&ask, shown) {
+                (Ask::Act(key), Shown::Settings) => console_options(key).unwrap_or_default(),
+                _ => "",
+            };
+            self.as_mut().rust_mut().over_consoles = !at.is_empty();
+            let at = QString::from(at);
+            if self.settings_at != at {
+                self.as_mut().rust_mut().settings_at = at;
+                self.as_mut().settings_at_changed();
+            }
         }
         let over_card = was == Shown::Pause && shown == Shown::Settings;
         if self.over_card != over_card && (over_card || shown != Shown::Settings) {

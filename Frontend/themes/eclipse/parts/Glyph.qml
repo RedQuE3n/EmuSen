@@ -2,9 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Theme
 
-// A pad button's glyph as the boards draw it (Main:63-69, 94-97): a lettered button's letter in the face inside a 2 px ring or
-// on a filled disc, a named one (Menu, View, the shoulders) its name in capitals in a 2 px capsule, any other the kit's mark in
-// the ring. The letter and the name are the kit's for the pad's family; every measure in board pixels (EmuSen_Qt.md §3.4.8).
+// A pad button's glyph as the boards draw it, every measure in board pixels (EmuSen_Qt.md §3.4.9, the tests' means).
 Item {
     id: root
     // A board pixel in canvas units, Board.unit.
@@ -20,6 +18,11 @@ Item {
     property int leadWeight: Font.Bold
     property real wordSize: 15
     property real padding: 12
+    // The shoulders' and triggers' box: its height inside the line, its corner and its padding (EclipseConsoles:103).
+    property real boxSide: 30
+    property real boxRadius: 8
+    property real boxPadding: 10
+    readonly property bool boxed: ([PadGlyph.PageUp, PadGlyph.PageDown, PadGlyph.First, PadGlyph.Last].indexOf(root.button) >= 0)
     property color ring: Tokens.muted
     property color ink: Tokens.text
     property color leadFill: Tokens.accent
@@ -29,14 +32,17 @@ Item {
     readonly property string letter: mark.letter
     readonly property bool named: root.letter.length > 1 || (root.letter.length === 0 && (root.button === PadGlyph.Menu || root.button === PadGlyph.Options))
     readonly property string word: root.letter.length > 1 ? root.letter : mark.name.toUpperCase()
-    readonly property real outer: root.side * root.unit + (root.lead ? 0 : 2 * root.line)
-    implicitWidth: root.named ? metrics.advanceWidth * root.unit + 2 * root.padding * root.unit + 2 * root.line : root.outer
+    readonly property real outer: (root.boxed ? root.boxSide : root.side) * root.unit + (root.lead ? 0 : 2 * root.line)
+    // The name's padding either side and the shape's corner as drawn, in canvas units.
+    readonly property real inset: (root.boxed ? root.boxPadding : root.padding) * root.unit
+    readonly property real corner: root.boxed ? root.boxRadius * root.unit : (root.named ? (root.side / 2) * root.unit : root.width / 2)
+    implicitWidth: root.named ? metrics.advanceWidth * root.unit + 2 * root.inset + 2 * root.line : root.outer
     implicitHeight: root.outer
     width: implicitWidth
     height: implicitHeight
     Rectangle {
         anchors.fill: parent
-        radius: root.named ? (root.side / 2) * root.unit : width / 2
+        radius: root.corner
         color: root.lead ? root.leadFill : "transparent"
         border.width: root.lead ? 0 : root.line
         border.color: root.ring

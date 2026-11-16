@@ -1,0 +1,9 @@
+{
+    "schema": 1,
+    "api": "1.5",
+    "name": "Fixture side column, makers cut off",
+    "author": "The EmuSen project",
+    "licence": "GPL-3.0-or-later",
+    "variants": ["dark"],
+    "screens": ["consoles"]
+}

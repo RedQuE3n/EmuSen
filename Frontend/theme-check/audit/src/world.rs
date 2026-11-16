@@ -61,9 +61,9 @@ pub struct Synthetic {
     pub view: LibraryView,
     pub crowd: LibraryView,
     /// The crowd's consoles by the names a tile shows.
-    pub crowd_names: Vec<String>,
+    pub crowd_names: Vec<(String, String)>,
     /// The library with a catalogue's consoles in place of its own, and their names, when one is given.
-    pub catalogue: Option<(LibraryView, Vec<String>)>,
+    pub catalogue: Option<(LibraryView, Vec<(String, String)>)>,
     pub device: DeviceFacts,
 }
 
@@ -137,8 +137,14 @@ pub fn make(harness: &mut Harness, entries: Option<&[Entry]>) -> Result<Syntheti
         device: DeviceFacts { controllers: 1, clock: "21:42".into(), battery: 64, ..DeviceFacts::default() },
     };
     synthetic.view = synthetic.shaped(Shape::Synthetic)?;
-    let names = |view: &LibraryView| -> Vec<String> {
-        view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).map(|r| r.name.clone()).collect()
+    // Each console's short name and its full one: a theme's tile says either (Library.consoles' name and displayName).
+    let names = |view: &LibraryView| -> Vec<(String, String)> {
+        view.rows
+            .rows()
+            .iter()
+            .filter(|r| r.kind == Some(Kind::Console))
+            .map(|r| (r.name.clone(), if r.full_name.is_empty() { r.name.clone() } else { r.full_name.clone() }))
+            .collect()
     };
     let default = synthetic.default_source();
     let mut crowd = LibraryView::empty();

@@ -50,6 +50,12 @@ pub const POWER_LINE: &str = "Exit";
 pub const BETWEEN: &str = "·";
 /// The search field's name, as a screen reader says it.
 pub const SEARCH: &str = "Search";
+/// The labels of a console's facts, a row each, in their order: its games, those played, its core and its screen.
+pub const FACT_LABELS: [&str; 4] = ["Games", "Played", "Core", "Screen"];
+/// Choose a console's chips (EclipseConsoles:43-45), in `console_list::Show`'s order.
+pub const CONSOLE_SHOWS: [&str; 3] = ["All", "With games", "Favourites"];
+/// Choose a console's orders as Y's entry says them (EclipseConsoles:49), in `console_list::Order`'s order.
+pub const CONSOLE_SORTS: [&str; 4] = ["Sorted by maker", "Sorted by year", "Sorted by name", "Sorted by games"];
 
 /// The program's name and version, as the Home card's Power page says it under its rows (Mistress's `BigMenuFooter`).
 pub fn version_line() -> String {
@@ -118,6 +124,27 @@ pub fn games(n: usize) -> String {
     counted(n, "game", "games")
 }
 
+/// A console's screen kind, Serenity's catalogue's name for it, in words: "CRT, television" or "LCD"; none for another.
+pub fn screen(kind: &str) -> &'static str {
+    match kind {
+        "Television" => "CRT, television",
+        "Lcd" => "LCD",
+        _ => "",
+    }
+}
+
+/// A battery's charge as the status says it: "82%"; none below 0, where the machine has no battery.
+pub fn percent(n: i32) -> String {
+    if n < 0 {
+        String::new()
+    } else {
+        format!("{n}%")
+    }
+}
+
+/// A console plate's line where it holds no game, after its year: "1986 · no games yet" (EclipseConsoles:129).
+pub const NO_GAMES_LINE: &str = "no games yet";
+
 /// The Recently played place's line: the game played last, or none yet.
 pub fn last_played(title: Option<&str>) -> String {
     title.map_or_else(|| "Nothing played yet".to_owned(), |t| format!("Last: {t}"))
@@ -136,7 +163,12 @@ pub fn runs_on(name: &str, libretro: bool) -> String {
 /// A focused console's facts: "Nintendo · 1983 · 2 games · runs on Moon, an EmuSen core", the empty parts left out.
 pub fn facts(maker: &str, year: i32, games: usize, runs_on: &str) -> String {
     let year = if year > 0 { year.to_string() } else { String::new() };
-    [maker, year.as_str(), self::games(games).as_str(), runs_on].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ")
+    line(&[maker, year.as_str(), self::games(games).as_str(), runs_on])
+}
+
+/// Parts said as one line: "Nintendo · 1990", the empty parts left out, joined as the facts join theirs.
+pub fn line(parts: &[&str]) -> String {
+    parts.iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ")
 }
 
 /// Now, in seconds since 1970.
@@ -210,6 +242,9 @@ pub fn continue_line(console: &str) -> String {
 pub fn resume_point(time: &str) -> String {
     format!("{RESUME_POINT} {BETWEEN} saved {time}")
 }
+
+/// Y on Eclipse's Choose a console, the next order (EclipseConsoles:46-50).
+pub const SORT: &str = "Sort";
 
 /// The art behind Home's disc, as Eclipse's Home names it (Main.dc.html:75).
 pub const GAME_ART: &str = "Game art";

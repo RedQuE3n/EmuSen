@@ -12,6 +12,8 @@ QtObject {
     readonly property color field4: "#D9C8FF"
     // The ground of an empty library (EclipseEmpty:17).
     readonly property color emptyGround: "#05060B"
+    // The words under an empty library's headline (EclipseEmpty:30).
+    readonly property color emptyAbout: "#C9CDDB"
     // Home's eyebrow (Main:54).
     readonly property color rose: "#F3C9D2"
     // The help line's words (Main:99, EclipseConsoles:99, EclipseLibrary:82).
@@ -22,6 +24,15 @@ QtObject {
     readonly property color resumeRim: "#80F6E7D8"
     // An outlined pill's line (Main:65, 68).
     readonly property color pillLine: "#5A6076"
+    // A chip's line, unpressed (EclipseConsoles:44, 45).
+    readonly property color chipLine: "#4A5068"
+    // A console plate's line where it holds no game (EclipseConsoles:129).
+    readonly property color emptyLine: "#8E94AB"
+    // A console plate's inset edge and its played share's track (EclipseConsoles:64, 66).
+    readonly property color plateEdge: "#262A3A"
+    readonly property color track: "#2C3044"
+    // The focus ring's glow round a tile or a plate (Main:113, EclipseConsoles:64).
+    readonly property color ringGlow: "#80F0B4C4"
     // A tile's title and its facts (Main:85, 86).
     readonly property color tileTitle: "#FFFFFF"
     readonly property color tileFacts: "#E3E6F0"

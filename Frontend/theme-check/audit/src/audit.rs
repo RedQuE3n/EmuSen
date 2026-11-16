@@ -221,7 +221,7 @@ fn still(scene: &mut Scene<'_>) -> Option<String> {
 struct Pass<'a> {
     variants: &'a [Variant],
     label: &'a str,
-    consoles: Option<&'a [String]>,
+    consoles: Option<&'a [(String, String)]>,
     /// The name of the element the pad walks the focus to before the state is judged.
     focus: Option<&'a str>,
     /// A held press of A on the focus while the state is judged.
@@ -239,7 +239,7 @@ struct Pass<'a> {
 }
 
 impl<'a> Pass<'a> {
-    fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [String]>) -> Pass<'a> {
+    fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [(String, String)]>) -> Pass<'a> {
         Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[], mockup: None, relined: None }
     }
 }
@@ -443,79 +443,143 @@ fn spoken(tree: &Tree, index: u32) -> String {
     String::new()
 }
 
-/// The focused element's item, its spoken name, and whether its centre is inside the window, where the player can see it.
-fn focused(scene: &mut Scene<'_>, size: (f64, f64)) -> Option<(u64, String, bool)> {
-    let tree = scene.tree();
-    focused_in(scene, &tree, size)
-}
-
-/// As `focused`, on a tree that still stands as the window shows it.
-fn focused_in(scene: &mut Scene<'_>, tree: &Tree, size: (f64, f64)) -> Option<(u64, String, bool)> {
-    scene.focus(tree).map(|f| {
-        let n = &tree.nodes[f as usize];
-        let (x, y) = (n.x + n.w / 2.0, n.y + n.h / 2.0);
-        (tree.id_of(f), spoken(tree, f), x >= 0.0 && y >= 0.0 && x < size.0 && y < size.1)
-    })
-}
-
-/// The pad's sweep of a crowded Choose a console: Up and Left until the focus stops, then each row along to its right end and
-/// back to its left with Down between, as a player looks for one console among many. None when every console's name was heard on the focus while it
-/// was inside the window; else how many were and the first few that were not.
-fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option<String> {
-    let mut heard: Vec<String> = Vec::new();
-    // The focus as last read: nothing but reading happens between one press's settled reading and the next press (man theme-check).
-    let mut last = focused(scene, size);
-    if let Some((_, name, true)) = &last {
-        heard.push(name.clone());
-    }
-    let limit = consoles.len() * 3 + 40;
-    // Whether the press moved the focus, and where it stands after it.
-    let mut press = |scene: &mut Scene<'_>, button: UiButton| -> (bool, Option<(u64, String, bool)>) {
-        scene.key(key_of(button), 0);
-        // The view brought the new focus into sight before it is read.
-        let tree = scene.tree();
-        let after = if scene.settle(&tree) { focused(scene, size) } else { focused_in(scene, &tree, size) };
-        if let Some((_, name, true)) = &after {
-            if !heard.contains(name) {
-                heard.push(name.clone());
-            }
-        }
-        let moved = after.is_some() && after != last;
-        last = after.clone();
-        (moved, after)
-    };
-    let mut presses = 0;
-    for button in [UiButton::Up, UiButton::Left] {
-        while presses < limit && press(scene, button).0 {
-            presses += 1;
+/// The pad's sweep of a crowded Choose a console, rows then neighbours; None when every console was heard (man theme-check).
+fn swept(scene: &mut Scene<'_>, consoles: &[(String, String)], size: (f64, f64)) -> Option<String> {
+    let mut sweep = Sweep { heard: Vec::new(), found: Vec::new(), size, last: None };
+    // A console is heard by its short name or its full one, whichever its tile says.
+    let unheard = |sweep: &Sweep, c: &(String, String)| !sweep.heard.contains(&c.0) && !sweep.heard.contains(&c.1);
+    sweep.rows(scene, consoles.len() * 3 + 40);
+    if consoles.iter().any(|c| unheard(&sweep, c)) {
+        if let Some(start) = sweep.now(scene) {
+            sweep.found.push(start.clone());
+            sweep.from(scene, start);
         }
     }
-    // Each row to both of its ends, since Down may land anywhere along the next (the orbits land nearest in x).
-    loop {
-        for along in [UiButton::Right, UiButton::Left] {
-            let mut seen = Vec::new();
-            while presses < limit {
-                let (moved, now) = press(scene, along);
-                if !moved {
-                    break;
-                }
-                presses += 1;
-                if seen.contains(&now) {
-                    break;
-                }
-                seen.push(now);
-            }
-        }
-        presses += 1;
-        if presses >= limit || !press(scene, UiButton::Down).0 {
-            break;
-        }
-    }
-    let missed: Vec<&String> = consoles.iter().filter(|c| !heard.contains(c)).collect();
+    let missed: Vec<&String> = consoles.iter().filter(|c| unheard(&sweep, c)).map(|c| &c.0).collect();
     (!missed.is_empty()).then(|| {
         let first: Vec<&str> = missed.iter().take(5).map(|s| s.as_str()).collect();
         format!("the pad's sweep heard {} of {} consoles on the screen; not {}", consoles.len() - missed.len(), consoles.len(), first.join(", "))
     })
+}
+
+/// An element the sweep landed on: its objectName (else its address) and the name a reader hears (man theme-check).
+type Landed = (String, String);
+
+/// The sweep's state: the names heard inside the window, the elements landed on, the window's size, and the focus as last read.
+struct Sweep {
+    heard: Vec<String>,
+    found: Vec<Landed>,
+    size: (f64, f64),
+    last: Option<Option<Landed>>,
+}
+
+impl Sweep {
+    /// Where the focus is, read from a fresh tree.
+    fn landed(&mut self, scene: &mut Scene<'_>) -> Option<Landed> {
+        let tree = scene.tree();
+        self.landed_in(scene, &tree)
+    }
+
+    /// The focus as last read: nothing but reading happens between one press's settled reading and the next press (man theme-check).
+    fn now(&mut self, scene: &mut Scene<'_>) -> Option<Landed> {
+        match &self.last {
+            Some(at) => at.clone(),
+            None => self.landed(scene),
+        }
+    }
+
+    /// Where the focus is on a tree that still stands as the window shows it, its name heard if its centre is inside the window.
+    fn landed_in(&mut self, scene: &mut Scene<'_>, tree: &Tree) -> Option<Landed> {
+        self.last = Some(None);
+        let f = scene.focus(tree)?;
+        let n = &tree.nodes[f as usize];
+        let (x, y) = (n.x + n.w / 2.0, n.y + n.h / 2.0);
+        let name = spoken(&tree, f);
+        if x >= 0.0 && y >= 0.0 && x < self.size.0 && y < self.size.1 && !self.heard.contains(&name) {
+            self.heard.push(name.clone());
+        }
+        // An element with no objectName is told from its like by its address, the one name it has.
+        let key = if n.name.is_empty() { format!("#{}", tree.id_of(f)) } else { n.name.clone() };
+        self.last = Some(Some((key, name)));
+        self.last.clone().flatten()
+    }
+
+    /// One press and where it landed, once the view brought it into sight.
+    fn press(&mut self, scene: &mut Scene<'_>, button: UiButton) -> Option<Landed> {
+        scene.key(key_of(button), 0);
+        let tree = scene.tree();
+        if scene.settle(&tree) { self.landed(scene) } else { self.landed_in(scene, &tree) }
+    }
+
+    /// The rows' part of the sweep, `limit` presses at most (man theme-check).
+    fn rows(&mut self, scene: &mut Scene<'_>, limit: usize) {
+        self.now(scene);
+        let mut presses = 0;
+        for button in [UiButton::Up, UiButton::Left] {
+            while presses < limit && self.moved(scene, button) {
+                presses += 1;
+            }
+        }
+        loop {
+            for along in [UiButton::Right, UiButton::Left] {
+                let mut seen = Vec::new();
+                while presses < limit && self.moved(scene, along) {
+                    presses += 1;
+                    let now = self.last.clone().flatten();
+                    if seen.contains(&now) {
+                        break;
+                    }
+                    seen.push(now);
+                }
+            }
+            presses += 1;
+            if presses >= limit || !self.moved(scene, UiButton::Down) {
+                break;
+            }
+        }
+    }
+
+    /// One press, and whether it moved the focus.
+    fn moved(&mut self, scene: &mut Scene<'_>, button: UiButton) -> bool {
+        let before = self.now(scene);
+        let after = self.press(scene, button);
+        after.is_some() && after != before
+    }
+
+    /// Stands on `at` again: the focus is already there, or it is given there directly while its delegate exists.
+    fn stand_on(&mut self, scene: &mut Scene<'_>, at: &Landed) -> bool {
+        if self.now(scene).is_some_and(|now| &now == at) {
+            return true;
+        }
+        self.last = None;
+        let tree = scene.tree();
+        (0..tree.nodes.len() as u32)
+            .find(|&i| {
+                let n = &tree.nodes[i as usize];
+                (if n.name.is_empty() { format!("#{}", tree.id_of(i)) } else { n.name.clone() }) == at.0 && spoken(&tree, i) == at.1
+            })
+            .is_some_and(|i| scene.focus_item(&tree, i))
+    }
+
+    /// Each press from `at`, following every new landing before coming back by the opposite press, so the focus ends on `at`.
+    fn from(&mut self, scene: &mut Scene<'_>, at: Landed) {
+        for (button, back) in [(UiButton::Up, UiButton::Down), (UiButton::Down, UiButton::Up), (UiButton::Left, UiButton::Right), (UiButton::Right, UiButton::Left)] {
+            if !self.stand_on(scene, &at) {
+                return;
+            }
+            let Some(to) = self.press(scene, button) else { continue };
+            if to == at {
+                continue;
+            }
+            if !self.found.contains(&to) {
+                self.found.push(to.clone());
+                self.from(scene, to.clone());
+            }
+            if self.stand_on(scene, &to) {
+                self.press(scene, back);
+            }
+        }
+    }
 }
 
 /// A recorded picture whose size is not its state's, in words; None when it is the state's size or was not written.

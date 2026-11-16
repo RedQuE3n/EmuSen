@@ -76,7 +76,7 @@ fn baked_shader() -> PathBuf {
 fn main() {
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Kit").version(1, 8).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
+        QmlModule::new("EmuSen.Kit").version(1, 9).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
     )
     .qrc("style/EmuSen.qrc")
     .qrc("fonts/Fonts.qrc")
@@ -96,6 +96,7 @@ fn main() {
         "src/planets.rs",
         "src/orbits.rs",
         "src/figures.rs",
+        "src/group_grid.rs",
         "src/wheels.rs",
         "src/stack.rs",
         "src/picture.rs",

@@ -11,6 +11,7 @@ pub mod clients;
 pub mod clock;
 pub mod display;
 pub mod edits;
+pub mod console_list;
 pub mod consoles;
 pub mod consoles_source;
 pub mod controllers;

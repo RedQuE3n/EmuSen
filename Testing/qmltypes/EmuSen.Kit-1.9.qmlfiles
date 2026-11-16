@@ -133,6 +133,7 @@ HelpBar
     objectName "help-" + entry.label
     objectName "icon-" + entry.label
     objectName "ownGlyph-" + entry.label
+    objectName "ownGlyph2-" + entry.label
     objectName "glyph-" + entry.label
     objectName "glyph2-" + entry.label
 MenuPanel

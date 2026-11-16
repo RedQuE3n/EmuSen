@@ -10,6 +10,8 @@ Item {
     required property var controller
     property bool searchable: true
     property bool glass: true
+    // The battery's charge before the clock, where the machine has a battery (EclipseConsoles:36).
+    property bool battery: false
     property color glassColor: "transparent"
     property real tall: 56
     property real pad: 22
@@ -88,11 +90,25 @@ Item {
             }
         }
     }
+    // Made only where a board draws the battery and the machine reports one, so otherwise no element of it is held.
+    Loader {
+        id: charge
+        active: root.battery && Words.percent(Device.battery).length > 0
+        x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
+        y: (root.height - height) / 2
+        sourceComponent: Line {
+            objectName: "battery"
+            unit: root.unit
+            text: Words.percent(Device.battery)
+            color: Tokens.text
+            size: root.size
+        }
+    }
     Line {
         id: clock
         objectName: "clock"
         unit: root.unit
-        x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
+        x: charge.item !== null ? charge.x + charge.width + root.gap * root.unit : charge.x
         y: (root.height - height) / 2
         text: Device.shortTime
         color: Tokens.text

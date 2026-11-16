@@ -96,4 +96,7 @@ impl LibrarySource for Crowd<'_> {
     fn collections(&self) -> Result<Vec<Collection>, String> {
         self.inner.collections()
     }
+    fn screens(&self) -> Result<Vec<(String, String)>, String> {
+        self.inner.screens()
+    }
 }

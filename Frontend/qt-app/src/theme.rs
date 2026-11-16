@@ -239,6 +239,7 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
         Action::Favourite(key) => Carried::Favourite(key.clone()),
         Action::Random(_) => Carried::Acted(help::RANDOM.into()),
         Action::OpenConsole(key) => Carried::Opened(key.clone()),
+        Action::ConsoleOptions(key) => Carried::Acted(format!("{}:{key}", help::CONSOLE_OPTIONS)),
         Action::OpenPlace(key) => match view::PLACE_IDS.iter().position(|id| id == key) {
             Some(i) => Carried::Place(i as i32),
             None => Carried::Opened(key.clone()),

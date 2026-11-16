@@ -249,6 +249,8 @@ Window {
             id: machineBattery
             objectName: "battery"
             platformLibrary: program.platformLibrary
+            onPlatformLibraryChanged: machineBattery.read()
+            onRootChanged: machineBattery.read()
         }
         Timer {
             interval: machineBattery.every

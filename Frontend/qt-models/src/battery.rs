@@ -22,7 +22,7 @@ pub mod qobject {
         #[qml_element]
         /// The platform library the battery is asked of.
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
-        /// A made-up power_supply tree a test names; empty, the kernel's own.
+        /// A made-up power_supply tree a test names; empty, the kernel's own. A change of either asks again.
         #[qproperty(QString, root)]
         /// The level, 0 to 100, or -1 where the machine has no battery or none was read yet.
         #[qproperty(i32, level, READ, NOTIFY)]
@@ -48,13 +48,14 @@ pub struct BatteryRust {
     charging: bool,
     every: i32,
     platform: Option<Arc<Platform>>,
-    /// Whether a read is out, so a slow one is never joined by another.
+    /// Whether a read is out, so a slow one is never joined by another, and whether one was asked for meanwhile.
     asking: bool,
+    again: bool,
 }
 
 impl Default for BatteryRust {
     fn default() -> Self {
-        BatteryRust { platform_library: QString::default(), root: QString::default(), level: -1, charging: false, every: EVERY_MS, platform: None, asking: false }
+        BatteryRust { platform_library: QString::default(), root: QString::default(), level: -1, charging: false, every: EVERY_MS, platform: None, asking: false, again: false }
     }
 }
 
@@ -66,6 +67,7 @@ pub fn shown(answer: Option<emusen_platform_client::galaxia::Battery>) -> (i32, 
 impl qobject::Battery {
     fn read(mut self: Pin<&mut Self>) {
         if self.asking {
+            self.as_mut().rust_mut().again = true;
             return;
         }
         if self.platform.is_none() {
@@ -91,6 +93,9 @@ impl qobject::Battery {
         if self.charging != charging {
             self.as_mut().rust_mut().charging = charging;
             self.as_mut().charging_changed();
+        }
+        if std::mem::take(&mut self.as_mut().rust_mut().again) {
+            self.read();
         }
     }
 }

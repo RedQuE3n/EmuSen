@@ -135,6 +135,35 @@ THE LOADED STEP
     theme that lays consoles out by hand, or names its tiles for no
     reader, fails it.
 
+    The sweep reads the window's tree once a press. Sampled on
+    2026-11-16 (eu-stack every 5 s over theme-audit --mockups
+    Testing/themes on Horizon, Meridian and Orrery, the desktop, Ryzen 7
+    7700X), 84 to 91 per cent of each run was spent reading trees, two
+    thirds of it under the sweep, which read four a press: the focus
+    before the press, the tree the views settle by, the focus after,
+    and the focus again for the row's end. Nothing but reading happens
+    between one press's settled reading and the next press, so the one
+    after a press stands for the one before the next, and when every
+    view was already at rest (the harness's settle says it waited
+    none) the tree it settled by is the one the focus is read from.
+    The findings, what was held and what was accepted are byte for
+    byte those of trunk 385db3952 over all six built-in themes but for
+    the ratio of an accepted contrast line, whose last digit trunk's
+    own two runs over Orrery do not repeat (4.39:1 and 4.41:1); the
+    three tests that hold Horizon, Meridian and Orrery to their mockups
+    compare the whole account with Testing/themes/audit, that ratio
+    written _. In the front end's gate (gate.sh, ordinary tests four at
+    a time) on 2026-11-16, the Horizon test took 184 s and Meridian's
+    292 s, against 480 s and 647 s for trunk's gate the same day;
+    Orrery's took 1204 s there and 386 s run by itself after the change
+    (cargo test --release --test audit, beside another gate). Run side
+    by side with the other built-in themes, the audit over Orrery took
+    1512 s and 1500 s on trunk and 448 s after. In that gate the Orrery
+    audit stopped at 27 s on a SIGSEGV in QQuickItem::geometryChange
+    under Scene::resize, the same top frames (a width set through
+    anchors.fill) a trunk binary died on once in three runs over Orrery,
+    there under the walk's put_back; its cause is not known.
+
     The loaded step's kinds, each line naming the screen's file, line 1
     (Qt keeps no line for an item), the size and the variant:
 

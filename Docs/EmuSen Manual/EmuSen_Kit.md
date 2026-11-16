@@ -4169,6 +4169,13 @@ the RX 6800). `tests/corona_gpu.rs` (a GPU job) draws the board's disc, rim and 
 colour at thirteen distances past the edge against the two box-shadows computed in the test (each chord's share by the
 error function, summed at a tenth of a pixel): within 2 levels (measured worst 2). Kit 1.8.
 
+**A glow's entry gone before its delegate.** Each delegate reads its glow through `modelData?.` guards: a `list<CoronaGlow>`
+holds its entries as guarded pointers, so an entry deleted while the disc lives, as a theme's dropped engine deletes them,
+leaves a null the delegate still reads. `tests/corona_disc.rs` deletes a disc's one glow while the disc lives and holds the
+log quiet; with one guard removed it logs "TypeError: Cannot read property 'blur' of null" (seen 2026-11-15). Eclipse's
+own drop no longer reaches the read since the delegate became an `Item` over a nested `Glow` in 2026-11-15's work, which is
+why the case is held in the kit.
+
 ### 7.117 The face tokens: Sora and JetBrains Mono bundled, a face for each role (2026-11-15)
 
 Decided 2026-11-14 by the tester (R-20261114-15): "Bundle both fonts and add the face token": Eclipse's typeface is Sora,

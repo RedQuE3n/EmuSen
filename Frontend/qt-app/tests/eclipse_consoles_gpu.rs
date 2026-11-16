@@ -5,6 +5,7 @@
 mod common;
 mod eclipse_board;
 mod eclipse_consoles_oracle;
+mod eclipse_pad;
 
 use emusen_qt_test::compositor::Compositor;
 

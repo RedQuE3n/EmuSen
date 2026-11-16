@@ -6,6 +6,7 @@
 
 
 use crate::common::{approved_console_core, wait_for, CONSOLES};
+use crate::eclipse_pad::{focused, press};
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
@@ -16,7 +17,6 @@ use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
-use emusen_qt_endymion::reading::sdl_button;
 use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::library::{refresh, LibrarySource, LibraryView};
 use emusen_qt_models::{themes, words};
@@ -27,11 +27,6 @@ use emusen_qt_test::Scene;
 use emusen_qt_models::console_list::{Order, Show};
 use emusen_theme_qt::view::{consoles_listed, Cell, CONSOLE_ROLES};
 use serde_json::json;
-
-/// SDL's trigger axes (SDL_GAMEPAD_AXIS_LEFT_TRIGGER and _RIGHT_TRIGGER) and a full pull.
-const LEFT_TRIGGER: i32 = 4;
-const RIGHT_TRIGGER: i32 = 5;
-const PULLED: i16 = i16::MAX;
 
 /// The board's elements, one a row (eclipse/consoles.tsv), held by eclipse_board's rules.
 const BOARD: &str = include_str!("../eclipse/consoles.tsv");
@@ -233,33 +228,6 @@ fn library_of(world: &World, cores: &std::path::Path) -> (Vec<Console>, LibraryV
 }
 
 /// The focused item's objectName.
-fn focused(scene: &mut Scene<'_>) -> String {
-    let tree = scene.tree();
-    scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
-}
-
-/// A control pressed and let go on the pad, as a hand does: down until the router holds it (or the screen it opens is
-/// shown, whose frame holds nothing yet), up until it has let it go.
-fn press(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, control: PadControl) {
-    let button = control.press().expect("a control the interface hears");
-    let shown = scene.property("screens", "shown");
-    let set = |down: bool| match sdl_button(control) {
-        Some(b) => sdl.press(pad, b, down),
-        None => sdl.axis(pad, if control == PadControl::LeftTrigger { LEFT_TRIGGER } else { RIGHT_TRIGGER }, if down { PULLED } else { 0 }),
-    };
-    for down in [true, false] {
-        set(down);
-        let heard = |s: &mut Scene<'_>| s.pad_held(button) == down || (down && s.property("screens", "shown") != shown);
-        let mut waited = 0;
-        while !heard(scene) && waited < 2000 {
-            scene.wait(8);
-            waited += 8;
-        }
-        assert!(heard(scene), "the router heard {control:?} {}; shown {}, focus {}", if down { "down" } else { "up" }, scene.property("screens", "shown"), focused(scene));
-    }
-    scene.wait(60);
-}
-
 /// Back on plate `k`: Open's Left and a maker's Right land on a plate, LT and RT step to its maker, then Down and Right along.
 fn go_to(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, grid: &emusen_kit_core::group_grid::GroupGrid, places: &[(usize, usize)], k: usize) {
     for _ in 0..64 {

@@ -1,4 +1,4 @@
-//! Eclipse's games view with no game in the library (EmuSen_Qt.md §3.4.10): the empty board's rows of `eclipse/games.tsv`
+//! Eclipse's games view with no game in the library (EmuSen_Qt.md §3.4.10): the empty board's rows of `eclipse/empty.tsv`
 //! held to the screen at each of the gate's sizes, and the program's words; the theme's fit and contrast are theme-check's loaded step. With
 //! `ECLIPSE_GAMES_PICTURES` set, the state is saved there at 1280x800 and 1920x1200.
 

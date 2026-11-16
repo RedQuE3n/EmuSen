@@ -1,4 +1,4 @@
-//! Eclipse's games view held to its table (`games.tsv`, EmuSen_Qt.md §3.4.10): every built row's checks against the
+//! Eclipse's games view held to its table (`empty.tsv`, EmuSen_Qt.md §3.4.10): every built row's checks against the
 //! scene's items, a board pixel converted by kit-core's design height over the board's height.
 
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
@@ -6,7 +6,7 @@ use emusen_kit_core::tokens::Colour;
 use emusen_qt_test::tree::{Node, Tree};
 use emusen_qt_test::Scene;
 
-pub const TABLE: &str = include_str!("games.tsv");
+pub const TABLE: &str = include_str!("empty.tsv");
 
 /// Two measures in canvas units are one where they differ by less than this: Qt's scene holds positions in single
 /// precision (about 7 digits), so a 3840-pixel window rounds at a few ten-thousandths of a unit; not a design allowance.
@@ -88,7 +88,6 @@ fn same(a: f64, b: f64) -> bool {
 /// The differences between the rows given and the scene at the window's height `h` and width `w`, each a line; `states`
 /// names the rows held in this state (the games or the empty one).
 pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<String> {
-    let text_scale = *scene.kit_tokens().expect("the program's tokens").text_scale();
     let tree = scene.tree();
     let unit = h / DESIGN_HEIGHT;
     let canvas_width = w / unit;
@@ -158,9 +157,8 @@ pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<
                     };
                     (x.to_string(), ((a.x + a.w) / unit + units(gap)).to_string())
                 }
-                // A type size is the item's own pixel size in canvas units: Type.size's of the board's, the kit's rule at the text
-                // scale in force and never under the legibility floor, as Qt holds it whole.
-                "font" => (node.size.to_string(), emusen_kit_qt::type_size::legible(units(value), text_scale).round().to_string()),
+                // A type size is the board's exactly, in board pixels, the words drawn by parts/Line.qml scaled by the board's measure (R-20261115-24).
+                "font" => (node.size.to_string(), value.to_string()),
                 "ink" => {
                     let read = node.ink.clone().unwrap_or_default();
                     if Colour::parse(&read) != Colour::parse(value) {

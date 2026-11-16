@@ -38,21 +38,14 @@ ThemeScreen {
             Ink {
                 id: ink
             }
-            // The board's hues for the shown game (Main:19-23): its art's three most prominent, spread by the board's own offsets where
-            // the art has fewer, else its console's hue the same way, else none and the board's own colours (EmuSen_Qt.md §3.4.8).
-            readonly property var artHues: Library.artHuesRead >= 0 && root.currentTile ? Library.artHues(root.currentTile.key, 3) : []
-            readonly property var hues: {
-                const art = root.artHues.length > 0 ? root.artHues : (root.currentTile ? [root.currentTile.consoleHue] : [])
-                if (art.length === 0)
-                    return []
-                // The board's three hues, 168, 251 and 218 degrees: the second 83 past the first, the third 50 past it.
-                const spread = (from, to) => from + ((((to - from) % 360) + 540) % 360 - 180) * 50 / 83
-                if (art.length === 1)
-                    return [art[0], art[0] + 83, art[0] + 50]
-                if (art.length === 2)
-                    return [art[0], art[1], spread(art[0], art[1])]
-                return art
+            // The shown game's hues for the board's fields (parts/ArtHues.qml).
+            ArtHues {
+                id: shownHues
+                key: root.currentTile ? root.currentTile.key : ""
+                consoleHue: root.currentTile ? root.currentTile.consoleHue : NaN
             }
+            readonly property var artHues: shownHues.art
+            readonly property var hues: shownHues.hues
             // Each board field's colour with the shown game's hue; the streaks take the hues of the two fields they are pale tints of
             // (Main:22 of 19, Main:23 of 20).
             FieldInk { id: field0; board: ink.field0; hue: root.hues.length > 0 ? root.hues[0] : NaN }

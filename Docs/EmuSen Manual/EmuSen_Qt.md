@@ -1991,71 +1991,71 @@ over the makers scrolls each, and the pad's next press brings the plate or the m
 table, so a library of 120 consoles exists only in theme-audit's crowd (`theme-check/audit/src/crowd.rs`), and the
 120-console run is theme-audit's.
 
-#### 3.4.10 Eclipse's games view **[M 2026-11-15]**
+#### 3.4.10 Eclipse's games view **[M 2026-11-16]**
 
 Decided 2026-11-14 by the tester (R-20261114-13): Eclipse is built a screen a piece. The games view is
-`Frontend/themes/eclipse/screens/Games.qml`, drawn from the boards "Eclipse theme, a console's games"
-(`EclipseLibrary.dc.html`) and "Eclipse theme, first run with no games" (`EclipseEmpty.dc.html`). Every element of the two
-boards is a row of `Frontend/qt-app/tests/eclipse/games.tsv`: its board line, what the program has for it (path:line) or
-that it has nothing, whether it is built here, Home's (a part Home's board draws too, built by the Home piece), not drawn,
-or open, and the checks it is held to. A board pixel becomes canvas units as value × `canvas::DESIGN_HEIGHT` / the board's
-height (1200), the conversion of §3.4.7.
+`Frontend/themes/eclipse/screens/Games.qml`, drawn from the board "Eclipse theme, a console's games"
+(`EclipseLibrary.dc.html`), and, with no game in the library, "Eclipse theme, first run with no games"
+(`EclipseEmpty.dc.html`). Decided 2026-11-15 by the tester (R-20261115-20 to -26): the screen is its board exactly, text
+sizes included. Every element of the games board is a row of `Frontend/qt-app/tests/eclipse/games.tsv`, in the format of
+Home's and Choose a console's tables (§3.4.8, §3.4.9): its board line, what the program supplies it from, the part that
+draws it, its box by the board's rule, its colour, its type size and its type; or `nothing`, with the reason, where the
+program has nothing for it. The empty board's rows and the empty lists' words are `eclipse/empty.tsv`.
 
-**What is drawn.** Behind everything, the focused game's art (its row's hero, else its cover, as `view.rs` gives it)
-through the kit's `Backdrop`, at the board's first field's blur, 120 px, and opacity, 0.35 (`EclipseLibrary:19`), the
-same opacity unblurred on the software backend (R-20261115-6); provisional, the tester's to judge from the pictures. A
-game with no art has none: the plain ground. Over it the kit's `CoronaDisc` at the board's place at the left edge
-(`EclipseLibrary:21`). At the left, the focused game's console (its `Library.consoles` name, then its year where the row has
-one) and its title, and its description where the row has one. Beside them, the Filter page's choices as chips, the one in
-force filled, and the sort in force as a pill at the right; under them the games as tiles, each the cover filling the tile
-as the board's art does (cropped through `RoundPicture`) or, with no cover, the plain tile in `surfaceRaised`, its title
-over the kit's `overArtScrim` foot, the kit's `FocusRing` on the focused one. The tiles stand in as many columns of the
-board's tile and gap as fit between the board's left edge of them and its right margin, five at the board's shape, and
-four rows are shown, moved a row at a time once the focus leaves them. At the right the letter rail: the focused game's
-letter, the track, the last letter. The help bar is `Help.entries(kind, {letters: true})`, so LT and RT step letters here
-and nowhere else. A list with nothing in it shows `Browse.emptyWords` in the empty board's heading; with no game in the
-library at all, the empty board: `Words.noGames`, `Words.addFolder` under it, the kit's `CoronaDisc` on the corona tokens,
-on the board's own ground.
+**What is drawn, and from what.**
+- The ground, #0A1024, and the board's two colour fields (an ellipse at 700, -200, 900 by 800, blurred 120 at 0.35; a
+  circle at 1200, 500, 900 across, blurred 130 at 0.4), each in the board's saturation and lightness with a hue of the
+  focused game's art (`parts/ArtHues.qml`, Home's rule: `Library.artHues`, else the console's hue spread by the board's
+  offsets), never the cover blurred whole (R-20261115-28).
+- The disc at -1100, -250, 1700 across: its rim, 2 px, and both glows (44 blur 8 spread at 0.55, 170 blur 46 spread at
+  0.25) in the art's first hue at the look's corona's saturation and lightness (R-20261115-27).
+- The header: the mark, then 28 px on the path, B's place in the help's own words ("Consoles"), `Words.crumb` and the
+  section (`Browse.heading`); pressed by the pointer or walked to and pressed by the pad, it goes back as B does. At the
+  right, the status on its glass: the clock, and the battery where the machine feeds a charge.
+- The column at 96, 230, 440 wide, 22 apart: the console and the year in capitals (the row's `consoleName` and `year`,
+  the year now fed from `GameRow::year`), the title at 62 px wrapped whole on lines of 64.48, "Last played" with the row's
+  `lastPlayedWords` for a game played, and 28 px under it A Start and X Game page as the board's pills.
+- The chips at 660, 150: All, Favourites and Not played with their counts (`Browse.filters`' new `chip` role,
+  `listing::chip_name`; a collection has none and stays the List card's), the one in force filled. At the right, the
+  order in force on its glass (`Browse.sortLine`, "Name, A to Z", `listing::sort_line`) after View's glyph; pressed, it
+  does what View does, the List card.
+- The tiles at 660, 236, 206 by 170, 20 apart, as many columns as fit before the board's right margin (five at the
+  board's shape) and as many whole rows as stand above the foot (four): the cover cropped at corner 16, the 84 px shade,
+  the title 14 px in and 12 px over the foot at 18 px on lines of 21.6, wrapped whole (`parts/TileWords.qml` takes any
+  number of lines); a resting tile's shadow, 0 8 24 at 0.4, and the focused one's ring, 4 px of the ground's dark, 3 of the
+  accent and 40 of glow 10 out. The rows move a row at a time once the focus leaves them; the wheel moves the focus a row a
+  notch.
+- The rail at the right, 34 by 740: the focused game's letter on the accent's disc, the track, the last letter; a press on
+  the track steps to the letter at that height.
+- The foot: A Start, B Back and Y Favourite (`Help.entries(kind, {games: true})`, `help::games_named`), and at the right on
+  its glass LT and RT, each stepping a letter when pressed, with "Letter · 1 of 214" (the help's LT label and
+  `Words.place`). The frame keeps every action of the grid's list, the triggers' letters among them, so Select still opens
+  the List card and Start goes Home, as the board's foot does not name them.
+- Not drawn, each a `nothing` row: the battery's charge (no machine feeds one yet), the genre and players chips, the
+  description, the time played and the states (the grid's rows hold none of them; they reach the game page alone).
 
-**The listing, decided 2026-11-15 by the tester.** The chips, the pill, the rail and the triggers are the List card's
-own state, read and driven through 1.7 (§3.2, `CHANGELOG-theme-api.md`): R-20261115-10, the filter's choices with their
-counts and a new filter, Not played, the games with no played time (`GameRow::played_at`, from the catalog's played
-record), listed by `listing::choices` once a read for both the Filter page and a theme; R-20261115-11, the sort; R-20261115-12,
-the letters and the triggers; R-20261115-13, the list's kind and its empty words ("No favourites yet", "Nothing played
-yet", "No games found"). Under the reference nothing changes but the Filter page's Not played.
+**The listing, decided 2026-11-15 by the tester.** The chips, the sort, the rail and the triggers are the List card's own
+state, read and driven through 1.7 (§3.2, `CHANGELOG-theme-api.md`): R-20261115-10, the filter's choices with their counts
+and Not played (`GameRow::played_at`), listed by `listing::choices` once a read for both the Filter page and a theme;
+R-20261115-11, the sort; R-20261115-12, the letters and the triggers; R-20261115-13, the list's kind and its empty words.
 
-**Shared parts and type.** The board's measure, the inks more than one screen draws, the mark, the status, the help line
-and the pills are Home's parts (§3.4.8). Every size of words is `Type.size` of the board's size at the player's text
-scale, so a size under the legibility floor is raised to the smallest that passes and a larger one keeps the board's
-(decided 2026-11-15 by the tester, R-20261115-14); the words are drawn in the application's face until the typeface
-piece lands.
+**A defect fixed in the kit.** `CoronaDisc` centred its rim, its body and its glows with `anchors.centerIn`, which rounds
+the parent's half width whatever `alignWhenCentered` says (Qt's `qquickanchors.cpp`, `hcenter()` and `vcenter()`: the
+item's own half size is left whole only for an item whose own anchors are not centre-aligned, the parent's is rounded).
+On a disc 1133.33 units across the body stood a third of a unit right of and below its box. They are now placed at
+(parent − own) / 2 (`EmuSen_Kit.md` §7.116); the games table's `coronaDisc` and `coronaRim` rows hold it.
 
-**Open.** theme-check's loaded step on Eclipse in every state it has (`--states all`, the gate's five sizes, the dark
-variant alone, as the package lists; measured 2026-11-15 offscreen on the software backend by theme-audit's
-`qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has`) gives 34 findings, and the test is red on them. A tile's
-title passes since the tile takes Home's shared foot (`parts/TileWords.qml`), whose shade holds under its two lines. On
-the games view, the Game page button's words over the disc's rim read 3.54:1 at 1280x800 and 1920x1080 and 3.80:1 at
-1920x1200 and 3840x2160 against 4.5:1, in the default, `long`, `norecent`, `pressed` and `one-console` states (20
-lines). On Home, in `empty` and `norecent` alike: the title is cut with an ellipsis at all five sizes, the pad does not
-reach Search and a click at the frame's centre hits the frame, both at 1280x800 (14 lines). Each is the tester's to
-settle. The stillness check gave no finding in this run.
+**Proof.** qt-app's `eclipse_games.rs`, the oracle `eclipse_games_oracle` on the software backend: 120 games, three with
+covers, the first played and thirty favourites, every row of the table held at the gate's five sizes, the fields' hue the
+rim's and their saturation and lightness the board's, the line heights, five columns at the board's shape; the words of
+the path, the chips, the sort, the buttons, the foot and the letters; the triggers by the pad and by a press on their
+glyphs and the rail's track; the walk off the tiles to the buttons, the chips, the sort and the path; the chips and the
+sort by the pad and the pointer; then over one game (a collection of one), the thirty and all 120, at each size, every
+game reached by the pad, the wheel and the pointer, each whole inside the grid, above the help line and its title uncut;
+the path by the pointer goes back. `eclipse_games_gpu.rs` runs the same oracle on the graphics card (a GPU job, through
+`gpu.sh`), and saves the pictures to the folder `EMUSEN_ECLIPSE_PICTURES` names. `eclipse_games_lists.rs` (the chips, the
+List card and the games view agreeing) and `eclipse_games_empty.rs` (the empty board by `eclipse/empty.tsv`).
 
-**Not drawn**, each listed in the table: the board's two colour fields (sample art standing for the focused game's), the breadcrumb (the top navigation's place, R-20261115-7), the genre and player
-chips and the facts list (the rows hold no genre, players, time played or states, and no words name them), the board's
-"Start" (the program's A is "Play"), the "VIEW" glyph (no button steps the sort), a game's place among the shown ("1 of
-214"), and on the empty board its steps and its two buttons. Colours no token holds are the games view's own constants in
-`parts/GamesInk.qml`; those Home's board draws too move to Home's shared part with its commit.
-
-**Proof.** qt-models' `listing_choices.rs` (Not played, the choices and the Filter page, the empty words, the kinds, the
-letters' help entry); theme-qt's `qml.rs` (every help list with its flags, the new actions) and `surface.rs`; qt-app's
-`eclipse_games.rs` (22 games, a tall, a wide and a square cover: every built row at each of the gate's sizes, the pad's
-moves, the triggers, the chips, the empty words of a filter, of Favourites and of Recent, the sort; a built row with no
-check is refused by the table's reader), `eclipse_games_lists.rs` (a game played, three never played and two in a
-collection: Not played and the collection pressed with their lists and counts, the filter, sort and letter set on the
-List card and read in the games view and the reverse, a search with none, and the collections read once for each change
-of them, not on a move of the focus) and `eclipse_games_empty.rs` (the empty board's rows at each size); theme-audit's
-`qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has` for the theme's fit, contrast and walk;
-`eclipse_games_gpu.rs`, a card job, draws both for the pictures when a folder is named.
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an

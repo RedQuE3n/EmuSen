@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Theme
 import "../parts"
 
-// Eclipse's games view: the focused game's words at the left, the section's games as tiles beside them, and with no game in the library the board's first-run words over the waiting disc; each element and its board line in qt-app/tests/eclipse/games.tsv (EmuSen_Qt.md §3.4.10).
+// Eclipse's games view as its board draws it (EclipseLibrary.dc.html), each element in qt-app/tests/eclipse/games.tsv; with no game in the library the first-run words over the waiting disc (EmuSen_Qt.md §3.4.10).
 ThemeScreen {
     id: screen
     objectName: "gridScreen"
@@ -14,9 +14,11 @@ ThemeScreen {
         required property string key
         required property string title
         required property string cover
-        required property string consoleId
-        required property string description
-        required property string hero
+        required property string consoleName
+        required property real consoleHue
+        required property int year
+        required property bool played
+        required property string lastPlayedWords
     }
     NormalizedCanvas {
         id: canvas
@@ -28,64 +30,111 @@ ThemeScreen {
             focus: true
             // A board pixel in canvas units, Board's.
             readonly property real px: board.unit
-            // Every size of words is Type's: the board's at the player's text scale, never under the legibility floor.
             readonly property var focusedCell: cells.currentItem
             // No console has a game, so the library has none: the first-run state.
             readonly property bool noLibrary: Library.consoles.count === 0 && cells.count === 0 && !Browse.searched
-            // The tile's box, the gaps between tiles, the margin right of them and the rows shown: the board's, constants of the design.
+            // The board's measures in its pixels, constants of the design (EclipseLibrary:64-73, 88).
+            readonly property real margin: 96 * root.px
+            readonly property real gridX: 660 * root.px
+            readonly property real gridY: 236 * root.px
+            readonly property real gridRight: 150 * root.px
             readonly property real tileWidth: 206 * root.px
             readonly property real tileHeight: 170 * root.px
             readonly property real tileGap: 20 * root.px
-            readonly property int rowsShown: 4
-            // The columns that fit between the board's left edge of the tiles and its right margin.
-            readonly property int columns: Math.max(1, Math.floor((root.width - (660 + 150) * root.px + root.tileGap) / (root.tileWidth + root.tileGap)))
+            readonly property real foot: 1114 * root.px
+            // The columns that fit between the grid's left edge and its right margin, and the whole rows above the foot.
+            readonly property int columns: Math.max(1, Math.floor((root.width - root.gridX - root.gridRight + root.tileGap) / (root.tileWidth + root.tileGap)))
+            readonly property int rowsShown: Math.max(1, Math.floor((root.foot - root.gridY + root.tileGap) / (root.tileHeight + root.tileGap)))
+            readonly property real rowsHeight: root.rowsShown * (root.tileHeight + root.tileGap) - root.tileGap
             // How far a tile's ring and glow reach past it, so the list's clip leaves them whole.
-            readonly property real reach: Tokens.ringOffset + Tokens.ringThickness + Tokens.glowSpread + Tokens.glowBlur
-            // The filter in force's place among the choices, for the walk up from the tiles, and the shown games' last letter.
+            readonly property real reach: (4 + 3 + 40 + 10) * root.px
+            // The filter in force's place among the chips, for the walk up from the tiles.
             property int filterAt: 0
-            // The pill that plays, for the walk left from the tiles' first column.
-            property Item firstPill: null
-            property Item pagePill: null
             property string lastLetter: ""
-            // The focused game's console's name, set by its row of Library.consoles.
-            property string consoleText: ""
-            Repeater {
-                model: Library.consoles
-                delegate: Item {
-                    id: consoleRow
-                    required property string key
-                    required property string displayName
-                    Binding {
-                        when: root.focusedCell !== null && root.focusedCell.consoleId === consoleRow.key
-                        target: root
-                        property: "consoleText"
-                        value: consoleRow.displayName
-                    }
-                }
+            // The help's words this board draws: A's and X's on the buttons, B's on the path, the triggers' at the right.
+            property string startWords
+            property string pageWords
+            property string backWords
+            property string letterWords
+            readonly property var gamesHelp: Help.entries(Browse.searched ? Help.SectionSearched : Help.Section, { games: true })
+            Board {
+                id: board
+                designHeight: canvas.designHeight
             }
-            Rectangle {
-                objectName: "gridGround"
-                anchors.fill: parent
-                color: root.noLibrary ? shared.emptyGround : shared.ground
+            Ink {
+                id: ink
             }
-            // The focused game's art blurred behind the disc, its hero else its cover as the row gives it; none for a game with no art.
+            GamesInk {
+                id: own
+            }
+            // The focused game's hues for the board's two fields and its disc (R-20261115-27, -28).
+            ArtHues {
+                id: hues
+                key: root.focusedCell ? root.focusedCell.key : ""
+                consoleHue: root.focusedCell ? root.focusedCell.consoleHue : NaN
+            }
+            FieldInk {
+                id: field0
+                board: ink.field0
+                hue: hues.hues.length > 0 ? hues.hues[0] : NaN
+            }
+            FieldInk {
+                id: field1
+                board: ink.field1
+                hue: hues.hues.length > 0 ? hues.hues[1] : NaN
+            }
             Backdrop {
                 objectName: "gamesBackdrop"
+                // Drawn behind everything, as a sky is, not beside it.
+                readonly property bool backdrop: true
                 anchors.fill: parent
-                visible: !root.noLibrary
-                source: root.focusedCell ? root.focusedCell.hero : ""
-                // The board's blur and opacity over its sample art (EclipseLibrary:19), the same on the software backend; provisional, the tester's to judge.
-                sourceBlur: 120 * root.px
-                sourceOpacity: 0.35
+                ground: root.noLibrary ? ink.emptyGround : ink.ground
                 pixelScale: canvas.unit
+                fields: [
+                    BackdropField {
+                        x: 700 * root.px
+                        y: -200 * root.px
+                        width: 900 * root.px
+                        height: 800 * root.px
+                        color: root.noLibrary ? "transparent" : field0.color
+                        blur: 120 * root.px
+                        opacity: 0.35
+                    },
+                    BackdropField {
+                        x: 1200 * root.px
+                        y: 500 * root.px
+                        width: 900 * root.px
+                        height: 900 * root.px
+                        color: root.noLibrary ? "transparent" : field1.color
+                        blur: 130 * root.px
+                        opacity: 0.4
+                    }
+                ]
             }
             CoronaDisc {
+                id: disc
                 objectName: "gamesDisc"
                 visible: !root.noLibrary
                 x: -1100 * root.px
                 y: -250 * root.px
                 width: 1700 * root.px
                 height: 1700 * root.px
+                // The focused game's first hue at the look's rim's saturation and lightness, its glows at the board's strengths (EclipseLibrary:20).
+                corona: hues.hues.length > 0 ? Qt.hsla((((hues.hues[0] % 360) + 360) % 360) / 360, Tokens.coronaColor.hslSaturation, Tokens.coronaColor.hslLightness, 1) : "transparent"
+                rim: 2 * root.px
+                pixelScale: canvas.unit
+                glows: [
+                    CoronaGlow {
+                        blur: 44 * root.px
+                        spread: 8 * root.px
+                        color: Qt.rgba(disc.corona.r, disc.corona.g, disc.corona.b, 0.55)
+                    },
+                    CoronaGlow {
+                        blur: 170 * root.px
+                        spread: 46 * root.px
+                        color: Qt.rgba(disc.corona.r, disc.corona.g, disc.corona.b, 0.25)
+                    }
+                ]
             }
             CoronaDisc {
                 objectName: "emptyDisc"
@@ -100,7 +149,7 @@ ThemeScreen {
                 anchors.fill: parent
                 surfaceDrawn: false
                 padFamily: Device.family
-                // The help line below draws the help; the frame keeps its actions.
+                // The help line below draws the board's entries; the frame keeps every action, the triggers' letters among them.
                 helpShown: false
                 focus: true
                 controller.navigationShown: false
@@ -110,126 +159,230 @@ ThemeScreen {
                     function onBackDeclined() { Actions.back() }
                     function onActionInvoked(key) { Actions.act(key) }
                 }
+                Repeater {
+                    model: frame.help
+                    Item {
+                        id: declared
+                        required property int button
+                        required property string label
+                        Binding {
+                            when: declared.button === PadGlyph.Screensaver
+                            target: root
+                            property: "pageWords"
+                            value: declared.label
+                        }
+                        Binding {
+                            when: declared.button === PadGlyph.Back
+                            target: root
+                            property: "backWords"
+                            value: declared.label
+                        }
+                        Binding {
+                            when: declared.button === PadGlyph.First
+                            target: root
+                            property: "letterWords"
+                            value: declared.label
+                        }
+                    }
+                }
+                Repeater {
+                    model: root.gamesHelp
+                    Item {
+                        id: named
+                        required property int button
+                        required property string label
+                        Binding {
+                            when: named.button === PadGlyph.Accept
+                            target: root
+                            property: "startWords"
+                            value: named.label
+                        }
+                    }
+                }
                 Item {
                     x: -frame.safeX
                     y: -frame.safeY
                     width: root.width
                     height: root.height
+
+                    // The header: the mark, the path (the place B goes back to, then the section), and the status on its glass (EclipseLibrary:22-35).
                     Brand {
+                        id: brand
+                        objectName: "gamesBrand"
                         unit: root.px
                         named: root.noLibrary
-                        x: 96 * root.px
+                        x: root.margin
                         // The header's middle line: the games board's 64-pixel header and the empty board's mark (EclipseLibrary:23, EclipseEmpty:22).
                         y: (root.noLibrary ? 48 + 17 : 48 + 32) * root.px - height / 2
                     }
+                    Walkable {
+                        id: crumb
+                        objectName: "gamesPath"
+                        visible: !root.noLibrary
+                        controller: frame.controller
+                        Accessible.name: crumbBack.text
+                        x: brand.x + brand.width + 28 * root.px
+                        y: 80 * root.px - height / 2
+                        width: crumbHere.x + crumbHere.width
+                        height: crumbBack.height
+                        onActivated: Actions.back()
+                        Keys.onDownPressed: filterChips.itemAt(Math.max(0, root.filterAt))?.forceActiveFocus()
+                        Line {
+                            id: crumbBack
+                            objectName: "gamesPathBack"
+                            unit: root.px
+                            text: root.backWords
+                            color: Tokens.muted
+                            size: 24
+                        }
+                        Line {
+                            id: crumbSlash
+                            objectName: "gamesPathSlash"
+                            unit: root.px
+                            x: crumbBack.width + 14 * root.px
+                            text: Words.crumb
+                            color: own.slash
+                            size: 24
+                        }
+                        Line {
+                            id: crumbHere
+                            objectName: "gamesPathHere"
+                            unit: root.px
+                            x: crumbSlash.x + crumbSlash.width + 14 * root.px
+                            text: Browse.heading
+                            color: Tokens.text
+                            size: 24
+                            weight: Font.DemiBold
+                        }
+                        FocusRing {
+                            anchors.fill: parent
+                            visible: crumb.activeFocus
+                        }
+                    }
                     Status {
+                        objectName: "gamesStatus"
                         unit: root.px
                         controller: frame.controller
                         visible: !root.noLibrary
                         searchable: false
-                        glassColor: shared.glass
-                        x: root.width - 96 * root.px - width
-                        y: (48 + 32) * root.px - height / 2
+                        battery: true
+                        glassColor: ink.glass
+                        x: root.width - root.margin - width
+                        y: 80 * root.px - height / 2
                     }
-                    HelpLine {
-                        unit: root.px
-                        controller: frame.controller
-                        visible: !Browse.typing && !root.noLibrary
-                        model: frame.help
-                        ink: shared.help
-                    }
+
+                    // The focused game's column: its console and year, its name, its last play, and A and X as buttons (EclipseLibrary:37-53).
                     Column {
                         objectName: "gamesAside"
                         visible: !root.noLibrary && root.focusedCell !== null
-                        x: 96 * root.px
+                        x: root.margin
                         y: 230 * root.px
                         width: 440 * root.px
                         spacing: 22 * root.px
-                        Text {
+                        Line {
                             objectName: "gamesConsole"
+                            unit: root.px
                             width: parent.width
-                            text: root.consoleText
+                            text: root.focusedCell ? Words.line([root.focusedCell.consoleName, root.focusedCell.year > 0 ? String(root.focusedCell.year) : ""]) : ""
                             wrapMode: Text.Wrap
-                            color: shared.rose
-                            font.weight: Font.DemiBold
-                            font.pixelSize: Type.size(18 * root.px, Tokens.textScale)
-                            font.capitalization: Font.AllUppercase
-                            font.letterSpacing: 18 * 0.2 * root.px
+                            color: ink.rose
+                            size: 18
+                            weight: Font.DemiBold
+                            spacing: 0.2 * 18
+                            capitalization: Font.AllUppercase
                         }
-                        Text {
+                        Line {
                             objectName: "gamesTitle"
+                            unit: root.px
                             width: parent.width
                             text: root.focusedCell ? root.focusedCell.title : ""
                             wrapMode: Text.Wrap
-                            maximumLineCount: 3
-                            elide: Text.ElideRight
                             color: Tokens.text
-                            font.weight: Font.DemiBold
-                            font.pixelSize: Type.size(62 * root.px, Tokens.textScale)
-                            font.letterSpacing: -62 * 0.02 * root.px
-                            lineHeight: 1.04
+                            size: 62
+                            weight: Font.DemiBold
+                            spacing: -0.02 * 62
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 62 * 1.04
                         }
-                        Text {
-                            objectName: "gamesDescription"
-                            visible: text.length > 0
+                        Item {
+                            objectName: "gamesFact.0"
+                            visible: root.focusedCell !== null && root.focusedCell.played
                             width: parent.width
-                            text: root.focusedCell ? root.focusedCell.description : ""
-                            wrapMode: Text.Wrap
-                            maximumLineCount: 6
-                            elide: Text.ElideRight
-                            color: own.words
-                            font.weight: Font.Light
-                            font.pixelSize: Type.size(20 * root.px, Tokens.textScale)
-                            lineHeight: 1.5
+                            height: factLabel.height
+                            Line {
+                                id: factLabel
+                                objectName: "gamesFactLabel.0"
+                                unit: root.px
+                                text: Words.gameFactLabels[0]
+                                color: Tokens.muted
+                                size: 20
+                            }
+                            Line {
+                                objectName: "gamesFactValue.0"
+                                unit: root.px
+                                x: parent.width - width
+                                text: root.focusedCell ? root.focusedCell.lastPlayedWords : ""
+                                color: Tokens.text
+                                size: 20
+                            }
                         }
                         Row {
                             objectName: "gamesActions"
                             // The board's six pixels over the buttons (EclipseLibrary:50).
                             topPadding: 6 * root.px
                             spacing: 14 * root.px
-                            // A and X as the help names them: the program's words for playing and for the game's page.
-                            Repeater {
-                                id: actionPills
-                                model: frame.help
-                                delegate: Pill {
-                                    id: pill
-                                    required property int index
-                                    readonly property bool plays: pill.button === PadGlyph.Accept
-                                    controller: frame.controller
-                                    objectName: "gamesAction." + pill.index
-                                    visible: pill.plays || pill.button === PadGlyph.Screensaver
-                                    place: pill.index
-                                    unit: root.px
-                                    filled: pill.plays
-                                    tall: 64
-                                    glyphSide: pill.plays ? 42 : 40
-                                    labelSize: 23
-                                    lead: 12
-                                    trail: pill.plays ? 28 : 26
-                                    gap: 12
-                                    onActivated: pill.plays ? Actions.play(root.focusedCell.key) : Actions.openPage(root.focusedCell.key)
-                                    Keys.onRightPressed: pill.plays && root.pagePill ? root.pagePill.forceActiveFocus() : cells.forceActiveFocus()
-                                    Keys.onLeftPressed: if (!pill.plays && root.firstPill) root.firstPill.forceActiveFocus()
-                                    Binding {
-                                        when: pill.button === PadGlyph.Screensaver
-                                        target: root
-                                        property: "pagePill"
-                                        value: pill
-                                    }
-                                    Binding {
-                                        when: pill.plays
-                                        target: root
-                                        property: "firstPill"
-                                        value: pill
-                                    }
-                                }
+                            Pill {
+                                id: startPill
+                                objectName: "gamesStart"
+                                controller: frame.controller
+                                unit: root.px
+                                button: PadGlyph.Accept
+                                label: root.startWords
+                                filled: true
+                                glows: false
+                                tall: 64
+                                glyphSide: 42
+                                leadLetterSize: 19
+                                labelSize: 23
+                                lead: 12
+                                trail: 28
+                                gap: 12
+                                place: 0
+                                pixelScale: canvas.unit
+                                onActivated: Actions.play(root.focusedCell?.key ?? "")
+                                KeyNavigation.right: pagePill
+                                Keys.onUpPressed: filterChips.itemAt(Math.max(0, root.filterAt))?.forceActiveFocus()
+                            }
+                            Pill {
+                                id: pagePill
+                                objectName: "gamesPage"
+                                controller: frame.controller
+                                unit: root.px
+                                button: PadGlyph.Screensaver
+                                label: root.pageWords
+                                outline: ink.pillLine
+                                tall: 64
+                                glyphSide: 40
+                                letterSize: 18
+                                labelSize: 23
+                                lead: 12
+                                trail: 26
+                                gap: 12
+                                place: 1
+                                pixelScale: canvas.unit
+                                onActivated: Actions.openPage(root.focusedCell?.key ?? "")
+                                KeyNavigation.left: startPill
+                                Keys.onRightPressed: cells.forceActiveFocus()
+                                Keys.onUpPressed: filterChips.itemAt(Math.max(0, root.filterAt))?.forceActiveFocus()
                             }
                         }
                     }
+
+                    // The chips: every game, the favourites and those not played, each with its count, the one in force filled (EclipseLibrary:55-57).
                     Row {
                         objectName: "gamesFilters"
                         visible: !root.noLibrary
-                        x: 660 * root.px
+                        x: root.gridX
                         y: 150 * root.px
                         spacing: 14 * root.px
                         Repeater {
@@ -239,10 +392,12 @@ ThemeScreen {
                                 id: chip
                                 required property int index
                                 required property string key
-                                required property string name
-                                required property int count
-                                required property string line
+                                required property string chip
                                 readonly property bool chosen: chip.key === Browse.filter
+                                // A button's box holds its line (CSS's border-box): the chip in force has none.
+                                readonly property real line: chip.chosen ? 0 : 2 * root.px
+                                // A collection is the List card's alone: the board's chips are the three.
+                                visible: chip.chip.length > 0
                                 controller: frame.controller
                                 objectName: "gamesFilter." + chip.index
                                 Accessible.name: chipWords.text
@@ -252,28 +407,37 @@ ThemeScreen {
                                     property: "filterAt"
                                     value: chip.index
                                 }
-                                width: chipWords.implicitWidth + 2 * 22 * root.px
+                                width: chipWords.width + 2 * (22 * root.px + chip.line)
                                 height: 48 * root.px
                                 onActivated: Actions.setFilter(chip.key)
                                 Keys.onLeftPressed: if (chip.index > 0) filterChips.itemAt(chip.index - 1).forceActiveFocus()
-                                Keys.onRightPressed: chip.index + 1 < filterChips.count ? filterChips.itemAt(chip.index + 1).forceActiveFocus() : sortPill.forceActiveFocus()
+                                Keys.onRightPressed: {
+                                    const next = filterChips.itemAt(chip.index + 1)
+                                    if (next && next.visible)
+                                        next.forceActiveFocus()
+                                    else
+                                        sortPill.forceActiveFocus()
+                                }
+                                Keys.onUpPressed: crumb.forceActiveFocus()
                                 Keys.onDownPressed: cells.forceActiveFocus()
                                 Rectangle {
-                                    objectName: "gamesFilterGround." + chip.index
+                                    objectName: "gamesFilterFill." + chip.index
                                     anchors.fill: parent
                                     radius: height / 2
                                     color: chip.chosen ? Tokens.accent : own.chipGround
-                                    border.width: chip.chosen ? 0 : 2 * root.px
-                                    border.color: own.chipLine
+                                    border.width: chip.line
+                                    border.color: ink.chipLine
                                 }
-                                Text {
+                                Line {
                                     id: chipWords
                                     objectName: "gamesFilterWords." + chip.index
-                                    anchors.centerIn: parent
-                                    text: chip.line
-                                    color: chip.chosen ? Tokens.overAccent : shared.tileFacts
-                                    font.weight: chip.chosen ? Font.DemiBold : Font.Normal
-                                    font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
+                                    unit: root.px
+                                    x: 22 * root.px + chip.line
+                                    y: (parent.height - height) / 2
+                                    text: chip.chip
+                                    color: chip.chosen ? Tokens.overAccent : ink.tileFacts
+                                    size: 21
+                                    weight: chip.chosen ? Font.DemiBold : Font.Normal
                                 }
                                 FocusRing {
                                     visible: chip.activeFocus
@@ -283,31 +447,52 @@ ThemeScreen {
                             }
                         }
                     }
+                    // The order in force on its glass, View its button: pressed, it opens the List card as View does (EclipseLibrary:59-62).
                     Walkable {
                         id: sortPill
                         objectName: "gamesSort"
-                        visible: !root.noLibrary && Browse.sort.length > 0
+                        visible: !root.noLibrary && Browse.sortLine.length > 0
                         controller: frame.controller
                         Accessible.name: sortWords.text
-                        x: root.width - 96 * root.px - width
+                        x: root.width - root.margin - width
                         y: 150 * root.px
-                        width: sortWords.implicitWidth + 2 * 18 * root.px
+                        width: sortWords.x + sortWords.width + 18 * root.px
                         height: 48 * root.px
-                        onActivated: Actions.stepSort(1)
-                        Keys.onLeftPressed: if (filterChips.count > 0) filterChips.itemAt(filterChips.count - 1).forceActiveFocus()
+                        onActivated: frame.controller.offer(PadGlyph.Options)
+                        Keys.onLeftPressed: {
+                            for (let i = filterChips.count - 1; i >= 0; --i) {
+                                if (filterChips.itemAt(i).visible)
+                                    return filterChips.itemAt(i).forceActiveFocus()
+                            }
+                        }
                         Keys.onDownPressed: cells.forceActiveFocus()
                         Rectangle {
+                            objectName: "gamesSortFill"
                             anchors.fill: parent
                             radius: height / 2
-                            color: shared.glass
+                            color: ink.glass
                         }
-                        Text {
+                        Glyph {
+                            id: sortGlyph
+                            objectName: "gamesSortGlyph"
+                            unit: root.px
+                            x: 18 * root.px
+                            y: (parent.height - height) / 2
+                            button: PadGlyph.Options
+                            side: 30
+                            wordSize: 14
+                            padding: 10
+                            ink: ink.help
+                        }
+                        Line {
                             id: sortWords
                             objectName: "gamesSortWords"
-                            anchors.centerIn: parent
-                            text: Browse.sort
-                            color: shared.help
-                            font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
+                            unit: root.px
+                            x: sortGlyph.x + sortGlyph.width + 12 * root.px
+                            y: (parent.height - height) / 2
+                            text: Browse.sortLine
+                            color: ink.help
+                            size: 21
                         }
                         FocusRing {
                             visible: sortPill.activeFocus
@@ -315,69 +500,16 @@ ThemeScreen {
                             radius: height / 2
                         }
                     }
-                    Column {
-                        objectName: "gamesRail"
-                        visible: !root.noLibrary && cells.count > 0
-                        x: root.width - (44 + 34) * root.px
-                        y: 236 * root.px
-                        width: 34 * root.px
-                        height: 740 * root.px
-                        spacing: 10 * root.px
-                        Repeater {
-                            id: letters
-                            model: Browse.letters
-                            delegate: Item {
-                                id: entry
-                                required property int index
-                                required property string letter
-                                Binding {
-                                    when: entry.index === letters.count - 1
-                                    target: root
-                                    property: "lastLetter"
-                                    value: entry.letter
-                                }
-                            }
-                        }
-                        Rectangle {
-                            objectName: "gamesRailLetter"
-                            width: parent.width
-                            height: parent.width
-                            radius: width / 2
-                            color: Tokens.accent
-                            Text {
-                                objectName: "gamesRailLetterWords"
-                                anchors.centerIn: parent
-                                text: Browse.letter
-                                color: Tokens.overAccent
-                                font.weight: Font.DemiBold
-                                font.pixelSize: Type.size(17 * root.px, Tokens.textScale)
-                            }
-                        }
-                        Rectangle {
-                            objectName: "gamesRailTrack"
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: 4 * root.px
-                            height: parent.height - parent.width - lastLetter.height - 2 * parent.spacing
-                            radius: width / 2
-                            color: own.railTrack
-                        }
-                        Text {
-                            id: lastLetter
-                            objectName: "gamesRailLast"
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: root.lastLetter
-                            color: shared.help
-                            font.pixelSize: Type.size(16 * root.px, Tokens.textScale)
-                        }
-                    }
+
+                    // The section's games as tiles, five columns at the board's width (EclipseLibrary:64-71).
                     GridView {
                         id: cells
                         objectName: "gamesGrid"
                         visible: !root.noLibrary
-                        x: 660 * root.px - root.reach
-                        y: 236 * root.px - root.reach
+                        x: root.gridX - root.reach
+                        y: root.gridY - root.reach
                         width: root.columns * cells.cellWidth - root.tileGap + 2 * root.reach
-                        height: root.rowsShown * cells.cellHeight - root.tileGap + 2 * root.reach
+                        height: root.rowsHeight + 2 * root.reach
                         leftMargin: root.reach
                         topMargin: root.reach
                         cellWidth: root.tileWidth + root.tileGap
@@ -386,16 +518,29 @@ ThemeScreen {
                         focus: true
                         keyNavigationWraps: false
                         highlightFollowsCurrentItem: false
-                        // Left from the first column reaches the pills.
+                        // The wheel moves the focus a row at a time, so the rows shown follow it; the arrows still walk the tiles.
+                        interactive: false
+                        keyNavigationEnabled: true
+                        WheelHandler {
+                            onWheel: (event) => {
+                                // A notch is 120 eighths of a degree (QWheelEvent::angleDelta); a row a notch, at least one.
+                                const notches = Math.max(1, Math.round(Math.abs(event.angleDelta.y) / 120))
+                                const by = (event.angleDelta.y < 0 ? 1 : -1) * notches * root.columns
+                                const to = Math.max(0, Math.min(cells.count - 1, cells.currentIndex + by))
+                                cells.currentIndex = to
+                                cells.currentItem?.forceActiveFocus()
+                            }
+                        }
+                        // Left from the first column reaches the buttons.
                         Keys.onLeftPressed: (event) => {
-                            if (cells.currentIndex % root.columns === 0 && root.firstPill)
-                                root.firstPill.forceActiveFocus();
+                            if (cells.currentIndex % root.columns === 0)
+                                startPill.forceActiveFocus();
                             else
                                 event.accepted = false;
                         }
-                        // Up from the first row reaches the filter in force.
+                        // Up from the first row reaches the chip in force.
                         Keys.onUpPressed: (event) => {
-                            const chip = filterChips.itemAt(Math.max(0, root.filterAt));
+                            const chip = filterChips.itemAt(Math.max(0, root.filterAt))
                             if (cells.currentIndex < root.columns && chip)
                                 chip.forceActiveFocus();
                             else
@@ -422,6 +567,17 @@ ThemeScreen {
                             z: cell.lit ? 1 : 0
                             onActivated: Actions.play(cell.key)
                             onActiveFocusChanged: if (cell.activeFocus) Actions.focus(cell.key)
+                            // A resting tile's shadow, 0 8 px 24 px rgba(0, 0, 0, 0.4) (EclipseLibrary:66); the focused one has its ring instead.
+                            Glow {
+                                objectName: "gamesTileShadow." + cell.index
+                                anchors.fill: parent
+                                visible: !cell.lit
+                                radius: 16 * root.px
+                                color: own.tileShadow
+                                blur: 24 * root.px
+                                offsetY: 8 * root.px
+                                pixelScale: canvas.unit
+                            }
                             Rectangle {
                                 objectName: "gamesTileGround." + cell.index
                                 anchors.fill: parent
@@ -440,26 +596,36 @@ ThemeScreen {
                                 radius: 16 * root.px
                                 pixelScale: canvas.unit
                             }
-                            // The shared foot (TileWords): the board's 84 px fade to Tokens.overArtScrim, held under the title's two lines.
+                            // The tile's foot (EclipseLibrary:67-68): the 84 px shade, the title 12 px over the foot, inset 14, wrapped whole.
                             TileWords {
                                 unit: root.px
                                 place: cell.index
                                 title: cell.title
                                 facts: ""
-                                titleLines: 2
-                                titleLineHeight: 1.2
+                                titleLines: 0
+                                titleLineHeight: 18 * 1.2
                                 radius: 16
                                 titleSize: 18
                                 inset: 14
+                                titleFoot: 12
                                 fade: 84
-                                titleInk: Tokens.overArt
+                                titleInk: ink.tileTitle
                                 shadeInk: Tokens.overArtScrim
+                                shadeClear: ink.shadeClear
                             }
+                            // The board's ring (EclipseLibrary:93): 4 px of the ground's dark, 3 px of the accent, 40 px of glow 10 px out.
                             FocusRing {
                                 objectName: "gamesRing." + cell.index
                                 visible: cell.lit
                                 anchors.fill: parent
                                 radius: 16 * root.px
+                                gap: 4 * root.px
+                                thickness: 3 * root.px
+                                glowColor: ink.ringGlow
+                                glowBlur: 40 * root.px
+                                glowSpread: 10 * root.px
+                                bandRadius: (16 + 7) * root.px
+                                pixelScale: canvas.unit
                             }
                         }
                     }
@@ -467,46 +633,173 @@ ThemeScreen {
                     Binding {
                         cells.currentIndex: Browse.focusRow
                     }
+
+                    // The letter rail: the focused game's letter, the track, the last letter; a press on the track steps to the letter there (EclipseLibrary:75-79).
+                    Column {
+                        objectName: "gamesRail"
+                        visible: !root.noLibrary && cells.count > 0
+                        x: root.width - (44 + 34) * root.px
+                        y: root.gridY
+                        width: 34 * root.px
+                        height: root.rowsHeight
+                        spacing: 10 * root.px
+                        Repeater {
+                            id: letters
+                            model: Browse.letters
+                            delegate: Item {
+                                id: entry
+                                required property int index
+                                required property string letter
+                                Binding {
+                                    when: entry.index === letters.count - 1
+                                    target: root
+                                    property: "lastLetter"
+                                    value: entry.letter
+                                }
+                            }
+                        }
+                        Rectangle {
+                            objectName: "gamesRailLetter"
+                            width: parent.width
+                            height: parent.width
+                            radius: width / 2
+                            color: Tokens.accent
+                            Line {
+                                objectName: "gamesRailLetterWords"
+                                unit: root.px
+                                anchors.centerIn: parent
+                                text: Browse.letter
+                                color: Tokens.overAccent
+                                size: 17
+                                weight: Font.Bold
+                            }
+                        }
+                        Rectangle {
+                            objectName: "gamesRailTrack"
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 4 * root.px
+                            height: parent.height - parent.width - lastLetterWords.height - 2 * parent.spacing
+                            radius: width / 2
+                            color: own.railTrack
+                            MouseArea {
+                                // As wide as the rail, so a press near the thin track lands on it.
+                                anchors.centerIn: parent
+                                width: 34 * root.px
+                                height: parent.height
+                                onClicked: (mouse) => {
+                                    let at = -1
+                                    for (let i = 0; i < letters.count; ++i)
+                                        if (letters.itemAt(i).letter === Browse.letter)
+                                            at = i
+                                    const to = Math.round(mouse.y / height * Math.max(0, letters.count - 1))
+                                    if (at >= 0 && to !== at)
+                                        Actions.stepLetter(to - at)
+                                }
+                            }
+                        }
+                        Line {
+                            id: lastLetterWords
+                            objectName: "gamesRailLast"
+                            unit: root.px
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: root.lastLetter
+                            color: ink.help
+                            size: 16
+                        }
+                    }
+
+                    // The foot: A Start, B Back and Y Favourite, and at the right the triggers' letters and the focused game's place (EclipseLibrary:82-91).
+                    HelpLine {
+                        objectName: "gamesHelp"
+                        unit: root.px
+                        controller: frame.controller
+                        visible: !Browse.typing && !root.noLibrary
+                        model: root.gamesHelp
+                        ink: ink.help
+                        Item {
+                            objectName: "gamesLetters"
+                            width: letterWords.x + letterWords.width + 18 * root.px
+                            height: 46 * root.px
+                            Rectangle {
+                                objectName: "gamesLettersFill"
+                                anchors.fill: parent
+                                radius: height / 2
+                                color: ink.glass
+                            }
+                            Glyph {
+                                id: letterBack
+                                objectName: "gamesLetterBack"
+                                unit: root.px
+                                x: 18 * root.px
+                                y: (parent.height - height) / 2
+                                button: PadGlyph.First
+                                wordSize: 15
+                                ink: ink.help
+                                TapHandler {
+                                    onTapped: Actions.stepLetter(-1)
+                                }
+                            }
+                            Glyph {
+                                id: letterOn
+                                objectName: "gamesLetterOn"
+                                unit: root.px
+                                x: letterBack.x + letterBack.width + 10 * root.px
+                                y: (parent.height - height) / 2
+                                button: PadGlyph.Last
+                                wordSize: 15
+                                ink: ink.help
+                                TapHandler {
+                                    onTapped: Actions.stepLetter(1)
+                                }
+                            }
+                            Line {
+                                id: letterWords
+                                objectName: "gamesLetterWords"
+                                unit: root.px
+                                x: letterOn.x + letterOn.width + 10 * root.px
+                                y: (parent.height - height) / 2
+                                text: Words.line([root.letterWords, cells.count > 0 ? Words.place(Math.max(0, cells.currentIndex), cells.count) : ""])
+                                color: ink.help
+                                size: 21
+                            }
+                        }
+                    }
+
+                    // An empty list's words, and with no game at all the first-run words (EclipseEmpty.dc.html).
                     Column {
                         visible: cells.count === 0
-                        x: 96 * root.px
+                        x: root.margin
                         y: 250 * root.px
                         width: 880 * root.px
                         spacing: 14 * root.px
-                        Text {
+                        Line {
                             objectName: "emptyHeading"
+                            unit: root.px
                             width: parent.width
                             text: root.noLibrary ? Words.noGames : Browse.emptyWords
                             wrapMode: Text.Wrap
                             color: Tokens.text
-                            font.weight: Font.DemiBold
-                            font.pixelSize: Type.size(84 * root.px, Tokens.textScale)
-                            font.letterSpacing: -84 * 0.02 * root.px
-                            lineHeight: 1.04
+                            size: 84
+                            weight: Font.DemiBold
+                            spacing: -0.02 * 84
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 84 * 1.04
                         }
-                        Text {
+                        Line {
                             objectName: "emptyLine"
                             visible: root.noLibrary
+                            unit: root.px
                             width: parent.width
                             text: Words.addFolder
                             wrapMode: Text.Wrap
                             color: own.words
-                            font.weight: Font.Light
-                            font.pixelSize: Type.size(25 * root.px, Tokens.textScale)
-                            lineHeight: 1.45
+                            size: 25
+                            weight: Font.Light
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 25 * 1.45
                         }
                     }
                 }
-            }
-            GamesInk {
-                id: own
-            }
-            Ink {
-                id: shared
-            }
-            Board {
-                id: board
-                designHeight: canvas.designHeight
             }
         }
     }

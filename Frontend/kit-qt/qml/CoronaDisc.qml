@@ -52,6 +52,7 @@ Item {
             // the card (§7.113) and painted on the software backend.
             Kit.Glow {
                 anchors.centerIn: parent
+                anchors.alignWhenCentered: false
                 width: root.diameter
                 height: root.diameter
                 radius: root.diameter / 2
@@ -65,6 +66,8 @@ Item {
     Rectangle {
         objectName: "coronaRim"
         anchors.centerIn: parent
+        // At the disc's centre exactly, not snapped to a whole unit: a rim of 2 board pixels is no whole unit (EmuSen_Kit.md §7.116).
+        anchors.alignWhenCentered: false
         width: root.diameter + 2 * root.rim
         height: root.diameter + 2 * root.rim
         radius: width / 2
@@ -74,6 +77,7 @@ Item {
     Rectangle {
         objectName: "coronaDisc"
         anchors.centerIn: parent
+        anchors.alignWhenCentered: false
         width: root.diameter
         height: root.diameter
         radius: width / 2

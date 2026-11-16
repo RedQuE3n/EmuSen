@@ -1921,8 +1921,12 @@ the host asks Screens for `consoleOptions:<system>`, which shows Settings with t
 section (`SettingsModel.openConsole`), and B from Settings comes back to Choose a console. A plate with no game says "no
 games yet" after its year in the board's dimmer ink. A chip that holds nothing shows the program's empty words.
 The plates and the makers are each an interactive `Flickable`, so the wheel and a drag scroll them. Their `contentY`
-binding brings the focused plate and the chosen maker back into sight when the focus moves. No test holds the wheel yet:
-the real program's fixture shelves too few consoles for any grid to overflow.
+binding brings the focused plate and the chosen maker back into sight when the focus moves; the wheel's own scrolling
+moves `contentY` from inside the `Flickable` and leaves the binding in place (seen 2026-11-16: the wheel test below passed
+on the binding as it stood). Down from a chip or from the order goes to the plate last focused where its maker is still
+the chosen one, else to the chosen maker's first console: a maker focused chooses its group and hides the plate last
+focused, and Down to a hidden plate moved nothing (seen 2026-11-16, theme-audit's sweep over 120 consoles, which heard
+none at its later sizes because the first left the focus on a maker).
 At the foot's right, the maker and `Words.place` (game_page.rs's `place`, "3 of 14") say where the focused console stands.
 
 The screen holds no layout logic. The kit's `GroupGridLayout` (EmuSen_Kit.md §7.120) gives each console its column and row in
@@ -1947,12 +1951,19 @@ lines 19 and 20), as Home's fields take a game's art (R-20261115-28). Every word
 the screen's own file draws is at the board's size, with no raise to the legibility floor (decided 2026-11-15 by the
 tester, R-20261115-24, replacing R-20261115-14 and -22 for this screen); the shared parts' words are Home's piece.
 
-Every element of the board is in `Frontend/theme-check/audit/tests/eclipse_consoles.tsv`. Each row gives the element's board
-line, what the program holds for it, its box in board pixels and in design units, and whether it is built. The top navigation is a piece of its own
-(R-20261115-7), and its place is left empty. The help bar holds the program's own entries. Not drawn, because the program holds nothing for them:
-
-- the filter chips: no console without games is listed, and no console is a favourite;
-- "Sorted by maker" and Options;
+Every element of the board is a row of `Frontend/qt-app/tests/eclipse/consoles.tsv`, in the rule language of Home's
+`eclipse_home.tsv` (§3.4.8) and checked by the same code, `qt-app/tests/eclipse_board/mod.rs`: the element's board line,
+what the program holds for it, the part that draws it, its box by the board's rule, its radius, colour, type size, and its
+words' weight, letter spacing and case, a glyph's letter size and weight, a box's line, a ring's measures, and each of the
+disc's glows' blur, spread and strength. The board draws its disc's glows at 40 px spread 8 at 0.6 and 150 px spread 40
+at 0.4 and its plate's ring with a gap of 4, a band of 3 and a glow of 40 spread 10 (lines 64 and 78): the screen sets
+these on its `CoronaDisc` and `FocusRing` rather than the tokens' Home measures. A plate's name is two lines at most at
+CSS's line height of 1.15 of its size, a fixed line height in Qt (`Text.lineHeightMode`), since Qt's proportional line
+height multiplies the face's own height (seen 2026-11-16: the plate's line stood 3 board pixels low). A ringed glyph's box
+is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery is drawn
+where the machine has one; `Status` makes it only where a board draws it. The top navigation is a piece of its own
+(R-20261115-7), and its place is left empty. `Frontend/theme-check/audit/tests/eclipse_consoles.tsv` is theme-audit's
+older table of the same board, its boxes held over the recording.
 
 **Proof.** theme-check's `eclipse_consoles.rs` runs theme-audit on Eclipse over the canvases' eleven consoles with the focus
 on the Super Nintendo. At 1280 × 800 and 1920 × 1200 it holds every built row's box to the board's pixels times the window's
@@ -1968,7 +1979,11 @@ walk puts it, every plate is reached, and each is drawn whole in its view and ov
 plate's words, the facts with the played count and the place line are the program's words over the model's row; the disc's
 rim and both glows are the focused console's `glow`, the two glows at different strengths, for two consoles of different
 colours; LT and RT step the makers and stop at the ends, LB and RB move nothing, and the help line draws Maker and no Group;
-A opens the console's games and B comes back to it. The program reads its library from the platform library's systems
+A opens the console's games and B comes back to it; Down from the chips after a maker was chosen lands on that maker's
+first console. Before the walk, at each of the gate's sizes, every row of `eclipse/consoles.tsv` is held to the screen,
+and both fields are painted in the board's saturation and lightness with the focused console's hue. Then the theme's
+`Library` is shown a crowd of forty more consoles of the first maker and twenty more makers: the wheel over the plates and
+over the makers scrolls each, and the pad's next press brings the plate or the maker it lands on back into sight. The program reads its library from the platform library's systems
 table, so a library of 120 consoles exists only in theme-audit's crowd (`theme-check/audit/src/crowd.rs`), and the
 120-console run is theme-audit's.
 

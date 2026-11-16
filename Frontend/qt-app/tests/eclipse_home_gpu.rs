@@ -5,6 +5,7 @@
 // The modules the scene imports register through the program's crate, which a test must link.
 extern crate emusen_qt;
 
+mod eclipse_board;
 mod eclipse_home_oracle;
 
 use emusen_qt_test::compositor::Compositor;

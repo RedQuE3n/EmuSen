@@ -411,7 +411,7 @@ ThemeScreen {
                                     radius: tile.radius
                                     gap: 4 * design.unit
                                     thickness: 3 * design.unit
-                                    glowColor: "#80F0B4C4"
+                                    glowColor: ink.ringGlow
                                     glowBlur: 40 * design.unit
                                     glowSpread: 10 * design.unit
                                     bandRadius: tile.radius + 7 * design.unit

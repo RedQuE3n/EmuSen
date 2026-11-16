@@ -9,8 +9,9 @@ ThemeScreen {
     id: screen
     objectName: "consolesScreen"
     role: ThemeScreen.Consoles
+    // The plate it opens on, else (no console listed) the pressed chip.
     focusItems: [
-        root.firstPlate
+        root.firstPlate ?? root.firstChip
     ]
     NormalizedCanvas {
         id: canvas
@@ -56,10 +57,16 @@ ThemeScreen {
             property Item lastPlate: null
             // The plate the screen opens on: the console last opened, else the first maker's first console; and the maker focused.
             property Item firstPlate: null
+            property Item firstChip: null
             property Item focusedMaker: null
             // The help's actions for Y and X (Help.entries' `action`), read from the frame's own list.
             property string sortAction
             property string optionsAction
+            // The plate under the chips: the one last focused where its maker is still the chosen one, else the chosen maker's first
+            // (a maker focused chooses its group and hides the plate last focused, which KeyNavigation would skip past).
+            function below() {
+                return root.lastPlate !== null && root.lastPlate.group === root.chosenGroup ? root.lastPlate : (plates.itemAt(layout.firsts[root.chosenGroup] ?? -1) ?? root.firstPlate)
+            }
             // The frame's declared action, by its key: Y the next order, X the console's options, any other the host's.
             signal invoked(string key)
             onInvoked: (key) => {
@@ -198,6 +205,7 @@ ThemeScreen {
                         Repeater {
                             id: chipRow
                             model: Words.consoleShows
+                            onItemAdded: (index, item) => root.firstChip = index === 0 ? item : root.firstChip
                             Walkable {
                                 id: chip
                                 required property int index
@@ -213,7 +221,7 @@ ThemeScreen {
                                 // Along the row, Down to the plates; the pressed chip shows its consoles.
                                 KeyNavigation.left: chipRow.itemAt(chip.index - 1)
                                 KeyNavigation.right: chip.index + 1 < chipRow.count ? chipRow.itemAt(chip.index + 1) : sortEntry
-                                KeyNavigation.down: root.lastPlate ?? root.firstPlate
+                                Keys.onDownPressed: root.below()?.forceActiveFocus()
                                 onActivated: root.show = chip.index
                                 Rectangle {
                                     objectName: "chipFill." + chip.index
@@ -253,7 +261,7 @@ ThemeScreen {
                         width: sortWords.x + sortWords.width
                         height: sortGlyph.height
                         KeyNavigation.left: chipRow.itemAt(chipRow.count - 1)
-                        KeyNavigation.down: root.lastPlate ?? root.firstPlate
+                        Keys.onDownPressed: root.below()?.forceActiveFocus()
                         onActivated: root.invoked(root.sortAction)
                         Glyph {
                             id: sortGlyph
@@ -506,7 +514,9 @@ ThemeScreen {
                                         color: Tokens.text
                                         size: 21
                                         weight: Font.DemiBold
-                                        lineHeight: 1.15
+                                        // CSS's line-height 1.15 is of the type's size; Qt's proportional one is of the face's own height.
+                                        lineHeightMode: Text.FixedHeight
+                                        lineHeight: 1.15 * 21
                                     }
                                     // "1990 · 214 games", or "1986 · no games yet" in the dimmer ink (board lines 128, 129).
                                     Line {
@@ -541,6 +551,14 @@ ThemeScreen {
                         width: root.plateWidth
                         height: root.plateHeight
                         radius: 18 * root.px
+                        // The board's ring (line 64's box-shadow): a gap of 4, a band of 3, a glow of 40 spread 10.
+                        gap: 4 * root.px
+                        thickness: 3 * root.px
+                        glowColor: ink.ringGlow
+                        glowBlur: 40 * root.px
+                        glowSpread: 10 * root.px
+                        bandRadius: (18 + 7) * root.px
+                        pixelScale: canvas.unit
                     }
 
                     // The focused console: its disc, its maker and year, its name, its facts with its core's mark, Open and Options (board lines 77 to 97).
@@ -558,8 +576,23 @@ ThemeScreen {
                             x: (parent.width - width) / 2
                             width: 300 * root.px
                             height: 300 * root.px
-                            // The focused console's own colour for the rim and both glows (R-20261115-9).
+                            // The focused console's own colour for the rim and both glows (R-20261115-9), at this board's rim of 2,
+                            // glow of 40 spread 8 at 0.6 and halo of 150 spread 40 at 0.4 (line 78), not Home's.
                             corona: root.shown ? root.shown.glow : "transparent"
+                            rim: 2 * root.px
+                            pixelScale: canvas.unit
+                            glows: [
+                                CoronaGlow {
+                                    blur: 40 * root.px
+                                    spread: 8 * root.px
+                                    color: Qt.rgba(disc.corona.r, disc.corona.g, disc.corona.b, 0.6)
+                                },
+                                CoronaGlow {
+                                    blur: 150 * root.px
+                                    spread: 40 * root.px
+                                    color: Qt.rgba(disc.corona.r, disc.corona.g, disc.corona.b, 0.4)
+                                }
+                            ]
                         }
                         Column {
                             y: disc.height + (22 + 12) * root.px

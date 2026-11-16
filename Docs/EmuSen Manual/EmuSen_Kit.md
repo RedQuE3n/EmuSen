@@ -4135,7 +4135,10 @@ the first on top as a box-shadow lists them, by default two from the tokens, the
 disc is drawn past the box, as a box-shadow is, and takes no room in a layout. Each glow is a `Glow` (§7.113) of the
 disc's square with corners of half its side, so a circle grown by its spread and blurred by its blur, outside the disc
 alone: a disc with no fill (the splash's) shows none of it inside. On the graphics card that is Qt's `RectangularShadow`,
-on the software backend a `Canvas`, as §7.113 says; the measures of the commonest recipe are in §7.113's table.
+on the software backend a `Canvas`, as §7.113 says; the measures of the commonest recipe are in §7.113's table. The rim,
+the disc and each glow are centred with `anchors.alignWhenCentered` false: Qt's anchors otherwise round a centred item to
+a whole unit of its parent (Qt 6, "Positioning with Anchors", `anchors.alignWhenCentered`, true by default), which put
+Choose a console's rim of two board pixels a third of a unit off its disc (measured 2026-11-16, qt-app's eclipse_consoles).
 
 **A game's corona.** `corona` is a game's corona colour, transparent (none given) by default; `gameCorona` is true while
 it is not transparent. The rim (`rimColor`) is the game's corona where one is given and the look's `coronaColor`

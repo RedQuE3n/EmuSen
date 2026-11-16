@@ -5,11 +5,14 @@
 //! are the model's. One test, as the harness is one per process.
 
 mod common;
+mod eclipse_board;
 
 use common::{approved_console_core, wait_for, CONSOLES};
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
+use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::group_grid::group_grid;
+use emusen_kit_core::tokens::Colour;
 use emusen_kit_core::input::PadControl;
 use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::Library;
@@ -31,6 +34,44 @@ use serde_json::json;
 const LEFT_TRIGGER: i32 = 4;
 const RIGHT_TRIGGER: i32 = 5;
 const PULLED: i16 = i16::MAX;
+
+/// The board's elements, one a row (eclipse/consoles.tsv), held by eclipse_board's rules.
+const BOARD: &str = include_str!("eclipse/consoles.tsv");
+
+/// Every row of the board's table held to the screen at each of the gate's sizes, with `c` focused: its box, colour, type
+/// and part; and both fields painted in the board's saturation and lightness with `c`'s hue (R-20261115-28).
+fn board_held(scene: &mut Scene<'_>, c: &Console) {
+    let (board_height, rows) = eclipse_board::rows(BOARD);
+    let k = DESIGN_HEIGHT / board_height;
+    let hue = Colour::parse(&c.glow).expect("the console's glow").to_hsl().0;
+    let mut differences = Vec::new();
+    for (width, height) in SIZES {
+        scene.resize(width, height);
+        scene.wait(300);
+        let tree = scene.tree();
+        let at = format!("{width}x{height}");
+        let unit: f64 = eclipse_board::read(&tree, "consolesCanvas", "unit").parse().expect("the canvas's unit");
+        let screen: u64 = tree.nodes[tree.find_named("consolesScreen").expect("Eclipse's Choose a console") as usize].id.parse().unwrap();
+        let tokens = eclipse_board::tokens(screen);
+        // The battery is drawn only where the machine reports one, as Status draws it.
+        let no_battery = eclipse_board::read(&tree, "battery", "text").is_empty();
+        eclipse_board::held(&tree, &rows, k, unit, f64::from(width) / unit, &tokens, &at, &|name, _, _| name == "battery" && no_battery, &mut differences);
+        // The disc's glows blurred at the scene's pixels.
+        let scale = eclipse_board::read(&tree, "consoleDisc", "pixelScale").parse::<f64>().unwrap_or(f64::NAN);
+        if (scale - unit).abs() > 1e-9 {
+            differences.push(format!("{at}: the disc's glows blurred at {scale} pixels a unit where the scene draws {unit}"));
+        }
+        for row in rows.iter().filter(|r| r.kind.starts_with("field ")) {
+            let board = Colour::parse(row.kind.split(' ').nth(3).unwrap()).expect("a field's board colour").to_hsl();
+            let have = Colour::parse(&eclipse_board::read(&tree, &row.name, "paint")).map(|p| p.to_hsl());
+            // Two degrees and a hundredth of saturation and lightness: the colour read back as 8 bits a channel.
+            if !have.is_some_and(|h| emusen_kit_core::world::wrap_hue(h.0 - hue).abs() <= 2.0 && (h.1 - board.1).abs() <= 0.01 && (h.2 - board.2).abs() <= 0.01) {
+                differences.push(format!("{at}: {} painted {have:?} where the board's colour with {}'s hue {hue:.1} gives {board:?}", row.name, c.display_name));
+            }
+        }
+    }
+    assert!(differences.is_empty(), "{} differences from the board:\n{}", differences.len(), differences.join("\n"));
+}
 
 /// One console of `Library.consoles` as the model gives it.
 #[derive(Clone, Debug)]
@@ -97,7 +138,7 @@ fn written(world: &World) -> Vec<String> {
 
 /// The library written, the fixture's PlayStation core approved in `cores` beside the build's own, and its plays recorded
 /// through the real clients; the consoles as `Library.consoles` gives them: those of the eleven a core runs.
-fn library_of(world: &World, cores: &std::path::Path) -> Vec<Console> {
+fn library_of(world: &World, cores: &std::path::Path) -> (Vec<Console>, LibraryView) {
     let platform = Platform::load(library()).unwrap();
     let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
     settings["RomDirectory"] = json!(world.root.join("Roms").to_string_lossy());
@@ -117,7 +158,7 @@ fn library_of(world: &World, cores: &std::path::Path) -> Vec<Console> {
     view.apply(refresh(&source));
     assert!(view.problem.is_empty(), "{}", view.problem);
     // Eclipse shows the All chip in maker order first: every console a core runs, each maker's together.
-    consoles_listed(&view, Show::All, Order::Maker)
+    let model = consoles_listed(&view, Show::All, Order::Maker)
         .iter()
         .map(|r| Console {
             key: text(r, "key"),
@@ -134,7 +175,8 @@ fn library_of(world: &World, cores: &std::path::Path) -> Vec<Console> {
             group: whole(r, "group") as usize,
             group_index: whole(r, "groupIndex") as usize,
         })
-        .collect()
+        .collect();
+    (model, view)
 }
 
 /// The focused item's objectName.
@@ -240,7 +282,7 @@ fn disc_holds(tree: &Tree, c: &Console, size: &str) {
 fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_in_its_colour_in_the_program() {
     let world = World::new("qt-app-eclipse-consoles");
     let cores = world.dir("lib");
-    let model = library_of(&world, &cores);
+    let (model, view) = library_of(&world, &cores);
     assert!(model.iter().any(|c| c.key == "psx") && model.len() > 5, "the consoles a core runs, the PlayStation among them: {model:?}");
     let groups: Vec<usize> = (0..=model.iter().map(|c| c.group).max().unwrap()).map(|g| model.iter().filter(|c| c.group == g).count()).collect();
     assert!(groups.len() >= 2, "two makers or more, so LT and RT step between them: {groups:?}");
@@ -286,6 +328,7 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
         scene.wait(50);
     }
     assert_eq!(focused(&mut scene), "plate.0", "the first maker's first console has the focus");
+    board_held(&mut scene, &model[0]);
 
     // The screen's plates are the model's consoles, in its order.
     let tree = scene.tree();
@@ -430,9 +473,91 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
         scene.wait(50);
     }
     assert_eq!(focused(&mut scene), format!("plate.{k}"), "back on the console it opened");
+    // Makers chosen by the pad, the last one's and then each above it on the way Up to the chips, and Down: the first
+    // maker's first console, not the plate last focused, which choosing another maker hid.
+    for _ in 0..8 {
+        if focused(&mut scene).starts_with("maker.") {
+            break;
+        }
+        press(&mut scene, &sdl, &pad, PadControl::Left);
+    }
+    assert_eq!(focused(&mut scene), format!("maker.{}", groups.len() - 2), "Left along the row to its maker");
+    press(&mut scene, &sdl, &pad, PadControl::Down);
+    assert_eq!(focused(&mut scene), format!("maker.{}", groups.len() - 1), "Down to the last maker");
+    for _ in 0..groups.len() {
+        if focused(&mut scene).starts_with("chip.") {
+            break;
+        }
+        press(&mut scene, &sdl, &pad, PadControl::Up);
+    }
+    assert!(focused(&mut scene).starts_with("chip."), "Up from the first maker to the chips");
+    press(&mut scene, &sdl, &pad, PadControl::Down);
+    assert_eq!(focused(&mut scene), format!("plate.{}", firsts[0]), "Down from the chips to the chosen maker's first console");
     chips_sort_and_options(&mut scene, &sdl, &pad, &model, &world, &cores);
+    wheel_scrolls(&mut scene, &sdl, &pad, &view);
     sdl.detach(pad);
     scene.assert_quiet();
+}
+
+/// Whether `name` is drawn whole inside the view `view`.
+fn whole_in(tree: &Tree, name: &str, view: &str) -> bool {
+    let (Some(n), Some(v)) = (shown(tree, name), shown(tree, view)) else { return false };
+    let (n, v) = (edges(n), edges(v));
+    n[0] >= v[0] - 1e-6 && n[1] >= v[1] - 1e-6 && n[2] <= v[2] + 1e-6 && n[3] <= v[3] + 1e-6
+}
+
+/// The wheel scrolls the plates and the makers, each under the pointer, and the pad's next press brings what it lands on
+/// back into sight. Over a crowd shown to the theme's Library directly, since the program shelves only the consoles a core
+/// runs: forty more consoles of the first maker and twenty makers more, so both columns are longer than the screen.
+fn wheel_scrolls(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, view: &LibraryView) {
+    scene.resize(1280, 800);
+    scene.wait(200);
+    let first = text(&consoles_listed(view, Show::All, Order::Maker)[0], "key");
+    let seed = view.cored.iter().find(|r| r.key == first).expect("the first maker's first console").clone();
+    let mut crowd = view.clone();
+    for n in 0..60 {
+        let mut row = seed.clone();
+        row.key = format!("{}-{n:02}", seed.key);
+        row.name = format!("{} {n:02}", seed.name);
+        if n >= 40 {
+            row.maker = format!("Maker {n:02}");
+        }
+        crowd.cored.push(row);
+    }
+    let tree = scene.tree();
+    let screen: u64 = tree.nodes[tree.find_named("consolesScreen").expect("Eclipse's Choose a console") as usize].id.parse().unwrap();
+    emusen_theme_qt::host::library(eclipse_board::object(screen)).expect("the theme's Library").show(&crowd, "[]");
+    scene.wait(300);
+    for _ in 0..30 {
+        if focused(scene) == "plate.0" {
+            break;
+        }
+        press(scene, sdl, pad, PadControl::LeftTrigger);
+    }
+    assert_eq!(focused(scene), "plate.0", "the first maker's first console by LT");
+    let at = |scene: &mut Scene<'_>, view: &str| -> f64 {
+        let tree = scene.tree();
+        eclipse_board::read(&tree, view, "contentY").parse().expect("a view's contentY")
+    };
+    assert_eq!(at(scene, "plates"), 0.0, "the plates at their top");
+    let (x, y) = middle(scene, "plates");
+    scene.wheel(x, y, -10);
+    scene.wait(800);
+    assert!(at(scene, "plates") > 0.0, "the wheel over the plates scrolls them");
+    assert!(!whole_in(&scene.tree(), "plate.1", "plates"), "the first row scrolled out of sight");
+    press(scene, sdl, pad, PadControl::Right);
+    assert_eq!(focused(scene), "plate.1", "Right along the first row");
+    assert!(whole_in(&scene.tree(), "plate.1", "plates"), "the plate Right landed on is brought back into sight");
+
+    assert_eq!(at(scene, "makers"), 0.0, "the makers at their top");
+    let (x, y) = middle(scene, "makers");
+    scene.wheel(x, y, -10);
+    scene.wait(800);
+    assert!(at(scene, "makers") > 0.0, "the wheel over the makers scrolls them");
+    assert!(!whole_in(&scene.tree(), "maker.1", "makers"), "the second maker scrolled out of sight");
+    press(scene, sdl, pad, PadControl::RightTrigger);
+    assert!(focused(scene).starts_with("plate."), "RT to the next maker's first console");
+    assert!(whole_in(&scene.tree(), "maker.1", "makers"), "the maker RT chose is brought back into sight");
 }
 
 /// The plates' names drawn, in order.

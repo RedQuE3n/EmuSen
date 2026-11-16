@@ -12,7 +12,7 @@ use std::fmt;
 pub use accepted::{ACCEPTED, Accepted, Class, accepted};
 pub use exempt::{Exempted, exempted};
 pub use fit::{
-    CAPS_SLACK, DESKTOP_CAPS, ECLIPSE_LINE_SOURCES, MOONRISE_SOURCE, SIZES, SMALL_TEXT_EXCEPTIONS, SMALLEST_TEXT, TWO_ROWS, fit, screen_unit, small_text_exception, smallest_capitals,
+    CAPS_SLACK, DESKTOP_CAPS, ECLIPSE_LINE_RESOURCE, eclipse_line_checkout, MOONRISE_SOURCE, SIZES, SMALL_TEXT_EXCEPTIONS, SMALLEST_TEXT, TWO_ROWS, fit, screen_unit, small_text_exception, smallest_capitals,
     smallest_capitals_in_units,
 };
 pub use reach::{Edge, pad_reach, pointer_reach, reached};

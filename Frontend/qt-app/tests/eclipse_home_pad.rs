@@ -245,32 +245,46 @@ fn qt_3_4_8_eclipse_s_home_acts_on_every_button_tile_and_the_search_from_the_pad
     scene.resize(1280, 800);
     scene.wait(200);
 
-    // Each entry of the help line, pressed as a pointer presses it, acts as its button does: Options opens the game's page,
-    // Favourite turns its heart, Home card opens the Home card.
+    // Each entry of the help line and each pill, pressed as a pointer presses it, acts as its button does: Options opens the
+    // game's page, Favourite turns its heart, Home card opens the Home card. Every one again after the card has been opened
+    // from the line and closed at once with B, which once left the card drawn over Home (EmuSen_Qt.md §7.2).
     let click = |scene: &mut Scene<'_>, name: &str| {
         let tree = scene.tree();
         let n = tree.nodes.iter().find(|n| n.name == name && n.visible).unwrap_or_else(|| panic!("{name} is drawn"));
         let (x, y) = (n.x + n.w / 2.0, n.y + n.h / 2.0);
         scene.click(x, y);
     };
-    first_tile(&mut scene, &sdl, &pad);
-    click(&mut scene, &format!("help-{}", words::OPTIONS));
-    until(&mut scene, "the help line's Options opening the game's page", 3000, |s| s.property("screens", "shown") == "Page");
-    // The page model still holds the page opened before until it has read this one: its title is the shown game's once read.
-    until(&mut scene, "the page of the game shown", 10000, |s| s.property("pageModel", "ready") == "true" && s.property("pageModel", "title") == GAMES[0].0);
-    home(&mut scene);
-    first_tile(&mut scene, &sdl, &pad);
-    let hearted = favourite(&paths[0]);
-    click(&mut scene, "help-Favourite");
-    until(&mut scene, "the help line's Favourite turning the heart", 5000, |_| favourite(&paths[0]) != hearted);
-    click(&mut scene, &format!("help-{}", words::HOME_CARD));
-    until(&mut scene, "the help line's Home card opening it", 3000, |s| s.property("screens", "shown") == "HomeCard");
-    home(&mut scene);
-    // The heart turned back by Y. A second press of the line's Favourite after the Home card has been open and closed does
-    // nothing, seen 2026-11-15 and its cause not known (EmuSen_Qt.md §3.4.8); this test does not lean on it.
-    first_tile(&mut scene, &sdl, &pad);
-    hand(&mut scene, &sdl, &pad, UiButton::Search);
-    until(&mut scene, "the heart turned back by Y", 5000, |_| favourite(&paths[0]) == hearted);
+    let options = format!("help-{}", words::OPTIONS);
+    for round in ["before the Home card", "after the Home card"] {
+        if round.starts_with("after") {
+            first_tile(&mut scene, &sdl, &pad);
+            click(&mut scene, &format!("help-{}", words::HOME_CARD));
+            until(&mut scene, "the help line's Home card opening it", 3000, |s| s.property("screens", "shown") == "HomeCard");
+            home(&mut scene);
+            until(&mut scene, "the Home card gone from the screen", 3000, |s| s.property("homeCardCanvas", "visible") == "false");
+        }
+        for name in [options.as_str(), "button.1"] {
+            first_tile(&mut scene, &sdl, &pad);
+            click(&mut scene, name);
+            until(&mut scene, &format!("{round}: {name} opening the game's page"), 3000, |s| s.property("screens", "shown") == "Page");
+            // The page model still holds the page opened before until it has read this one: its title is the shown game's once read.
+            until(&mut scene, &format!("{round}: {name} opening the page of the game shown"), 10000, |s| {
+                s.property("pageModel", "ready") == "true" && s.property("pageModel", "title") == GAMES[0].0
+            });
+            home(&mut scene);
+        }
+        for name in ["help-Favourite", "button.2"] {
+            first_tile(&mut scene, &sdl, &pad);
+            let hearted = favourite(&paths[0]);
+            click(&mut scene, name);
+            until(&mut scene, &format!("{round}: {name} turning the heart"), 5000, |_| favourite(&paths[0]) != hearted);
+        }
+        // The search on the status, pressed by pointer, opens the search.
+        first_tile(&mut scene, &sdl, &pad);
+        click(&mut scene, "search");
+        until(&mut scene, &format!("{round}: the search opening the search"), 3000, |s| s.property("screens", "shown") == "Search");
+        home(&mut scene);
+    }
 
     // A on the first button starts the game shown: the second tile's, not the first's.
     first_tile(&mut scene, &sdl, &pad);
@@ -290,5 +304,30 @@ fn qt_3_4_8_eclipse_s_home_acts_on_every_button_tile_and_the_search_from_the_pad
     started(&mut scene, &paths[3]);
     scene.assert_quiet();
     drop(scene);
+
+    // The help line's first entry, the first pill and a tile, each pressed by pointer, start their game: the first two the
+    // game shown, the last played; the tile its own, the one played before it.
+    let click = |scene: &mut Scene<'_>, name: &str| {
+        let tree = scene.tree();
+        let n = tree.nodes.iter().find(|n| n.name == name && n.visible).unwrap_or_else(|| panic!("{name} is drawn"));
+        scene.click(n.x + n.w / 2.0, n.y + n.h / 2.0);
+    };
+    for (name, game) in [("lead", &paths[3]), ("button.0", &paths[3]), ("tile.1", &paths[1])] {
+        let mut scene = program(&mut harness);
+        assert_eq!(scene.property("library", "lastPlayed"), paths[3]);
+        // The line's first entry is named for what A does on the game shown: Resume for the suspended one, else Play.
+        let name = if name != "lead" {
+            name.to_owned()
+        } else {
+            let tree = scene.tree();
+            let lead = ["Resume", "Play"].iter().map(|w| format!("help-{w}")).find(|n| tree.nodes.iter().any(|x| &x.name == n && x.visible));
+            lead.expect("the help line's first entry is drawn")
+        };
+        click(&mut scene, &name);
+        until(&mut scene, &format!("{name} starting its game"), 3000, |s| s.property("screens", "shown") == "Game");
+        started(&mut scene, game);
+        scene.assert_quiet();
+        drop(scene);
+    }
     sdl.detach(pad);
 }

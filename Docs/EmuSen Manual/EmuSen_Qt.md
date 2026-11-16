@@ -1762,17 +1762,23 @@ keeps its distance from the right edge. Recent shows as many tiles as fit before
 
 **What it draws.** Over the ground (#0A1024, `parts/Ink.qml`) and the shown game's art is the kit's `CoronaDisc`, 2100 board pixels at (-900, -450),
 with the look's corona, since the model holds no game's corona yet. Then the header: the crescent mark and `Words.title`,
-and at the right the status glass with the search (`Actions.search`) and `Device.clock`. Then the shown game: the eyebrow
+and at the right the status glass with the search (`Actions.search`) and `Device.shortTime`. Under the status, while
+the shown game's art gives the backdrop its hues (`Library.artHues`), the art is named on a glass of its own,
+`Words.gameArt` in capitals 0.14em apart, "GAME ART · AURORA DRIFT". Then the shown game: the eyebrow
 `Words.continuePlaying` while it is the suspended game, its title, and its facts (`Words.pausedFacts`, or the row's
 `facts`). While the shown game is the suspended one, the resume point follows: `Session.frame`, the paused
-picture, cut at its centre to 96 × 60 with the board's inset rim, and `Words.resumePoint`, "Resume point · saved 21:12", the
-time of pausing in the clock's own form (`qt-models/src/clock.rs`, `clock_time`). Under them, the first three entries of `Help.entries` as pill buttons: A plays the game, and the others press
-their own button, as the help line does. Then `Words.recentEntry` and the Recent row, `Library.recent` with the suspended
+picture, cut at its centre to 96 × 60 with the board's inset rim, and `Words.resumePoint`, "Resume point · saved 9:12 PM", the
+time of pausing in the machine's short form. Both times are the machine's own: `qt-models/src/clock.rs`, `short_time`, asks
+`QLocale::system()` for `toString(time, QLocale::ShortFormat)`, whose en_US form is "h:mm AP" (doc.qt.io/qt-6/qlocale.html,
+`timeFormat`, read 2026-11-15); Qt 6.11's locale data writes the gap before AM or PM as U+202F, a narrow no-break space Sora
+has no glyph for, so the one function turns it (and U+00A0) to the face's space, as the boards write "9:41 PM". Under them, the first three entries of `Help.entries` as pill buttons: A plays the game, and the others press
+their own button, as the help line does. Then `Words.recentEntry`, beside it on its baseline `Words.place` of the shown tile among every game played ("1 of
+24"), and the Recent row, `Library.recent` with the suspended
 game first as the board puts it. The shown tile is 312 × 196 board pixels and the others 264 × 165, each with its hero
 cropped, the shade, its title and its row's `facts`. Last, the help line, the kit's `HelpBar` on the board's foot. The pad
 walks the tiles, Up to the buttons, then Up to the search. Every word is the program's. Where the board's differ, the
-program's are drawn: "EMUSEN" for "EmuSen", "CONTINUE PLAYING" for "CONTINUE · SUPER NINTENDO", the paused facts for "Last
-played yesterday · 3 h 20 min played", and "hh:mm" for "9:41 PM". The buttons and the help line read
+program's are drawn: "EMUSEN" for "EmuSen", "CONTINUE PLAYING" for "CONTINUE · SUPER NINTENDO", and the paused facts for "Last
+played yesterday · 3 h 20 min played". The buttons and the help line read
 `Help.entries(kind, { card: true })`: X "Options", still opening the game's page, and Start "Home card", which opens the
 Home card (`qt-models/src/screens.rs`, Home's `home` action), with no Select search in the line; the search is the
 status's own button. Their glyphs are `parts/Glyph.qml`, the board's: the kit's letter for the pad's family in Sora in a
@@ -1785,7 +1791,10 @@ own (R-20261115-7). Also not drawn, because the program has nothing for them: th
 each at its place, size, corners, turn, blur and opacity, in the kit's `Backdrop` (`EmuSen_Kit.md` §7.118). Only each
 field's hue is the shown game's: the field keeps the board colour's saturation, lightness and alpha. The program reads a
 game's art (its hero, else its cover) once, off the GUI thread, for its hues, most prominent first (`qt-models/src/art_hues.rs`,
-`Library.artHues`); the three large fields take the first three and the two streaks, pale tints of the first two fields on
+`Library.artHues`). A reading is kept by the picture's path and the time its file last changed, so a cover written later
+or written again is read again once the library is fed (until 2026-11-15 it kept the first reading, none for a cover not
+yet written); one thread reads the pictures one after another, started at the first asked for and ended with the library,
+as no thread pool is in the tree and Qt's `QThreadPool` is not wrapped by cxx-qt-lib; the three large fields take the first three and the two streaks, pale tints of the first two fields on
 the board, take those two hues. Where the art has fewer than three, the board's own offsets spread them: its hues are 168,
 251 and 218 degrees, the second 83 past the first and the third 50 past it, so one hue h gives h, h + 83 and h + 50, and two
 give h1, h2 and the point 50/83 of the way from h1 to h2 the short way round. Art with no hue (greys) or a game with no art
@@ -1821,6 +1830,17 @@ logged. `eclipse_home_gpu.rs` runs the same oracle on the graphics card. With `E
 both grab Home at 1280 × 800 and 1920 × 1200, and once more at 1920 × 1200 with the shown game one with no art. The
 six games' first five have covers, drawn by qt-test's `covers`.
 
+**What the oracle holds besides boxes (2026-11-15).** The table's `type` column carries the board's CSS for what a box
+cannot: each text's weight, letter spacing in em and case, read from the drawn Text's font (Qt keeps a spacing in 64ths
+of a pixel, so it is held within one); each glyph's letter size and weight; each field's turn, corner (the ellipse drawn
+as one, the bars as boxes at 40 px) and which of the art's hues it takes; each glow's blur, spread and offsets and the
+scene pixels its Gaussian runs at; and the focused tile's ring, its gap, thickness, glow, band radius and colours, with
+the gap and the band drawn round the tile by their widths. The words are the board's own literals where the fixture's
+first game is the board's ("9:41 PM", "Resume point · saved 9:12 PM", "Last played yesterday · 3 h 20 min played",
+"GAME ART · AURORA DRIFT"), with the locale set to en_US and the zone to UTC. The five fields' colours are held over the
+first two covers, and the second field's centre is read from the window for both. The pointer's presses are held on the
+real program by `eclipse_home_pad.rs`.
+
 **Type.** Every word is drawn in the look's face, Sora (`Tokens.faceText`), at the board's size, weight, letter spacing and
 case (R-20261115-24). A font's pixel size is a whole number (`QFont::setPixelSize`, an `int`), so a board's 20 px, 13.33
 canvas units, cannot be set on a Text in the canvas. `parts/Line.qml` draws each text at the board's pixels and scales
@@ -1852,12 +1872,14 @@ each field is drawn unblurred at its opacity. The oracle reads, on both backends
 field nor the disc reaches: it is that field's board colour with the first cover's second hue at its opacity over the
 ground, within two levels of 255, and none of the cover's own colours; it reads the rim's hue against the art's first.
 
-**Every size, and the help line by pointer.** `eclipse_home_pad.rs` walks, at each of the gate's five sizes, Right through
-all six tiles and Left back, Up to the buttons and through them, Up to the search and Down again; at 1280 × 800 it presses
-the help line's Options, Favourite and Home card with the pointer, which open the shown game's page, turn its heart and open
-the Home card. Not known (2026-11-15): after the Home card opened by the line's Home card is closed with B, a second pointer
-press of the line's Favourite turns nothing, where the pad's Y does; what would settle it is reading which item takes that
-press.
+**Every size, and every press by pointer.** `eclipse_home_pad.rs` walks, at each of the gate's five sizes, Right through
+all six tiles and Left back, Up to the buttons and through them, Up to the search and Down again. At 1280 × 800 it presses
+with the pointer the help line's Options and Favourite, the Options and Favourite pills and the search, which open the
+shown game's page, turn its heart and open the search; then the line's Home card, closed at once with B, and every one of
+them again; then, each in a program loaded afresh, the line's first entry, the Resume pill and a tile, which start their
+game. A pointer press of the line's Favourite after the card did nothing until 2026-11-15: the card, closed while it still
+slid in, stayed drawn over Home, and its help band's Back, at the place of Home's Favourite, took the press (§7.2,
+`MenuCard`'s slide); the test now also waits for the card to leave the screen.
 
 **At rest under reduced motion.** Theme-check's audit logs of 03:04 and 07:32 on 2026-11-15 recorded Home swapping a frame
 while at rest under reduced motion; ten audit runs after did not show it, and its cause is not known: what would settle it
@@ -5646,7 +5668,9 @@ built on it too:
   the List card's rows after Left on Sort: the reset made new delegates under the walk (a seeded fault below).
 - `qt-app/qml/MenuCard.qml` draws it: the scrim, the panel at 40% with its shadow, the title row (an optional cover, the
   breadcrumb above the title), the rows as the kit's `MenuRow`s, the pane at 576,156, the 98-unit band with its help bar,
-  and the slide (Enter in, Exit out, nothing under reduced motion). Its words are its host's properties, its pane is
+  and the slide (Enter in, Exit out, nothing under reduced motion). Each way stops the other: a card closed while it
+  still slid in had its Exit finish first and its Enter carry on to the end, so it stayed drawn over Home, its help band
+  taking the pointer presses meant for Home's help line (found 2026-11-15 by Eclipse's pad test, Start then B). Its words are its host's properties, its pane is
   lines or a picture or the host's own items (its default property, for the Pause Card's reel and slots), and its
   signals are `chosen`, `stepped(index, by, held)`, `focused`, `backed`, `acted` and `gone`, each answered in one call.
   **The shadow falls over the help band** beside the panel, as Mistress's does (the tester's note on stage 1's Pause

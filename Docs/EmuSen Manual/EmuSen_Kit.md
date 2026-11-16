@@ -4069,7 +4069,9 @@ drawn alpha against the recipe: the ring's 0.2000/0.1985 at 5.5 px, the disc's g
 0.1271/0.1258 at 30.5. `FocusRing` takes `gap`, `thickness`, `glowColor`, `glowBlur`, `glowSpread` and `bandRadius`, the
 tokens' (and the kit's own corners, the box's grown by the gap) by default, so a board that draws a ring apart sets its own:
 Eclipse's Home tile, 4 px of gap, 3 of ring and 40 px of glow 10 px out at 0.5 (`Main.dc.html:113`), the corners grown by
-the whole 7 px. Kit 1.8.
+the whole 7 px. `FocusRing.pixelScale` hands the scale to its glow; Eclipse's Home sets the canvas's unit on every glow it
+draws (the pills' halo and glow, the tiles' shadow and ring, the search's ring), which before 2026-11-15 ran at 1, a grid of
+canvas units coarser than the pixels at every size above 800 high. Kit 1.8.
 
 ### 7.114 A button's corners (2026-11-14)
 
@@ -4168,6 +4170,13 @@ software backend each glow is still the kit's `Glow`. Drawn by `Glow`'s Rectangu
 the RX 6800). `tests/corona_gpu.rs` (a GPU job) draws the board's disc, rim and glows over Home's ground and holds the
 colour at thirteen distances past the edge against the two box-shadows computed in the test (each chord's share by the
 error function, summed at a tenth of a pixel): within 2 levels (measured worst 2). Kit 1.8.
+
+**A glow's entry gone before its delegate.** Each delegate reads its glow through `modelData?.` guards: a `list<CoronaGlow>`
+holds its entries as guarded pointers, so an entry deleted while the disc lives, as a theme's dropped engine deletes them,
+leaves a null the delegate still reads. `tests/corona_disc.rs` deletes a disc's one glow while the disc lives and holds the
+log quiet; with one guard removed it logs "TypeError: Cannot read property 'blur' of null" (seen 2026-11-15). Eclipse's
+own drop under `qt-app/tests/eclipse.rs` no longer logs it with the guard removed (seen 2026-11-15); which order of
+deletion changed is not known, so the case is held in the kit.
 
 ### 7.117 The face tokens: Sora and JetBrains Mono bundled, a face for each role (2026-11-15)
 
@@ -4354,9 +4363,13 @@ every item is reached from its group's first. theme-qt's harness scene reads the
 Decided 2026-11-15 by the tester (R-20261115-24, replacing R-20261115-14 and -22 for Eclipse's own screens): every text
 an Eclipse board draws is drawn at the board's size, weight, spacing and case, none raised; legibility is the tester's own
 work. Words written in the built-in Eclipse's `parts/Line.qml` under the floor, and (R-20261115-29) under their contrast,
-are accepted by those rulings (`audit::eclipse_board_words` over `ECLIPSE_LINE_SOURCES`, the `EclipseBoardType` row of
-`accepted.rs`, the exemptions "too small to read, a named exception" and "low contrast as Eclipse's board draws it"):
-the program's resources' file and the repository's, no theme of the player's, and the findings stay printed as accepted.
+are accepted by those rulings (`audit::eclipse_board_words` over `ECLIPSE_LINE_RESOURCE` and `eclipse_line_checkout`,
+the `EclipseBoardType` row of `accepted.rs`, the exemptions "too small to read, a named exception" and "low contrast as
+Eclipse's board draws it"), and the findings stay printed as accepted. What it lets through, exactly: words whose file is
+`qrc:/emusen/themes/eclipse/parts/Line.qml`, or the one `file://` URL of the checkout kit-core was built from, its path
+resolved (`fs::canonicalize`); no other folder, though its path end the same (until 2026-11-15 any `file://` path ending
+`/Frontend/themes/eclipse/parts/Line.qml` passed), and no theme of the player's. For those words it excuses a size under
+the floor and any contrast, with no lower bound; cut-off, ellipsis, overlap and reach are still findings.
 The program's own screens under Eclipse (Settings, the cards) are not covered and still draw through the kit's column
 below. Test: kit-core's `tests/exempted.rs`. EmuSen.Theme's `Type` and kit-qt's
 `type_size::legible` and `legible_in`, which raised Eclipse's words, are removed, since nothing calls them. What follows

@@ -244,14 +244,23 @@ pub fn continue_line(console: &str) -> String {
     }
 }
 
-/// The line beside a suspended game's picture on Eclipse's Home (Main.dc.html:59): "Resume point · saved 21:12", the time in
-/// the clock's own form (`clock::clock_time`).
+/// The line beside a suspended game's picture on Eclipse's Home (Main.dc.html:59): "Resume point · saved 9:12 PM", the time in
+/// the machine's short form (`clock::short_time`).
 pub fn resume_point(time: &str) -> String {
     format!("{RESUME_POINT} {BETWEEN} saved {time}")
 }
 
 /// Y on Eclipse's Choose a console, the next order (EclipseConsoles:46-50).
 pub const SORT: &str = "Sort";
+
+/// The art behind Home's disc, as Eclipse's Home names it (Main.dc.html:75).
+pub const GAME_ART: &str = "Game art";
+
+/// The words on the glass under Eclipse's status naming the art behind the disc (Main.dc.html:75): "Game art · Aurora
+/// Drift", drawn in capitals.
+pub fn game_art(title: &str) -> String {
+    format!("{GAME_ART} {BETWEEN} {title}")
+}
 
 /// X on a game, the game's page, as Eclipse's Home names it (Main.dc.html:66, 95).
 pub const OPTIONS: &str = "Options";

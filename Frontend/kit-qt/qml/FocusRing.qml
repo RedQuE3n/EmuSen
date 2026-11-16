@@ -21,6 +21,8 @@ Item {
     // The ring's outer corners: the box's grown by the gap, as the kit has drawn it; a board drawing the ring as a box-shadow
     // grows them by the ring's whole reach (CSS Backgrounds 3 §6.1.1).
     property real bandRadius: root.radius + root.gap
+    // Scene pixels to one of this item's units, so the glow's blur runs at the pixels it draws (§7.119).
+    property real pixelScale: 1
     // True while the ring is the box's own border: a box binds its border to edgeWidth and edgeColor only then.
     readonly property bool onEdge: root.form === FocusRing.Edge
     // The ring as the box's own border, for a box that draws it in the Edge placement.
@@ -37,6 +39,7 @@ Item {
         color: root.glowColor
         blur: root.glowBlur
         spread: root.glowSpread
+        pixelScale: root.pixelScale
     }
     Rectangle {
         objectName: "focusGap"

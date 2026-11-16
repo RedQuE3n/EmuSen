@@ -121,7 +121,10 @@ fn r_20261115_24_words_of_the_built_in_eclipse_s_line_under_the_floor_are_accept
         _ => None,
     };
     assert_eq!(accepted_in("qrc:/emusen/themes/eclipse/parts/Line.qml"), Some(Class::EclipseBoardType), "the program's built-in Eclipse");
-    assert_eq!(accepted_in("file:///home/a/EmuSen/Frontend/themes/eclipse/parts/Line.qml"), Some(Class::EclipseBoardType), "the repository's");
+    let checkout = emusen_kit_core::audit::eclipse_line_checkout().expect("this checkout's Eclipse");
+    assert_eq!(accepted_in(checkout), Some(Class::EclipseBoardType), "this checkout's");
+    assert_eq!(accepted_in("file:///home/a/EmuSen/Frontend/themes/eclipse/parts/Line.qml"), None, "another folder with the same tail is held");
+    assert_eq!(accepted_in(&checkout.replace("/themes/", "/themes/../themes/")), None, "the path as written, not resolved");
     assert_eq!(accepted_in("file:///home/a/.local/share/EmuSen/themes/eclipse/parts/Line.qml"), None, "a theme of the player's named eclipse is held");
     assert_eq!(accepted_in("qrc:/emusen/themes/eclipse/screens/Home.qml"), None, "another file of Eclipse's is held");
     assert_eq!(accepted_in("qrc:/emusen/themes/horizon/parts/Line.qml"), None, "another built-in theme is held");

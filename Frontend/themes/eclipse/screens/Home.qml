@@ -113,9 +113,34 @@ ThemeScreen {
                         unit: design.unit
                         controller: frame.controller
                         glassColor: ink.glass
+                        pixelScale: canvas.unit
                         x: parent.width - 96 * design.unit - width
                         y: 80 * design.unit - height / 2
                         below: root.firstButton ?? root.currentTile
+                    }
+                    // The art behind the disc named on the glass under the status, while the shown game's art gives its colours (Main:75).
+                    Rectangle {
+                        id: artLabel
+                        objectName: "artLabel"
+                        visible: root.artHues.length > 0
+                        x: parent.width - 96 * design.unit - width
+                        y: 150 * design.unit
+                        width: artWords.width + 2 * 16 * design.unit
+                        height: artWords.height + 2 * 8 * design.unit
+                        radius: 18 * design.unit
+                        color: ink.glass
+                        Line {
+                            id: artWords
+                            objectName: "artWords"
+                            unit: design.unit
+                            x: 16 * design.unit
+                            y: 8 * design.unit
+                            text: Words.gameArt(root.currentTile?.title ?? "")
+                            capitalization: Font.AllUppercase
+                            color: ink.help
+                            size: 16
+                            spacing: 0.14 * 16
+                        }
                     }
                     // With no game on the row the search is where the focus is, so the pad reaches it.
                     Binding {
@@ -263,6 +288,7 @@ ThemeScreen {
                                 controller: frame.controller
                                 objectName: "button." + pill.index
                                 place: pill.index
+                                pixelScale: canvas.unit
                                 visible: pill.index < root.gameButtons
                                 live: pill.model.enabled ?? true
                                 filled: pill.index === 0
@@ -290,6 +316,18 @@ ThemeScreen {
                         color: Tokens.text
                         size: 28
                         weight: Font.DemiBold
+                    }
+                    // Where the shown tile stands among every game played, its baseline on the heading's (Main:78-80).
+                    Line {
+                        id: recentCount
+                        objectName: "recentCount"
+                        unit: design.unit
+                        x: recentHeading.x + recentHeading.width + 18 * design.unit
+                        y: recentHeading.y + (recentHeading.words.baselineOffset - recentCount.words.baselineOffset) * design.unit
+                        visible: tiles.count > 0
+                        text: Words.place(root.current, tiles.count)
+                        color: Tokens.muted
+                        size: 20
                     }
                     Item {
                         id: row
@@ -342,6 +380,7 @@ ThemeScreen {
                                     color: "#73000000"
                                     blur: 30 * design.unit
                                     offsetY: 10 * design.unit
+                                    pixelScale: canvas.unit
                                 }
                                 RoundPicture {
                                     objectName: "tileArt." + tile.index
@@ -376,6 +415,7 @@ ThemeScreen {
                                     glowBlur: 40 * design.unit
                                     glowSpread: 10 * design.unit
                                     bandRadius: tile.radius + 7 * design.unit
+                                    pixelScale: canvas.unit
                                     visible: tile.activeFocus
                                 }
                             }

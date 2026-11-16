@@ -17,6 +17,8 @@ Item {
     property real pad: 22
     property real gap: 22
     property real size: 22
+    // Scene pixels to a canvas unit, so the search's ring glows at the pixels drawn (EmuSen_Kit.md §7.119).
+    property real pixelScale: 1
     readonly property Item search: searchButton
     // Where Down takes the focus from the search.
     property Item below: null
@@ -44,6 +46,7 @@ Item {
         FocusRing {
             anchors.fill: parent
             radius: width / 2
+            pixelScale: root.pixelScale
             visible: searchButton.activeFocus
         }
         Item {
@@ -104,7 +107,7 @@ Item {
         unit: root.unit
         x: charge.visible ? charge.x + charge.width + root.gap * root.unit : charge.x
         y: (root.height - height) / 2
-        text: Device.clock
+        text: Device.shortTime
         color: Tokens.text
         size: root.size
         weight: Font.DemiBold

@@ -479,6 +479,7 @@ Glow
     property real offsetX
     property real offsetY
     readonly property real reach
+    readonly property real cardBlur
     property real pixelScale
     readonly property bool software
     readonly property bool glows
@@ -496,6 +497,7 @@ FocusRing
     property real glowBlur
     property real glowSpread
     property real bandRadius
+    property real pixelScale
     readonly property bool onEdge
     readonly property real edgeWidth
     readonly property color edgeColor

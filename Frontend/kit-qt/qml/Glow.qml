@@ -19,6 +19,8 @@ Item {
     property real offsetY: 0
     // How far past the box the glow is drawn: the spread, twice the blur and the offset, in whole units.
     readonly property real reach: Math.ceil(root.spread + 2 * root.blur + Math.max(Math.abs(root.offsetX), Math.abs(root.offsetY)))
+    // The card's blur as a share of the given blur: 1 since the glow is drawn as a Gaussian (EmuSen_Kit.md §7.119).
+    readonly property real cardBlur: 1
     // Scene pixels to one of this item's units, so the card's blur runs at the pixels it draws.
     property real pixelScale: 1
     // The software backend renders no shader effect; there the kit's GlowPaint draws the glow (§7.113).

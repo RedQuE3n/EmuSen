@@ -10,6 +10,10 @@ Item {
     required property var controller
     property bool searchable: true
     property bool glass: true
+    // The battery's level before the clock, where a board draws it and the machine has a battery (Main:44-47, EclipseConsoles:37).
+    property bool battery: false
+    // The battery's picture beside its level, where a board draws one (Main:45).
+    property bool batteryPicture: false
     property color glassColor: "transparent"
     property real tall: 56
     property real pad: 22
@@ -88,70 +92,90 @@ Item {
             }
         }
     }
-    Item {
-        id: battery
-        objectName: "battery"
-        visible: Device.battery >= 0
+    // Made only where a board draws the battery and the machine reports one, so otherwise no element of it is held.
+    Loader {
+        id: charge
+        active: root.battery && Words.percent(Device.battery).length > 0
         x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
         y: (root.height - height) / 2
-        width: level.x + level.width
-        height: Math.max(batteryIcon.height, level.height)
-        Item {
-            id: batteryIcon
-            objectName: "batteryIcon"
-            // The colour the battery is drawn in.
-            readonly property color ink: Tokens.text
-            y: (battery.height - height) / 2
-            width: 30 * root.unit
-            height: 18 * root.unit
-            Rectangle {
-                // The board's body, a rect of 24 by 16 at (1, 1) stroked 2 about its edge, so 26 by 18 with its corner 4 + 1 (Main:45).
-                objectName: "batteryBody"
-                readonly property color ink: batteryIcon.ink
-                width: 26 * root.unit
-                height: 18 * root.unit
-                radius: 5 * root.unit
-                color: "transparent"
-                border.color: ink
-                border.width: 2 * root.unit
-            }
-            Rectangle {
-                // The charge, at most the body's inner 18 less its gaps, in whole board pixels as the board draws 15 for 82 (Main:45).
-                objectName: "batteryCharge"
-                x: 4 * root.unit
-                y: 4 * root.unit
-                width: Math.round(18 * Math.min(Device.battery, 100) / 100) * root.unit
-                height: 10 * root.unit
-                radius: 2 * root.unit
-                color: batteryIcon.ink
-            }
-            Rectangle {
-                // The terminal, 2.5 by 6 at (27, 6), its corner 1 (Main:45).
-                objectName: "batteryNub"
-                x: 27 * root.unit
-                y: 6 * root.unit
-                width: 2.5 * root.unit
-                height: 6 * root.unit
-                radius: 1 * root.unit
-                color: batteryIcon.ink
-            }
-        }
+        sourceComponent: root.batteryPicture ? pictured : level
+    }
+    // The level alone, as Choose a console's board draws it (EclipseConsoles:37).
+    Component {
+        id: level
         Line {
-            id: level
-            objectName: "batteryLevel"
+            objectName: "battery"
             unit: root.unit
-            x: batteryIcon.width + 8 * root.unit
-            y: (battery.height - height) / 2
-            text: Device.battery.toLocaleString(Qt.locale(), "f", 0) + Qt.locale().percent
+            text: Words.percent(Device.battery)
             color: Tokens.text
             size: root.size
+        }
+    }
+    // The battery's picture and its level, 8 apart, as Home's board draws them (Main:44-47).
+    Component {
+        id: pictured
+        Item {
+            id: battery
+            objectName: "battery"
+            width: batteryLevel.x + batteryLevel.width
+            height: Math.max(batteryIcon.height, batteryLevel.height)
+            Item {
+                id: batteryIcon
+                objectName: "batteryIcon"
+                // The colour the battery is drawn in.
+                readonly property color ink: Tokens.text
+                y: (battery.height - height) / 2
+                width: 30 * root.unit
+                height: 18 * root.unit
+                Rectangle {
+                    // The board's body, a rect of 24 by 16 at (1, 1) stroked 2 about its edge, so 26 by 18 with its corner 4 + 1 (Main:45).
+                    objectName: "batteryBody"
+                    readonly property color ink: batteryIcon.ink
+                    width: 26 * root.unit
+                    height: 18 * root.unit
+                    radius: 5 * root.unit
+                    color: "transparent"
+                    border.color: ink
+                    border.width: 2 * root.unit
+                }
+                Rectangle {
+                    // The charge, at most the body's inner 18 less its gaps, in whole board pixels as the board draws 15 for 82 (Main:45).
+                    objectName: "batteryCharge"
+                    x: 4 * root.unit
+                    y: 4 * root.unit
+                    width: Math.round(18 * Math.min(Device.battery, 100) / 100) * root.unit
+                    height: 10 * root.unit
+                    radius: 2 * root.unit
+                    color: batteryIcon.ink
+                }
+                Rectangle {
+                    // The terminal, 2.5 by 6 at (27, 6), its corner 1 (Main:45).
+                    objectName: "batteryNub"
+                    x: 27 * root.unit
+                    y: 6 * root.unit
+                    width: 2.5 * root.unit
+                    height: 6 * root.unit
+                    radius: 1 * root.unit
+                    color: batteryIcon.ink
+                }
+            }
+            Line {
+                id: batteryLevel
+                objectName: "batteryLevel"
+                unit: root.unit
+                x: batteryIcon.width + 8 * root.unit
+                y: (battery.height - height) / 2
+                text: Words.percent(Device.battery)
+                color: Tokens.text
+                size: root.size
+            }
         }
     }
     Line {
         id: clock
         objectName: "clock"
         unit: root.unit
-        x: battery.visible ? battery.x + battery.width + root.gap * root.unit : root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
+        x: charge.item !== null ? charge.x + charge.width + root.gap * root.unit : charge.x
         y: (root.height - height) / 2
         text: Device.shortTime
         color: Tokens.text

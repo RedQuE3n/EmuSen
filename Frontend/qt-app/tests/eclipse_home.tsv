@@ -40,7 +40,7 @@ batteryIcon	46	the battery's picture, 30 by 18	the theme's own drawing	Item	in:b
 batteryBody	46	its body, a rect of 24 by 16 at (1, 1) stroked 2, so 26 by 18 at a corner of 5	the theme's own drawing	Rectangle	in:batteryIcon:0	mid:80	26	18	5	Tokens.text	-	built	-
 batteryCharge	46	its charge, 15 by 10 at (4, 4) for 82%, at a corner of 2	Device.battery, as whole board pixels of the body's inner 18	Rectangle	in:batteryIcon:4	mid:80	15	10	2	Tokens.text	-	built	-
 batteryNub	46	its terminal, 2.5 by 6 at (27, 6), at a corner of 1	the theme's own drawing	Rectangle	in:batteryIcon:27	mid:80	2.5	6	1	Tokens.text	-	built	-
-batteryLevel	47	"82%"	Device.battery in the machine's locale, with its percent sign (Qt's Locale.percent)	Text	after:batteryIcon:8	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+batteryLevel	47	"82%"	Device.battery as Words.percent gives it (qt-models/src/words.rs percent)	Text	after:batteryIcon:8	mid:80	-	-	-	Tokens.text	22	built	400 0 none
 clock	49	"9:41 PM"	Device.shortTime, the machine's short form (qt-models/src/clock.rs short_time)	Text	after:battery:22	mid:80	inright:status:22	-	-	Tokens.text	22	built	600 0 none
 eyebrow	54	"CONTINUE · SUPER NINTENDO"	Words.continuePlaying, "CONTINUE PLAYING" (qt-models/src/words.rs:36)	Text	96	250	-	-	-	#FFF3C9D2	20	built	600 0.22 upper
 titleLine	55	"Aurora Drift"'s line box, 112 px at the board's line height of 1.02	the title's line height, times its lines	Item	96	below:eyebrow:26	980	114.24	-	-	-	built	-

@@ -3,6 +3,41 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.5, an addition: a console's played games (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played games is added to what a theme may read.
+
+- **`Library.consoles`' `played`** (added role): how many of the console's games were played, a game counting as played
+  when the catalogue holds a last-played time for it (`Catalog::played`, `qt-models/src/library.rs`), the same rule as a
+  game row's `played`. Counted once, where the library's rows are built (`library::rows`), not per frame or per console list.
+- **`Library.consoles`' `glow`** (added role): the console's own colour as `#RRGGBB`, the glow kit-core gives its body
+  (`world::glow`), so a theme's corona and the Sky agree (R-20261115-9).
+- **`Words.line(parts)`** (the parts joined as the facts join theirs, " · ", the empty
+  ones left out; `words::facts` now calls it) (added).
+- **`Help.entries(kind, {triggers: true})`** (added flag): with `group`, the group's entry is LT RT Maker on the triggers
+  (`help.rs`'s `MAKER`) in place of LB RB Group, as Eclipse's Choose a console steps its makers (decided 2026-11-15 by the
+  tester, R-20261115-17). The pair is drawn as one glyph, LT with RT.
+- **`Library.consoles`' `screen`** (added role): the screen the console drove, in words ("CRT, television", "LCD";
+  `words::screen`), from Serenity's catalogue of screens (`emusen_serenity_filters`' `screens`, read through
+  `LibrarySource::screens` once a refresh); empty where the catalogue names none. For Eclipse's facts table
+  (EclipseConsoles:87).
+- **`Words.factLabels`** ("Games", "Played", "Core", "Screen", `words::FACT_LABELS`) and **`Words.count(n)`** (a count
+  grouped by thousands, `words::grouped`) (added), for the same table's labels and values.
+- **`Help.entries(kind, {actions: false})`** (added flag): the entries that carry the screen's own actions (Choose a
+  console's Favourites and Random game) left out (`help::without_actions`), for a board that draws neither in its bar
+  (EclipseConsoles:99-104); Open, Back and the group's entry stay.
+- **`Library.consolesBy(show, order, shortened)`** (added): the consoles a core runs, those with no game among them, as Choose a
+  console's chips show them (0 All, 1 With games, 2 Favourites) in an order (0 maker, 1 year, 2 name, 3 games), each
+  maker's together (`console_list.rs`), by name the consoles keyed in `shortened` by their short name, as their plates show them; **`Words.consoleShows`**, **`Words.consoleSorts`** ("Sorted by maker"),
+  **`Words.noGamesLine`** ("no games yet") and **`Words.percent(charge)`** ("82%") (added).
+- **`Help.entries(kind, {options: true})`** (added flag): Choose a console's Y named Sort and X Options, their actions
+  `sort` and `consoleOptions`, the list's action lines its own; the entries' new **`action`** role names each entry's
+  action. **`Actions.consoleOptions(key)`** (added): Settings opened at the console's page.
+- **`GroupGridLayout`** (the kit's, by name; 1.5 in the qmldir): groups as a column and the chosen group's items as a
+  grid, with the walk inside it (`EmuSen_Kit.md` §7.120), so a theme lays such a screen out without logic of its own.
+- The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.
+  A role is no QML type, so the qmldir's types keep their minors and `import EmuSen.Theme 1.0` finds what it found before.
+
 ## 1.4, an addition: the backdrop and the glow (2026-11-15)
 
 Decided 2026-11-15 by the tester (R-20261115-6): Eclipse gets two kit parts themes may use, a blurred backdrop and the glow
@@ -38,7 +73,7 @@ or shadow. 1.3 is another piece's.
   and its locale's short form (`QLocale::system()`, `QLocale::ShortFormat`): "9:41 PM" under en_US, "21:41" under de_DE.
   `Device.clock` keeps the program's "hh:mm", so the other themes' clocks are unchanged (R-20261114-21). Eclipse's status
   draws `Device.shortTime` (Main.dc.html:49).
-- The module is 1.4 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.4.*`.
+- The module is 1.4 and `theme.json`'s `api` may name it; its registry was `Testing/qmltypes/EmuSen.Theme-1.4.*` until 1.5.
 
 ## 1.3, an addition: the face tokens (2026-11-15)
 

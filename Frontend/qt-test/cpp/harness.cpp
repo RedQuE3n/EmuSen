@@ -641,7 +641,12 @@ bool harness_grab(QObject& window, const QString& path)
 QString harness_property(QObject& root, const QString& object_name, const QString& property)
 {
     QObject* object = root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);
-    return object != nullptr ? object->property(property.toUtf8().constData()).toString() : QString();
+    // A grouped property by its path, "border.width": each part but the last an object property of the one before.
+    const QStringList path = property.split(QLatin1Char('.'));
+    for (qsizetype i = 0; object != nullptr && i + 1 < path.size(); ++i) {
+        object = object->property(path[i].toUtf8().constData()).value<QObject*>();
+    }
+    return object != nullptr ? object->property(path.last().toUtf8().constData()).toString() : QString();
 }
 
 QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module, const QString& name)

@@ -2986,6 +2986,10 @@ neither changes what an existing screen draws.
   `alignWhenCentered` on the child alone does not centre exactly); false centres exactly, for a look on a canvas whose
   unit is no pixel. Entries of different heights now share the bar's middle; before, each stood at the row's top.
 
+A theme that draws its own glyphs (`glyph`) gets the pair's second as its own glyph too, `ownGlyph2-<label>`, so LT RT
+Maker is two of the theme's boxes as Eclipse's Choose a console board draws it (added 2026-11-16; before, only the first
+was drawn).
+
 **Held to**: kit-core's `tests/glyph.rs` `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
 sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
 glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry
@@ -4175,7 +4179,10 @@ the first on top as a box-shadow lists them, by default two from the tokens, the
 disc is drawn past the box, as a box-shadow is, and takes no room in a layout. Each glow is a `Glow` (§7.113) of the
 disc's square with corners of half its side, so a circle grown by its spread and blurred by its blur, outside the disc
 alone: a disc with no fill (the splash's) shows none of it inside. On the graphics card that is Qt's `RectangularShadow`,
-on the software backend a `Canvas`, as §7.113 says; the measures of the commonest recipe are in §7.113's table.
+on the software backend a `Canvas`, as §7.113 says; the measures of the commonest recipe are in §7.113's table. The rim,
+the disc and each glow are centred with `anchors.alignWhenCentered` false: Qt's anchors otherwise round a centred item to
+a whole unit of its parent (Qt 6, "Positioning with Anchors", `anchors.alignWhenCentered`, true by default), which put
+Choose a console's rim of two board pixels a third of a unit off its disc (measured 2026-11-16, qt-app's eclipse_consoles).
 
 **A game's corona.** `corona` is a game's corona colour, transparent (none given) by default; `gameCorona` is true while
 it is not transparent. The rim (`rimColor`) is the game's corona where one is given and the look's `coronaColor`
@@ -4376,6 +4383,27 @@ offset is added to the canvas's shadow offset. EmuSen.Theme 1.4 exports `Glow` b
 (software) and `tests/shadow_gpu.rs` (the card, a GPU job): a glow moved down draws, above and below its box, what the
 same glow unmoved draws `offset` further out and nearer in, within one level of 255 on the software backend and two on
 the card, and nothing inside the box. Kit 1.8.
+
+
+### 7.120 GroupGridLayout: groups as a column and the chosen group as a grid (2026-11-15)
+
+`kit-core/src/group_grid.rs` (`group_grid`) takes each item's group and place in its group, in a model's order, and a
+number of columns. It gives each item its column and row in its group's grid, and its left, right, up and down neighbours
+inside that grid: none past the grid's edge. Down from a row lands on the item below, or on the last item when the next
+row is shorter, and gives none from the last row. It also gives each group's first item and its number of rows. It names
+no console. `kit-qt/src/group_grid.rs`, **`GroupGridLayout`**, reads the two roles (`groupRole`, `group` by default;
+`indexRole`, `groupIndex`) from any list model when `read()` is called or the model changes. It lays out again when
+`columns` changes, and gives the lists `columnOf`, `rowOf`, `left`, `right`, `up`, `down`, `firsts` and `rows`, with -1
+for none. A screen places an item at its column and row and answers each arrow in the item's own `Keys.onPressed` from the neighbour's index; Eclipse's Choose a console uses no `KeyNavigation`, which writes back links of its own and skips a hidden delegate (EmuSen_Qt.md §3.4.9). The
+edges of the grid are the screen's to join: to its group's heading, to an action. Exported to themes in EmuSen.Theme 1.5
+(Eclipse's Choose a console, EmuSen_Qt.md §3.4.9). Kit 1.9.
+
+**Proof.** kit-core's `tests/group_grid.rs`: two interleaved groups at four columns, with each item's place, the groups'
+firsts and rows; a walk that stays inside its group, with Down landing on a short row's last item; and one column and no
+items. A fourth holds the walk at one to six columns on one group of 1, of a row's worth, of 11, 30 and 40, and on 120 items
+in seven interleaved groups, 40 in one: every neighbour is the one the grid's arithmetic gives (along the row, the row
+above, the row below or the last item when that row is short), no press toward an item that lies that way gives none, and
+every item is reached from its group's first. theme-qt's harness scene reads the consoles through it after the list resets.
 
 ### 7.121 A look's type size and the legibility floor (2026-11-15)
 

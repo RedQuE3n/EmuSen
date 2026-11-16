@@ -542,6 +542,11 @@ Window {
                 onActed: (key) => screens.act(key)
             }
         }
+        // A console's options asked for on Choose a console: Settings opens at that console's page (none for an empty one).
+        Connections {
+            target: screens
+            function onSettingsAtChanged() { settingsModel.openConsole(screens.settingsAt) }
+        }
         ThemesScreen {
             objectName: "themes"
             screens: screens

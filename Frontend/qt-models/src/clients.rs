@@ -242,6 +242,12 @@ impl LibrarySource for ClientSource {
         Ok(games.iter().filter_map(of).collect())
     }
 
+    fn screens(&self) -> Result<Vec<(String, String)>, String> {
+        let catalogue = emusen_platform_client::serenity::catalogue(&self.platform).map_err(words)?;
+        let text = |s: &Value, key: &str| s[key].as_str().unwrap_or_default().to_owned();
+        Ok(catalogue["screens"].as_array().into_iter().flatten().map(|s| (text(s, "console"), text(s, "kind"))).collect())
+    }
+
     fn collections(&self) -> Result<Vec<Collection>, String> {
         let all = self.library.get(&json!({ "what": "collections" })).map_err(words)?;
         let mut out = Vec::new();
@@ -317,15 +323,14 @@ impl LibrarySource for ClientSource {
     }
 }
 
-/// An engine by the name a choice stores, named from the runtime's cores listing: a libretro core by its corename, an
-/// EmuSen core by its info name less the port's mark, and an engine the listing lacks by its stored name.
+/// An engine by the name a choice stores, shown by its libretro corename or by its original name (`without_port_mark`).
 pub fn engine_shown(id: &str, cores: &[CoreRow]) -> Engine {
     let row = cores.iter().find(|c| c.engine.as_deref() == Some(id));
     let libretro = row.and_then(|r| r.libretro.as_ref());
     let name = match (row, libretro) {
         (_, Some(l)) => l.corename.clone().or_else(|| row.and_then(|r| r.name.clone())).unwrap_or_else(|| id.to_owned()),
         (Some(r), None) => without_port_mark(r.name.as_deref().unwrap_or(id)).to_owned(),
-        (None, None) => id.to_owned(),
+        (None, None) => without_port_mark(id).to_owned(),
     };
     Engine { id: id.to_owned(), name, libretro: libretro.is_some() }
 }

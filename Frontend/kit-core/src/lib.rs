@@ -7,6 +7,7 @@ pub mod canvas;
 pub mod controller;
 pub mod figures;
 pub mod glyph;
+pub mod group_grid;
 pub mod input;
 pub mod keyboard;
 pub mod layout;

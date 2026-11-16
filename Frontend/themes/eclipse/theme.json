@@ -1,6 +1,6 @@
 {
     "schema": 1,
-    "api": "1.4",
+    "api": "1.5",
     "name": "Eclipse",
     "author": "The EmuSen project",
     "licence": "GPL-3.0-or-later",
@@ -8,7 +8,8 @@
         "dark"
     ],
     "screens": [
-        "home"
+        "home",
+        "consoles"
     ],
     "tokens": {
         "dark": {

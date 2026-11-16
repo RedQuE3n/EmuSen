@@ -15,6 +15,7 @@ pub mod consoles;
 pub mod disc_set;
 pub mod files;
 pub mod path_key;
+pub mod power;
 pub mod game_folders;
 pub mod error_log;
 pub mod image_probe;

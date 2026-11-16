@@ -114,6 +114,8 @@ ThemeScreen {
                         controller: frame.controller
                         glassColor: ink.glass
                         pixelScale: canvas.unit
+                        battery: true
+                        batteryPicture: true
                         x: parent.width - 96 * design.unit - width
                         y: 80 * design.unit - height / 2
                         below: root.firstButton ?? root.currentTile

@@ -43,6 +43,9 @@ pub mod qobject {
         #[qproperty(QString, clock)]
         /// The time in the machine's own short form: `Device.shortTime`.
         #[qproperty(QString, short_time, cxx_name = "shortTime")]
+        /// The machine's battery, 0 to 100 or -1 for none, and whether it charges: `Device.battery` and `charging`.
+        #[qproperty(i32, battery)]
+        #[qproperty(bool, charging)]
         /// Reduced motion, as the window binds the kit's tokens.
         #[qproperty(bool, reduced_motion, cxx_name = "reducedMotion")]
         /// Swap A and B in menus, as the window binds its own PadRouter, for the engine's (EmuSen_Qt.md §7.7.H3).
@@ -172,6 +175,8 @@ pub struct ThemeFeedRust {
     family: i32,
     clock: QString,
     short_time: QString,
+    battery: i32,
+    charging: bool,
     reduced_motion: bool,
     swap: bool,
     now: i64,
@@ -190,6 +195,8 @@ impl Default for ThemeFeedRust {
             family: 0,
             clock: QString::default(),
             short_time: QString::default(),
+            battery: -1,
+            charging: false,
             reduced_motion: false,
             swap: false,
             now: 0,
@@ -318,6 +325,8 @@ impl cxx_qt::Initialize for qobject::ThemeFeed {
         self.as_mut().on_family_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_clock_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_short_time_changed(|feed| feed.feed_device()).release();
+        self.as_mut().on_battery_changed(|feed| feed.feed_device()).release();
+        self.as_mut().on_charging_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_reduced_motion_changed(|feed| feed.feed_motion()).release();
         self.as_mut().on_swap_changed(|feed| feed.feed_swap()).release();
         self.as_mut().on_now_changed(|feed| {
@@ -416,7 +425,7 @@ impl qobject::ThemeFeed {
 
     fn feed_device(&self) {
         let facts = DeviceFacts { controllers: self.controllers, family: self.family, clock: self.clock.to_string(),
-            short_time: self.short_time.to_string(),
+            short_time: self.short_time.to_string(), battery: self.battery, charging: self.charging,
             ..DeviceFacts::default()
         };
         if let Some(device) = self.engine().and_then(host::device) {

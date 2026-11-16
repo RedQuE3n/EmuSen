@@ -1,5 +1,5 @@
 //! The program's feed of an EmuSen theme (EmuSen_Qt.md §3.5.2): the theme's engine reads the program's library, places,
-//! time, session and reduced motion through EmuSen.Theme, hears the pad through its own router, and its Actions are the
+//! time, battery, session and reduced motion through EmuSen.Theme, hears the pad through its own router, and its Actions are the
 //! program's. One Qt program a process, so one test a file.
 
 mod common;
@@ -17,6 +17,12 @@ fn qt_3_5_2_the_feed_hands_a_theme_the_program_s_views_and_carries_its_actions()
     let mut harness = emusen_qt_test::Harness::new();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
+    // The machine's battery from the world's made-up power_supply tree, which the platform library reads in place of the kernel's.
+    let power = _world.power_supply().join("BAT0");
+    std::fs::create_dir_all(&power).unwrap();
+    for (key, value) in [("type", "Battery"), ("scope", "System"), ("capacity", "82"), ("status", "Charging")] {
+        std::fs::write(power.join(key), format!("{value}\n")).unwrap();
+    }
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     assert!(scene.set_property("program", "theme", FED));
     wait_for(&mut scene, "library", "loading", "false", 10000);
@@ -26,6 +32,7 @@ fn qt_3_5_2_the_feed_hands_a_theme_the_program_s_views_and_carries_its_actions()
     assert_eq!(scene.property("fedPlaces", "text"), "7");
     assert_eq!(scene.property("fedClock", "text"), scene.property("clock", "time"));
     assert_eq!(scene.property("fedSession", "text"), "false");
+    wait_for(&mut scene, "fedBattery", "text", "82 true", 2000);
     assert!(scene.set_property("program", "reducedMotion", "true"));
     assert_eq!(scene.property("fedMotion", "text"), "true", "the theme's engine's tokens follow the program's");
 

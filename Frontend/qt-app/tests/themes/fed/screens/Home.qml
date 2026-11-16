@@ -11,6 +11,7 @@ ThemeScreen {
     Text { objectName: "fedClock"; y: 40; text: Device.clock }
     Text { objectName: "fedSession"; y: 60; text: Session.hasGame }
     Text { objectName: "fedMotion"; y: 80; text: Tokens.reducedMotion }
+    Text { objectName: "fedBattery"; y: 120; text: Device.battery + " " + Device.charging }
     Frame {
         id: frame
         anchors.fill: parent

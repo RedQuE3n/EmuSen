@@ -1797,7 +1797,8 @@ tile's shadow and the filled button's halo and glow are the kit's `Glow` (§7.11
 **Shared parts.** `parts/` serves every Eclipse screen. `Board` and `Ink` hold the measure and the boards' own colours.
 `Brand` is the mark and the name. `Status` is the search and the clock, on the glass or not.
 `Pill` is a button. `HelpLine` is the help bar on the foot, with a place at its right. `Glyph` is a pad button's glyph as the
-boards draw it, and `Line` a text at the board's own size. `TileWords` is a tile's foot as the board draws it: the board's
+boards draw it, `Line` a text at the board's own size (its words named as the Line is), and `FieldInk` a board field's
+colour with a game's hue. `TileWords` is a tile's foot as the board draws it: the board's
 96 px shade from rgba(4, 5, 10, 0.92) at the foot to clear, the console line in capitals 12 px over the foot and the title
 34 px over it, each inset 18 px (`Main.dc.html:84-86`). The column follows the board's flow (Main:53): each
 line 26 px under the one before, the buttons 18 px further. The title's line box is the board's, 1.02 of 112 px for each

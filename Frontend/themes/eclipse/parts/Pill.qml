@@ -86,7 +86,7 @@ Walkable {
     }
     Line {
         id: wordsItem
-        name: "buttonLabel." + root.place
+        objectName: "buttonLabel." + root.place
         unit: root.unit
         x: glyphItem.x + glyphItem.width + root.gap * root.unit
         y: (root.height - height) / 2

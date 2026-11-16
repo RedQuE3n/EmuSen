@@ -241,7 +241,8 @@ fn tokens(screen: u64) -> BTreeMap<String, String> {
 /// A property of an element of the placed screen, as Qt writes it as text; the element by its number in the tree, since a
 /// Repeater's items are no QObject children of the screen.
 fn read(tree: &Tree, name: &str, property: &str) -> String {
-    let Some(i) = tree.find_named(name) else { return String::new() };
+    // A Line's words are named as the Line is: the last of a name in the tree, the deepest, is the words themselves.
+    let Some(i) = tree.nodes.iter().rposition(|n| n.name == name) else { return String::new() };
     let id: u64 = tree.nodes[i as usize].id.parse().unwrap();
     emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(name), &QString::from(property)).to_string()
 }
@@ -320,7 +321,7 @@ pub fn oracle(backend: &str) {
         let canvas_width = width as f64 / unit;
         let got = boxes(&tree, unit);
         let at = format!("{width}x{height}");
-        let named = |n: &str| tree.nodes.iter().find(|m| m.name == n && m.visible).or_else(|| tree.find_named(n).map(|i| &tree.nodes[i as usize]));
+        let named = |n: &str| tree.nodes.iter().rev().find(|m| m.name == n && m.visible).or_else(|| tree.nodes.iter().rev().find(|m| m.name == n));
 
         // The board's state: Recent's first game, the suspended one, focused and shown.
         assert_eq!(read(&tree, "tile.0", "activeFocus"), "true", "{at}: the first tile holds the focus");

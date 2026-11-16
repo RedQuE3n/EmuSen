@@ -18,6 +18,7 @@
     <qresource prefix="/emusen/themes/eclipse">
         <file alias="parts/Board.qml">../themes/eclipse/parts/Board.qml</file>
         <file alias="parts/Brand.qml">../themes/eclipse/parts/Brand.qml</file>
+        <file alias="parts/FieldInk.qml">../themes/eclipse/parts/FieldInk.qml</file>
         <file alias="parts/Glyph.qml">../themes/eclipse/parts/Glyph.qml</file>
         <file alias="parts/HelpLine.qml">../themes/eclipse/parts/HelpLine.qml</file>
         <file alias="parts/Ink.qml">../themes/eclipse/parts/Ink.qml</file>

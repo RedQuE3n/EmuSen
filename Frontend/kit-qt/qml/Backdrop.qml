@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
-import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
 // A screen's backdrop as the Eclipse boards draw it: a ground, and over it blurred colour fields, or a picture blurred in their place; on the software backend each unblurred at its opacity (EmuSen_Kit.md §7.118).
@@ -57,21 +56,17 @@ Item {
                 Item {
                     id: body
                     anchors.fill: parent
-                    Shape {
+                    // The ellipse its box holds: a circle as wide as the box, scaled to its height, a painted ground as the disc is.
+                    Rectangle {
                         objectName: "backdropEllipse"
-                        anchors.fill: parent
+                        width: field.width
+                        height: field.width
                         visible: (field.modelData?.corner ?? -1) < 0
-                        preferredRendererType: Shape.CurveRenderer
-                        ShapePath {
-                            strokeColor: "transparent"
-                            fillColor: field.paint
-                            PathAngleArc {
-                                centerX: field.width / 2
-                                centerY: field.height / 2
-                                radiusX: field.width / 2
-                                radiusY: field.height / 2
-                                sweepAngle: 360
-                            }
+                        radius: width / 2
+                        color: field.paint
+                        antialiasing: true
+                        transform: Scale {
+                            yScale: field.height / Math.max(1, field.width)
                         }
                     }
                     Rectangle {

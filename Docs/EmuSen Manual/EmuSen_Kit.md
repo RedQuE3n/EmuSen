@@ -4304,6 +4304,9 @@ Gaussian function"; w3.org/TR/filter-effects-1, read 2026-11-15).
 Tests: `tests/backdrop.rs` (software) holds the ground, each field's colour at its opacity over the ground, its sharp
 edge, the streak's turn, and a picture drawn at its opacity in the fields' place. `tests/backdrop_gpu.rs` (the card, a GPU job) holds the field
 blurred past its edge as the Gaussian is, the ground where no field reaches, and the picture in the fields' place. A
+An ellipse field is a circle as wide as its box (a `Rectangle` of half its width's radius) scaled to the box's height, a
+painted ground as the disc is, where a `Shape` was read by the fit audit as a picture past the panel and over words (seen
+2026-11-15 when Eclipse's Home drew its fields). A
 picture in the fields' place (`source`) is still blurred by `MultiEffect`; Eclipse's Home no longer draws one. Kit 1.8,
 Theme 1.4.
 

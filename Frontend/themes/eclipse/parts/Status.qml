@@ -87,7 +87,7 @@ Item {
     }
     Line {
         id: clock
-        name: "clock"
+        objectName: "clock"
         unit: root.unit
         x: root.searchable ? searchButton.x + searchButton.width + root.gap * root.unit : root.pad * root.unit
         y: (root.height - height) / 2

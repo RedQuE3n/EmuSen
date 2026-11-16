@@ -40,7 +40,7 @@ Item {
     }
     Line {
         id: titleItem
-        name: "tileTitle." + root.place
+        objectName: "tileTitle." + root.place
         unit: root.unit
         x: root.inset * root.unit
         // Its foot the board's 34 px over the tile's (Main:85).
@@ -54,7 +54,7 @@ Item {
     }
     Line {
         id: factsItem
-        name: "tileFacts." + root.place
+        objectName: "tileFacts." + root.place
         unit: root.unit
         x: root.inset * root.unit
         y: root.height - root.foot * root.unit - height

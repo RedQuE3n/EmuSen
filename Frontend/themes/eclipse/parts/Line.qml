@@ -7,8 +7,6 @@ Item {
     id: root
     // A board pixel in canvas units, Board.unit.
     property real unit: 1
-    // The Text's name, which a reader and the tests find it by.
-    property alias name: words.objectName
     property alias text: words.text
     property alias color: words.color
     // The board's size, weight, letter spacing and line height, in board pixels.
@@ -30,6 +28,8 @@ Item {
     implicitHeight: words.implicitHeight * root.unit
     Text {
         id: words
+        // The Line's name, so a reader and the tests find the words themselves by it.
+        objectName: root.objectName
         // Its own width where the box is its words', which the division by the measure could leave a hair short of and so elide.
         width: root.width === root.implicitWidth ? words.implicitWidth : root.width / root.unit
         height: root.height / root.unit

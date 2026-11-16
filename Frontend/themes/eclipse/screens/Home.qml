@@ -53,15 +53,13 @@ ThemeScreen {
                     return [art[0], art[1], spread(art[0], art[1])]
                 return art
             }
-            // A board field's colour with the shown game's hue: the field's own saturation, lightness and alpha; the streaks take
-            // the hues of the two fields they are pale tints of (Main:22 of 19, Main:23 of 20).
-            function fieldColor(index: int): color {
-                const board = ink.fields[index]
-                if (root.hues.length === 0)
-                    return board
-                const hue = root.hues[[0, 1, 2, 0, 1][index]]
-                return Qt.hsla((((hue % 360) + 360) % 360) / 360, board.hslSaturation, board.hslLightness, board.a)
-            }
+            // Each board field's colour with the shown game's hue; the streaks take the hues of the two fields they are pale tints of
+            // (Main:22 of 19, Main:23 of 20).
+            FieldInk { id: field0; board: ink.field0; hue: root.hues.length > 0 ? root.hues[0] : NaN }
+            FieldInk { id: field1; board: ink.field1; hue: root.hues.length > 0 ? root.hues[1] : NaN }
+            FieldInk { id: field2; board: ink.field2; hue: root.hues.length > 0 ? root.hues[2] : NaN }
+            FieldInk { id: field3; board: ink.field3; hue: root.hues.length > 0 ? root.hues[0] : NaN }
+            FieldInk { id: field4; board: ink.field4; hue: root.hues.length > 0 ? root.hues[1] : NaN }
             // The ground and the board's five blurred colour fields, each at its place, size, turn, blur and opacity (Main:17-23).
             Backdrop {
                 objectName: "backdrop"
@@ -69,11 +67,11 @@ ThemeScreen {
                 ground: ink.ground
                 pixelScale: canvas.unit
                 fields: [
-                    BackdropField { x: 1060 * design.unit; y: -140 * design.unit; width: 900 * design.unit; height: 760 * design.unit; color: root.fieldColor(0); blur: 90 * design.unit; opacity: 0.85 },
-                    BackdropField { x: 1380 * design.unit; y: 420 * design.unit; width: 760 * design.unit; height: 760 * design.unit; color: root.fieldColor(1); blur: 110 * design.unit; opacity: 0.9 },
-                    BackdropField { x: 900 * design.unit; y: -260 * design.unit; width: 700 * design.unit; height: 520 * design.unit; color: root.fieldColor(2); blur: 100 * design.unit; opacity: 0.8 },
-                    BackdropField { x: 1240 * design.unit; y: 250 * design.unit; width: 620 * design.unit; height: 46 * design.unit; corner: 40 * design.unit; color: root.fieldColor(3); blur: 22 * design.unit; opacity: 0.55; rotation: -18 },
-                    BackdropField { x: 1330 * design.unit; y: 380 * design.unit; width: 520 * design.unit; height: 30 * design.unit; corner: 40 * design.unit; color: root.fieldColor(4); blur: 18 * design.unit; opacity: 0.5; rotation: -14 }
+                    BackdropField { x: 1060 * design.unit; y: -140 * design.unit; width: 900 * design.unit; height: 760 * design.unit; color: field0.color; blur: 90 * design.unit; opacity: 0.85 },
+                    BackdropField { x: 1380 * design.unit; y: 420 * design.unit; width: 760 * design.unit; height: 760 * design.unit; color: field1.color; blur: 110 * design.unit; opacity: 0.9 },
+                    BackdropField { x: 900 * design.unit; y: -260 * design.unit; width: 700 * design.unit; height: 520 * design.unit; color: field2.color; blur: 100 * design.unit; opacity: 0.8 },
+                    BackdropField { x: 1240 * design.unit; y: 250 * design.unit; width: 620 * design.unit; height: 46 * design.unit; corner: 40 * design.unit; color: field3.color; blur: 22 * design.unit; opacity: 0.55; rotation: -18 },
+                    BackdropField { x: 1330 * design.unit; y: 380 * design.unit; width: 520 * design.unit; height: 30 * design.unit; corner: 40 * design.unit; color: field4.color; blur: 18 * design.unit; opacity: 0.5; rotation: -14 }
                 ]
             }
             CoronaDisc {
@@ -127,7 +125,7 @@ ThemeScreen {
                     }
                     Line {
                         id: eyebrow
-                        name: "eyebrow"
+                        objectName: "eyebrow"
                         unit: design.unit
                         x: 96 * design.unit
                         y: 250 * design.unit
@@ -152,7 +150,7 @@ ThemeScreen {
                     }
                     Line {
                         id: title
-                        name: "title"
+                        objectName: "title"
                         unit: design.unit
                         x: 96 * design.unit
                         // The face's own height about the line box's middle, as CSS spreads a line's leading equally above and below.
@@ -172,7 +170,7 @@ ThemeScreen {
                     }
                     Line {
                         id: facts
-                        name: "facts"
+                        objectName: "facts"
                         unit: design.unit
                         x: 96 * design.unit
                         y: titleLine.y + titleLine.height + 26 * design.unit
@@ -238,7 +236,7 @@ ThemeScreen {
                         }
                         Line {
                             id: resumeWords
-                            name: "resumeWords"
+                            objectName: "resumeWords"
                             unit: design.unit
                             x: resumePicture.width + 16 * design.unit
                             y: (resume.height - height) / 2
@@ -284,7 +282,7 @@ ThemeScreen {
                     }
                     Line {
                         id: recentHeading
-                        name: "recentHeading"
+                        objectName: "recentHeading"
                         unit: design.unit
                         x: 96 * design.unit
                         y: 790 * design.unit

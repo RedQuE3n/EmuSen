@@ -44,7 +44,7 @@ Item {
     }
     Line {
         id: wordmark
-        name: "wordmark"
+        objectName: "wordmark"
         unit: root.unit
         x: mark.width + root.gap * root.unit
         y: (root.height - height) / 2

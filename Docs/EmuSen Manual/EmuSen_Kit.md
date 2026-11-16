@@ -2852,7 +2852,7 @@ colour behind the maker's name under the hub, depended on how many frames the ma
 running animations at that read on 2026-11-16 found the sky's `FrameAnimation` running at 1920 × 1200, 1920 × 1080,
 1280 × 720 and 3840 × 2160 dark, the states of the varying lines. A `FrameAnimation` declares no end, so `looping`
 now counts only an animation whose `loops` is infinite (or a group's that is): `rest` waits for a running frame clock as
-for any transition and fails past `SETTLE_MS` naming it, and theme-audit rests after each resize in place of the 150 ms.
+for any transition and fails past `SETTLE_MS` naming it, and theme-audit rests after each resize in place of the 150 ms (a held clock's states keep the 150 ms: nothing moves under a held clock, so resting there only waits out the limit).
 The kit's two frame clocks both stop by themselves (`Sky`'s once its glow settles, Moonrise's once the splash ends; a
 held clock's passes never rest). `PolishScene.qml` stands for a resting motion with a `NumberAnimation` of infinite
 `loops`, so `polish.rs` still holds the tree read while frames swap and `rest` has nothing to wait for. Two runs of the

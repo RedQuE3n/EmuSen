@@ -161,7 +161,8 @@ THE LOADED STEP
     1512 s and 1500 s on trunk and 448 s after.
 
     Each size of a state is read once the screen rests after its
-    resize (the harness's rest), no longer 150 ms after it. The ratio
+    resize (the harness's rest), no longer 150 ms after it; a held
+    clock's states, under which nothing moves, keep the 150 ms. The ratio
     that varied was read while the sky's glow still eased to the centre
     the resize gave it: the canvas's width in design units follows the
     window's shape, so glowX changes, and the glow eases over Pan

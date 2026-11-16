@@ -41,6 +41,16 @@ Item {
         entrySpacing: root.spacing * root.unit
         glyphGap: root.glyphGap * root.unit
         glyphSize: root.glyphSide * root.unit
+        // The canvas's unit is no pixel, so the entries are centred exactly, as the board centres them (Main:93).
+        snapped: false
+        // The boards' glyphs: letters in the face in a 2 px ring, A filled, Menu and the shoulders named in a capsule (Main:94-97).
+        glyph: Component {
+            Glyph {
+                unit: root.unit
+                side: root.glyphSide
+                ink: root.ink
+            }
+        }
     }
     Item {
         id: sideSlot

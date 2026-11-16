@@ -24,6 +24,10 @@ or shadow. 1.3 is another piece's.
   case, "EmuSen", Eclipse's wordmark, where `title` stays "EMUSEN" for the other screens; a game's last play and its time
   played, "Last played yesterday · 3 h 20 min played"; and "Continue · Super Nintendo" (`qt-models/src/words.rs`). The host
   now feeds `Session.played` from games.db's seconds played. Eclipse's Home draws all three, as its board does.
+- **`Help.entries(kind, { card: true })`**: the kind's entries as Eclipse's Home names them, X "Options" and Start "Home
+  card" (the card it opens), and no Select search in the bar, its action still the frame's (`qt-models/src/help.rs`,
+  `card_named`; the words `words::OPTIONS`, `HOME_CARD`). The kit's `HelpBar.glyph`, `snapped` and `PadGlyph.letter` reach
+  themes through the kit's types.
 - **`Words.resumePoint(pausedSince)`**: "Resume point · saved 21:12", the time of pausing in the clock's own form
   (`qt-models/src/words.rs`, `resume_point`; `qt-models/src/clock.rs`, `clock_time`). Eclipse's Home draws it beside the
   paused picture, as its board does (Main.dc.html:59).

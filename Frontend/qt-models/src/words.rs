@@ -211,6 +211,12 @@ pub fn resume_point(time: &str) -> String {
     format!("{RESUME_POINT} {BETWEEN} saved {time}")
 }
 
+/// X on a game, the game's page, as Eclipse's Home names it (Main.dc.html:66, 95).
+pub const OPTIONS: &str = "Options";
+
+/// Start on Home, the Home card it opens, as Eclipse's Home names it (Main.dc.html:97).
+pub const HOME_CARD: &str = "Home card";
+
 /// The suspended game's picture, as Eclipse's Home names it (Main.dc.html:59).
 pub const RESUME_POINT: &str = "Resume point";
 

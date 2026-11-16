@@ -15,6 +15,8 @@ Item {
     readonly property alias paired: marks.paired
     property color ink: Kit.Tokens.text
     readonly property alias name: marks.name
+    // The letter the family prints on the button, drawn in the glyph type; empty for a button marked by a shape alone.
+    readonly property alias letter: marks.letter
     // The glyph's own side over the glyph type's size.
     readonly property real sideShare: 1.4
     implicitWidth: Kit.Tokens.fontGlyph * root.sideShare

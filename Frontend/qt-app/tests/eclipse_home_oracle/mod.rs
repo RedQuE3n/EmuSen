@@ -450,7 +450,7 @@ pub fn oracle(backend: &str) {
         }
 
         // Every word is the program's.
-        let help = entries(Screen::Home);
+        let help = emusen_qt_models::help::card_named(entries(Screen::Home).to_vec());
         let mut words_of = vec![
             ("wordmark", words::NAME.to_owned()),
             ("eyebrow", words::continue_line(&game.console)),

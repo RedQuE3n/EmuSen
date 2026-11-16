@@ -29,6 +29,10 @@ Item {
     property bool pairGlyph: false
     // A host's own drawing of an entry's words, a component with `text` and `color`; null, the kit's Text in labelFont (§7.54).
     property Component label: null
+    // A host's own drawing of an entry's glyph, a component with `button`, `family` and `lead` (the first entry); null, the kit's PadGlyph (§7.54).
+    property Component glyph: null
+    // Each entry and its parts centred on the bar's middle snapped to a whole unit (Qt's alignWhenCentered); a look on a canvas whose unit is no pixel centres them exactly.
+    property bool snapped: true
     // The bar's own colour and radius, drawn by its backing; the paddings are its box's around the entries.
     property color color: root.glass ? Qt.alpha(Kit.Tokens.inputSurface, root.glassOpacity) : Kit.Tokens.surface
     property alias radius: backing.radius
@@ -42,6 +46,10 @@ Item {
     property bool glass: false
     readonly property real glassOpacity: 0.72
     signal pressed(int button)
+    // Where a box of `inner` stands centred in `outer`: as Qt's centre anchors put it, each half snapped to a whole unit, or exactly.
+    function centred(outer: real, inner: real): real {
+        return root.snapped ? Math.round(outer / 2) - Math.round(inner / 2) : (outer - inner) / 2
+    }
     implicitWidth: root.leftInset + 2 * root.horizontalPadding + row.implicitWidth
     implicitHeight: root.fitted ? row.implicitHeight + 2 * root.verticalPadding : Kit.Tokens.helpBar
     // A clear colour draws no backing at all: on Vulkan a clear Rectangle cleared its strip to alpha 0 (EmuSen_Kit.md §7.28).
@@ -68,7 +76,7 @@ Item {
     Row {
         id: row
         x: root.leftInset + root.horizontalPadding
-        anchors.verticalCenter: parent.verticalCenter
+        y: root.centred(root.height, row.height)
         spacing: root.entrySpacing
         Repeater {
             id: entries
@@ -84,6 +92,8 @@ Item {
                 // An entry whose action the host would decline: drawn at 38% and not pressed (EmuSen_Kit.md §7.28).
                 readonly property bool live: entry.model.enabled ?? true
                 objectName: "help-" + entry.label
+                // Entries of different heights share the bar's middle, as a line of glyphs and words is centred.
+                y: root.centred(row.height, entry.height)
                 flat: true
                 leftPadding: 0
                 rightPadding: 0
@@ -103,10 +113,11 @@ Item {
                         root.controller.offer(entry.button)
                 }
                 contentItem: Row {
+                    id: content
                     spacing: root.glyphGap * root.entryScale
                     Image {
                         objectName: "icon-" + entry.label
-                        anchors.verticalCenter: parent.verticalCenter
+                        y: root.centred(content.height, height)
                         visible: entry.picture.length > 0
                         width: glyph.width
                         height: glyph.height
@@ -119,11 +130,37 @@ Item {
                             anchors.fill: parent
                         }
                     }
+                    Loader {
+                        id: ownGlyph
+                        objectName: ownGlyph.active ? "ownGlyph-" + entry.label : ""
+                        y: root.centred(content.height, height)
+                        active: root.glyph !== null && entry.picture.length === 0
+                        visible: active
+                        sourceComponent: root.glyph
+                        Binding {
+                            target: ownGlyph.item
+                            property: "button"
+                            value: entry.button
+                            when: ownGlyph.item !== null
+                        }
+                        Binding {
+                            target: ownGlyph.item
+                            property: "family"
+                            value: root.family
+                            when: ownGlyph.item !== null
+                        }
+                        Binding {
+                            target: ownGlyph.item
+                            property: "lead"
+                            value: entry.index === 0
+                            when: ownGlyph.item !== null
+                        }
+                    }
                     Kit.PadGlyph {
                         id: glyph
                         objectName: "glyph-" + entry.label
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: entry.picture.length === 0
+                        y: root.centred(content.height, height)
+                        visible: entry.picture.length === 0 && root.glyph === null
                         width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
                         height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
@@ -135,8 +172,8 @@ Item {
                     }
                     Kit.PadGlyph {
                         objectName: "glyph2-" + entry.label
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: entry.pair >= 0 && !glyph.paired
+                        y: root.centred(content.height, height)
+                        visible: entry.pair >= 0 && !glyph.paired && root.glyph === null
                         width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
                         height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
@@ -147,7 +184,7 @@ Item {
                     }
                     Loader {
                         id: words
-                        anchors.verticalCenter: parent.verticalCenter
+                        y: root.centred(content.height, height)
                         active: root.label !== null
                         visible: active
                         sourceComponent: root.label
@@ -165,7 +202,7 @@ Item {
                         }
                     }
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
+                        y: root.centred(content.height, height)
                         visible: root.label === null
                         text: entry.label
                         color: root.labelColor

@@ -227,7 +227,7 @@ ThemeScreen {
                         visible: root.currentTile !== null
                         Repeater {
                             id: buttons
-                            model: Help.entries(root.helpKind)
+                            model: Help.entries(root.helpKind, { card: true })
                             Pill {
                                 id: pill
                                 required property int index
@@ -240,8 +240,7 @@ ThemeScreen {
                                 live: pill.model.enabled ?? true
                                 filled: pill.index === 0
                                 outline: ink.pillLine
-                                // The outlined glyph's 44 px inside its own 2 px ring (Main:66).
-                                glyphSide: pill.filled ? 46 : 48
+                                glyphSide: pill.filled ? 46 : 44
                                 labelSize: pill.filled ? 26 : 24
                                 trail: pill.filled ? 34 : 30
                                 gap: pill.filled ? 16 : 14
@@ -349,7 +348,8 @@ ThemeScreen {
                     HelpLine {
                         unit: design.unit
                         controller: frame.controller
-                        model: frame.help
+                        // The board's words for the frame's entries: X Options, Start the Home card, no Select search (Main:94-97).
+                        model: Help.entries(root.helpKind, { card: true })
                         ink: ink.help
                     }
                 }

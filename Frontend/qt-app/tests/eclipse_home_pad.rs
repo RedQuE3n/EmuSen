@@ -1,7 +1,7 @@
 //! Eclipse's Home acts on what it draws (EmuSen_Qt.md §3.4.8), in the program under Eclipse with an in-process SDL pad: the
 //! walk reaches every button and every tile drawn and the search; A on the first button starts the game shown, A on a tile
 //! other than the first starts that tile's game, X and the second button open the game's page, Y and the third button turn
-//! it a favourite, and A on the search opens the search.
+//! it a favourite, A on the search opens the search, and Start opens the Home card.
 
 mod common;
 
@@ -213,6 +213,12 @@ fn qt_3_4_8_eclipse_s_home_acts_on_every_button_tile_and_the_search_from_the_pad
     assert_eq!(focused(&mut scene), "search");
     hand_until(&mut scene, &sdl, &pad, UiButton::Accept, |s| s.property("screens", "shown") == "Search");
     wait_for(&mut scene, "screens", "shown", "Search", 3000);
+    home(&mut scene);
+
+    // Start opens the Home card, which the help line names (Main.dc.html:97); B gives Home back.
+    first_tile(&mut scene, &sdl, &pad);
+    hand_until(&mut scene, &sdl, &pad, UiButton::Menu, |s| s.property("screens", "shown") == "HomeCard");
+    wait_for(&mut scene, "screens", "shown", "HomeCard", 3000);
     home(&mut scene);
 
     // A on the first button starts the game shown: the second tile's, not the first's.

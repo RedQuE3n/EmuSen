@@ -12,6 +12,7 @@ Walkable {
     // Whether a filled pill draws the boards' halo and glow (Main:61); Consoles' Open draws neither (EclipseConsoles:90).
     property bool glows: true
     property real tall: 72
+    // The glyph's side inside its ring, in board pixels.
     property real glyphSide: 44
     property real labelSize: 24
     property real lead: 14
@@ -66,18 +67,22 @@ Walkable {
         radius: root.radius
         visible: root.activeFocus
     }
-    PadGlyph {
+    Glyph {
         id: glyphItem
         objectName: "buttonGlyph." + root.place
+        unit: root.unit
         x: root.line + root.lead * root.unit
         y: (root.height - height) / 2
-        width: root.glyphSide * root.unit
-        height: width
-        family: Device.family
         button: root.button
-        // The filled pill's glyph a filled mark in the ground's dark, its letter cut out to the pill's colour (Main:62).
-        style: root.filled ? PadGlyph.Filled : PadGlyph.Outlined
-        ink: root.filled ? Tokens.overAccent : Tokens.muted
+        side: root.glyphSide
+        lead: root.filled
+        // The filled pill's glyph a disc in the ground's dark, its letter the pill's colour (Main:63); the others' letters 20 px in the pill's words' colour (Main:66).
+        letterSize: 20
+        leadLetterSize: 22
+        leadWeight: Font.DemiBold
+        ink: Tokens.text
+        leadFill: Tokens.overAccent
+        leadInk: Tokens.accent
     }
     Text {
         id: wordsItem

@@ -35,13 +35,13 @@ resumePicture	58	the resume point's picture, 96 by 60 at radius 10	Session.frame
 resumeRim	58	its inset rim, 2 px of rgba(246, 231, 216, 0.5)	none: the board's own colour	Rectangle	in:resume:0	mid:resume	96	60	10	#80F6E7D8	-	built	-	-	-
 resumeWords	59	"Resume point · saved 9:12 PM"	Words.resumePoint(Session.pausedSince) (qt-models/src/words.rs resume_point), the time in the clock's form (qt-models/src/clock.rs clock_time)	Text	after:resumePicture:16	mid:resume	-	-	-	#FFD8DBE6	22	built	14.667	18	raised
 button.0	61	Resume, filled	Help.entries(Help.Continue), first row (qt-models/src/help.rs:103)	Pill	96	below:resume:44	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built	-	-	-
-buttonGlyph.0	62	the A disc	the kit's PadGlyph, Device.family	PadGlyph	in:button.0:14	mid:button.0	46	46	-	-	-	built	-	-	-
+buttonGlyph.0	62	the A disc	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.0:14	mid:button.0	46	46	-	-	-	built	-	-	-
 buttonLabel.0	62	"Resume"	the row's label	Text	after:buttonGlyph.0:16	mid:button.0	-	-	-	Tokens.overAccent	26	built	17.333	18	-
-button.1	64	"Options", outlined, its 2 px line inside its box	the second row, "Game page" (qt-models/src/help.rs:104)	Pill	after:button.0:18	foot:button.0	fit:buttonLabel.1:32	72	36	#FF5A6076	-	built	-	-	-
-buttonGlyph.1	65	the X disc, 44 inside its 2 px ring	PadGlyph	PadGlyph	in:button.1:16	mid:button.1	48	48	-	-	-	built	-	-	-
+button.1	64	"Options", outlined, its 2 px line inside its box	the second row, X: Words' "Options" through Help.entries(kind, { card: true }) (qt-models/src/help.rs card_named, words.rs OPTIONS)	Pill	after:button.0:18	foot:button.0	fit:buttonLabel.1:32	72	36	#FF5A6076	-	built	-	-	-
+buttonGlyph.1	65	the X disc, 44 inside its 2 px ring	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.1:16	mid:button.1	48	48	-	-	-	built	-	-	-
 buttonLabel.1	65	"Options"	the row's label	Text	after:buttonGlyph.1:14	mid:button.1	-	-	-	Tokens.text	24	built	16	18	raised
 button.2	67	"Favourite", outlined, its 2 px line inside its box	the third row (qt-models/src/help.rs:105)	Pill	after:button.1:18	foot:button.0	fit:buttonLabel.2:32	72	36	#FF5A6076	-	built	-	-	-
-buttonGlyph.2	68	the Y disc, 44 inside its 2 px ring	PadGlyph	PadGlyph	in:button.2:16	mid:button.2	48	48	-	-	-	built	-	-	-
+buttonGlyph.2	68	the Y disc, 44 inside its 2 px ring	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.2:16	mid:button.2	48	48	-	-	-	built	-	-	-
 buttonLabel.2	68	"Favourite"	the row's label	Text	after:buttonGlyph.2:14	mid:button.2	-	-	-	Tokens.text	24	built	16	18	raised
 buttonHalo.0	61	the filled button's halo, 6 px out	the kit's Glow, exported (R-20261115-6)	Glow	in:button.0:0	foot:button.0	fit:button.0:0	72	36	#2EF6E7D8	-	built	-	-	-
 buttonGlow.0	61	the filled button's glow, 46 px of blur 6 px out	the kit's Glow	Glow	in:button.0:0	foot:button.0	fit:button.0:0	72	36	#73F0B4C4	-	built	-	-	-
@@ -61,4 +61,7 @@ tileFacts.0	86	the console, "SUPER NINTENDO"	the row's consoleName, the console'
 tileRing	83	the focused tile's ring	the kit's FocusRing (R-20261115-3, every control the gapped ring)	FocusRing	-	-	-	-	-	-	-	built	-	-	-
 tileShadow.1	83	a resting tile's shadow, 0 10 px 30 px	the kit's Glow with its offset (R-20261115-6)	Glow	in:tile.1:0	foot:tile.1	264	165	18	#73000000	-	built	-	-	-
 help	99	the help bar's entries	Help.entries(Help.Continue) (qt-models/src/help.rs:102), the kit's HelpBar	HelpBar	96	mid:1137	-	-	-	#FFD8DBE6	21	built	14	18	raised
+ownGlyph-Resume	94	the help line's A, a filled disc of 34	Eclipse's Glyph, lead	-	in:help:0	mid:help	34	34	-	-	-	built	-	-	-
+ownGlyph-Options	95	the help line's X, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	-	-	-
+ownGlyph-Home card	97	"MENU" in a 2 px capsule, 34 inside, the kit's name for Start in the pad's family	Eclipse's Glyph, named	-	-	mid:help	-	38	-	-	-	built	-	-	-
 helpGroup	105	"LB RB Sections"	nothing: Home steps no sections	-	-	-	-	-	-	-	-	ruled	-	-	-

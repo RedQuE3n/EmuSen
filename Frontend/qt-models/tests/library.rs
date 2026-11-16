@@ -415,6 +415,17 @@ fn eclipse_s_home_says_a_game_s_last_play_its_time_played_and_continue_as_its_bo
 }
 
 #[test]
+fn eclipse_s_home_names_x_options_and_start_the_home_card_and_leaves_select_s_search_out_of_its_bar() {
+    use emusen_qt_models::help::{card_named, entries, Screen};
+    let words = |s: Screen| card_named(entries(s).to_vec()).iter().map(|e| e.1).collect::<Vec<_>>();
+    // Main.dc.html:94-97: "A Resume, X Options, Y Favourite, MENU Home card".
+    assert_eq!(words(Screen::Home), ["Resume", "Options", "Favourite", "Home card"]);
+    assert_eq!(words(Screen::HomeShelf), ["Play", "Options", "Favourite", "Home card"]);
+    let actions = |s: Screen| card_named(entries(s).to_vec()).iter().map(|e| e.2).collect::<Vec<_>>();
+    assert_eq!(actions(Screen::Home), [None, Some("gamePage"), Some("favourite"), Some("home")], "each still acts as before");
+}
+
+#[test]
 fn eclipse_s_resume_point_is_said_with_the_time_in_the_clock_s_form() {
     use emusen_qt_models::clock::clock_time;
     use emusen_qt_models::words::resume_point;

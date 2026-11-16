@@ -2937,6 +2937,15 @@ neither changes what an existing screen draws.
   (null by default, the kit's `Text` in `labelFont`). The ES-DE painter gives it `GlyphLine`, ES-DE's own line layout,
   since Qt's text layout has no form of it (EmuSen_Qt.md §4.8.7, item 3).
 
+- **`HelpBar.glyph`** (added 2026-11-15, Kit 1.8), a component that draws an entry's glyph in place of the kit's
+  `PadGlyph`, given `button`, `family` and `lead` (the first entry); null by default. Eclipse's boards draw a lettered
+  button's letter in the face in a 2 px ring and Start as "MENU" in a capsule (`Main.dc.html:94-97`), reading the letter
+  and the name from the kit (`PadGlyph.letter`, added, and `name`). **`HelpBar.snapped`** (true by default): each entry,
+  and each part of it, is centred on the bar's middle as Qt's centre anchors put it, each half rounded to a whole unit
+  (`qquickanchors.cpp` `vcenter`, Qt 6.11.2: a parent's centre is rounded unless its own anchors say otherwise, so
+  `alignWhenCentered` on the child alone does not centre exactly); false centres exactly, for a look on a canvas whose
+  unit is no pixel. Entries of different heights now share the bar's middle; before, each stood at the row's top.
+
 **Held to**: kit-core's `tests/glyph.rs` `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
 sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
 glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry

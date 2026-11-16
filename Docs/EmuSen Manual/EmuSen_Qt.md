@@ -1772,8 +1772,11 @@ game first as the board puts it. The shown tile is 312 × 196 board pixels and t
 cropped, the shade, its title and its row's `facts`. Last, the help line, the kit's `HelpBar` on the board's foot. The pad
 walks the tiles, Up to the buttons, then Up to the search. Every word is the program's. Where the board's differ, the
 program's are drawn: "EMUSEN" for "EmuSen", "CONTINUE PLAYING" for "CONTINUE · SUPER NINTENDO", the paused facts for "Last
-played yesterday · 3 h 20 min played", "hh:mm" for "9:41 PM", and Help's labels ("Game page", "Home") for "Options" and
-"Home card".
+played yesterday · 3 h 20 min played", and "hh:mm" for "9:41 PM". The buttons and the help line read
+`Help.entries(kind, { card: true })`: X "Options", still opening the game's page, and Start "Home card", which opens the
+Home card (`qt-models/src/screens.rs`, Home's `home` action), with no Select search in the line; the search is the
+status's own button. Their glyphs are `parts/Glyph.qml`, the board's: the kit's letter for the pad's family in Sora in a
+2 px ring, A filled, Start's name in a capsule.
 
 **Not drawn**: the section tabs (Home, Library, Consoles, Collections, Tools) and "LB RB Sections", a piece of their
 own (R-20261115-7). Also not drawn, because the program has nothing for them: the battery, since the program feeds no
@@ -1823,7 +1826,7 @@ five gate sizes: the floor and the board meet there, and the oracle's one differ
 **Words.** The wordmark is `Words.name`, the program's name in its own case; the eyebrow `Words.continueLine`, "Continue ·
 Super Nintendo" in the font's capitals; the line under the title `Words.playedFacts`, when the game was last played and,
 where games.db holds any, its time played (`Session.played`, which the host now feeds). Where the board's words differ
-from the program's and no word exists ("Options" for the game page, "Home card", the battery, "1 of 24", the resume
+from the program's and no word exists (the battery, "1 of 24", the resume
 point, the section tabs), Home draws the program's or nothing, as listed in the table.
 
 **What acts.** Home's `Frame` holds the help's entries, so the pad's X, Y, Select and Start reach their actions on Home as

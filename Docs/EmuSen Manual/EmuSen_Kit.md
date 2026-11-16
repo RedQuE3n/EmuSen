@@ -4060,6 +4060,17 @@ in the accent, its gap in `ringGapColor`; under Eclipse the glow paints once and
 follows the rule within its measured bound and ends at its reach. `tests/glow.rs` (software) and `tests/glow_gpu.rs`
 (the card, a GPU job) hold the part itself. Kit 1.5; `Glow` and `ringGapped` Kit 1.6.
 
+**Glow on the card as a box-shadow's Gaussian (2026-11-15).** `Glow`'s card path draws the box grown by its spread, its
+corners grown with it and moved by its offsets, blurred by the kit's `GaussianBlur` (§7.118) with a deviation of half the
+blur radius (CSS Backgrounds 3 §6.1.2), still masked to outside the box. It replaced Qt's `RectangularShadow` at 1.2 times
+the blur, which stood up to 9 levels of 255 under CSS's at a disc's edge (§7.116). `pixelScale` (scene pixels a unit, 1 by
+default) lets the blur run at the pixels drawn. Measured 2026-11-15 by `tests/glow_gpu.rs` under Eclipse's tokens, the
+drawn alpha against the recipe: the ring's 0.2000/0.1985 at 5.5 px, the disc's glow 0.2886/0.2889 at 5.5 and the halo
+0.1271/0.1258 at 30.5. `FocusRing` takes `gap`, `thickness`, `glowColor`, `glowBlur`, `glowSpread` and `bandRadius`, the
+tokens' (and the kit's own corners, the box's grown by the gap) by default, so a board that draws a ring apart sets its own:
+Eclipse's Home tile, 4 px of gap, 3 of ring and 40 px of glow 10 px out at 0.5 (`Main.dc.html:113`), the corners grown by
+the whole 7 px. Kit 1.8.
+
 ### 7.114 A button's corners (2026-11-14)
 
 `buttonRadius` is a number token of `Tokens` (kit-core `Spacing`, 4 in both forms, the `rowRadius` that `ActionButton` and

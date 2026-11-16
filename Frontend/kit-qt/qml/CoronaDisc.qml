@@ -34,8 +34,6 @@ Item {
     readonly property real diameter: Math.min(root.width, root.height)
     // Scene pixels to one of this item's units, so the card's blur runs at the pixels it draws.
     property real pixelScale: 1
-    // The software backend renders no shader effect; there the kit's Glow paints each glow (§7.113).
-    readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     Repeater {
         model: root.glows
         Item {
@@ -50,39 +48,17 @@ Item {
             anchors.fill: parent
             // Under the rim and the disc, each glow under those before it.
             z: -1 - glow.index
+            // The disc grown by the spread and blurred, as a box-shadow is: the kit's Glow, a Gaussian of half the blur radius on
+            // the card (§7.113) and painted on the software backend.
             Kit.Glow {
                 anchors.centerIn: parent
                 width: root.diameter
                 height: root.diameter
-                visible: root.software
                 radius: root.diameter / 2
                 blur: glow.blur
                 spread: glow.spread
                 color: glow.color
-            }
-            // On the card the disc grown by the spread, blurred by a Gaussian of half the blur radius, as a box-shadow is (CSS
-            // Backgrounds 3 §6.1.2); the disc over it hides what falls inside.
-            Item {
-                id: grown
-                anchors.centerIn: parent
-                width: root.diameter + 2 * glow.spread
-                height: width
-                visible: !root.software
-                Rectangle {
-                    anchors.fill: parent
-                    radius: width / 2
-                    color: glow.color
-                }
-            }
-            Loader {
-                active: !root.software && glow.color.a > 0 && glow.blur > 0
-                sourceComponent: Component {
-                    Kit.GaussianBlur {
-                        source: grown
-                        deviation: glow.blur / 2
-                        pixelScale: root.pixelScale
-                    }
-                }
+                pixelScale: root.pixelScale
             }
         }
     }

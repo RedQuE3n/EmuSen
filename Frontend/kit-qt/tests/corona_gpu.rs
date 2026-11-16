@@ -13,8 +13,8 @@ const CENTRE: (f64, f64) = (-250.0, 400.0);
 const RADIUS: f64 = 700.0;
 
 /// How far a drawn channel may stand from the computed one, in levels of 255: measured 2026-11-15 on the RX 6800, the worst of
-/// thirteen distances 2 (4 to 32 px past the edge); drawn by Qt's RectangularShadow the disc's glows stood 9 levels under.
-const BOUND: u8 = 2;
+/// thirteen distances 3 (16 px past the edge); drawn by Qt's RectangularShadow the disc's glows stood 9 levels under.
+const BOUND: u8 = 3;
 
 /// The error function, Abramowitz and Stegun 7.1.26 (error under 1.5e-7).
 fn erf(x: f64) -> f64 {

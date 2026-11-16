@@ -366,10 +366,18 @@ ThemeScreen {
                                     shadeInk: ink.shade
                                     shadeClear: ink.shadeClear
                                 }
+                                // The board's ring for a tile: 4 px of the ground's dark, 3 px of the accent, and 40 px of glow 10 px out at
+                                // rgba(240, 180, 196, 0.5) (Main:113), measures of the design.
                                 FocusRing {
                                     objectName: "tileRing"
                                     anchors.fill: parent
                                     radius: tile.radius
+                                    gap: 4 * design.unit
+                                    thickness: 3 * design.unit
+                                    glowColor: "#80F0B4C4"
+                                    glowBlur: 40 * design.unit
+                                    glowSpread: 10 * design.unit
+                                    bandRadius: tile.radius + 7 * design.unit
                                     visible: tile.activeFocus
                                 }
                             }

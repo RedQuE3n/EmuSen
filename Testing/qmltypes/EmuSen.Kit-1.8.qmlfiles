@@ -479,7 +479,7 @@ Glow
     property real offsetX
     property real offsetY
     readonly property real reach
-    readonly property real cardBlur
+    property real pixelScale
     readonly property bool software
     readonly property bool glows
     objectName "glowCast"
@@ -490,6 +490,12 @@ FocusRing
     property real radius
     property int placement
     readonly property int form
+    property real gap
+    property real thickness
+    property color glowColor
+    property real glowBlur
+    property real glowSpread
+    property real bandRadius
     readonly property bool onEdge
     readonly property real edgeWidth
     readonly property color edgeColor
@@ -523,7 +529,6 @@ CoronaDisc
     property list<Kit.CoronaGlow> glows
     readonly property real diameter
     property real pixelScale
-    readonly property bool software
     objectName "coronaGlow." + glow.index
     objectName "coronaRim"
     objectName "coronaDisc"

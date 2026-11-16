@@ -85,6 +85,15 @@ fn boxes() -> Vec<(String, [Option<f64>; 4], bool, bool)> {
         .collect()
 }
 
+/// The plates' lattice from the table: plate.0's x, y, width and height, and the gap plate.1's rule stands it after plate.0 by.
+fn lattice() -> (f64, f64, f64, f64, f64) {
+    let row = |name: &str| TABLE.lines().map(|l| l.split('\t').collect::<Vec<_>>()).find(|c| c[0] == name).unwrap_or_else(|| panic!("the table's {name}"));
+    let (p0, p1) = (row("plate.0"), row("plate.1"));
+    let n = |v: &str| v.parse::<f64>().unwrap_or_else(|_| panic!("plate.0's box in plain pixels: {v}"));
+    let gap = p1[5].strip_prefix("after:plate.0:").map(n).expect("plate.1 after plate.0 by the grid's gap");
+    (n(p0[5]), n(p0[6]), n(p0[7]), n(p0[8]), gap)
+}
+
 fn states(dir: &Path, size: &str) -> Vec<(String, String)> {
     let mut found: Vec<(String, String)> = std::fs::read_dir(dir)
         .unwrap()
@@ -111,7 +120,19 @@ fn qt_3_4_9_eclipse_s_consoles_stands_where_its_board_stands_it() {
         for (file, spec) in &recorded {
             let items = seen(spec);
             for (name, edges, right, middle) in boxes() {
-                let Some(item) = items.get(&name) else { continue };
+                // The kit Backdrop's ground and fields: the recording writes a backdrop as one line, its parts unrecorded
+                // (qt-test/src/spec.rs `visit`), so the backdrop itself must be recorded and qt-app's oracle holds its parts.
+                if name.starts_with("backdrop") {
+                    if !items.contains_key("consolesBackdrop") {
+                        differences.push(format!("{file}: the backdrop is not recorded"));
+                    }
+                    continue;
+                }
+                // Every other element the board draws is recorded in every state; a missing one is a difference.
+                let Some(item) = items.get(&name) else {
+                    differences.push(format!("{file}: {name} is not recorded"));
+                    continue;
+                };
                 held += 1;
                 let at = item.at;
                 let x = if right { at[0] + at[2] } else { at[0] };
@@ -128,11 +149,13 @@ fn qt_3_4_9_eclipse_s_consoles_stands_where_its_board_stands_it() {
                     }
                 }
             }
-            // The plates of the chosen maker on the board's lattice: 390 + 256 c px across, 250 + 198 r px down, 236 by 178 px.
+            // The plates of the chosen maker on the board's lattice, read from the table: plate.0's box, and the grid's gap
+            // (plate.1 stands after plate.0 by it; the board's grid has one gap both ways, line 62).
             let px = unit;
+            let (x0, y0, w, h, gap) = lattice();
             for (name, item) in items.iter().filter(|(n, _)| n.starts_with("plate.")) {
-                let (c, r) = (((item.at[0] / px - 390.0) / 256.0).round(), ((item.at[1] / px - 250.0) / 198.0).round());
-                let want = [(390.0 + 256.0 * c) * px, (250.0 + 198.0 * r) * px, 236.0 * px, 178.0 * px].map(written);
+                let (c, r) = (((item.at[0] / px - x0) / (w + gap)).round(), ((item.at[1] / px - y0) / (h + gap)).round());
+                let want = [(x0 + (w + gap) * c) * px, (y0 + (h + gap) * r) * px, w * px, h * px].map(written);
                 if want != item.at {
                     differences.push(format!("{file}: {name} at {:?}, the board's lattice {want:?}", item.at));
                 }

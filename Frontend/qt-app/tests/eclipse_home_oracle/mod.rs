@@ -301,6 +301,12 @@ pub fn oracle(backend: &str) {
     // Placed and fed, the screen has logged nothing, and comes to rest: no frame swapped for two seconds.
     scene.assert_quiet();
     scene.assert_still("Eclipse's Home at rest");
+    // Under reduced motion too, nothing is redrawn for two seconds (EmuSen_Qt.md §3.4.8: a frame was once seen there).
+    host::kit_tokens(object(screen)).expect("the kit's tokens").set_reduced_motion(true);
+    scene.wait(200);
+    scene.assert_still("Eclipse's Home at rest under reduced motion");
+    host::kit_tokens(object(screen)).expect("the kit's tokens").set_reduced_motion(false);
+    scene.wait(200);
 
     let (board_height, rows) = rows();
     // A board pixel in canvas units, by the canvas's owner of its height.

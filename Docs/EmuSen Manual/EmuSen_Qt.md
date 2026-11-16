@@ -1851,6 +1851,11 @@ each field is drawn unblurred at its opacity. The oracle reads, on both backends
 field nor the disc reaches: it is that field's board colour with the first cover's second hue at its opacity over the
 ground, within two levels of 255, and none of the cover's own colours; it reads the rim's hue against the art's first.
 
+**At rest under reduced motion.** Theme-check's audit logs of 03:04 and 07:32 on 2026-11-15 recorded Home swapping a frame
+while at rest under reduced motion; ten audit runs after did not show it, and its cause is not known: what would settle it
+is a run that records which item asked for the frame when it happens again. The oracle now places Home, sets the kit's
+`reducedMotion`, and holds that no frame is swapped for two seconds (`assert_still`), on both backends.
+
 **A tile's line is the console alone.** The board's tile draws `{{t.system}}` under the title (Main.dc.html line 86), so
 the tile draws the row's `consoleName` (EmuSen.Theme 1.4), the same name the row's `facts` begin with, from the one owner
 of both, `qt-models/src/library.rs`. The oracle holds the word and that no shown tile's title or line is cut.

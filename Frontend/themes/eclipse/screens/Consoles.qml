@@ -64,9 +64,8 @@ ThemeScreen {
             property string optionsAction
             // The plate under the chips: the one last focused where its maker is still the chosen one, else the chosen maker's first
             // (a maker focused chooses its group and hides the plate last focused, which KeyNavigation would skip past).
-            function below() {
-                return root.lastPlate !== null && root.lastPlate.group === root.chosenGroup ? root.lastPlate : (plates.itemAt(layout.firsts[root.chosenGroup] ?? -1) ?? root.firstPlate)
-            }
+            property Item chosenFirst: null
+            readonly property Item belowChips: (root.lastPlate !== null && root.lastPlate.group === root.chosenGroup ? root.lastPlate : root.chosenFirst) ?? root.firstPlate
             // The frame's declared action, by its key: Y the next order, X the console's options, any other the host's.
             signal invoked(string key)
             onInvoked: (key) => {
@@ -223,7 +222,7 @@ ThemeScreen {
                                 // Along the row, Down to the plates; the pressed chip shows its consoles.
                                 KeyNavigation.left: chipRow.itemAt(chip.index - 1)
                                 KeyNavigation.right: chip.index + 1 < chipRow.count ? chipRow.itemAt(chip.index + 1) : sortEntry
-                                Keys.onDownPressed: root.below()?.forceActiveFocus()
+                                Keys.onDownPressed: root.belowChips?.forceActiveFocus()
                                 onActivated: root.show = chip.index
                                 Rectangle {
                                     objectName: "chipFill." + chip.index
@@ -263,7 +262,7 @@ ThemeScreen {
                         width: sortWords.x + sortWords.width
                         height: sortGlyph.height
                         KeyNavigation.left: chipRow.itemAt(chipRow.count - 1)
-                        Keys.onDownPressed: root.below()?.forceActiveFocus()
+                        Keys.onDownPressed: root.belowChips?.forceActiveFocus()
                         onActivated: root.invoked(root.sortAction)
                         Glyph {
                             id: sortGlyph
@@ -328,8 +327,10 @@ ThemeScreen {
                                 height: root.makerHeight
                                 onActiveFocusChanged: {
                                     root.focusedMaker = maker.activeFocus ? maker : (root.focusedMaker === maker ? null : root.focusedMaker)
-                                    if (maker.activeFocus)
+                                    if (maker.activeFocus) {
                                         root.chosenGroup = maker.group
+                                        root.chosenFirst = plates.itemAt(maker.first)
+                                    }
                                 }
                                 // Right its first console, LT (the key Home) and RT (End) the makers' first consoles, Up and Down the
                                 // makers, Up from the first the chips; a plate focused chooses its own maker.

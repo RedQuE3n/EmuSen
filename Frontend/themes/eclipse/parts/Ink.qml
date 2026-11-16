@@ -12,6 +12,8 @@ QtObject {
     readonly property color field4: "#D9C8FF"
     // The ground of an empty library (EclipseEmpty:17).
     readonly property color emptyGround: "#05060B"
+    // The words under an empty library's headline (EclipseEmpty:30).
+    readonly property color emptyAbout: "#C9CDDB"
     // Home's eyebrow (Main:54).
     readonly property color rose: "#F3C9D2"
     // The help line's words (Main:99, EclipseConsoles:99, EclipseLibrary:82).

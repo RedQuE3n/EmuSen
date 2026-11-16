@@ -1,7 +1,7 @@
 //! Choose a console's chips and Y over the consoles a core runs (EmuSen_Qt.md §3.4.9): which each chip holds and counts,
 //! and each order, each maker's consoles together; and Eclipse's Y and X declared by the help (`options_named`).
 
-use emusen_qt_models::console_list::{counts, listed, Order, Show, ORDERS, SHOWS};
+use emusen_qt_models::console_list::{counts, listed, plate_name, Order, Show, ORDERS, SHOWS};
 use emusen_qt_models::help::{self, options_named, Screen};
 use emusen_qt_models::library::LibraryRow;
 use emusen_qt_models::words;
@@ -30,12 +30,12 @@ fn library() -> Vec<LibraryRow> {
 fn qt_3_4_9_each_chip_holds_and_counts_its_consoles_and_each_order_keeps_a_maker_s_together() {
     let all = library();
     assert_eq!(counts(&all), [7, 5, 2], "All, With games, Favourites");
-    assert_eq!(keys(&listed(&all, Show::All, Order::Maker)), ["snes", "fds", "Gb", "md", "sms", "arcade", "psx"]);
-    assert_eq!(keys(&listed(&all, Show::WithGames, Order::Maker)), ["snes", "Gb", "md", "arcade", "psx"]);
-    assert_eq!(keys(&listed(&all, Show::Favourites, Order::Maker)), ["snes", "arcade"]);
-    assert_eq!(keys(&listed(&all, Show::All, Order::Year)), ["fds", "Gb", "snes", "sms", "md", "arcade", "psx"]);
-    assert_eq!(keys(&listed(&all, Show::All, Order::Name)), ["fds", "Gb", "snes", "md", "sms", "arcade", "psx"]);
-    assert_eq!(keys(&listed(&all, Show::All, Order::Games)), ["snes", "Gb", "fds", "md", "sms", "arcade", "psx"]);
+    assert_eq!(keys(&listed(&all, Show::All, Order::Maker, &[])), ["snes", "fds", "Gb", "md", "sms", "arcade", "psx"]);
+    assert_eq!(keys(&listed(&all, Show::WithGames, Order::Maker, &[])), ["snes", "Gb", "md", "arcade", "psx"]);
+    assert_eq!(keys(&listed(&all, Show::Favourites, Order::Maker, &[])), ["snes", "arcade"]);
+    assert_eq!(keys(&listed(&all, Show::All, Order::Year, &[])), ["fds", "Gb", "snes", "sms", "md", "arcade", "psx"]);
+    assert_eq!(keys(&listed(&all, Show::All, Order::Name, &[])), ["fds", "Gb", "snes", "md", "sms", "arcade", "psx"]);
+    assert_eq!(keys(&listed(&all, Show::All, Order::Games, &[])), ["snes", "Gb", "fds", "md", "sms", "arcade", "psx"]);
     assert_eq!((SHOWS.len(), ORDERS.len()), (words::CONSOLE_SHOWS.len(), words::CONSOLE_SORTS.len()), "a word for each");
 }
 
@@ -59,4 +59,19 @@ fn qt_3_4_9_a_console_s_options_go_from_choose_a_console_to_settings() {
     assert_eq!(console_options(help::CONSOLE_OPTIONS), None, "no console named");
     assert_eq!(step(Shown::Consoles, &Ask::Act(asked.clone())), Some((Shown::Settings, None)));
     assert_eq!(step(Shown::Grid, &Ask::Act(asked)), None, "asked of Choose a console alone");
+}
+
+#[test]
+fn qt_3_4_9_by_name_a_console_stands_by_the_name_its_plate_shows() {
+    let full = |key: &str, name: &str, full_name: &str| LibraryRow { key: key.into(), name: name.into(), full_name: full_name.into(), maker: "Nintendo".into(), ..LibraryRow::default() };
+    let all = vec![full("n64", "Nintendo 64", "Nintendo 64"), full("nes", "NES", "Nintendo Entertainment System"), full("gb", "Game Boy", "Game Boy")];
+    // The full names: "Nintendo 64" before "Nintendo Entertainment System".
+    assert_eq!(keys(&listed(&all, Show::All, Order::Name, &[])), ["gb", "n64", "nes"]);
+    // The NES's plate showing its short name: "NES" before "Nintendo 64".
+    let short = ["nes".to_owned()];
+    assert_eq!(keys(&listed(&all, Show::All, Order::Name, &short)), ["gb", "nes", "n64"]);
+    assert_eq!(plate_name(&all[1], &short), "NES");
+    assert_eq!(plate_name(&all[1], &[]), "Nintendo Entertainment System");
+    // The other orders read no names.
+    assert_eq!(keys(&listed(&all, Show::All, Order::Maker, &short)), keys(&listed(&all, Show::All, Order::Maker, &[])));
 }

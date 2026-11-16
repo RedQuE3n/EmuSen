@@ -46,8 +46,8 @@ ThemeScreen {
             // The chip pressed (Words.consoleShows' order) and the order in force (Words.consoleSorts'), the theme's own.
             property int show: 0
             property int order: 0
-            // The consoles the chip and the order give, each maker's together.
-            readonly property var listing: Library.consolesBy(root.show, root.order)
+            // The consoles the chip and the order give, each maker's together, by name by the names the plates show.
+            readonly property var listing: Library.consolesBy(root.show, root.order, root.shortened)
             // The chosen maker's group, the console the aside shows, and the plate last focused.
             property int chosenGroup: 0
             property Item shown: null
@@ -72,6 +72,45 @@ ThemeScreen {
                     Actions.consoleOptions(root.shown?.key ?? "")
                 else
                     Actions.act(key)
+            }
+            // Each console's full name laid out as its plate lays it (two lines, the plate's width): Qt's own truncated says the
+            // name would be cut, and a word wider than the plate overflows; those plates take the short name (EmuSen_Qt.md §3.4.9).
+            Repeater {
+                id: measures
+                model: Library.consolesBy(0, 0, [])
+                // Repeater.itemAt notifies nothing, so each measure made, and each that changes, reads the keys again.
+                onItemAdded: root.measured += 1
+                onItemRemoved: root.measured += 1
+                Line {
+                    required property string key
+                    objectName: "plateMeasure." + key
+                    required property string displayName
+                    readonly property bool cut: truncated || words.contentWidth > words.width
+                    onCutChanged: root.measured += 1
+                    visible: false
+                    unit: root.px
+                    width: root.plateWidth - 40 * root.px
+                    text: displayName
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    size: 21
+                    weight: Font.DemiBold
+                    lineHeightMode: Text.FixedHeight
+                    lineHeight: 1.15 * 21
+                }
+            }
+            // The keys of the consoles whose plates show their short name, read again as `measured` moves.
+            property int measured: 0
+            readonly property var shortened: {
+                const keys = []
+                void root.measured
+                for (let i = 0; i < measures.count; ++i) {
+                    const line = measures.itemAt(i)
+                    if (line && line.cut)
+                        keys.push(line.key)
+                }
+                return keys
             }
             Board {
                 id: board
@@ -235,7 +274,7 @@ ThemeScreen {
                                     unit: root.px
                                     x: 22 * root.px + chip.line
                                     y: (parent.height - height) / 2
-                                    text: Words.line([chip.modelData, Words.count(Library.consolesBy(chip.index, 0).count)])
+                                    text: Words.line([chip.modelData, Words.count(Library.consolesBy(chip.index, 0, []).count)])
                                     color: chip.pressed ? Tokens.overAccent : ink.tileFacts
                                     size: 21
                                     weight: chip.pressed ? Font.DemiBold : Font.Normal
@@ -396,6 +435,7 @@ ThemeScreen {
                                 id: plate
                                 required property int index
                                 required property string key
+                                required property string name
                                 required property string displayName
                                 required property string maker
                                 required property int year
@@ -513,7 +553,8 @@ ThemeScreen {
                                         objectName: "plateName." + plate.index
                                         unit: root.px
                                         width: parent.width
-                                        text: plate.displayName
+                                        // The full name where it stands in two lines, else the short one (R-20261116-5).
+                                        text: root.shortened.indexOf(plate.key) >= 0 ? plate.name : plate.displayName
                                         wrapMode: Text.WordWrap
                                         maximumLineCount: 2
                                         elide: Text.ElideRight
@@ -622,9 +663,8 @@ ThemeScreen {
                                 objectName: "consoleName"
                                 unit: root.px
                                 width: parent.width
+                                // As many lines as the name needs, the column below flowing (board line 80, R-20261116-5).
                                 wrapMode: Text.WordWrap
-                                maximumLineCount: 2
-                                elide: Text.ElideRight
                                 text: root.shown ? root.shown.displayName : ""
                                 color: Tokens.text
                                 size: 46
@@ -766,29 +806,41 @@ ThemeScreen {
                         }
                     }
 
-                    // No console is shown: the program's empty words (a chip that holds none, or no core at all).
+                    // No console is shown (a chip that holds none, or no core at all): the program's words as the first-run board's
+                    // headline and the words under it, at their size and place, with no folder buttons (EclipseEmpty:28-31, R-20261116-9).
                     Column {
                         objectName: "noConsoles"
                         visible: root.listing.count === 0
-                        y: 537 * root.px
-                        width: root.width
-                        spacing: 12 * root.px
+                        x: 96 * root.px
+                        y: 250 * root.px
+                        width: 880 * root.px
+                        spacing: 14 * root.px
                         Line {
+                            objectName: "noConsolesWords"
                             unit: root.px
                             width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
                             text: root.show === 0 ? Words.noConsoles : Words.noGames
-                            color: Tokens.muted
-                            size: 22
+                            color: Tokens.text
+                            size: 84
+                            weight: Font.DemiBold
+                            // The board's -0.02 em and CSS's line height of 1.04 of the size.
+                            spacing: -0.02 * 84
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 1.04 * 84
                         }
                         Line {
+                            objectName: "noConsolesAbout"
                             unit: root.px
                             width: parent.width
                             visible: root.show === 0
-                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
                             text: Words.addFolder
-                            color: Tokens.muted
-                            size: 22
+                            color: ink.emptyAbout
+                            size: 25
+                            weight: Font.Light
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 1.45 * 25
                         }
                     }
                 }

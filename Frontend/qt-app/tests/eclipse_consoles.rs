@@ -553,8 +553,20 @@ fn chips_sort_and_options(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, mo
         let tree = scene.tree();
         let texts: Vec<&str> = tree.nodes.iter().filter(|n| n.visible).filter_map(|n| n.text.as_deref()).collect();
         assert!(texts.contains(&model[k].name.as_str()), "{}'s page open over the consoles' section: {texts:?}", model[k].name);
-        press(scene, sdl, pad, PadControl::East);
-        press(scene, sdl, pad, PadControl::East);
+        // B closes the console's page, then leaves Settings for Choose a console.
+        // As a hand does, B once Settings holds the focus: its screen is made as it is shown (Main.qml's settingsSlot).
+        let mut seen = Vec::new();
+        for _ in 0..2 {
+            for _ in 0..40 {
+                if !focused(scene).is_empty() {
+                    break;
+                }
+                scene.wait(50);
+            }
+            press(scene, sdl, pad, PadControl::East);
+            seen.push((scene.property("screens", "shown"), focused(scene)));
+        }
         wait_for(scene, "screens", "shown", "Consoles", 2000);
+        assert_eq!(scene.property("screens", "shown"), "Consoles", "B twice from the console's page: {seen:?}");
     }
 }

@@ -1826,8 +1826,9 @@ a hue: the systems table's data gives one for 14 consoles, and `SystemDef::look`
 table: `Words.factLabels` (Games, Played, Core, Screen) at the left and, at the right, `Words.count` of its games and of
 those played, its core's name after its `PlanetMark`, and its `screen` (EmuSen.Theme 1.5), Serenity's screen kind for the
 console in words ("CRT, television", "LCD"). Open is the help bar's own A entry.
-The plates and the makers are each a `Flickable` the wheel and a drag scroll; a plate or a maker that takes the focus is
-brought into sight by setting `contentY`, not by a binding, so a scroll by hand is kept until the focus moves.
+The plates and the makers are each an interactive `Flickable`, so the wheel and a drag scroll them. Their `contentY`
+binding brings the focused plate and the chosen maker back into sight when the focus moves. No test holds the wheel yet:
+the real program's fixture shelves too few consoles for any grid to overflow.
 At the foot's right, the maker and `Words.place` (game_page.rs's `place`, "3 of 14") say where the focused console stands.
 
 The screen holds no layout logic. The kit's `GroupGridLayout` (EmuSen_Kit.md §7.120) gives each console its column and row in

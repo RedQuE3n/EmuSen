@@ -140,17 +140,10 @@ ThemeScreen {
                         width: root.makerWidth
                         height: root.foot - root.listTop
                         clip: true
-                        // The wheel and a drag scroll it; the chosen maker is brought into sight as it is chosen.
+                        // The wheel and a drag scroll it; the binding brings the chosen maker back into sight as another is chosen.
                         boundsBehavior: Flickable.StopAtBounds
                         contentHeight: layout.groups * root.makerPitch
-                        function reveal() {
-                            const top = root.chosenGroup * root.makerPitch
-                            makerList.contentY = Math.max(0, Math.min(top, Math.max(makerList.contentY, top + root.makerHeight - makerList.height), makerList.contentHeight - makerList.height))
-                        }
-                        Connections {
-                            target: root
-                            function onChosenGroupChanged() { makerList.reveal() }
-                        }
+                        contentY: Math.max(0, Math.min(root.chosenGroup * root.makerPitch + root.makerHeight - height, contentHeight - height))
                         Repeater {
                             id: makers
                             model: Library.consoles
@@ -232,18 +225,11 @@ ThemeScreen {
                         leftMargin: root.plateGap / 2
                         rightMargin: root.plateGap / 2
                         clip: true
-                        // The wheel and a drag scroll the plates; the focused plate is brought into sight as it takes the focus.
+                        // The wheel and a drag scroll the plates; the binding brings the focused plate back into sight as the focus moves.
                         boundsBehavior: Flickable.StopAtBounds
                         readonly property real pitch: root.plateHeight + root.plateGap
                         contentHeight: Math.max(0, (layout.rows[root.chosenGroup] ?? 0) * grid.pitch - root.plateGap)
-                        // Another maker chosen: its plates from their first row.
-                        Connections {
-                            target: root
-                            function onChosenGroupChanged() { grid.contentY = 0 }
-                        }
-                        function reveal(plate: Item) {
-                            grid.contentY = Math.max(0, Math.min(plate.y, Math.max(grid.contentY, plate.y + root.plateHeight - grid.height), grid.contentHeight - grid.height))
-                        }
+                        contentY: root.lastPlate ? Math.max(0, Math.min(root.lastPlate.y + root.plateHeight - height, contentHeight - height)) : 0
                         Repeater {
                             id: plates
                             model: Library.consoles
@@ -305,7 +291,6 @@ ThemeScreen {
                                     root.chosenGroup = plate.group
                                     root.shown = plate
                                     root.lastPlate = plate
-                                    grid.reveal(plate)
                                     Actions.focus(plate.key)
                                 }
                                 onActivated: Actions.openConsole(plate.key)

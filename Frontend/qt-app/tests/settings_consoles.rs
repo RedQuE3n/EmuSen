@@ -74,7 +74,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     // Its page: the engine, firmware, cards, the core's own row, then the picture's rows.
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "settingsModel", "help", "20", 1000);
-    assert!(sentence(&mut scene).starts_with("VenusRT (Rust), the Super Nintendo's engine"), "{}", sentence(&mut scene));
+    assert!(sentence(&mut scene).starts_with("Venus, the Super Nintendo's engine"), "{}", sentence(&mut scene));
     hold(&mut scene, "SettingsConsolePage", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The firmware line in Success, as Mistress tinted it: the kit's sentence in the tone the model gives.
     scene.pad(UiButton::Down);
@@ -118,7 +118,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     // Engine as a page of choices, B keeping what was chosen.
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "settingsModel", "help", "21", 1000);
-    assert_eq!(sentence(&mut scene), "VenusRT (Rust) runs every Super Nintendo game.");
+    assert_eq!(sentence(&mut scene), "Venus runs every Super Nintendo game.");
     hold(&mut scene, "SettingsEngine", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "settingsModel", "help", "20", 1000);

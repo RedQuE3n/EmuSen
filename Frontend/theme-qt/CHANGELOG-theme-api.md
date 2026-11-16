@@ -9,8 +9,8 @@ Decided 2026-11-15 by the tester (R-20261115-7): Eclipse's top navigation is bui
 sections and an addition to what a theme may read.
 
 - **`Library.sections`** (a list, roles `key` and `name`): the program's top sections in a nav's order, from their one
-  owner (`qt-models/src/screens.rs`, `SECTIONS`; the words from `words.rs`). Today they are Home and Consoles, the
-  sections the program opens as screens.
+  owner (`qt-models/src/screens.rs`, `SECTIONS`; the words from `words.rs`): Home, Library, Consoles, Collections and
+  Tools, as the boards draw them, each opening the screen the program has for it (EmuSen_Qt.md §3.4.8).
 - **`Library.section`**: the key of the section shown, empty where the screen shown is none.
 - **`Actions.openSection(key)`**: opens a section by its key; the host declines a key that names none, the one shown, or a
   move from a screen that is no section.

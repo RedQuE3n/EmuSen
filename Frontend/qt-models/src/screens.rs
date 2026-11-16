@@ -72,19 +72,31 @@ pub enum Ask {
     Section(String),
 }
 
-/// A top section of the program: its key, its name as a nav says it, and the screen it opens.
+/// A top section of the program: its key, its name as a nav says it, the screen it opens, the key that screen is opened
+/// at (a grid's, the Home card's page) and the List card's page, where it opens one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Section {
     pub key: &'static str,
     pub name: &'static str,
     pub screen: Shown,
+    pub at: Option<&'static str>,
+    pub page: Option<&'static str>,
 }
 
-/// The program's sections in a nav's order: only the screens the program opens as sections (R-20261115-7); one is added
-/// here by its row.
-pub const SECTIONS: [Section; 2] = [
-    Section { key: HOME, name: crate::words::HOME_SECTION, screen: Shown::Home },
-    Section { key: "consoles", name: crate::words::CONSOLES_SECTION, screen: Shown::Consoles },
+/// The program's sections in a nav's order (Main.dc.html:34-38, R-20261115-7), each opening the program's screen that holds
+/// it today (EmuSen_Qt.md §3.4.8).
+pub const SECTIONS: [Section; 5] = [
+    Section { key: HOME, name: crate::words::HOME_SECTION, screen: Shown::Home, at: None, page: None },
+    Section { key: "library", name: crate::words::LIBRARY_SECTION, screen: Shown::Grid, at: Some(crate::library::ALL), page: None },
+    Section { key: "consoles", name: crate::words::CONSOLES_SECTION, screen: Shown::Consoles, at: None, page: None },
+    Section {
+        key: "collections",
+        name: crate::words::COLLECTIONS_SECTION,
+        screen: Shown::List,
+        at: Some(crate::library::ALL),
+        page: Some(crate::list_card::FILTER),
+    },
+    Section { key: "tools", name: crate::words::TOOLS_SECTION, screen: Shown::HomeCard, at: Some(crate::home_card::TOOLS), page: None },
 ];
 
 /// Home's Settings and Power places, by their index in `words::HOME_PLACES`.
@@ -149,7 +161,7 @@ pub const CARD_BINDINGS: &str = crate::settings_controllers::CARD_BINDINGS;
 /// were.
 pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
     match (shown, ask) {
-        (_, Ask::Section(key)) => crate::sections::opened(shown, key).map(|s| (s, None)),
+        (_, Ask::Section(key)) => crate::sections::opened(shown, key).map(|s| (s.screen, s.at.map(str::to_owned))),
         (Shown::Home, Ask::Place(0)) => Some((Shown::Consoles, None)),
         (Shown::Home, Ask::Place(SETTINGS_PLACE)) => Some((Shown::Settings, None)),
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
@@ -339,6 +351,8 @@ pub mod qobject {
         #[qproperty(QString, page_at, cxx_name = "pageAt", READ, NOTIFY)]
         /// The console whose page Settings opens at, asked for from Choose a console; empty where Settings opens at its start.
         #[qproperty(QString, settings_at, cxx_name = "settingsAt", READ, NOTIFY)]
+        /// The page the List card opens at, a section's (crate::sections), empty for its first.
+        #[qproperty(QString, list_page, cxx_name = "listPage", READ, NOTIFY)]
         /// The key of the program's section the shown screen is (crate::sections), empty for a screen that is none.
         #[qproperty(QString, section, READ, NOTIFY)]
         type Screens = super::ScreensRust;
@@ -427,6 +441,7 @@ pub struct ScreensRust {
     /// Settings opened over the Pause Card, whose B returns to it.
     over_card: bool,
     settings_at: QString,
+    list_page: QString,
     /// Settings opened at a console's page from Choose a console, whose B returns to it.
     over_consoles: bool,
 }
@@ -449,6 +464,7 @@ impl Default for ScreensRust {
             tool_origin: None,
             over_card: false,
             settings_at: QString::default(),
+            list_page: QString::default(),
             over_consoles: false,
         }
     }
@@ -608,6 +624,16 @@ impl qobject::Screens {
             if self.settings_at != at {
                 self.as_mut().rust_mut().settings_at = at;
                 self.as_mut().settings_at_changed();
+            }
+        }
+        if shown == Shown::List && was != Shown::List {
+            let page = QString::from(match &ask {
+                Ask::Section(key) => crate::sections::by_key(key).and_then(|s| s.page).unwrap_or_default(),
+                _ => "",
+            });
+            if self.list_page != page {
+                self.as_mut().rust_mut().list_page = page;
+                self.as_mut().list_page_changed();
             }
         }
         let over_card = was == Shown::Pause && shown == Shown::Settings;

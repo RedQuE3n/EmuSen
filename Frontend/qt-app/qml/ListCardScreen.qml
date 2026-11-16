@@ -22,6 +22,8 @@ Kit.NormalizedCanvas {
         id: listCardModel
         objectName: "listCardModel"
         card: CardModel.List
+        // Its first page, or the one a section opens it at (Collections at Filter, qt-models/src/sections.rs).
+        start: listCardCanvas.screens.listPage
         shown: listCardCanvas.screens.shown === Screens.List
         facts: listCardCanvas.esdeLook ? listCardCanvas.library.esdeListFacts(listCardCanvas.esdeView?.scene.shelf ?? "", listCardCanvas.esdeView?.scene.selected ?? 0) : listCardCanvas.games.listFacts
         // Under an ES-DE theme the own grid is hidden and acted on by nothing; the theme's gamelist is acted on below.

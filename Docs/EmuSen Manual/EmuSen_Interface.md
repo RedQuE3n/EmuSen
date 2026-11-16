@@ -2164,7 +2164,11 @@ side gained the other's job, and the kit's bodies can draw any host's worlds.
 - **One named exception.** The info names of the four Nintendo cores ported to Rust still carry the port's mark
   (VenusRT, MarsRT, MoonRT, MercuryRT) from the months both cores ran side by side; their C# cores are retired, and a
   stored "Venus (C#)" already reads as VenusRT. The tile drops a trailing "RT" from an EmuSen core's name, so the line
-  reads VENUS as the mockup has it. Renaming the four cores' info names would let the rule go.
+  reads VENUS as the mockup has it. Renaming the four cores' info names would let the rule go. The front end shows a
+  core's original name (Moon, Venus, Mercury, Mars) everywhere; in code, stored choices and save states the names keep
+  "RT" and "(Rust)", and no stored value is renamed (decided 2026-11-16 by the tester, R-20261116-14). One rule owns it,
+  `library::without_port_mark`, which drops a trailing " (Rust)" and then the "RT", so a stored "MoonRT (Rust)" that the
+  cores listing lacks reads Moon too (`clients::engine_shown`); the stored id is untouched.
 - **No restart.** The line is read each time Choose a console is filled, and Settings ▸ Consoles ▸ Engine (or Cores'
   Make Default) leaves it before the player returns, so the tile and the facts show the new engine at once; a changed
   engine also forgets the catalog, as before.

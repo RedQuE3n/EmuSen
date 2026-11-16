@@ -8,7 +8,8 @@
         "dark"
     ],
     "screens": [
-        "home"
+        "home",
+        "consoles"
     ],
     "tokens": {
         "dark": {
@@ -51,7 +52,14 @@
             "coronaGlowSpread": 5.333333333333333,
             "coronaHaloColor": "#47ECA0BA",
             "coronaHaloBlur": 113.33333333333333,
-            "coronaHaloSpread": 30.666666666666668
+            "coronaHaloSpread": 30.666666666666668,
+            "faceText": "Sora",
+            "faceLabel": "Sora",
+            "faceInterface": "Sora",
+            "faceCode": "JetBrains Mono",
+            "weightTitle": 600,
+            "weightSentence": 300,
+            "weightWordmark": 600
         }
     }
 }

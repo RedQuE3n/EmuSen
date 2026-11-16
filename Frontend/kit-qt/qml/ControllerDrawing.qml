@@ -42,6 +42,7 @@ Item {
     readonly property real padding: 6
     FontMetrics {
         id: probe
+        font.family: Kit.Tokens.faceInterface
         font.pixelSize: Kit.Tokens.fontCaption
     }
 
@@ -114,6 +115,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: label.index < layout.labelWords.length ? layout.labelWords[label.index] : ""
                 color: label.focusedLabel ? Kit.Tokens.textStrong : Kit.Tokens.text
+                font.family: Kit.Tokens.faceInterface
                 font.pixelSize: Kit.Tokens.fontCaption
             }
             TapHandler {

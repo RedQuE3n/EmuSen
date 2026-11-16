@@ -1,0 +1,94 @@
+# Eclipse's Choose a console against its board, EclipseConsoles.dc.html (design project, "Eclipse theme, Consoles", 1920 by 1200), one row an element (EmuSen_Qt.md §3.4.9).
+# board_height: 1200
+# Boxes are the board's pixels; tests/eclipse_consoles.rs turns each into canvas units as value × canvas::DESIGN_HEIGHT / board_height.
+# The rules are eclipse_home.tsv's (tests/eclipse_board/mod.rs), and two more: top:N:g  y is N's y + g; before:N:g  the right edge is g short of N's x.
+# A ShapePath row is a path of its Shape (plateShare), held by tests/eclipse_consoles_oracle: "path W S A cap", its stroke W
+# board pixels wide, its arc from S degrees through A (share: the played share, at least 0.04 of a turn) and its cap.
+# A name's line height (CSS's, of its size) and its wrap are held there too: plate 1.15, the console's 1.08; no name is cut (Qt's
+# Text.truncated false, no line wider than its box): a plate whose two lines cannot hold the full name shows the short one,
+# and the name beside the disc takes the lines it needs, the facts below it (R-20261116-5).
+# type, beside eclipse_home.tsv's: "word S W C P", a named glyph's name size and weight, its corner C and its padding P either side; "line W C", a box's line inside its edge, W board pixels wide in colour C (0, none); "corona B S A", a
+# glow of the disc, its blur radius B and spread S in board pixels and its colour's strength A (board line 78's box-shadow).
+# A ringed glyph's box is its span's with the ring outside it (CSS's content-box): Y's 34 is 38, X's 40 is 44; a button's holds its line.
+# The state held is the board's with the program's eleven consoles: the first chip pressed, the first maker chosen, its first
+# console focused; the disc's colour, the fields' hue and the words are held by the test beside the table.
+# status: built, nothing (the program has nothing for it, so no element of it is made), or ruled (the section tabs, another piece's by R-20261115-7: nothing drawn here), or empty: drawn
+# while the chip pressed holds no console, its line the first-run board's (EclipseEmpty.dc.html), held in that state alone (R-20261116-9).
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	#FF07080F	-	built	-
+backdropField.0	19	a colour field: #5B3FD6, a circle, blurred 140 px at 0.5	the kit's BackdropField: the board's saturation and lightness with the focused console's hue (its glow)	-	1250	120	900	900	-	opacity:0.5	blur:140	built	field 0 -1 #5B3FD6 0
+backdropField.1	20	a colour field: #C0486F, a circle, blurred 150 px at 0.35	the kit's BackdropField: the board's saturation and lightness with the focused console's hue (its glow)	-	1500	520	620	620	-	opacity:0.35	blur:150	built	field 0 -1 #C0486F 0
+mark	25	the crescent mark	Marks.crescent, Home's Brand part	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+wordmark	26	"EmuSen"	Words.title, Home's Brand part	Text	after:mark:14	mid:80	-	-	-	Tokens.text	24	built	600 0.02 none
+nav.home	29	"Home", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
+nav.library	30	"Library", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
+nav.consoles	31	"Consoles", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
+nav.collections	32	"Collections", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
+nav.tools	33	"Tools", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
+battery	37	"82%"	Device.battery as Words.percent gives it, fed from the platform library (EmuSen_RustPlatform.md §58); the level alone, no picture	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	38	"9:41 PM"	Device.shortTime, Home's Status part	Text	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
+chip.0	44	the chip pressed, "All · 124"	Words.consoleShows[0], Library.consolesBy(0, 0, []).count	Walkable	96	150	fit:chipWords.0:22	48	-	-	-	built	-
+chipFill.0	44	its fill, no line	the chip pressed: Tokens.accent	Rectangle	in:chip.0:0	top:chip.0:0	fit:chip.0:0	48	24	Tokens.accent	-	built	line 0 -
+chipWords.0	44	its words	Words.line of the show and its count	Text	in:chip.0:22	mid:chip.0	-	-	-	Tokens.overAccent	21	built	600 0 none
+chip.1	45	a chip, "With games · 37"	Words.consoleShows[1], Library.consolesBy(1, 0, []).count	Walkable	after:chip.0:14	foot:chip.0	fit:chipWords.1:24	48	-	-	-	built	-
+chipFill.1	45	its line, 2 px #4A5068, no fill	Ink.chipLine	Rectangle	in:chip.1:0	top:chip.1:0	fit:chip.1:0	48	24	#00000000	-	built	line 2 #FF4A5068
+chipWords.1	45	its words	Words.line of the show and its count	Text	in:chip.1:24	mid:chip.1	-	-	-	#FFE3E6F0	21	built	400 0 none
+chip.2	46	a chip, "Favourites · 6"	Words.consoleShows[2], Library.consolesBy(2, 0, []).count	Walkable	after:chip.1:14	foot:chip.0	fit:chipWords.2:24	48	-	-	-	built	-
+chipFill.2	46	its line, 2 px #4A5068, no fill	Ink.chipLine	Rectangle	in:chip.2:0	top:chip.2:0	fit:chip.2:0	48	24	#00000000	-	built	line 2 #FF4A5068
+chipWords.2	46	its words	Words.line of the show and its count	Text	in:chip.2:24	mid:chip.2	-	-	-	#FFE3E6F0	21	built	400 0 none
+sort	48	the order in force, "Y Sorted by maker"	Words.consoleSorts, Y's help entry	Walkable	-	mid:chip.0	right:96	38	-	-	-	built	-
+sortGlyph	49	Y, ringed	the kit's lettered glyph through Eclipse's Glyph part	Glyph	in:sort:0	mid:sort	38	38	-	-	-	built	glyph 16 400
+sortWords	50	"Sorted by maker"	Words.consoleSorts[order]	Text	after:sortGlyph:12	mid:sort	-	-	-	#FFD8DBE6	21	built	400 0 none
+maker.0	56	the chosen maker's row	Library.consolesBy's maker, the group of the focused console	Walkable	96	250	250	60	-	-	-	built	-
+makerFill.0	56	its fill	Tokens.accent	Rectangle	in:maker.0:0	top:maker.0:0	250	60	14	Tokens.accent	-	built	-
+makerName.0	57	its name	the maker	Text	in:maker.0:18	mid:maker.0	-	-	-	Tokens.overAccent	22	built	600 0 none
+makerCount.0	57	its count	the group's size	Text	-	mid:maker.0	inright:maker.0:18	-	-	Tokens.overAccent	18	built	400 0 none
+maker.1	56	another maker's row	the next group	Walkable	96	below:maker.0:6	250	60	-	-	-	built	-
+makerFill.1	56	no fill	transparent	Rectangle	in:maker.1:0	top:maker.1:0	250	60	14	#00000000	-	built	-
+makerName.1	57	its name	the maker	Text	in:maker.1:18	mid:maker.1	-	-	-	#FFD8DBE6	22	built	400 0 none
+makerCount.1	57	its count	the group's size	Text	-	mid:maker.1	inright:maker.1:18	-	-	#FFD8DBE6	18	built	400 0 none
+plate.0	64	the focused console's plate	Library.consolesBy's first console of the chosen maker	Walkable	390	250	236	178	-	-	-	built	-
+plateFill.0	64	its fill, no edge while focused	Tokens.inputSurface	Rectangle	in:plate.0:0	top:plate.0:0	236	178	18	Tokens.inputSurface	-	built	line 0 -
+plateShare.0	65	the played share's track and arc	played over count, the track a design colour	Shape	in:plate.0:20	top:plate.0:20	52	52	-	#FF2C3044	-	built	-
+plateTrack.0	66	the played share's track, r 21, 5 px, #2C3044	a design colour (Ink.track)	ShapePath	-	-	-	-	-	#FF2C3044	-	built	path 5 0 360 flat
+plateArc.0	67	the played share's arc from the top, 5 px, round ends	played over count, at least 0.04, Tokens.accent	ShapePath	-	-	-	-	-	Tokens.accent	-	built	path 5 -90 share round
+plateName.0	70	its name	displayName where the plate's two lines hold it whole, else name (R-20261116-5)	Text	in:plate.0:20	above:plateLine.0:6	-	-	-	Tokens.text	21	built	600 0 none
+plateLine.0	71	its line "1990 · 214 games"	year, Words.between, Words.games(count)	Text	in:plate.0:20	up:plate.0:20	-	-	-	Tokens.muted	16	built	400 0 none
+plate.1	64	the next plate	the chosen maker's second console	Walkable	after:plate.0:20	foot:plate.0	236	178	-	-	-	built	-
+plateFill.1	64	its fill and inset edge	Tokens.inputSurface, the edge a design colour	Rectangle	in:plate.1:0	top:plate.1:0	236	178	18	Tokens.inputSurface	-	built	line 1 #FF262A3A
+plateRing	64	the focused plate's ring	the kit's FocusRing	FocusRing	in:plate.0:0	top:plate.0:0	236	178	-	-	-	built	ring 4 3 40 10 25 #80F0B4C4 #FF07080F #FFF6E7D8
+consoleAside	77	the focused console's column, 374 px	-	Item	right:96	230	374	-	-	-	-	built	-
+consoleDisc	78	the disc, 300 px, centred in the column	the kit's CoronaDisc	CoronaDisc	in:consoleAside:37	230	300	300	-	Tokens.surface	-	built	-
+coronaRim	78	its rim, 2 px	the focused console's glow	Rectangle	in:consoleDisc:-2	top:consoleDisc:-2	304	304	-	-	-	built	-
+coronaGlow.0	78	its glow, 40 px blur, 8 px spread, 0.6	the focused console's glow at the board's strength	-	in:consoleDisc:0	top:consoleDisc:0	300	300	-	-	-	built	corona 40 8 0.6
+coronaGlow.1	78	its halo, 150 px blur, 40 px spread, 0.4	the focused console's glow at the board's strength	-	in:consoleDisc:0	top:consoleDisc:0	300	300	-	-	-	built	corona 150 40 0.4
+consoleEyebrow	80	"NINTENDO · 1990"	maker, Words.between, year	Text	in:consoleAside:0	below:consoleDisc:34	-	-	-	#FFF3C9D2	18	built	600 0.2 upper
+consoleName	81	"Super Nintendo"	displayName, in as many lines as it needs (R-20261116-5)	Text	in:consoleAside:0	below:consoleEyebrow:8	374	-	-	Tokens.text	46	built	600 0 none
+consoleFacts	83	the facts, two columns	-	Column	in:consoleAside:0	below:consoleName:22	374	-	-	-	-	built	-
+consoleFact.0	84	a row	-	Item	in:consoleFacts:0	top:consoleFacts:0	374	-	-	-	-	built	-
+consoleFactLabel.0	84	its label, "Games"	words::FACT_LABELS	Text	in:consoleFact.0:0	mid:consoleFact.0	-	-	-	Tokens.muted	21	built	400 0 none
+consoleFactValue.0	84	its value	the console's count, played, core, screen	Text	-	mid:consoleFact.0	inright:consoleFact.0:0	-	-	Tokens.text	21	built	400 0 none
+consoleFact.1	85	a row	-	Item	in:consoleFacts:0	below:consoleFact.0:14	374	-	-	-	-	built	-
+consoleFactLabel.1	85	its label, "Played"	words::FACT_LABELS	Text	in:consoleFact.1:0	mid:consoleFact.1	-	-	-	Tokens.muted	21	built	400 0 none
+consoleFactValue.1	85	its value	the console's count, played, core, screen	Text	-	mid:consoleFact.1	inright:consoleFact.1:0	-	-	Tokens.text	21	built	400 0 none
+consoleFact.2	86	a row	-	Item	in:consoleFacts:0	below:consoleFact.1:14	374	-	-	-	-	built	-
+consoleFactLabel.2	86	its label, "Core"	words::FACT_LABELS	Text	in:consoleFact.2:0	mid:consoleFact.2	-	-	-	Tokens.muted	21	built	400 0 none
+consoleFactValue.2	86	its value	the console's count, played, core, screen	Text	-	mid:consoleFact.2	inright:consoleFact.2:0	-	-	Tokens.text	21	built	400 0 none
+consoleFact.3	87	a row	-	Item	in:consoleFacts:0	below:consoleFact.2:14	374	-	-	-	-	built	-
+consoleFactLabel.3	87	its label, "Screen"	words::FACT_LABELS	Text	in:consoleFact.3:0	mid:consoleFact.3	-	-	-	Tokens.muted	21	built	400 0 none
+consoleFactValue.3	87	its value	the console's count, played, core, screen	Text	-	mid:consoleFact.3	inright:consoleFact.3:0	-	-	Tokens.text	21	built	400 0 none
+consoleCoreMark	86	the core's planet, 24 px	the kit's PlanetMark of the core	-	before:consoleFactValue.2:10	mid:consoleFact.2	24	24	-	-	-	built	-
+consoleOpen	90	Open, A	Help.entries' A entry, Eclipse's Pill	Pill	in:consoleAside:0	below:consoleFacts:30	fit:buttonLabel.0:28	64	32	Tokens.accent	-	built	-
+buttonGlyph.0	91	A, filled	the kit's lettered glyph	Glyph	in:consoleOpen:12	mid:consoleOpen	42	42	-	-	-	built	glyph 19 600
+buttonLabel.0	91	"Open"	Help.entries' A entry	Text	after:buttonGlyph.0:12	mid:consoleOpen	-	-	-	Tokens.overAccent	23	built	600 0 none
+consoleOptions	93	Options, X	Help.entries' X entry, Eclipse's Pill	Pill	after:consoleOpen:14	foot:consoleOpen	fit:buttonLabel.1:28	64	32	#FF5A6076	-	built	-
+buttonGlyph.1	94	X, ringed	the kit's lettered glyph	Glyph	in:consoleOptions:14	mid:consoleOptions	44	44	-	-	-	built	glyph 18 400
+buttonLabel.1	94	"Options"	Help.entries' X entry	Text	after:buttonGlyph.1:12	mid:consoleOptions	-	-	-	Tokens.text	23	built	400 0 none
+help	99	the help line: A Open, B Back, LT RT Maker	Help.entries(Help.Console), Eclipse's HelpLine	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Open	101	A, filled, 34 px	the kit's lettered glyph through Eclipse's Glyph part	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Back	102	B in a 2 px ring, 34 px inside	the kit's lettered glyph through Eclipse's Glyph part	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Maker	103	LT in a 2 px box, 30 px inside, corner 8, padding 10	the kit's named glyph through Eclipse's Glyph part	-	-	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Maker	103	RT, the pair's second, in the same box	the kit's HelpBar's pair through Eclipse's Glyph part	-	after:ownGlyph-Maker:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
+consolePlace	105	"Nintendo · 3 of 14"	maker, Words.between, Words.place	Text	-	mid:help	right:96	-	-	#FFD8DBE6	21	built	400 0 none
+noConsolesWords	29	the first-run board's headline "No games yet", 84 px	the chip's own words: Words.noConsoles under All, Words.noGames under another	Text	96	250	880	-	-	Tokens.text	84	empty	600 -0.02 none
+noConsolesAbout	30	the words under it, 25 px #C9CDDB light	Words.addFolder under All, nothing under another; no folder buttons	Text	96	below:noConsolesWords:14	880	-	-	#FFC9CDDB	25	empty	300 0 none

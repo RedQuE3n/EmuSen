@@ -5,6 +5,7 @@ import EmuSen.Kit as Kit
 Text {
     id: root
     property int tone: Kit.Tones.Text
+    font.family: Kit.Tokens.faceInterface
     color: root.tone === Kit.Tones.Muted ? Kit.Tokens.muted
         : root.tone === Kit.Tones.Strong ? Kit.Tokens.textStrong
         : root.tone === Kit.Tones.Accent ? Kit.Tokens.accent

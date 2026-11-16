@@ -19,6 +19,9 @@ pub mod qobject {
         #[qproperty(i32, controllers, READ, NOTIFY)]
         #[qproperty(i32, family, READ, NOTIFY)]
         #[qproperty(QString, clock, READ, NOTIFY)]
+        /// The time in the machine's own short form, its locale's `QLocale::ShortFormat`: "9:41 PM" under en_US
+        /// (Theme 1.4). `clock` keeps the program's "hh:mm".
+        #[qproperty(QString, short_time, cxx_name = "shortTime", READ, NOTIFY)]
         #[qproperty(i32, battery, READ, NOTIFY)]
         #[qproperty(bool, charging, READ, NOTIFY)]
         #[qproperty(bool, network, READ, NOTIFY)]
@@ -35,6 +38,7 @@ pub struct DeviceFacts {
     pub controllers: i32,
     pub family: i32,
     pub clock: String,
+    pub short_time: String,
     pub battery: i32,
     pub charging: bool,
     pub network: bool,
@@ -48,6 +52,7 @@ impl Default for DeviceFacts {
             controllers: 0,
             family: 0,
             clock: String::new(),
+            short_time: String::new(),
             battery: -1,
             charging: false,
             network: false,
@@ -61,6 +66,7 @@ pub struct ThemeDeviceRust {
     controllers: i32,
     family: i32,
     clock: QString,
+    short_time: QString,
     battery: i32,
     charging: bool,
     network: bool,
@@ -75,6 +81,7 @@ impl Default for ThemeDeviceRust {
             controllers: d.controllers,
             family: d.family,
             clock: QString::default(),
+            short_time: QString::default(),
             battery: d.battery,
             charging: d.charging,
             network: d.network,
@@ -99,6 +106,11 @@ impl qobject::ThemeDevice {
         if self.clock != clock {
             self.as_mut().rust_mut().clock = clock;
             self.as_mut().clock_changed();
+        }
+        let short = QString::from(facts.short_time.as_str());
+        if self.short_time != short {
+            self.as_mut().rust_mut().short_time = short;
+            self.as_mut().short_time_changed();
         }
         if self.battery != facts.battery {
             self.as_mut().rust_mut().battery = facts.battery;

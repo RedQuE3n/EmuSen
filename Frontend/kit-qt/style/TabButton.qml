@@ -14,6 +14,7 @@ T.TabButton {
     padding: Kit.Tokens.base * 2
     horizontalPadding: Kit.Tokens.base * 4
     spacing: Kit.Tokens.base * 2
+    font.family: Kit.Tokens.faceInterface
     font.pixelSize: Kit.Tokens.fontBody
     icon.width: Kit.Tokens.fontBody * 1.5
     icon.height: Kit.Tokens.fontBody * 1.5

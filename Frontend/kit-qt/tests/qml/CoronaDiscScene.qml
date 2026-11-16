@@ -33,4 +33,20 @@ Window {
             }
         ]
     }
+    // A disc whose one glow is deleted while the disc lives, as a dropped engine deletes a list's entries before their delegates.
+    Kit.CoronaDisc {
+        objectName: "bareDisc"
+        x: 1800
+        y: 60
+        width: 40
+        height: 40
+        glows: [
+            Kit.CoronaGlow {
+                objectName: "goneGlow"
+                blur: 2
+                spread: 4
+                color: "#FF00FF00"
+            }
+        ]
+    }
 }

@@ -174,7 +174,16 @@ Window {
             gameMuted: Kit.PadRouter.guideHeld
             // A theme's screens hear the pad through their own engine's router (EmuSen_Qt.md §3.5.2); while a binding listens
             // for the pad's press, the interface hears none of it, and while the tester runs, only its B and the releases (EmuSen_Qt.md §7.7.H).
-            onButton: (button, down) => settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
+            // A release also goes to every engine's router, so one the focus left while the button was down lets it go, and its
+            // next press is a press (EmuSen_Qt.md §3.5.2).
+            onButton: (button, down) => {
+                if (!down) {
+                    program.themeHost?.feed.push(button, false)
+                    referenceHost.feed.push(button, false)
+                    Kit.PadRouter.push(button, false)
+                }
+                settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
+            }
             onSeatsChanged: settingsModel.seatsChanged()
             // A pad come or gone, told where Controller notices is on, over a game too (EmuSen_Input.md §8.13.5).
             onNotice: (words) => {
@@ -234,6 +243,20 @@ Window {
             repeat: true
             running: true
             onTriggered: clock.tick()
+        }
+        // The machine's battery, asked of the platform library on start and then every `every` ms (EmuSen_RustPlatform.md §58.3).
+        Battery {
+            id: machineBattery
+            objectName: "battery"
+            platformLibrary: program.platformLibrary
+            onPlatformLibraryChanged: machineBattery.read()
+        }
+        Timer {
+            interval: machineBattery.every
+            repeat: true
+            running: true
+            triggeredOnStart: true
+            onTriggered: machineBattery.read()
         }
         // The game, under the screens: in front on its own screen, paused under the Pause Card, and behind Home while it is suspended there, where Continue draws its picture.
         Play.Game {
@@ -297,6 +320,8 @@ Window {
             library: library
             session: player.session
             clock: clock
+            battery: machineBattery.level
+            charging: machineBattery.charging
             grid: games
             picture: player.picture
             controllers: pads.connected
@@ -308,6 +333,7 @@ Window {
             consolesWanted: !program.esdeLook && !(program.themeHost?.consoles ?? false)
             gamesWanted: !program.esdeLook && !(program.themeHost?.games ?? false)
             onPlayed: (path) => program.play(path)
+            onFavourite: (path) => library.toggleFavourite(path)
             onResumed: screens.resume()
             onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
             onFocused: (game) => {
@@ -336,6 +362,8 @@ Window {
                 library: library
                 session: player.session
                 clock: clock
+                battery: machineBattery.level
+                charging: machineBattery.charging
                 grid: games
                 picture: player.picture
                 controllers: pads.connected
@@ -346,6 +374,7 @@ Window {
                 splashShown: program.splashShown
                 splashLayer: splashLayer
                 onPlayed: (path) => program.play(path)
+                onFavourite: (path) => library.toggleFavourite(path)
                 onResumed: screens.resume()
                 onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
                 onFocused: (game) => {
@@ -511,6 +540,11 @@ Window {
                 onBacked: screens.back()
                 onActed: (key) => screens.act(key)
             }
+        }
+        // A console's options asked for on Choose a console: Settings opens at that console's page (none for an empty one).
+        Connections {
+            target: screens
+            function onSettingsAtChanged() { settingsModel.openConsole(screens.settingsAt) }
         }
         ThemesScreen {
             objectName: "themes"

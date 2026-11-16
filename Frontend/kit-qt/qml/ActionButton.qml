@@ -15,7 +15,7 @@ Kit.Walkable {
     property bool stepped: false
     readonly property size stepMark: Qt.size(8, 11)
     property int family: Kit.Families.Generic
-    property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontRow })
+    property font labelFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontRow })
     readonly property color ink: root.filled ? Kit.Tokens.overAccent : (root.enabled ? Kit.Tokens.text : Kit.Tokens.muted)
     readonly property real padding: Kit.Tokens.base * 4
     implicitWidth: words.implicitWidth + 2 * root.padding

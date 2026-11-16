@@ -155,6 +155,25 @@ fn qt_3_7_consoles_laid_out_by_hand_do_not_survive_120_consoles() {
 }
 
 #[test]
+fn qt_3_7_the_sweep_follows_a_side_column_s_own_neighbours_to_every_console() {
+    // Makers in a column beside the chosen maker's grid: Left from a first-column console goes to its maker, Down from a maker to the next.
+    let ran = audit("side-column");
+    let swept: Vec<&str> = ran.out.lines().filter(|l| l.contains(" reach ")).collect();
+    assert!(ran.held("Consoles").0 > 0, "{}", ran.err);
+    assert!(swept.is_empty(), "every console of 120 is reached by the pad:\n{}", swept.join("\n"));
+}
+
+#[test]
+fn qt_3_7_the_sweep_still_misses_the_consoles_no_press_reaches() {
+    // The same screen with no press from the first maker to the next: those makers' consoles are reached by no press.
+    let ran = audit("side-column-cut");
+    for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
+        let want = format!(" reach {size} dark, 120 consoles: the pad's sweep heard ");
+        assert!(ran.out.contains(&want), "{want}\n{}", ran.out);
+    }
+}
+
+#[test]
 fn qt_3_7_a_package_with_static_findings_is_not_loaded_and_each_fixture_is_named() {
     for (name, want) in [
         ("literal", "literal/parts/Shelf.qml:8 words \"CONTINUE PLAYING\""),
@@ -400,6 +419,18 @@ fn built_in(theme: &str) {
     }
     let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ")).collect();
     assert!(found.is_empty(), "{theme}: {} differences from its mockups:\n{}", found.len(), found.join("\n"));
+    // The whole account, findings and what was held and accepted, as recorded from the audit before its sweep read less (man theme-check).
+    let recorded = mockups.join("audit").join(format!("{theme}.findings"));
+    let expected = std::fs::read_to_string(&recorded).unwrap_or_else(|e| panic!("{}: {e}", recorded.display()));
+    assert_eq!(whole(&ran, &folder, theme), expected, "{theme}: the audit's whole account differs from {}", recorded.display());
+}
+
+/// A run's lines and its `theme-audit:` words, the theme's folder written `themes/<theme>` wherever it is checked out.
+fn whole(ran: &Ran, folder: &Path, theme: &str) -> String {
+    let real = std::fs::canonicalize(folder).unwrap().display().to_string();
+    let given = folder.display().to_string();
+    let words = ran.err.lines().filter(|l| l.starts_with("theme-audit: "));
+    ran.out.lines().chain(words).map(|l| format!("{}\n", l.replace(&given, &format!("themes/{theme}")).replace(&real, &format!("themes/{theme}")))).collect()
 }
 
 #[test]
@@ -528,4 +559,52 @@ fn kit_7_102_moonrise_s_caption_name_in_a_theme_s_own_moonrise_is_not_accepted()
     assert!(!ran.err.contains("theme-audit: accepted by"), "R-20261111-40 covers the kit's Moonrise.qml alone, not a theme's item named moonrise: {}", ran.err);
     let small: Vec<&str> = ran.out.lines().filter(|l| l.contains("small-caption/screens/Home.qml") && l.contains("too small") && l.contains("moonriseCaption")).collect();
     assert_eq!(small.len(), 10, "the floor's finding at five sizes in both variants:\n{}", ran.out);
+}
+
+/// The `loaded` fixture under the variants `listed`, copied to a folder of `name`, with its recordings: the run and the files.
+fn listing(name: &str, listed: &str) -> (Ran, Vec<String>) {
+    let dir = std::env::temp_dir().join(format!("theme-audit-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy_tree(&themes().join("loaded"), &dir.join("theme"));
+    let manifest = std::fs::read_to_string(dir.join("theme/theme.json")).unwrap();
+    let changed = manifest.replace(r#""variants": ["dark", "light"]"#, listed);
+    assert!(changed.contains(listed), "the fixture's variants line");
+    std::fs::write(dir.join("theme/theme.json"), changed).unwrap();
+    let states = dir.join("states");
+    let ran = Ran::judged(Command::new(PROGRAM).arg("--state").arg(&states).arg(dir.join("theme")));
+    let mut files: Vec<String> = std::fs::read_dir(&states).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    files.sort();
+    let _ = std::fs::remove_dir_all(&dir);
+    (ran, files)
+}
+
+#[test]
+fn qt_3_7_a_theme_is_judged_in_the_variants_it_lists_and_no_other() {
+    let (one, files) = listing("dark-only", r#""variants": ["dark"]"#);
+    assert_eq!(one.held("Home").0, 5, "a dark-only theme's Home at five sizes, once: {}", one.err);
+    assert!(files.iter().any(|f| f.starts_with("Home-dark-")), "{files:?}");
+    assert!(!files.iter().any(|f| f.contains("-light")), "nothing recorded in light: {files:?}");
+    assert!(!one.out.contains(" light") && !one.err.contains(" light"), "no line of light: {}{}", one.out, one.err);
+    let (two, files) = listing("both", r#""variants": ["dark", "light"]"#);
+    assert_eq!(two.held("Home").0, 10, "both listed: Home at five sizes in each: {}", two.err);
+    for variant in ["dark", "light"] {
+        assert!(files.iter().any(|f| f.starts_with(&format!("Home-{variant}-"))), "{variant}: {files:?}");
+    }
+}
+
+#[test]
+fn qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has() {
+    // Eclipse as the program finds it, every state theme-audit has that names one of its screens, at the gate's sizes in
+    // the one variant it lists.
+    let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes/eclipse");
+    let ran = Ran::judged(Command::new(PROGRAM).args(["--states", "all"]).arg(&folder));
+    let screens: Vec<String> = std::fs::read_dir(folder.join("screens"))
+        .expect("Eclipse's screens")
+        .filter_map(|entry| entry.ok()?.file_name().to_str()?.strip_suffix(".qml").map(str::to_owned))
+        .collect();
+    assert!(screens.iter().any(|screen| screen == "Home"), "Eclipse's screens are read from its folder: {screens:?}");
+    for screen in &screens {
+        assert!(ran.held(screen).0 >= SIZES.len(), "{screen} held at the gate's sizes: {}", ran.err);
+    }
+    assert_eq!(ran.status, 0, "Eclipse's findings:\n{}", ran.out);
 }

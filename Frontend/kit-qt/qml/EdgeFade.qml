@@ -23,11 +23,14 @@ Item {
         anchors.fill: parent
         // A shade under whole until the software layer holds an alpha channel, so Qt makes the layer with one (EmuSen_Kit.md §7.35).
         opacity: root.software && !mask.primed ? 0.999 : 1
+        // On from the moment an edge fades, and off only once the queue is clear, so an edge that stops before then keeps the layer (EmuSen_Kit.md §7.35).
         property bool layered
-        Binding on layered {
-            value: root.fading
-            delayed: true
-        }
+    }
+    onFadingChanged: if (root.fading) held.layered = true
+    Timer {
+        interval: 0
+        running: held.layered !== root.fading
+        onTriggered: held.layered = root.fading
     }
     Kit.EdgeMask {
         id: mask

@@ -74,7 +74,7 @@ pub unsafe extern "C" fn emusen_galaxia_file(which: u32, out: *mut u8, len: usiz
     answer(file.map(|file| file.path(&tree::tree()).to_string_lossy().into_owned()), out, len)
 }
 
-/// Moves one of the three redirects, or with a null path restores the real location.
+/// Moves one of the redirects, or with a null path restores the real location.
 ///
 /// # Safety
 /// `directory` must be valid for `len` bytes, or null.
@@ -772,6 +772,7 @@ mod tests {
         defines("EMUSEN_GALAXIA_OVERRIDE_CONFIG", Override::Config as u32);
         defines("EMUSEN_GALAXIA_OVERRIDE_DATA", Override::Data as u32);
         defines("EMUSEN_GALAXIA_OVERRIDE_LEGACY", Override::Legacy as u32);
+        defines("EMUSEN_GALAXIA_OVERRIDE_POWER_SUPPLY", Override::PowerSupply as u32);
         for (name, value) in [("SRAM", save::SRAM), ("FLAT_SRAM", save::FLAT_SRAM), ("STATE", save::STATE), ("RESUME_STATE", save::RESUME_STATE), ("PICTURE", save::PICTURE)] {
             defines(&format!("EMUSEN_GALAXIA_SAVE_{name}"), value);
         }

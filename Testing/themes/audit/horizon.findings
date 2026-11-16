@@ -1,0 +1,5 @@
+theme-audit: held Home in 10 states, 2 against its mockup
+theme-audit: held Consoles in 15 states, 2 against its mockup
+theme-audit: held Games in 10 states, 2 against its mockup
+theme-audit: held Splash in 10 states, 0 against its mockup
+theme-audit: accepted by R-20261111-37: themes/horizon/screens/Consoles.qml 1920x1200 dark: low contrast in the spare tenth: 283 at 1.08:1, needs 4.5:1 (283 QQuickText engineName at 128,408 63x34)

@@ -83,6 +83,10 @@ pub trait LibrarySource: Send + Sync {
     fn collections(&self) -> Result<Vec<Collection>, String> {
         Ok(Vec::new())
     }
+    /// Each console's screen kind by its catalog console (Serenity's `screens`); none from a source with no catalogue.
+    fn screens(&self) -> Result<Vec<(String, String)>, String> {
+        Ok(Vec::new())
+    }
     /// How many cheats the game at `path` on `console` has in its own list (cheats.rs); a source with no lists has none.
     fn cheats(&self, _console: &str, _path: &str) -> Result<usize, String> {
         Ok(0)
@@ -103,13 +107,14 @@ pub trait LibrarySource: Send + Sync {
 pub struct Engine {
     /// The name the choice stores.
     pub id: String,
-    /// The name shown: a libretro core's corename, an EmuSen core's info name less the port's "RT".
+    /// The name shown: a libretro core's corename, an EmuSen core's original name (`without_port_mark`).
     pub name: String,
     pub libretro: bool,
 }
 
-/// An EmuSen core's info name as shown: VenusRT reads Venus, the one named exception of §24.6.
+/// A core's original name as shown: VenusRT and "VenusRT (Rust)" read Venus (EmuSen_Interface.md §24.6, R-20261116-14).
 pub fn without_port_mark(name: &str) -> &str {
+    let name = name.strip_suffix(" (Rust)").unwrap_or(name);
     match name.strip_suffix("RT") {
         Some(rest) if rest.chars().last().is_some_and(char::is_lowercase) => rest,
         _ => name,
@@ -143,6 +148,10 @@ pub struct LibraryRow {
     /// The grid's heading for the row: a place's short name, a console's name.
     pub heading: String,
     pub count: usize,
+    /// How many of a console's games were played: those with a last-played time in the catalogue (`Catalog::played`).
+    pub played: usize,
+    /// How many of a console's games are favourites.
+    pub favourites: usize,
     pub hue: f64,
     pub body: String,
     pub maker: String,
@@ -161,8 +170,17 @@ pub struct LibraryRow {
     pub engine_mark: String,
     /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.18).
     pub world: String,
+    /// The screen the console drove, in words ("CRT, television"); empty where the catalogue names none.
+    pub screen: String,
     /// The row's first games as GameModel reads them, the covers Choose a console fans; empty until a refresh.
     pub fan: String,
+}
+
+impl LibraryRow {
+    /// The name a console's tile shows: its full name where it has one, else its short one (`Library.consoles`' displayName).
+    pub fn shown_name(&self) -> &str {
+        if self.full_name.is_empty() { &self.name } else { &self.full_name }
+    }
 }
 
 impl Keyed for LibraryRow {
@@ -214,6 +232,8 @@ pub struct Catalog {
     pub collections: Vec<Collection>,
     /// How many cheats the game last played has in its list; 0 where none was played.
     pub last_cheats: usize,
+    /// Each console's screen kind, by its catalog console (`LibrarySource::screens`).
+    pub screens: Vec<(String, String)>,
 }
 
 /// One game as the screens show it: its title from its file name, its console, its console's hue, its cover and its facts.
@@ -360,6 +380,17 @@ pub fn lists_of(rows: &mut [LibraryRow], systems: &[SystemRow], catalog: &Catalo
 
 /// The rows for what a source answered: the places with their counts, then each system that has games.
 pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine)]) -> Vec<LibraryRow> {
+    with_consoles(place_rows(catalog), console_rows(systems, catalog, engines))
+}
+
+/// The places' rows followed by the consoles' that have games.
+fn with_consoles(mut places: Vec<LibraryRow>, consoles: Vec<LibraryRow>) -> Vec<LibraryRow> {
+    places.extend(consoles.into_iter().filter(|r| r.count > 0));
+    places
+}
+
+/// The three places' rows: all games, the favourites and the recently played.
+fn place_rows(catalog: &Catalog) -> Vec<LibraryRow> {
     let last = catalog.recent.first().map(|p| title_of(p));
     let lines = [
         words::games(catalog.games.len()),
@@ -367,7 +398,7 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
         words::last_played(last.as_deref()),
     ];
     let counts = [catalog.games.len(), catalog.favourites.len(), catalog.recent.len()];
-    let mut out: Vec<LibraryRow> = PLACES
+    PLACES
         .into_iter()
         .zip(counts)
         .zip(lines)
@@ -383,12 +414,17 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             status,
             ..LibraryRow::default()
         })
-        .collect();
+        .collect()
+}
+
+/// Each system's console row, those with no games among them, in the systems' order: a system with no engine has a row too.
+pub fn console_rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine)]) -> Vec<LibraryRow> {
+    let played: HashMap<&str, i64> = catalog.played.iter().map(|(p, at)| (p.as_str(), *at)).collect();
+    let favourites: HashSet<&str> = catalog.favourites.iter().map(String::as_str).collect();
+    let mut out = Vec::with_capacity(systems.len());
     for s in systems {
-        let count = catalog.games.iter().filter(|g| g.system.as_deref() == Some(s.id.as_str())).count();
-        if count == 0 {
-            continue;
-        }
+        let games = || catalog.games.iter().filter(|g| g.system.as_deref() == Some(s.id.as_str()));
+        let count = games().count();
         let engine = engines.iter().find(|(id, _)| id == &s.id).map(|(_, e)| e.clone()).unwrap_or_default();
         let mark = if engine.name.is_empty() { String::new() } else { engine_mark(&engine.name, engine.libretro, &s.look.body) };
         let runs_on = if engine.name.is_empty() { String::new() } else { words::runs_on(&engine.name, engine.libretro) };
@@ -401,6 +437,8 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             status: words::games(count),
             facts: words::facts(&s.manufacturer, s.release_year, count, &runs_on),
             count,
+            played: games().filter(|g| played.get(g.path.as_str()).is_some_and(|at| *at > 0)).count(),
+            favourites: games().filter(|g| favourites.contains(g.path.as_str())).count(),
             hue: s.look.hue,
             body: s.look.body.clone(),
             maker: s.manufacturer.clone(),
@@ -410,6 +448,7 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             engine_mark: mark,
             libretro: engine.libretro,
             world: world_line_of(s),
+            screen: catalog.screens.iter().find(|(c, _)| c == &s.console).map(|(_, kind)| words::screen(kind).to_owned()).unwrap_or_default(),
             fan: String::new(),
         });
     }
@@ -455,6 +494,8 @@ pub struct Read {
     pub systems: Vec<SystemRow>,
     pub catalog: Catalog,
     pub rows: Vec<LibraryRow>,
+    /// Every console a core runs, those with no games among them, in the shelves' order (`cored`).
+    pub cored: Vec<LibraryRow>,
     /// Each row's games as GameModel reads them, by the row's key (`lists_of`).
     pub lists: HashMap<String, String>,
     /// The ES-DE view's settings, and its texts while a theme is the library's look (esde_shelves).
@@ -498,6 +539,9 @@ impl LibrarySource for FirstLook<'_> {
     }
     fn collections(&self) -> Result<Vec<Collection>, String> {
         self.0.collections()
+    }
+    fn screens(&self) -> Result<Vec<(String, String)>, String> {
+        self.0.screens()
     }
     fn cheats(&self, console: &str, path: &str) -> Result<usize, String> {
         self.0.cheats(console, path)
@@ -544,11 +588,15 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
         (Some(g), Some(s)) => source.cheats(&s.console, &g.path)?,
         _ => 0,
     };
-    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware, names, collections, last_cheats };
+    let screens = source.screens()?;
+    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware, names, collections, last_cheats, screens };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));
-    let mut rows = rows(&shelved, &catalog, &engines);
+    let consoles = console_rows(&shelved, &catalog, &engines);
+    // The runtime's shelves are the consoles a core runs (EmuSen_Interface.md §24.1); a source with none names them by an engine.
+    let cored = consoles.iter().filter(|r| if shelves.is_empty() { !r.engine_name.is_empty() } else { shelves.contains(&r.key) }).cloned().collect();
+    let mut rows = with_consoles(place_rows(&catalog), consoles);
     let lists = lists_of(&mut rows, &systems, &catalog, words::now());
     let esde_settings = crate::esde_shelves::settings_of(&catalog.settings);
     let (esde, esde_state) = if esde_settings.themed {
@@ -558,7 +606,7 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
     } else {
         (Esde::default(), EsdeState::default())
     };
-    Ok(Read { systems, catalog, rows, lists, esde_settings, esde, esde_state })
+    Ok(Read { systems, catalog, rows, cored, lists, esde_settings, esde, esde_state })
 }
 
 /// A system's firmware as Start Console's pane says it, in Mistress's words (her `FirmwareLine`): found, or not found;
@@ -586,6 +634,8 @@ pub fn cover_shape(system: Option<&SystemRow>) -> f64 {
 #[derive(Clone, Debug, Default)]
 pub struct LibraryView {
     pub rows: KeyedRows<LibraryRow>,
+    /// Every console a core runs, those with no games among them (`cored`).
+    pub cored: Vec<LibraryRow>,
     pub systems: Vec<SystemRow>,
     pub catalog: Catalog,
     pub lists: HashMap<String, String>,
@@ -671,6 +721,7 @@ impl LibraryView {
                 self.problem.clear();
                 Some(Read {
                     rows: self.rows.replace(read.rows),
+                    cored: replace(&mut self.cored, read.cored),
                     systems: replace(&mut self.systems, read.systems),
                     catalog: replace(&mut self.catalog, read.catalog),
                     lists: replace(&mut self.lists, read.lists),

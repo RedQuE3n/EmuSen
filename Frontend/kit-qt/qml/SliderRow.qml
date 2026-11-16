@@ -25,6 +25,7 @@ Kit.WholeRow {
             Layout.preferredWidth: parent.width * 0.4
             text: root.label
             color: root.activeFocus ? Kit.Tokens.textStrong : Kit.Tokens.text
+            font.family: Kit.Tokens.faceInterface
             font.pixelSize: Kit.Tokens.fontRow
             elide: Text.ElideRight
         }
@@ -48,6 +49,7 @@ Kit.WholeRow {
             horizontalAlignment: Text.AlignRight
             text: root.value
             color: Kit.Tokens.muted
+            font.family: Kit.Tokens.faceInterface
             font.pixelSize: Kit.Tokens.fontRow
         }
     }

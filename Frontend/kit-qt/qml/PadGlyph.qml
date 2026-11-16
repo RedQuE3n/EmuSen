@@ -15,6 +15,8 @@ Item {
     readonly property alias paired: marks.paired
     property color ink: Kit.Tokens.text
     readonly property alias name: marks.name
+    // The letter the family prints on the button, drawn in the glyph type; empty for a button marked by a shape alone.
+    readonly property alias letter: marks.letter
     // The glyph's own side over the glyph type's size.
     readonly property real sideShare: 1.4
     implicitWidth: Kit.Tokens.fontGlyph * root.sideShare
@@ -28,6 +30,7 @@ Item {
     TextMetrics {
         id: inked
         // The letter in proportion to the drawn glyph, read from the marks so no binding reads the item's own size (EmuSen_Kit.md §7.28).
+        font.family: Kit.Tokens.faceInterface
         font.pixelSize: Math.max(1, marks.size * marks.letterScale / root.sideShare)
         font.bold: marks.letterBold
         text: marks.letter
@@ -64,6 +67,7 @@ Item {
                 PathText {
                     x: (root.width - inked.tightBoundingRect.width) / 2 - inked.tightBoundingRect.x
                     y: (root.height - inked.tightBoundingRect.height) / 2
+                    font.family: inked.font.family
                     font.pixelSize: inked.font.pixelSize
                     font.bold: inked.font.bold
                     text: drawn.cutLetter
@@ -89,6 +93,7 @@ Item {
             PathText {
                 x: (root.width - inked.tightBoundingRect.width) / 2 - inked.tightBoundingRect.x
                 y: (root.height - inked.tightBoundingRect.height) / 2
+                font.family: inked.font.family
                 font.pixelSize: inked.font.pixelSize
                 font.bold: inked.font.bold
                 text: marks.letter

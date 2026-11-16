@@ -5,7 +5,7 @@ use emusen_kit_core::tokens::Variant;
 use emusen_qt_test::Harness;
 
 const SCENE: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/tests/qml/TokensScene.qml");
-const REGISTRY: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.8.qmltypes");
+const REGISTRY: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.9.qmltypes");
 
 /// The Tokens component's read-only properties with their registry types: the tokens a theme may override.
 fn registry_tokens() -> Vec<(String, String)> {
@@ -48,8 +48,20 @@ fn kit_7_2_every_number_and_switch_token_takes_a_theme_s_override_in_its_variant
     overrides.push((Variant::Dark, "radius".to_owned(), "3".to_owned()));
     overrides.push((Variant::Dark, "quick".to_owned(), "1.5".to_owned()));
     scene.kit_tokens().expect("the kit's tokens").set_overrides(overrides);
+    // A size token is the theme's held to the legibility floor on the big screen (EmuSen_Kit.md §7.121), as `Column` makes it.
+    let floor_held = |name: &str| {
+        use emusen_kit_core::tokens::{legible_header, legible_type, Form, TypeScale};
+        let all = TypeScale { display: 7.5, title: 7.5, strong: 7.5, row: 7.5, body: 7.5, caption: 7.5, glyph: 7.5 };
+        let size = if name == "headerSize" {
+            legible_header(Form::BigScreen, 7.5, 1.0, emusen_kit_qt::type_size::caps)
+        } else {
+            legible_type(Form::BigScreen, &all, 1.0, emusen_kit_qt::type_size::caps).row
+        };
+        size.to_string()
+    };
     for ((name, t), kit) in tokens.iter().zip(&kit) {
-        assert_eq!(read(&mut scene, name), given(t, kit), "{name}, a {t}, is the theme's");
+        let want = if name.starts_with("font") || name == "headerSize" { floor_held(name) } else { given(t, kit) };
+        assert_eq!(read(&mut scene, name), want, "{name}, a {t}, is the theme's");
     }
     // Under reduced motion the theme's durations and its breathing are reduced as the kit's are; its radius stays.
     scene.kit_tokens().expect("the kit's tokens").set_reduced_motion(true);

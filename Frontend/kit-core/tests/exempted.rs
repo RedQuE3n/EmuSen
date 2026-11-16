@@ -107,6 +107,39 @@ fn kit_7_100_a_finding_names_its_kind_and_its_items_apart_from_its_numbers() {
 }
 
 #[test]
+fn r_20261115_24_words_of_the_built_in_eclipse_s_line_under_the_floor_are_accepted_and_no_other_file_s() {
+    let small = |source: &str| {
+        Item::new(1, Kind::Panel, PANEL).written_in(source).child(
+            Item::new(2, Kind::Words, Rect::new(10.0, 10.0, 200.0, 20.0))
+                .named("eyebrow")
+                .written_in(source)
+                .words(Text { cap_height: 9.0, width: 100.0, height: 18.0, ellipsis: false, data: false, own: None }),
+        )
+    };
+    let accepted_in = |source: &str| match exempted(&small(source), Some(&[]), 11.64)[..] {
+        [Exempted::SmallText { class, .. }] => Some(class),
+        _ => None,
+    };
+    assert_eq!(accepted_in("qrc:/emusen/themes/eclipse/parts/Line.qml"), Some(Class::EclipseBoardType), "the program's built-in Eclipse");
+    let checkout = emusen_kit_core::audit::eclipse_line_checkout().expect("this checkout's Eclipse");
+    assert_eq!(accepted_in(checkout), Some(Class::EclipseBoardType), "this checkout's");
+    assert_eq!(accepted_in("file:///home/a/EmuSen/Frontend/themes/eclipse/parts/Line.qml"), None, "another folder with the same tail is held");
+    assert_eq!(accepted_in(&checkout.replace("/themes/", "/themes/../themes/")), None, "the path as written, not resolved");
+    assert_eq!(accepted_in("file:///home/a/.local/share/EmuSen/themes/eclipse/parts/Line.qml"), None, "a theme of the player's named eclipse is held");
+    assert_eq!(accepted_in("qrc:/emusen/themes/eclipse/screens/Home.qml"), None, "another file of Eclipse's is held");
+    assert_eq!(accepted_in("qrc:/emusen/themes/horizon/parts/Line.qml"), None, "another built-in theme is held");
+    // R-20261115-29: their contrast as the board draws it is accepted too, and printed as accepted; anyone else's is a finding.
+    let (faint, white) = (Colour::hex("#949494"), Colour::hex("#FFFFFF"));
+    let over = |source: &str| Item::new(1, Kind::Panel, PANEL).child(words(2, 10.0, faint, vec![white; 20]).written_in(source));
+    let board = over("qrc:/emusen/themes/eclipse/parts/Line.qml");
+    assert!(emusen_kit_core::audit::contrast(&board).is_empty(), "no finding for the board's words");
+    assert!(matches!(exempted(&board, Some(&[]), 0.0)[..], [Exempted::Board { item: ElementId(2), .. }]), "named as accepted");
+    let theirs = over("file:///home/a/.local/share/EmuSen/themes/eclipse/parts/Line.qml");
+    assert_eq!(emusen_kit_core::audit::contrast(&theirs).len(), 1, "a player's theme named eclipse is held");
+    assert!(exempted(&theirs, Some(&[]), 0.0).is_empty());
+}
+
+#[test]
 fn kit_7_102_the_table_holds_the_classes_the_tester_accepted_and_no_other() {
     let rows: Vec<(Class, &str)> = ACCEPTED.iter().map(|a| (a.class, a.ruling)).collect();
     assert_eq!(
@@ -121,6 +154,7 @@ fn kit_7_102_the_table_holds_the_classes_the_tester_accepted_and_no_other() {
             (Class::DimmedAndMoving, "R-20261111-43"),
             (Class::DataWordsElided, "R-20261111-44"),
             (Class::MainThreadLineInTests, "R-20261111-110"),
+            (Class::EclipseBoardType, "R-20261115-24, R-20261115-29"),
         ]
     );
     assert!(ACCEPTED.iter().all(|a| !a.covers.is_empty()), "each row says what it covers");
@@ -168,6 +202,7 @@ fn kit_7_109_each_class_covers_its_own_kinds_of_finding_and_no_other() {
             (Class::DimmedAndMoving, &[Exempted::DISABLED][..]),
             (Class::DataWordsElided, &[Exempted::ELIDED][..]),
             (Class::MainThreadLineInTests, &[][..]),
+            (Class::EclipseBoardType, &[Exempted::SMALL_TEXT, Exempted::BOARD][..]),
         ],
         "a class excuses only the findings its ruling covers; the log lines' classes excuse no finding of the rules"
     );

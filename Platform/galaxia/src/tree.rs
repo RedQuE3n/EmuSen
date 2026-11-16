@@ -142,18 +142,20 @@ impl Directory {
     }
 }
 
-/// One of the three redirects the tests move.
+/// One of the redirects the tests move.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Override {
     Config = 0,
     Data = 1,
     Legacy = 2,
+    /// The kernel's power_supply class, which the battery is read from (since 50).
+    PowerSupply = 3,
 }
 
 impl Override {
     pub fn from_u32(value: u32) -> Option<Override> {
-        [Override::Config, Override::Data, Override::Legacy].get(value as usize).copied()
+        [Override::Config, Override::Data, Override::Legacy, Override::PowerSupply].get(value as usize).copied()
     }
 }
 
@@ -172,6 +174,8 @@ pub struct Tree {
     pub data_override: Option<PathBuf>,
     /// `ConfigStore.OverrideLegacyDirectory`.
     pub legacy_override: Option<PathBuf>,
+    /// A made-up power_supply tree a test reads the battery from, in place of the kernel's (EmuSen_RustPlatform.md §58).
+    pub power_supply_override: Option<PathBuf>,
 }
 
 impl Tree {
@@ -257,6 +261,7 @@ impl Tree {
             Override::Config => self.config_override = directory,
             Override::Data => self.data_override = directory,
             Override::Legacy => self.legacy_override = directory,
+            Override::PowerSupply => self.power_supply_override = directory,
         }
     }
 }

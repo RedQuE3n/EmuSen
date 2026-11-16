@@ -4,6 +4,9 @@
 /// The wordmark: Moonrise's title and Home's (EmuSen_Interface.md §22, §24.3).
 pub const TITLE: &str = "EMUSEN";
 
+/// The program's name in its own case, the wordmark Eclipse's boards draw (Main.dc.html:30); TITLE stays the other screens'.
+pub const NAME: &str = "EmuSen";
+
 /// "1 game", "1,566 games": a count with its noun, grouped by thousands as the mockups write them.
 pub fn counted(n: usize, one: &str, many: &str) -> String {
     format!("{} {}", grouped(n), if n == 1 { one } else { many })
@@ -47,6 +50,12 @@ pub const POWER_LINE: &str = "Exit";
 pub const BETWEEN: &str = "·";
 /// The search field's name, as a screen reader says it.
 pub const SEARCH: &str = "Search";
+/// The labels of a console's facts, a row each, in their order: its games, those played, its core and its screen.
+pub const FACT_LABELS: [&str; 4] = ["Games", "Played", "Core", "Screen"];
+/// Choose a console's chips (EclipseConsoles:43-45), in `console_list::Show`'s order.
+pub const CONSOLE_SHOWS: [&str; 3] = ["All", "With games", "Favourites"];
+/// Choose a console's orders as Y's entry says them (EclipseConsoles:49), in `console_list::Order`'s order.
+pub const CONSOLE_SORTS: [&str; 4] = ["Sorted by maker", "Sorted by year", "Sorted by name", "Sorted by games"];
 
 /// The program's name and version, as the Home card's Power page says it under its rows (Mistress's `BigMenuFooter`).
 pub fn version_line() -> String {
@@ -80,7 +89,7 @@ pub const CONSOLES_SECTION: &str = "Consoles";
 /// (a title, a console's name, a phrase counted or built from them) is data and may elide (EmuSen_Qt.md §3.7.2).
 pub fn is_fixed(words: &str) -> bool {
     let single = [
-        TITLE, GAMES, CHOOSE_A_CONSOLE, GAMES_PATH, CONTINUE_PLAYING, RECENT, POWER_LINE, BETWEEN, SEARCH, EMUSEN_TAG, LIBRETRO_TAG,
+        TITLE, NAME, GAMES, CHOOSE_A_CONSOLE, GAMES_PATH, CONTINUE_PLAYING, RECENT, POWER_LINE, BETWEEN, SEARCH, EMUSEN_TAG, LIBRETRO_TAG,
         FAVOURITES_LINE, NO_GAMES, NO_RECENT, NO_CONSOLES, ADD_FOLDER, PLACES, CONTINUE_ENTRY, RECENT_ENTRY,
         HOME_SECTION, CONSOLES_SECTION,
     ];
@@ -120,6 +129,27 @@ pub fn games(n: usize) -> String {
     counted(n, "game", "games")
 }
 
+/// A console's screen kind, Serenity's catalogue's name for it, in words: "CRT, television" or "LCD"; none for another.
+pub fn screen(kind: &str) -> &'static str {
+    match kind {
+        "Television" => "CRT, television",
+        "Lcd" => "LCD",
+        _ => "",
+    }
+}
+
+/// A battery's charge as the status says it: "82%"; none below 0, where the machine has no battery.
+pub fn percent(n: i32) -> String {
+    if n < 0 {
+        String::new()
+    } else {
+        format!("{n}%")
+    }
+}
+
+/// A console plate's line where it holds no game, after its year: "1986 · no games yet" (EclipseConsoles:129).
+pub const NO_GAMES_LINE: &str = "no games yet";
+
 /// The Recently played place's line: the game played last, or none yet.
 pub fn last_played(title: Option<&str>) -> String {
     title.map_or_else(|| "Nothing played yet".to_owned(), |t| format!("Last: {t}"))
@@ -138,7 +168,12 @@ pub fn runs_on(name: &str, libretro: bool) -> String {
 /// A focused console's facts: "Nintendo · 1983 · 2 games · runs on Moon, an EmuSen core", the empty parts left out.
 pub fn facts(maker: &str, year: i32, games: usize, runs_on: &str) -> String {
     let year = if year > 0 { year.to_string() } else { String::new() };
-    [maker, year.as_str(), self::games(games).as_str(), runs_on].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ")
+    line(&[maker, year.as_str(), self::games(games).as_str(), runs_on])
+}
+
+/// Parts said as one line: "Nintendo · 1990", the empty parts left out, joined as the facts join theirs.
+pub fn line(parts: &[&str]) -> String {
+    parts.iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ")
 }
 
 /// Now, in seconds since 1970.
@@ -160,15 +195,79 @@ pub fn ago(at: i64, now: i64) -> String {
 /// How long ago a game was paused, as Mistress's Home says it (HomeScreen.PausedAgo): "Paused just now", "Paused 1 minute
 /// ago", "Paused 12 minutes ago", "Paused 3 hours ago", "Paused yesterday", "Paused 4 days ago".
 pub fn paused_ago(at: i64, now: i64) -> String {
+    format!("Paused {}", when_ago(at, now))
+}
+
+/// How long ago `at` was at `now`, in the words `paused_ago` and `played_facts` follow: "just now", "1 minute ago",
+/// "12 minutes ago", "3 hours ago", "yesterday", "4 days ago".
+pub fn when_ago(at: i64, now: i64) -> String {
     let minutes = (now - at).max(0) / 60;
     match minutes {
-        0 => "Paused just now".into(),
-        1..=59 => format!("Paused {}", counted(minutes as usize, "minute ago", "minutes ago")),
-        60..=1439 => format!("Paused {}", counted((minutes / 60) as usize, "hour ago", "hours ago")),
-        1440..=2879 => "Paused yesterday".into(),
-        _ => format!("Paused {} days ago", minutes / 1440),
+        0 => "just now".into(),
+        1..=59 => counted(minutes as usize, "minute ago", "minutes ago"),
+        60..=1439 => counted((minutes / 60) as usize, "hour ago", "hours ago"),
+        1440..=2879 => "yesterday".into(),
+        _ => format!("{} days ago", minutes / 1440),
     }
 }
+
+/// A time played, as Eclipse's boards write it (Main.dc.html:56): "3 h 20 min played", "45 min played", "2 h played"; none
+/// for under a minute.
+pub fn played_for(seconds: i64) -> Option<String> {
+    let minutes = seconds.max(0) / 60;
+    match (minutes / 60, minutes % 60) {
+        (0, 0) => None,
+        (0, m) => Some(format!("{m} min played")),
+        (h, 0) => Some(format!("{h} h played")),
+        (h, m) => Some(format!("{h} h {m} min played")),
+    }
+}
+
+/// A game's last play and its time played, as Eclipse's Home says them under the title: "Last played yesterday · 3 h 20 min
+/// played", the second half left out for a game with no time played.
+pub fn played_facts(at: i64, now: i64, seconds: i64) -> String {
+    let last = format!("Last played {}", when_ago(at, now));
+    match played_for(seconds) {
+        Some(played) => format!("{last} {BETWEEN} {played}"),
+        None => last,
+    }
+}
+
+/// The line over a suspended game's name on Eclipse's Home: "Continue · Super Nintendo", or "Continue" with no console.
+pub fn continue_line(console: &str) -> String {
+    if console.is_empty() {
+        CONTINUE_ENTRY.to_owned()
+    } else {
+        format!("{CONTINUE_ENTRY} {BETWEEN} {console}")
+    }
+}
+
+/// The line beside a suspended game's picture on Eclipse's Home (Main.dc.html:59): "Resume point · saved 9:12 PM", the time in
+/// the machine's short form (`clock::short_time`).
+pub fn resume_point(time: &str) -> String {
+    format!("{RESUME_POINT} {BETWEEN} saved {time}")
+}
+
+/// Y on Eclipse's Choose a console, the next order (EclipseConsoles:46-50).
+pub const SORT: &str = "Sort";
+
+/// The art behind Home's disc, as Eclipse's Home names it (Main.dc.html:75).
+pub const GAME_ART: &str = "Game art";
+
+/// The words on the glass under Eclipse's status naming the art behind the disc (Main.dc.html:75): "Game art · Aurora
+/// Drift", drawn in capitals.
+pub fn game_art(title: &str) -> String {
+    format!("{GAME_ART} {BETWEEN} {title}")
+}
+
+/// X on a game, the game's page, as Eclipse's Home names it (Main.dc.html:66, 95).
+pub const OPTIONS: &str = "Options";
+
+/// Start on Home, the Home card it opens, as Eclipse's Home names it (Main.dc.html:97).
+pub const HOME_CARD: &str = "Home card";
+
+/// The suspended game's picture, as Eclipse's Home names it (Main.dc.html:59).
+pub const RESUME_POINT: &str = "Resume point";
 
 /// Continue's facts for a paused game: its console, where the library knows it, and how long ago it was paused.
 pub fn paused_facts(console: &str, at: i64, now: i64) -> String {

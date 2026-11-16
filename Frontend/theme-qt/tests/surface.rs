@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.6.qmltypes");
 const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.6.qmldir");
-const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.8.qmltypes");
+const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.9.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
@@ -73,10 +73,10 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
 #[test]
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
-    let api: [(&str, &[&str], &[&str]); 13] = [
-        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "sections", "section"], &["gamesOf", "search", "firstOf"]),
+    let api: [(&str, &[&str], &[&str]); 12] = [
+        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead", "sections", "section"], &["gamesOf", "search", "firstOf", "artHues", "consolesBy"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
-        ("Device", &["controllers", "family", "clock", "battery", "charging", "network", "bigScreen", "form"], &[]),
+        ("Device", &["controllers", "family", "clock", "shortTime", "battery", "charging", "network", "bigScreen", "form"], &[]),
         (
             "Actions",
             &[],
@@ -86,6 +86,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "favourite",
                 "random",
                 "openConsole",
+                "consoleOptions",
                 "openPlace",
                 "openSection",
                 "home",
@@ -121,9 +122,14 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "places",
                 "continueEntry",
                 "recentEntry",
+                "factLabels",
+                "consoleShows",
+                "consoleSorts",
+                "noGamesLine",
                 "now",
+                "name",
             ],
-            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo"],
+            &["games", "count", "line", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "percent", "shortTime", "gameArt"],
         ),
         ("Help", &["sections"], &["entries"]),
         (
@@ -132,7 +138,6 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             &[],
         ),
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),
-        ("Type", &[], &["size"]),
         ("Rows", &["count"], &rows),
         ("HelpEntries", &["actionLines"], &rows),
     ];
@@ -164,6 +169,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "FocusRing",
             "Frame",
             "Glow",
+            "GroupGridLayout",
             "HelpBar",
             "Moonrise",
             "NormalizedCanvas",

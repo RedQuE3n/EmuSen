@@ -4785,3 +4785,98 @@ needs them. The choice is kept where the library keeps what it knows of a game, 
 lent library's existing `save_edits`, so it follows a renamed game as every edit does. `EmuSen_Backend.md` §30.6 has
 the rule. `lib.rs`, `emusen_platform.h`, the service's minor in `scraping.rs`, the platform client's binding and
 `PlatformLibrary.InterfaceVersion` move to 49 together.
+
+## 58. Interface 50, 2026-11-16: the machine's battery
+
+*Decided by the tester on 2026-11-16 (R-20261116-7):* "The platform library reads /sys/class/power_supply and the front
+end asks it." Qt 6 has no battery interface on any platform (its module list, doc.qt.io/qt-6/qtmodules.html, read
+2026-11-16), so the reader is the platform library's, one per operating system behind one call. Galaxia holds it
+(`Platform/galaxia/src/power.rs`), beside the clock's zone, as another fact read from the system; the C layer is
+`Platform/platform/src/galaxia_power.rs`. Additive: one call, no existing signature or layout changed.
+
+```c
+int32_t emusen_galaxia_battery(const uint8_t *root, size_t root_len, uint8_t *charging);
+```
+
+It answers the level, 0 to 100, and writes 1 or 0 to `charging` where that is not null; `EMUSEN_PLATFORM_ABSENT` where
+the machine has no battery of its own, or where the system has no reader yet (every system but Linux, while Windows and
+macOS are paused, §31); `BAD_STRING` for a root that is not UTF-8. A null `root` reads the kernel's own tree,
+`/sys/class/power_supply`, unless a test has moved the fourth redirect, `EMUSEN_GALAXIA_OVERRIDE_POWER_SUPPLY` (3, a
+value of the existing `emusen_galaxia_set_override`, added with this number), in which case it reads that tree. A
+caller that cannot move a redirect, the platform's own tests, names a made-up tree as `root`.
+
+The redirect has one owner on the front end's side: `emusen-client-fixture`'s `World`, which every client and front-end
+test builds its scratch tree with, moves it to an empty `power_supply` folder of that tree as it moves config and data,
+so a test answers no battery on a desktop, a laptop and the handheld alike until it writes a supply there
+(`World::power_supply`). A test that wants "no battery" leaves the folder empty. No front-end element names a tree:
+`qt-models`' `Battery` always asks with a null root. Counted on 2026-11-16, 60 of `qt-app`'s test files (65 tests) load
+the platform library, each with its tree built by a `World`; the redirect is the process's, as config and data are, and is not
+part of a thread's scope (§3.14 of `EmuSen_Galaxia.md`), since the battery is read on a thread of its own.
+
+### 58.1 Which supply is the machine's battery
+
+The kernel's documented attributes are read: `type`, `capacity`, `status` and `present`
+(`Documentation/ABI/testing/sysfs-class-power`, as docs.kernel.org/admin-guide/abi-testing.html renders it, read
+2026-11-16: `type` is one of "Battery", "UPS", "Mains", "USB", "Wireless"; `capacity` 0 to 100 percent; `status` one of
+"Unknown", "Charging", "Discharging", "Not charging", "Full"; `present` 0 or 1, and "if the property does not exist, the
+battery is considered to be present"). `Documentation/power/power_supply_class.rst` (docs.kernel.org/power/
+power_supply_class.html, read 2026-11-16) says the same of STATUS and CAPACITY.
+
+Neither document tells the machine's battery from a peripheral's. A pad's, a mouse's or a headset's battery is a
+power_supply entry of type Battery too: the desktop this was built on has exactly one entry, `hidpp_battery_0`, a
+Logitech M720 mouse, whose `uevent` reads `POWER_SUPPLY_TYPE=Battery` and `POWER_SUPPLY_SCOPE=Device` (read
+2026-11-16). The attribute that tells them apart is `scope`, which neither document defines, so the rule rests on the
+kernel's source and on UPower, read 2026-11-16 (the kernel at torvalds/linux master, UPower at upower/upower master):
+
+- `include/linux/power_supply.h:101-105` declares the three scopes, `POWER_SUPPLY_SCOPE_UNKNOWN = 0`, `_SYSTEM` and
+  `_DEVICE`, and `drivers/power/supply/power_supply_sysfs.c:142-145` writes them as "Unknown", "System" and "Device".
+- The HID drivers set Device for a peripheral's battery: `drivers/hid/hid-input.c:511-512` for every HID battery and
+  `drivers/hid/hid-logitech-hidpp.c:1807-1808` for Logitech's, the mouse above.
+- `drivers/acpi/battery.c`, a laptop's battery, has no SCOPE property at all, so the machine's own battery commonly
+  has no `scope` file.
+- UPower decides the same question so: `src/linux/up-device-supply-battery.c:547-553` skips a supply whose scope is
+  "device", takes one with none, and warns of any other but "system" while taking it as the system's;
+  `src/linux/up-device-supply.c:647-654` likewise takes a missing or unknown scope as the system's.
+
+So a supply is the machine's battery when its `type` is Battery, its `scope` is not Device (System, Unknown, or no file),
+its `present` is not 0, and its `capacity` reads as a whole number; a level over 100 is held at 100. Nothing contradicts
+this in the sources above. The kernel's strings are compared exactly, as `power_supply_sysfs.c` writes them, less the
+line end. **Not yet confirmed on the handheld**: the Legion Go S did not answer when its tree was to be read
+(2026-11-16), so the names and scopes of its entries are not known here; they are to be recorded in this section when
+it is read.
+
+### 58.2 Charging, and two batteries
+
+`charging` is true while a battery reads Charging or Full and none reads Discharging; Not charging and Unknown are not
+charging. Full counts because a full battery on mains is fed, not drawn from. A machine with two or more batteries of
+its own answers the mean of their levels, rounded half up, and is charging only while none of them discharges. UPower
+weights its composite by each battery's energy when it knows it and otherwise takes the plain mean of the percentages
+(`src/up-daemon.c:278-285`); this interface reads only the documented `capacity`, so it takes UPower's fallback, the
+mean, which is exact for batteries of one size and the level the player would read off each. A battery that does not
+say its level is skipped, not counted as empty.
+
+### 58.3 How often, and what a call costs
+
+Nothing is cached: each call reads the tree again, so an answer is never older than the call. The front end asks on
+start and then every 30 s (`qt-models/src/battery.rs`, `EVERY_MS`), never per frame: the kernel reports whole
+percents, a level moves slowly, and half a minute bounds how long the figure and a plug-in take to show, at a read of
+a few small sysfs files a time. The read runs on a thread of its own, since each attribute read is a call into the
+supply's driver, whose time is not measured here, and an answer that is still out is never joined by another. A call allocates the folder's
+listing (std's `read_dir`, its entries' names) and one path it reuses; each attribute is read into a 32-byte buffer on
+the stack. Avoiding the listing's allocations would need the system's own directory calls, and the call is made twice
+a minute, so they stay.
+
+The platform client wraps it as `Platform::battery(root)` (`Frontend/platform-client/src/galaxia.rs`), answering
+`Option<Battery>`; `qt-models`' `Battery` element holds `level` (-1 for none) and `charging`; `qt-app`'s `Main.qml`
+binds them into each theme host, and `ThemeFeed` feeds `Device.battery` and `Device.charging`. Eclipse draws it on Home
+(`EmuSen_Qt.md` §3.4.8). Themes that stop their resting motion on battery (Constellation, Horizon, Orrery) now see a
+real one. `lib.rs`, `emusen_platform.h` and the platform client's binding move to 50 together; the C#
+`PlatformLibrary.InterfaceVersion` stays at 49, since nothing C# is built or changed, so the C# programs refuse this
+library until they are retired.
+
+Measured by `emusen-galaxia`'s `power` tests (no supplies, a peripheral alone, one system battery at 82 discharging,
+Charging and Full, no scope and Unknown scope, absent and silent batteries, two batteries), `emusen-platform`'s
+`galaxia_power` test of the C call, `emusen-galaxia`'s
+`the_power_supply_redirect_is_read_in_place_of_the_kernel_s_tree`, `emusen-platform-client`'s
+`the_machine_s_battery_comes_from_the_tree_given_and_a_peripheral_s_is_skipped` against the library built from this
+commit (the tree named, then the `World`'s redirect read with no root), and Eclipse Home's oracle, whose battery rows are drawn as the board draws them when the host feeds 82.

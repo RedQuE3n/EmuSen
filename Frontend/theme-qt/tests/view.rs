@@ -37,7 +37,10 @@ fn qt_3_2_each_list_has_the_api_s_roles_and_no_other() {
             "group",
             "groupIndex",
             "groupSize",
-            "groupStart"
+            "groupStart",
+            "played",
+            "glow",
+            "screen"
         ]
     );
     assert_eq!(view::PLACE_ROLES, ["key", "name", "kind", "line", "attention", "count", "available"]);
@@ -62,11 +65,12 @@ fn qt_3_2_each_list_has_the_api_s_roles_and_no_other() {
             "video",
             "hero",
             "lastPlayedWords",
-            "facts"
+            "facts",
+            "consoleName"
         ]
     );
     assert_eq!(view::COLLECTION_ROLES, ["key", "name", "count"]);
-    assert_eq!(view::HELP_ROLES, ["button", "label", "pair", "enabled"]);
+    assert_eq!(view::HELP_ROLES, ["button", "label", "pair", "enabled", "action"]);
 }
 
 #[test]
@@ -83,7 +87,13 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
     assert!(!text(&nes[7]).is_empty(), "the body is the world the kit's Body draws");
     assert_eq!(text(&nes[9]), "emusen", "the engine's kind");
     assert_eq!(nes[5], Cell::Whole(1));
-    assert_eq!(nes[12..], [Cell::Whole(0), Cell::Whole(0), Cell::Whole(1), Cell::Whole(0)], "the one console is its maker's group alone, with none before it");
+    assert_eq!(nes[12..16], [Cell::Whole(0), Cell::Whole(0), Cell::Whole(1), Cell::Whole(0)], "the one console is its maker's group alone, with none before it");
+    let played = v.catalog.played.iter().filter(|(_, at)| *at > 0).count() as i32;
+    assert_eq!(nes[16], Cell::Whole(played), "the console's played games, as the catalogue records them");
+    let Cell::Number(hue) = nes[6] else { panic!("the hue is a number") };
+    let body = emusen_kit_core::world::glow(hue, true).0;
+    assert_eq!(nes[17], Cell::Text(body.to_hex()), "the console's colour is its body's glow");
+    assert_eq!(emusen_kit_core::tokens::Colour::parse(text(&nes[17])), Some(body));
 
     let places = view::places(v, &view::lines_of(common::HOME_LINES), &[]);
     assert!(places.iter().all(|r| r.len() == view::PLACE_ROLES.len()));
@@ -115,6 +125,8 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
         let Cell::Number(shape) = g[3] else { panic!("the cover's shape is a number: {:?}", g[3]) };
         assert!((shape - 0.6993).abs() < 1e-4, "the NES cover 0.6993 wide to 1 tall, the table's 1.43 turned: {shape}");
         assert_eq!((&g[6], text(&g[16])), (&Cell::Flag(false), ""), "never played, so no words for it");
+        assert_eq!(text(&g[18]), read.nes_name, "the console's name alone, as the facts begin");
+        assert!(text(&g[17]).starts_with(text(&g[18])), "the facts lead with the same name: {:?}", g[17]);
     }
     // A game whose console the systems table lacks is drawn 3 wide by 4 tall, as any cover with no shape; it was 0, which
     // the reference look's rows drew square and Horizon's games drew with no width.

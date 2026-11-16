@@ -22,6 +22,8 @@ struct Fake {
     /// The games hidden in games.db, and the player's settings.
     hidden: Vec<String>,
     settings: serde_json::Value,
+    /// When each played game was last played, by path.
+    played: Vec<(String, i64)>,
     fail: Mutex<Option<String>>,
 }
 
@@ -46,6 +48,9 @@ impl LibrarySource for Fake {
     }
     fn settings(&self) -> Result<serde_json::Value, String> {
         Ok(self.settings.clone())
+    }
+    fn played(&self, games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
+        Ok(self.played.iter().filter(|(p, _)| games.iter().any(|g| &g.path == p)).cloned().collect())
     }
     fn engines(&self, _: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
         Ok(self.engines.clone())
@@ -119,6 +124,16 @@ fn the_places_come_first_then_each_console_with_games_in_the_table_s_order() {
 }
 
 #[test]
+fn a_console_s_row_counts_its_played_games() {
+    let mut source = fake();
+    *source.games.lock().unwrap() = games(&[("nes", 3), ("snes", 5)]);
+    source.played = vec![("/roms/snes/1".into(), 1_700_000_000), ("/roms/snes/4".into(), 1_700_000_100), ("/roms/nes/0".into(), 1_700_000_200)];
+    let rows = refresh(&source).unwrap().rows;
+    let played: Vec<(&str, usize, usize)> = rows.iter().filter(|r| r.kind == Some(Kind::Console)).map(|r| (r.key.as_str(), r.count, r.played)).collect();
+    assert_eq!(played, [("nes", 3, 1), ("snes", 5, 2)], "two of the Super Nintendo's five games were played, one of the NES's three");
+}
+
+#[test]
 fn a_row_leads_to_its_games_by_title_and_recent_by_when() {
     let source = fake();
     let read = refresh(&source).unwrap();
@@ -186,6 +201,7 @@ fn a_paused_game_is_said_as_mistress_s_home_says_it() {
 #[test]
 fn an_engine_is_named_by_its_own_info_and_the_port_s_mark_is_dropped() {
     assert_eq!((without_port_mark("VenusRT"), without_port_mark("PCSX2"), without_port_mark("RT")), ("Venus", "PCSX2", "RT"));
+    assert_eq!((without_port_mark("MercuryRT (Rust)"), without_port_mark("Mesen (Rust)")), ("Mercury", "Mesen"));
     let own = CoreRow { engine: Some("Venus".into()), name: Some("VenusRT".into()), ..CoreRow::default() };
     let hosted = CoreRow {
         engine: Some("pcsx2".into()),
@@ -197,6 +213,9 @@ fn an_engine_is_named_by_its_own_info_and_the_port_s_mark_is_dropped() {
     assert_eq!(engine_shown("Venus", &cores), Engine { id: "Venus".into(), name: "Venus".into(), libretro: false });
     assert_eq!(engine_shown("pcsx2", &cores), Engine { id: "pcsx2".into(), name: "PCSX2".into(), libretro: true });
     assert_eq!(engine_shown("Moon", &cores).name, "Moon", "an engine the listing lacks keeps its stored name");
+    let lacked = engine_shown("MoonRT (Rust)", &cores);
+    assert_eq!(lacked, Engine { id: "MoonRT (Rust)".into(), name: "Moon".into(), libretro: false }, "a lacked port shows its original name");
+    assert_eq!(engine_shown("MarsRT", &[]).name, "Mars", "an empty listing too");
 }
 
 #[test]
@@ -352,6 +371,18 @@ fn the_themes_group_and_back_entries_go_where_the_canvases_put_them() {
 }
 
 #[test]
+fn qt_3_4_9_the_makers_entry_stands_on_the_triggers_where_the_group_s_would() {
+    use emusen_kit_core::input::UiButton;
+    use emusen_qt_models::help::{entries_grouped, pair_of, GROUP, MAKER};
+    let words: Vec<&str> = entries_grouped(Screen::Consoles, Some(MAKER), false).iter().map(|e| e.1).collect();
+    assert_eq!(words, ["Open", "Back", "Maker", "Favourites", "Random game"], "R-20261115-17: LT RT Maker where LB RB Group stood");
+    assert_eq!((MAKER.0, pair_of(MAKER.0), MAKER.2), (UiButton::First, Some(UiButton::Last), None), "LT with RT, no action: the theme answers it");
+    assert!(!entries_grouped(Screen::Consoles, Some(MAKER), true).contains(&GROUP), "the shoulders' entry is not drawn beside it");
+    assert_eq!(entries_grouped(Screen::Consoles, Some(GROUP), true), emusen_qt_models::help::entries_with(Screen::Consoles, true, true));
+    assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\nhome Menu\n", "the declared actions unchanged");
+}
+
+#[test]
 fn qt_3_4_2_a_console_s_cover_shape_is_its_table_s_turned_with_one_fallback() {
     use emusen_crystal_client::shapes::SystemRow;
     use emusen_qt_models::library::cover_shape;
@@ -397,4 +428,50 @@ fn qt_7_8_g2_a_hidden_game_leaves_every_place_until_settings_lists_hidden_games(
     source.settings = serde_json::json!({ "ShowHiddenGames": true });
     let rows = refresh(&source).unwrap().rows;
     assert_eq!(rows.iter().map(|r| r.count).collect::<Vec<_>>(), [5, 1, 4, 3, 2], "listed again with the rest");
+}
+
+#[test]
+fn eclipse_s_home_says_a_game_s_last_play_its_time_played_and_continue_as_its_board_does() {
+    use emusen_qt_models::words::{continue_line, played_facts};
+    let at = 1_000_000;
+    // Main.dc.html:56, "Last played yesterday · 3 h 20 min played".
+    assert_eq!(played_facts(at, at + 86_400, 3 * 3600 + 20 * 60), "Last played yesterday · 3 h 20 min played");
+    assert_eq!(played_facts(at, at + 720, 45 * 60), "Last played 12 minutes ago · 45 min played");
+    assert_eq!(played_facts(at, at + 7200, 2 * 3600), "Last played 2 hours ago · 2 h played");
+    assert_eq!(played_facts(at, at + 3 * 86_400, 0), "Last played 3 days ago", "no time played, no second half");
+    assert_eq!(played_facts(at, at + 30, 59), "Last played just now", "under a minute played is none");
+    // Main.dc.html:53, "CONTINUE · SUPER NINTENDO", its capitals the font's.
+    assert_eq!(continue_line("Super Nintendo"), "Continue · Super Nintendo");
+    assert_eq!(continue_line(""), "Continue");
+}
+
+#[test]
+fn eclipse_s_home_names_x_options_and_start_the_home_card_and_leaves_select_s_search_out_of_its_bar() {
+    use emusen_qt_models::help::{card_named, entries, Screen};
+    let words = |s: Screen| card_named(entries(s).to_vec()).iter().map(|e| e.1).collect::<Vec<_>>();
+    // Main.dc.html:94-97: "A Resume, X Options, Y Favourite, MENU Home card".
+    assert_eq!(words(Screen::Home), ["Resume", "Options", "Favourite", "Home card"]);
+    assert_eq!(words(Screen::HomeShelf), ["Play", "Options", "Favourite", "Home card"]);
+    let actions = |s: Screen| card_named(entries(s).to_vec()).iter().map(|e| e.2).collect::<Vec<_>>();
+    assert_eq!(actions(Screen::Home), [None, Some("gamePage"), Some("favourite"), Some("home")], "each still acts as before");
+}
+
+#[test]
+fn eclipse_s_times_are_said_in_the_locale_s_short_form() {
+    use emusen_qt_models::clock::short_time_in;
+    use emusen_qt_models::words::resume_point;
+    // 1970-01-01 21:41 and 21:12 UTC: the board's status (Main.dc.html:49) and resume row (:59) under en_US.
+    let (status, saved) = (21 * 3600 + 41 * 60, 21 * 3600 + 12 * 60);
+    assert_eq!(short_time_in(status, true, "en_US"), "9:41 PM");
+    assert_eq!(resume_point(&short_time_in(saved, true, "en_US")), "Resume point · saved 9:12 PM");
+    // A 24-hour locale gives its own form, so no form is the program's.
+    assert_eq!(short_time_in(status, true, "de_DE"), "21:41");
+    assert_eq!(short_time_in(status, true, "en_GB"), "21:41");
+}
+
+#[test]
+fn eclipse_s_art_pill_says_the_game_s_title() {
+    // Main.dc.html:75, "GAME ART · AURORA DRIFT", drawn in capitals from these words.
+    assert_eq!(emusen_qt_models::words::game_art("Aurora Drift"), "Game art · Aurora Drift");
+    assert_eq!(emusen_qt_models::game_page::place(0, 24), "1 of 24", "Main.dc.html:80");
 }

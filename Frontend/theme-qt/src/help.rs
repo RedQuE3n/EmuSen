@@ -1,7 +1,4 @@
-//! `Help`, the help bar's entries for what a theme's focus is on (EmuSen_Qt.md §3.2): `entries(kind)` gives the same
-//! list each time, with the roles the kit's `HelpBar` reads and the actions `Frame` declares, from emusen-qt-models' help.rs;
-//! `entries(kind, {group, back, accept})` the same with the shoulders' Group and B's Back added where the kind takes them,
-//! and A's entry marked not `enabled` when `accept` is false.
+//! `Help`, the help bar's entries for what a theme's focus is on, from emusen-qt-models' help.rs (EmuSen_Qt.md §3.2, `Help`).
 
 use crate::glue::ffi;
 use crate::view::HELP_ROLES;
@@ -9,7 +6,7 @@ use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QMap, QMapPair_QString_QVariant, QModelIndex, QString, QVariant};
-use emusen_qt_models::help::{self, action_lines, entries_with, Entry, Screen};
+use emusen_qt_models::help::{self, action_lines, entries_grouped, entries_with, Entry, Screen};
 use emusen_kit_core::input::UiButton;
 
 #[cxx_qt::bridge]
@@ -60,8 +57,7 @@ pub mod qobject {
     extern "RustQt" {
         #[qinvokable]
         fn entries(self: &ThemeHelp, kind: HelpKind) -> *mut ThemeHelpEntries;
-        /// The kind's list with `group` (LB RB Group) and `back` (B Back where the kind has none) added as asked, and
-        /// A's entry not `enabled` when `accept` is false (the host would decline what A does).
+        /// The kind's list with the entries `group`, `back` and `accept` ask for (EmuSen_Qt.md §3.2, `Help`).
         #[qinvokable]
         #[cxx_name = "entries"]
         fn entries_with(self: &ThemeHelp, kind: HelpKind, flags: &QMap_QString_QVariant) -> *mut ThemeHelpEntries;
@@ -110,38 +106,47 @@ pub fn screen_of(kind: HelpKind) -> Screen {
     }
 }
 
-/// What a list may differ by: the group's entry added, B's added, and A's entry enabled; a list's place in a kind's eight.
-pub const FLAGS: [(bool, bool, bool); 8] = [
-    (false, false, true),
-    (true, false, true),
-    (false, true, true),
-    (true, true, true),
-    (false, false, false),
-    (true, false, false),
-    (false, true, false),
-    (true, true, false),
-];
+/// What a list may differ by, a kind's 72 lists: group, back, accept, actions kept, and `Names` (EmuSen_Qt.md §3.2).
+pub const FLAGS: [(Option<Entry>, bool, bool, bool, Names); 72] = {
+    const G: [Option<Entry>; 3] = [None, Some(help::GROUP), Some(help::MAKER)];
+    const N: [Names; 3] = [Names::Own, Names::Card, Names::Options];
+    let mut flags = [(None, false, true, true, Names::Own); 72];
+    let mut f = 0;
+    while f < 72 {
+        flags[f] = (G[f % 3], (f / 3) % 2 == 1, (f / 6) % 2 == 0, (f / 12) % 2 == 0, N[f / 24]);
+        f += 1;
+    }
+    flags
+};
 
-/// Eight lists for each kind, one for each of `FLAGS`, the singleton's children.
+/// How a list's entries are named: the screen's own, Eclipse Home's, or Eclipse's Choose a console's Sort and Options.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Names {
+    Own,
+    Card,
+    Options,
+}
+
+/// Seventy-two lists for each kind, one for each of `FLAGS`, the singleton's children.
 pub struct ThemeHelpRust {
-    lists: [[*mut qobject::ThemeHelpEntries; 8]; 7],
+    lists: [[*mut qobject::ThemeHelpEntries; 72]; 7],
     sections: *mut qobject::ThemeHelpEntries,
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [[std::ptr::null_mut(); 8]; 7], sections: std::ptr::null_mut() }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 72]; 7], sections: std::ptr::null_mut() }
     }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeHelp {
     fn initialize(mut self: Pin<&mut Self>) {
         for (i, kind) in KINDS.into_iter().enumerate() {
-            for (f, (group, back, accept)) in FLAGS.into_iter().enumerate() {
+            for (f, (group, back, accept, actions, names)) in FLAGS.into_iter().enumerate() {
                 let list = ffi::new_help_entries(self.as_mut().upcast_pin());
                 // Safety: the list was just made, a child of this singleton.
                 if let Some(entries) = unsafe { list.as_mut() } {
-                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept);
+                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept, actions, names);
                 }
                 self.as_mut().rust_mut().lists[i][f] = list;
             }
@@ -157,17 +162,25 @@ impl cxx_qt::Initialize for qobject::ThemeHelp {
 
 impl qobject::ThemeHelp {
     pub fn entries(&self, kind: HelpKind) -> *mut qobject::ThemeHelpEntries {
-        self.list(kind, false, false, true)
+        self.list(kind, None, false, true, true, Names::Own)
     }
 
     pub fn entries_with(&self, kind: HelpKind, flags: &QMap<QMapPair_QString_QVariant>) -> *mut qobject::ThemeHelpEntries {
         let flag = |name: &str, unset: bool| flags.get(&QString::from(name)).and_then(|v| v.value::<bool>()).unwrap_or(unset);
-        self.list(kind, flag("group", false), flag("back", false), flag("accept", true))
+        let group = flag("group", false).then_some(if flag("triggers", false) { help::MAKER } else { help::GROUP });
+        let names = if flag("card", false) {
+            Names::Card
+        } else if flag("options", false) {
+            Names::Options
+        } else {
+            Names::Own
+        };
+        self.list(kind, group, flag("back", false), flag("accept", true), flag("actions", true), names)
     }
 
     /// A kind's list with the entries asked for added.
-    pub fn list(&self, kind: HelpKind, group: bool, back: bool, accept: bool) -> *mut qobject::ThemeHelpEntries {
-        let f = FLAGS.iter().position(|x| *x == (group, back, accept)).unwrap_or(0);
+    pub fn list(&self, kind: HelpKind, group: Option<Entry>, back: bool, accept: bool, actions: bool, names: Names) -> *mut qobject::ThemeHelpEntries {
+        let f = FLAGS.iter().position(|x| *x == (group, back, accept, actions, names)).unwrap_or(0);
         KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.lists[i][f])
     }
 }
@@ -193,11 +206,22 @@ impl Default for ThemeHelpEntriesRust {
 
 impl qobject::ThemeHelpEntries {
     /// The screen whose entries the list holds, with the added entries asked for, set once when it is made.
-    fn show(mut self: Pin<&mut Self>, screen: Screen, group: bool, back: bool, accept: bool) {
+    fn show(mut self: Pin<&mut Self>, screen: Screen, group: Option<Entry>, back: bool, accept: bool, actions: bool, names: Names) {
         self.as_mut().rust_mut().screen = screen;
         self.as_mut().rust_mut().accept = accept;
-        self.as_mut().rust_mut().list = entries_with(screen, group, back);
-        self.as_mut().rust_mut().action_lines = QString::from(action_lines(screen).as_str());
+        let list = entries_grouped(screen, group, back);
+        let list = if actions { list } else { help::without_actions(list) };
+        let (list, lines) = match names {
+            Names::Own => (list, action_lines(screen)),
+            Names::Card => (help::card_named(list), action_lines(screen)),
+            Names::Options => {
+                let named = help::options_named(list);
+                let lines = help::lines_of(screen, &named);
+                (named, lines)
+            }
+        };
+        self.as_mut().rust_mut().list = list;
+        self.as_mut().rust_mut().action_lines = QString::from(lines.as_str());
     }
 
     /// A list of the entries given, declaring no action, set once when it is made.
@@ -222,7 +246,7 @@ impl qobject::ThemeHelpEntries {
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some((button, label, _)) = self.list.get(index.row() as usize) else {
+        let Some((button, label, action)) = self.list.get(index.row() as usize) else {
             return QVariant::default();
         };
         match role {
@@ -230,6 +254,7 @@ impl qobject::ThemeHelpEntries {
             1 => QVariant::from(&QString::from(*label)),
             2 => QVariant::from(&help::pair_of(*button).map_or(-1, |b| b.index() as i32)),
             3 => QVariant::from(&(self.accept || *button != UiButton::Accept)),
+            4 => QVariant::from(&QString::from(action.unwrap_or_default())),
             _ => QVariant::default(),
         }
     }

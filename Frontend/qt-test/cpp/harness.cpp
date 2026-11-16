@@ -16,6 +16,7 @@
 #include <QtCore/QSignalMapper>
 #include <QtGui/QAccessible>
 #include <QtGui/QColor>
+#include <QtGui/QFontInfo>
 #include <QtGui/QFontMetricsF>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QImage>
@@ -223,6 +224,8 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
         node["bold"] = font.weight() >= QFont::Bold;
         node["face"] = font.family();
+        node["drawn"] = QFontInfo(font).family();
+        node["weight"] = QFontInfo(font).weight(); // the weight Qt matched, as a CSS weight // the family Qt matched, a fallback's where the face asked for is missing (QFontInfo)
         const QRectF laid = glyphBox(item), glyphs = item->mapRectToScene(laid);
         node["glyphs"] = QJsonArray{glyphs.x(), glyphs.y(), glyphs.width(), glyphs.height()};
         // The glyphs' own four corners in the scene, which a stack's rule holds uncovered (EmuSen_Kit.md §7.33).
@@ -638,7 +641,12 @@ bool harness_grab(QObject& window, const QString& path)
 QString harness_property(QObject& root, const QString& object_name, const QString& property)
 {
     QObject* object = root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);
-    return object != nullptr ? object->property(property.toUtf8().constData()).toString() : QString();
+    // A grouped property by its path, "border.width": each part but the last an object property of the one before.
+    const QStringList path = property.split(QLatin1Char('.'));
+    for (qsizetype i = 0; object != nullptr && i + 1 < path.size(); ++i) {
+        object = object->property(path[i].toUtf8().constData()).value<QObject*>();
+    }
+    return object != nullptr ? object->property(path.last().toUtf8().constData()).toString() : QString();
 }
 
 QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module, const QString& name)
@@ -827,11 +835,11 @@ bool animating(QObject* object)
     return (object->inherits("QQuickFrameAnimation") || object->inherits("QQuickAbstractAnimation")) && object->property("running").toBool();
 }
 
-// Whether an animation repeats without end, itself or a group it runs in: a design's resting motion, not a transition.
+// Whether an animation declares it repeats without end, itself or a group it runs in: a design's resting motion; a frame clock declares no end (EmuSen_Kit.md §7.49).
 bool looping(QObject* object)
 {
     for (QObject* at = object; at != nullptr; at = at->parent()) {
-        if (at->inherits("QQuickFrameAnimation") || (at->inherits("QQuickAbstractAnimation") && at->property("loops").toInt() < 0)) {
+        if (at->inherits("QQuickAbstractAnimation") && at->property("loops").toInt() < 0) {
             return true;
         }
     }

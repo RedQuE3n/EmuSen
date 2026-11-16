@@ -145,4 +145,9 @@ fn kit_7_116_a_corona_disc_holds_its_box_its_rim_s_colour_and_its_glows() {
     let halo_reach = halo.spread + 2.0 * halo.blur;
     assert_eq!(light(scene.colours_at(&[out(halo_reach + 4.0)])[0]), 0, "nothing past the halo's reach");
     scene.assert_quiet();
+
+    // A glow deleted while its disc lives: the delegate reads its entry as none, with no warning (§7.116).
+    assert!(scene.destroy("goneGlow"), "the bare disc's glow is deleted");
+    scene.wait(100);
+    scene.assert_quiet();
 }

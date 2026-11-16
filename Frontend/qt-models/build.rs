@@ -35,6 +35,7 @@ fn main() {
             "src/marks_object.rs",
             "src/screens.rs",
             "src/clock.rs",
+            "src/battery.rs",
             "src/session_model.rs",
             "src/question_model.rs",
             "src/pause_model.rs",
@@ -50,7 +51,7 @@ fn main() {
             "src/game_page_model.rs",
         ])
         .include_dir("cpp")
-        .cpp_files(["cpp/session_pictures.cpp", "cpp/folders.cpp"])
+        .cpp_files(["cpp/session_pictures.cpp", "cpp/folders.cpp", "cpp/short_time.cpp"])
         .qt_module("Quick")
         .qt_module("Qml")
         .build()

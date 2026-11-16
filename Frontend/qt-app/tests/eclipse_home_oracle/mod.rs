@@ -832,6 +832,32 @@ pub fn oracle(backend: &str) {
     if walked != ["tile.0", "button.0", "button.1", "search", "button.0", "tile.0"] {
         differences.push(format!("the pad walks {walked:?}"));
     }
+    // A cover written again at its path, as a scrape replaces one, is read again once the library is fed: the shown game's
+    // second field takes the new picture's hue, not the hue read before.
+    {
+        let cover = |i: usize| {
+            let game = view.game(&rom(&world, GAMES[i].0, GAMES[i].1)).expect("a game of the library");
+            if game.hero.is_empty() { game.cover } else { game.hero }
+        };
+        let (shown, other) = (cover(0), cover(2));
+        let was = emusen_qt_models::art_hues::hues_of_file(&shown, 3);
+        std::fs::copy(&other, &shown).expect("the cover written again");
+        let now = emusen_qt_models::art_hues::hues_of_file(&shown, 3);
+        assert!(now.len() > 1 && was.len() > 1 && emusen_kit_core::world::wrap_hue(now[1] - was[1]).abs() > 10.0, "the new picture's hues differ: {was:?} {now:?}");
+        host::library(object(screen)).expect("Library").show(&view, "[]");
+        let mut seen = f64::NAN;
+        for _ in 0..40 {
+            scene.wait(50);
+            let tree = scene.tree();
+            seen = Colour::parse(&read(&tree, "backdropField.1", "paint")).expect("a field's paint").to_hsl().0;
+            if emusen_kit_core::world::wrap_hue(seen - now[1]).abs() <= 2.0 {
+                break;
+            }
+        }
+        if emusen_kit_core::world::wrap_hue(seen - now[1]).abs() > 2.0 {
+            differences.push(format!("{backend}: the cover written again keeps the hue {seen:.1} where its new picture gives {:.1}", now[1]));
+        }
+    }
     assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));
     scene.assert_quiet();
     // The host drops the screen and its engine and places it again, as theme-check's audit places each screen: nothing is logged.

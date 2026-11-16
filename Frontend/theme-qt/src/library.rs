@@ -84,9 +84,15 @@ pub struct ThemeLibraryRust {
     lines: Vec<(String, bool)>,
     declined: Vec<String>,
     art_hues_read: i32,
-    /// Each picture's hues as read, by its path and how many were asked; a picture being read is listed with none.
-    hues: HashMap<(String, usize), Vec<f64>>,
+    /// Each picture's hues as read, by its path, when its file last changed and how many were asked; a picture being read is
+    /// listed with none, and one written again, or written after it was first asked for, is read again.
+    hues: HashMap<Asked, Vec<f64>>,
+    /// The one thread that reads pictures, one after another, started at the first asked for; it ends with the library.
+    reader: Option<std::sync::mpsc::Sender<Asked>>,
 }
+
+/// A picture's hues asked for: its path, when its file last changed (none while there is no file), and how many.
+type Asked = (String, Option<std::time::SystemTime>, usize);
 
 impl Default for ThemeLibraryRust {
     fn default() -> Self {
@@ -109,6 +115,7 @@ impl Default for ThemeLibraryRust {
             declined: Vec::new(),
             art_hues_read: 0,
             hues: HashMap::new(),
+            reader: None,
         }
     }
 }
@@ -153,22 +160,36 @@ impl qobject::ThemeLibrary {
         if path.is_empty() || most <= 0 {
             return out;
         }
-        let asked = (path, most as usize);
+        let changed = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        let asked = (path, changed, most as usize);
         if let Some(hues) = self.hues.get(&asked) {
             hues.iter().for_each(|h| out.append(*h));
             return out;
         }
         self.as_mut().rust_mut().hues.insert(asked.clone(), Vec::new());
-        let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let hues = emusen_qt_models::art_hues::hues_of_file(&asked.0, asked.1);
-            let _ = qt.queue(move |mut library| {
-                library.as_mut().rust_mut().hues.insert(asked, hues);
-                let read = library.art_hues_read.wrapping_add(1);
-                library.as_mut().rust_mut().art_hues_read = read;
-                library.as_mut().art_hues_read_changed();
+        if self.reader.is_none() {
+            let (send, take) = std::sync::mpsc::channel::<Asked>();
+            let qt = self.qt_thread();
+            std::thread::spawn(move || {
+                for asked in take {
+                    let hues = emusen_qt_models::art_hues::hues_of_file(&asked.0, asked.2);
+                    let sent = qt.queue(move |mut library| {
+                        library.as_mut().rust_mut().hues.insert(asked, hues);
+                        let read = library.art_hues_read.wrapping_add(1);
+                        library.as_mut().rust_mut().art_hues_read = read;
+                        library.as_mut().art_hues_read_changed();
+                    });
+                    // The library is gone: nothing is left to read for.
+                    if sent.is_err() {
+                        break;
+                    }
+                }
             });
-        });
+            self.as_mut().rust_mut().reader = Some(send);
+        }
+        if let Some(reader) = &self.reader {
+            let _ = reader.send(asked);
+        }
         out
     }
 

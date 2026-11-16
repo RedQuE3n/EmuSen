@@ -1791,7 +1791,10 @@ own (R-20261115-7). Also not drawn, because the program has nothing for them: th
 each at its place, size, corners, turn, blur and opacity, in the kit's `Backdrop` (`EmuSen_Kit.md` §7.118). Only each
 field's hue is the shown game's: the field keeps the board colour's saturation, lightness and alpha. The program reads a
 game's art (its hero, else its cover) once, off the GUI thread, for its hues, most prominent first (`qt-models/src/art_hues.rs`,
-`Library.artHues`); the three large fields take the first three and the two streaks, pale tints of the first two fields on
+`Library.artHues`). A reading is kept by the picture's path and the time its file last changed, so a cover written later
+or written again is read again once the library is fed (until 2026-11-15 it kept the first reading, none for a cover not
+yet written); one thread reads the pictures one after another, started at the first asked for and ended with the library,
+as no thread pool is in the tree and Qt's `QThreadPool` is not wrapped by cxx-qt-lib; the three large fields take the first three and the two streaks, pale tints of the first two fields on
 the board, take those two hues. Where the art has fewer than three, the board's own offsets spread them: its hues are 168,
 251 and 218 degrees, the second 83 past the first and the third 50 past it, so one hue h gives h, h + 83 and h + 50, and two
 give h1, h2 and the point 50/83 of the way from h1 to h2 the short way round. Art with no hue (greys) or a game with no art

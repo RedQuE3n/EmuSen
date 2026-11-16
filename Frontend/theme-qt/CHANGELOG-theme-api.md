@@ -20,7 +20,8 @@ or shadow. 1.3 is another piece's.
   played, "Last played yesterday · 3 h 20 min played"; and "Continue · Super Nintendo" (`qt-models/src/words.rs`). The host
   now feeds `Session.played` from games.db's seconds played. Eclipse's Home draws all three, as its board does.
 - **`Library.artHues(key, most)`**, **`Library.artHuesRead`**: a game's art's hues in degrees, most prominent first, read
-  once a picture off the GUI thread by `qt-models/src/art_hues.rs`; `artHuesRead` moves when a reading lands or the
+  once a picture, and again when its file has changed since, by one reading thread off the GUI thread (pictures read one
+  after another, so a library of covers starts no thread each) with `qt-models/src/art_hues.rs`; `artHuesRead` moves when a reading lands or the
   library is fed, so a binding asks again. Eclipse's Home colours its backdrop's fields and its disc's corona with them.
 - **`Help.entries(kind, { card: true })`**: the kind's entries as Eclipse's Home names them, X "Options" and Start "Home
   card" (the card it opens), and no Select search in the bar, its action still the frame's (`qt-models/src/help.rs`,

@@ -212,7 +212,7 @@ fn qt_7_7_e_every_console_is_listed_those_an_engine_runs_first_by_year() {
 
     // Mistress's pane: games, engine, firmware, the CRT and the first choice of the console's own, then what they are.
     let snes = view.pane(0);
-    assert_eq!(snes.sentence, "Super Nintendo · 5 games · engine VenusRT");
+    assert_eq!(snes.sentence, "Super Nintendo · 5 games · engine Venus", "the original name, R-20261116-14");
     assert_eq!(snes.lines, ["✓ No firmware needed", "CRT profile Off · SA-1 catch-up After every S-CPU instruction (exact)"]);
     assert_eq!(snes.muted, ["What every Super Nintendo game shares, unless the game's own options say otherwise."]);
     assert_eq!(view.pane(1).lines[0], "No BIOS of your own: the open replacement runs in its place", "a console that starts empty names its BIOS");
@@ -294,7 +294,7 @@ fn qt_7_7_e_engine_is_a_page_of_choices_on_the_value_cores_make_default_writes()
     assert_eq!((view.pane(1).sentence.as_str(), view.pane(1).tones.as_slice()), ("✓ No firmware needed", &[Tone::Success][..]));
     assert!(page[5].held, "Shader levers wait for the CRT to be chosen");
     let pane = view.pane(0);
-    assert_eq!(pane.sentence, "VenusRT, the Super Nintendo's engine: every Super Nintendo game opens on it unless the game's own options choose another.");
+    assert_eq!(pane.sentence, "Venus, the Super Nintendo's engine: every Super Nintendo game opens on it unless the game's own options choose another.");
     assert_eq!(pane.muted, ["Snes9x can be chosen here too; this is the same setting as Cores' Make Default."]);
     assert_eq!(view.help(), emusen_qt_models::help::Screen::SettingsConsole);
 
@@ -303,7 +303,7 @@ fn qt_7_7_e_engine_is_a_page_of_choices_on_the_value_cores_make_default_writes()
     assert_eq!(view.help(), emusen_qt_models::help::Screen::SettingsChoices);
     let choices = view.rows();
     assert_eq!(choices.iter().map(|r| (r.label.as_str(), r.value.as_str(), r.marked, r.kind)).collect::<Vec<_>>(), [
-        ("VenusRT", "Default", true, RowKind::Choice),
+        ("Venus", "Default", true, RowKind::Choice),
         ("Snes9x", "✓ Installed", false, RowKind::Choice)
     ]);
     assert_eq!(view.pane(1).sentence, "Snes9x would run every Super Nintendo game.");

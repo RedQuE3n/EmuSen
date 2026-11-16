@@ -68,7 +68,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     }
     wait_for(&mut scene, "settingsModel", "focused", "5", 1000);
     scene.wait(200);
-    assert_eq!(scene.property("settingsSentence", "text"), "Super Nintendo · 5 games · engine VenusRT (Rust)");
+    assert_eq!(scene.property("settingsSentence", "text"), "Super Nintendo · 5 games · engine Venus", "the original name, R-20261116-14");
     hold(&mut scene, "SettingsConsoles", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // Its page: the engine, firmware, cards, the core's own row, then the picture's rows.

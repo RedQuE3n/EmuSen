@@ -205,6 +205,15 @@ pub fn continue_line(console: &str) -> String {
     }
 }
 
+/// The line beside a suspended game's picture on Eclipse's Home (Main.dc.html:59): "Resume point · saved 21:12", the time in
+/// the clock's own form (`clock::clock_time`).
+pub fn resume_point(time: &str) -> String {
+    format!("{RESUME_POINT} {BETWEEN} saved {time}")
+}
+
+/// The suspended game's picture, as Eclipse's Home names it (Main.dc.html:59).
+pub const RESUME_POINT: &str = "Resume point";
+
 /// Continue's facts for a paused game: its console, where the library knows it, and how long ago it was paused.
 pub fn paused_facts(console: &str, at: i64, now: i64) -> String {
     if console.is_empty() {

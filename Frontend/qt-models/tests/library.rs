@@ -413,3 +413,17 @@ fn eclipse_s_home_says_a_game_s_last_play_its_time_played_and_continue_as_its_bo
     assert_eq!(continue_line("Super Nintendo"), "Continue · Super Nintendo");
     assert_eq!(continue_line(""), "Continue");
 }
+
+#[test]
+fn eclipse_s_resume_point_is_said_with_the_time_in_the_clock_s_form() {
+    use emusen_qt_models::clock::clock_time;
+    use emusen_qt_models::words::resume_point;
+    // Main.dc.html:59, "Resume point · saved 9:12 PM", the time as the program's clock writes it.
+    assert_eq!(resume_point("21:12"), "Resume point · saved 21:12");
+    let at = 1_000_000;
+    let (time, later) = (clock_time(at), clock_time(at + 3600 + 60));
+    let hm = |t: &str| -> (u32, u32) { (t[..2].parse().unwrap(), t[3..].parse().unwrap()) };
+    assert!(time.len() == 5 && &time[2..3] == ":", "hh:mm, as the clock reads the wall clock: {time}");
+    let ((h, m), (h2, m2)) = (hm(&time), hm(&later));
+    assert_eq!(((h + 1 + (m + 1) / 60) % 24, (m + 1) % 60), (h2, m2), "an hour and a minute later reads so: {time} {later}");
+}

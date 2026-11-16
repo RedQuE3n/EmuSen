@@ -1052,5 +1052,12 @@ Module {
             lineNumber: 82
             Parameter { name: "console"; type: "QString" }
         }
+        Method {
+            name: "resumePoint"
+            type: "QString"
+            isMethodConstant: true
+            lineNumber: 83
+            Parameter { name: "paused_since"; type: "double" }
+        }
     }
 }

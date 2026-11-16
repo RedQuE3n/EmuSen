@@ -21,13 +21,17 @@ Walkable {
     property bool live: true
     // The pill's place in its row, which names its parts for a reader and the tests.
     property int place
+    // An outlined pill's line, the board's own where it has one.
+    property color outline: Tokens.border
     // The pill's one colour: its fill when filled, else its outline.
-    readonly property color paint: root.filled ? Tokens.accent : Tokens.border
+    readonly property color paint: root.filled ? Tokens.accent : root.outline
+    // The outline's width, inside the pill's box; lead and trail are measured inside it, as CSS pads inside a border.
+    readonly property real line: root.filled ? 0 : Tokens.hoverBorder
     // Round at both ends, as every pill on the boards is.
     readonly property real radius: root.height / 2
     readonly property Item glyph: glyphItem
     readonly property Item words: wordsItem
-    width: wordsItem.x + wordsItem.implicitWidth + root.trail * root.unit
+    width: wordsItem.x + wordsItem.implicitWidth + root.trail * root.unit + root.line
     height: root.tall * root.unit
     opacity: root.live ? 1 : 0.38
     Accessible.name: root.label
@@ -36,7 +40,7 @@ Walkable {
         radius: root.radius
         color: root.filled ? root.paint : "transparent"
         border.color: root.filled ? "transparent" : root.paint
-        border.width: root.filled ? 0 : Tokens.hoverBorder
+        border.width: root.line
     }
     // The filled pill's halo and glow (Main:61, EclipseEmpty:46): rgba(246, 231, 216, 0.18) 6 px out, and 46 px of blur 6 px out
     // in rgba(240, 180, 196, 0.45); constants of the design, as the boards draw them.
@@ -65,7 +69,7 @@ Walkable {
     PadGlyph {
         id: glyphItem
         objectName: "buttonGlyph." + root.place
-        x: root.lead * root.unit
+        x: root.line + root.lead * root.unit
         y: (root.height - height) / 2
         width: root.glyphSide * root.unit
         height: width

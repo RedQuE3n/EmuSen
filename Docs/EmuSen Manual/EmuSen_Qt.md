@@ -1764,7 +1764,9 @@ keeps its distance from the right edge. Recent shows as many tiles as fit before
 with the look's corona, since the model holds no game's corona yet. Then the header: the crescent mark and `Words.title`,
 and at the right the status glass with the search (`Actions.search`) and `Device.clock`. Then the shown game: the eyebrow
 `Words.continuePlaying` while it is the suspended game, its title, and its facts (`Words.pausedFacts`, or the row's
-`facts`). Under them, the first three entries of `Help.entries` as pill buttons: A plays the game, and the others press
+`facts`). While the shown game is the suspended one, the resume point follows: `Session.frame`, the paused
+picture, cut at its centre to 96 × 60 with the board's inset rim, and `Words.resumePoint`, "Resume point · saved 21:12", the
+time of pausing in the clock's own form (`qt-models/src/clock.rs`, `clock_time`). Under them, the first three entries of `Help.entries` as pill buttons: A plays the game, and the others press
 their own button, as the help line does. Then `Words.recentEntry` and the Recent row, `Library.recent` with the suspended
 game first as the board puts it. The shown tile is 312 × 196 board pixels and the others 264 × 165, each with its hero
 cropped, the shade, its title and its row's `facts`. Last, the help line, the kit's `HelpBar` on the board's foot. The pad
@@ -1775,7 +1777,7 @@ played yesterday · 3 h 20 min played", "hh:mm" for "9:41 PM", and Help's labels
 
 **Not drawn**: the section tabs (Home, Library, Consoles, Collections, Tools) and "LB RB Sections", a piece of their
 own (R-20261115-7). Also not drawn, because the program has nothing for them: the battery, since the program feeds no
-`Device.battery` (`qt-app/src/theme.rs`, `feed_device`); "Resume point · saved"; "GAME ART". "1 of 24" waits for `Words.place`, which Choose a console's piece adds over
+`Device.battery` (`qt-app/src/theme.rs`, `feed_device`); "GAME ART". "1 of 24" waits for `Words.place`, which Choose a console's piece adds over
 `game_page.rs`'s `place`; its place on Home is left empty until then. The blurred colour fields are the kit's `Backdrop` (`EmuSen_Kit.md` §7.118, R-20261115-6). The board labels them the
 shown game's art (`Main.dc.html:75`), so Home gives the backdrop the shown tile's hero, blurred 90 px at 0.85 opacity, the
 board's first field (`Main.dc.html:19`). These are provisional values, the tester's to judge from pictures. On the
@@ -1787,8 +1789,13 @@ tile's shadow and the filled button's halo and glow are the kit's `Glow` (§7.11
 `Pill` is a button. `HelpLine` is the help bar on the foot, with a place at its right. `TileWords` is a tile's foot: the title stands on the
 facts line, and a shade fades in over the board's 96 px, then holds the board's 0.92 from the title's top to the foot.
 With the words raised to the legibility floor, the board's 96 px gradient alone left a title at 2.4:1 over bright covers
-(theme-check, 2026-11-15). The shade's reach is provisional, the tester's to judge. The title takes the face's own line
-height, since the board's 1.02 cut its glyphs (theme-check's fit), and the facts follow it at the board's 26 px. What differs between the boards
+(theme-check, 2026-11-15). The shade's reach is provisional, the tester's to judge. The column follows the board's flow (Main:53): each
+line 26 px under the one before, the buttons 18 px further. The title's line box is the board's, 1.02 of 112 px for each
+line (`titleLine`); the title's own box keeps the face's height about that box's middle, where CSS spreads a short line's
+leading equally above and below, so its glyphs stand where the board's do and theme-check's fit still finds none cut. A
+pill's lead and trail are measured inside its 2 px outline and an outlined glyph is 44 px inside its own 2 px ring, as
+CSS's box model gives the board's buttons (`Main.dc.html:62-68`); the outline is the board's #5A6076. Measured 2026-11-15
+in headless Chrome over the board with the repo's Sora, every box of the column is the table's. What differs between the boards
 (the ground, the status's glass and search, the line's right side, a pill's measures) is a property of the part.
 
 **The table and its test.** `qt-app/tests/eclipse_home.tsv` lists every element of the board with its line, what the

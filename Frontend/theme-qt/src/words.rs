@@ -81,6 +81,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "continueLine"]
         fn continue_line(self: &ThemeWords, console: &QString) -> QString;
+
+        /// "Resume point · saved 21:12": a suspended game's picture and when it was paused, in the clock's form.
+        #[qinvokable]
+        #[cxx_name = "resumePoint"]
+        fn resume_point(self: &ThemeWords, paused_since: f64) -> QString;
     }
 }
 
@@ -168,6 +173,10 @@ impl qobject::ThemeWords {
 
     pub fn continue_line(&self, console: &QString) -> QString {
         said(words::continue_line(&console.to_string()))
+    }
+
+    pub fn resume_point(&self, paused_since: f64) -> QString {
+        said(words::resume_point(&emusen_qt_models::clock::clock_time(paused_since as i64)))
     }
 
     pub fn facts(&self, maker: &QString, year: i32, count: i32, runs_on: &QString) -> QString {

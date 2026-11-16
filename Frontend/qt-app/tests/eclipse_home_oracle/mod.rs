@@ -49,7 +49,7 @@ const DOWN: i32 = 0x0100_0015;
 const CLOCK: &str = "21:41";
 
 /// The theme host and one slot filling the window, as theme-audit's scene places a screen.
-const SCENE: &str = r#"import QtQuick
+const SCENE: &str = r##"import QtQuick
 import EmuSen.ThemeHost
 Window {
     id: scene
@@ -64,13 +64,21 @@ Window {
         objectName: "host"
         onGenerationChanged: scene.placed = host.ready && host.place(ThemeHost.Home, slot)
     }
+    // The paused game's picture, which the host gives Session: two bands, as the board's stand-in for it draws (Main:58).
+    Rectangle {
+        objectName: "pausedFrame"
+        width: 640
+        height: 400
+        color: "#1FC9A8"
+        Rectangle { y: 400 - 26 * 400 / 60; width: 640; height: 26 * 400 / 60; color: "#6A4CF0" }
+    }
     Item {
         id: slot
         objectName: "slot"
         anchors.fill: parent
     }
 }
-"#;
+"##;
 
 /// One row of the table.
 struct Row {
@@ -282,6 +290,9 @@ pub fn oracle(backend: &str) {
     host::words(object(screen)).expect("Words").show_now(now as f64);
     host::library(object(screen)).expect("Library").show(&view, "[]");
     host::session(object(screen)).expect("Session").show(&session);
+    let frame: u64 = tree.nodes[tree.find_named("pausedFrame").expect("the paused picture") as usize].id.parse().unwrap();
+    // Safety: the scene's item lives as long as the scene, longer than the screen that draws it.
+    host::session(object(screen)).expect("Session").show_frame(frame as *mut _);
     // One pad, of the family whose letters the board draws (A, X, Y; Main:62-68).
     let family = emusen_kit_qt::kinds::family_of(emusen_kit_core::glyph::PadFamily::Xbox).repr;
     host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, family, clock: CLOCK.into(), ..DeviceFacts::default() });
@@ -445,6 +456,7 @@ pub fn oracle(backend: &str) {
             ("eyebrow", words::continue_line(&game.console)),
             ("title", game.title.clone()),
             ("facts", words::played_facts(now - 720, now, session_played)),
+            ("resumeWords", words::resume_point(&emusen_qt_models::clock::clock_time(now - 720))),
             ("clock", CLOCK.to_owned()),
             ("recentHeading", words::RECENT_ENTRY.to_owned()),
             ("tileFacts.0", game.console.clone()),

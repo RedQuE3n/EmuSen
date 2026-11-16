@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Shapes
 import EmuSen.Theme
 import "../parts"
 
@@ -111,11 +112,21 @@ ThemeScreen {
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.22 * 20 * design.unit
                     }
+                    // The title's line box, the board's line height of 1.02 (Main:55): the next line follows it, as the board's column does.
+                    Item {
+                        id: titleLine
+                        objectName: "titleLine"
+                        x: 96 * design.unit
+                        y: eyebrow.y + eyebrow.height + 26 * design.unit
+                        width: 980 * design.unit
+                        height: title.lineCount * title.lineHeight
+                    }
                     Text {
                         id: title
                         objectName: "title"
                         x: 96 * design.unit
-                        y: eyebrow.y + eyebrow.height + 26 * design.unit
+                        // The face's own height about the line box's middle, as CSS spreads a line's leading equally above and below.
+                        anchors.verticalCenter: titleLine.verticalCenter
                         width: 980 * design.unit
                         text: root.resuming ? Session.title : root.currentTile?.title ?? (Library.consoles.count === 0 ? Words.addFolder : Words.noRecent)
                         color: Tokens.textStrong
@@ -123,19 +134,19 @@ ThemeScreen {
                         wrapMode: root.currentTile === null ? Text.WordWrap : Text.NoWrap
                         maximumLineCount: 2
                         elide: Text.ElideRight
+                        lineHeightMode: Text.FixedHeight
+                        lineHeight: 1.02 * 112 * design.unit
                         font.pixelSize: Type.sizeIn(112 * design.unit, Tokens.textScale, Tokens.faceText, Tokens.weightTitle)
                         font.family: Tokens.faceText
                         font.weight: Tokens.weightTitle
                         font.letterSpacing: -0.02 * 112 * design.unit
-                        // The face's own line height, so no glyph stands past the box; the facts follow it (Main:55-56).
                     }
                     Text {
                         id: facts
                         objectName: "facts"
                         x: 96 * design.unit
-                        y: title.y + title.height + 26 * design.unit
+                        y: titleLine.y + titleLine.height + 26 * design.unit
                         width: 980 * design.unit
-                        // The paused game's words follow the clock, as the program's clock says them again each minute.
                         // The board's line (Main:56): when it was last played and the time played; it follows the clock, which ticks each minute.
                         text: root.resuming ? (Device.clock.length >= 0 ? Words.playedFacts(Session.pausedSince, Session.played) : "") : root.currentTile?.facts ?? ""
                         color: Tokens.muted
@@ -144,11 +155,74 @@ ThemeScreen {
                         font.family: Tokens.faceText
                         font.weight: Tokens.weightSentence
                     }
+                    // The resume point (Main:57-60): the suspended game's paused picture and when it was saved, while that game is shown.
+                    Item {
+                        id: resume
+                        objectName: "resume"
+                        x: 96 * design.unit
+                        y: facts.y + facts.height + 26 * design.unit
+                        width: 980 * design.unit
+                        height: 60 * design.unit
+                        visible: root.resuming
+                        // The game's own picture at its centre, cut to the board's 96 by 60.
+                        ShaderEffectSource {
+                            id: pausedTexture
+                            readonly property Item frame: Session.frame
+                            readonly property real cutWidth: pausedTexture.frame ? Math.min(pausedTexture.frame.width, pausedTexture.frame.height * 96 / 60) : 0
+                            readonly property real cutHeight: pausedTexture.cutWidth * 60 / 96
+                            sourceItem: root.resuming && resume.visible ? pausedTexture.frame : null
+                            hideSource: false
+                            visible: false
+                            sourceRect: pausedTexture.frame ? Qt.rect((pausedTexture.frame.width - pausedTexture.cutWidth) / 2, (pausedTexture.frame.height - pausedTexture.cutHeight) / 2, pausedTexture.cutWidth, pausedTexture.cutHeight) : Qt.rect(0, 0, 0, 0)
+                            textureSize: Qt.size(Math.ceil(resumePicture.width * canvas.unit), Math.ceil(resumePicture.height * canvas.unit))
+                        }
+                        Shape {
+                            id: resumePicture
+                            objectName: "resumePicture"
+                            width: 96 * design.unit
+                            height: 60 * design.unit
+                            readonly property real radius: 10 * design.unit
+                            visible: Session.frame !== null
+                            preferredRendererType: Shape.CurveRenderer
+                            ShapePath {
+                                strokeColor: "transparent"
+                                fillColor: "transparent"
+                                fillItem: pausedTexture
+                                fillTransform: PlanarTransform.fromScale(resumePicture.width / Math.max(1, pausedTexture.textureSize.width), resumePicture.height / Math.max(1, pausedTexture.textureSize.height))
+                                PathRectangle {
+                                    width: resumePicture.width
+                                    height: resumePicture.height
+                                    radius: resumePicture.radius
+                                }
+                            }
+                        }
+                        // The picture's inset rim, 2 px of rgba(246, 231, 216, 0.5) (Main:58).
+                        Rectangle {
+                            objectName: "resumeRim"
+                            // The rim's colour, which the test reads.
+                            readonly property color paint: ink.resumeRim
+                            anchors.fill: resumePicture
+                            radius: resumePicture.radius
+                            color: "transparent"
+                            border.color: paint
+                            border.width: 2 * design.unit
+                        }
+                        Text {
+                            id: resumeWords
+                            objectName: "resumeWords"
+                            x: resumePicture.width + 16 * design.unit
+                            y: (resume.height - height) / 2
+                            text: root.resuming ? Words.resumePoint(Session.pausedSince) : ""
+                            color: ink.help
+                            font.pixelSize: Type.sizeIn(22 * design.unit, Tokens.textScale, Tokens.faceText, Font.Normal)
+                            font.family: Tokens.faceText
+                        }
+                    }
                     Row {
                         objectName: "buttons"
                         x: 96 * design.unit
-                        // The board's column gap and the buttons' own margin above them (Main:53, 61).
-                        y: facts.y + facts.height + (26 + 18) * design.unit
+                        // The board's column gap and the buttons' own margin above them (Main:53, 61), under the resume point when it is drawn.
+                        y: (resume.visible ? resume.y + resume.height : facts.y + facts.height) + (26 + 18) * design.unit
                         spacing: 18 * design.unit
                         visible: root.currentTile !== null
                         Repeater {
@@ -165,7 +239,9 @@ ThemeScreen {
                                 visible: pill.index < root.gameButtons
                                 live: pill.model.enabled ?? true
                                 filled: pill.index === 0
-                                glyphSide: pill.filled ? 46 : 44
+                                outline: ink.pillLine
+                                // The outlined glyph's 44 px inside its own 2 px ring (Main:66).
+                                glyphSide: pill.filled ? 46 : 48
                                 labelSize: pill.filled ? 26 : 24
                                 trail: pill.filled ? 34 : 30
                                 gap: pill.filled ? 16 : 14

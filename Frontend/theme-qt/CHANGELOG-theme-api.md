@@ -24,6 +24,9 @@ or shadow. 1.3 is another piece's.
   case, "EmuSen", Eclipse's wordmark, where `title` stays "EMUSEN" for the other screens; a game's last play and its time
   played, "Last played yesterday · 3 h 20 min played"; and "Continue · Super Nintendo" (`qt-models/src/words.rs`). The host
   now feeds `Session.played` from games.db's seconds played. Eclipse's Home draws all three, as its board does.
+- **`Words.resumePoint(pausedSince)`**: "Resume point · saved 21:12", the time of pausing in the clock's own form
+  (`qt-models/src/words.rs`, `resume_point`; `qt-models/src/clock.rs`, `clock_time`). Eclipse's Home draws it beside the
+  paused picture, as its board does (Main.dc.html:59).
 - The module is 1.4 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.4.*`.
 
 ## 1.3, an addition: the face tokens (2026-11-15)

@@ -12,6 +12,10 @@ QtObject {
     readonly property color help: "#D8DBE6"
     // The status and the help line's glass, rgba(7, 8, 15, 0.78) (Main:40, EclipseLibrary:32, 88).
     readonly property color glass: "#C707080F"
+    // The resume point's picture's inset rim, rgba(246, 231, 216, 0.5) (Main:58).
+    readonly property color resumeRim: "#80F6E7D8"
+    // An outlined pill's line (Main:65, 68).
+    readonly property color pillLine: "#5A6076"
     // A tile's title and its facts (Main:85, 86).
     readonly property color tileTitle: "#FFFFFF"
     readonly property color tileFacts: "#E3E6F0"

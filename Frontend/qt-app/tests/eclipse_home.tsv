@@ -6,66 +6,71 @@
 #   below:N:g  y is N's bottom + g         foot:N     the bottom is N's     up:N:g   the bottom is g above N's bottom
 #   mid:g      the vertical centre is g    mid:N      the vertical centre is N's    above:N:g  the bottom is g above N's top
 #   fit:N:g    the right edge is N's right edge + g    inright:N:g  the right edge is g short of N's
+#   base:N     the baseline is N's
 # size: a text's board size in board pixels, which the Text draws at exactly, scaled by the board's measure (themes/eclipse/parts/Line.qml;
 # R-20261115-24: every text at the board's size, weight, spacing and case).
+# type: a text's weight, letter spacing in em and case ("upper" drawn in capitals), as the board's CSS gives them; a glyph's
+# letter ("glyph") or name ("word") size in board pixels and weight. Qt holds a letter spacing in 64ths of a pixel (seen
+# 2026-11-15: 0.22em of 20 px set as 4.4, read back 4.390625), so a spacing is held within a 64th.
 # colour: a kit token by name, or the board's own as #AARRGGBB. status: built, or nothing (the program has nothing for it,
 # so it is not drawn), or ruled (the section tabs, another piece's by R-20261115-7: nothing drawn here).
-name	line	element	program	part	x	y	w	h	radius	colour	size	status
-backdropGround	17	the ground	the kit's Backdrop, its ground: the board's own colour	Rectangle	0	0	right:0	1200	-	#FF0A1024	-	built
-backdropField.0	19	a colour field: #1FC9A8, an ellipse, blurred 90 px at 0.85	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1060	-140	900	760	-	opacity:0.85	blur:90	built
-backdropField.1	20	a colour field: #6A4CF0, an ellipse, blurred 110 px at 0.9	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1380	420	760	760	-	opacity:0.9	blur:110	built
-backdropField.2	21	a colour field: #1D6BF2, an ellipse, blurred 100 px at 0.8	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	900	-260	700	520	-	opacity:0.8	blur:100	built
-backdropField.3	22	a colour field: #B8FFE9, a bar turned -18 degrees, blurred 22 px at 0.55	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1240	250	620	46	-	opacity:0.55	blur:22	built
-backdropField.4	23	a colour field: #D9C8FF, a bar turned -14 degrees, blurred 18 px at 0.5	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1330	380	520	30	-	opacity:0.5	blur:18	built
-disc	25	the eclipse's disc, its rim and two glows	the kit's CoronaDisc (kit-qt/qml/CoronaDisc.qml), its corona the shown game's first hue at the look's rim's saturation and lightness	CoronaDisc	-900	-450	2100	2100	-	Tokens.surface	-	built
-mark	30	the crescent mark	Marks.crescent (theme-qt/src/marks.rs:48, qt-models/src/marks.rs:25)	Item	96	mid:80	34	34	-	Tokens.accent	-	built
-wordmark	31	"EmuSen"	Words.title, "EMUSEN" (qt-models/src/words.rs:5)	Text	after:mark:14	mid:80	-	-	-	Tokens.text	24	built
-nav.home	33	"Home", the section shown	nothing: Home is no section the program steps to	-	-	-	-	-	-	-	-	ruled
-nav.library	34	"Library"	nothing: the program's Library is a tool (qt-models/src/words.rs:39), not a section	-	-	-	-	-	-	-	-	ruled
-nav.consoles	35	"Consoles"	nothing	-	-	-	-	-	-	-	-	ruled
-nav.collections	36	"Collections"	nothing (Library.collections is empty, theme-qt §3.2)	-	-	-	-	-	-	-	-	ruled
-nav.tools	37	"Tools"	nothing	-	-	-	-	-	-	-	-	ruled
-status	40	the status glass	none: the board's own colour	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built
-search	41	the search button	Actions.search() (theme-qt/src/actions.rs), named by Words.search	Walkable	in:status:22	mid:80	44	44	-	-	-	built
-searchIcon	42	the magnifier	the theme's own drawing	Item	in:search:10	mid:80	24	24	-	Tokens.text	-	built
-battery	45	the battery and "82%"	Device.battery, which the program never feeds (qt-app/src/theme.rs:390); no words say a charge	-	-	-	-	-	-	-	-	nothing
-clock	49	"9:41 PM"	Device.shortTime, the machine's short form (qt-models/src/clock.rs short_time)	Text	after:search:22	mid:80	inright:status:22	-	-	Tokens.text	22	built
-eyebrow	54	"CONTINUE · SUPER NINTENDO"	Words.continuePlaying, "CONTINUE PLAYING" (qt-models/src/words.rs:36)	Text	96	250	-	-	-	#FFF3C9D2	20	built
-titleLine	55	"Aurora Drift"'s line box, 112 px at the board's line height of 1.02	the title's line height, times its lines	Item	96	below:eyebrow:26	980	114.24	-	-	-	built
-title	55	"Aurora Drift", the face's own height about the line box's middle, as CSS spreads the leading (Main:55)	Session.title, or the focused game row's title	Text	96	mid:titleLine	-	-	-	Tokens.textStrong	112	built
-facts	56	"Last played yesterday · 3 h 20 min played"	Words.pausedFacts (qt-models/src/words.rs:169), or the row's facts; Session.played is never fed (qt-app/src/theme.rs:351)	Text	96	below:titleLine:26	-	-	-	Tokens.muted	26	built
-resume	57	the resume point's row, 60 high, while the suspended game is shown	Session.hasGame and the shown tile its key	Item	96	below:facts:26	980	60	-	-	-	built
-resumePicture	58	the resume point's picture, 96 by 60 at radius 10	Session.frame, the paused picture, cut at its centre	Shape	in:resume:0	mid:resume	96	60	10	-	-	built
-resumeRim	58	its inset rim, 2 px of rgba(246, 231, 216, 0.5)	none: the board's own colour	Rectangle	in:resume:0	mid:resume	96	60	10	#80F6E7D8	-	built
-resumeWords	59	"Resume point · saved 9:12 PM"	Words.resumePoint(Session.pausedSince) (qt-models/src/words.rs resume_point), the time in the machine's short form (qt-models/src/clock.rs short_time)	Text	after:resumePicture:16	mid:resume	-	-	-	#FFD8DBE6	22	built
-button.0	61	Resume, filled	Help.entries(Help.Continue), first row (qt-models/src/help.rs:103)	Pill	96	below:resume:44	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built
-buttonGlyph.0	62	the A disc	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.0:14	mid:button.0	46	46	-	-	-	built
-buttonLabel.0	62	"Resume"	the row's label	Text	after:buttonGlyph.0:16	mid:button.0	-	-	-	Tokens.overAccent	26	built
-button.1	64	"Options", outlined, its 2 px line inside its box	the second row, X: Words' "Options" through Help.entries(kind, { card: true }) (qt-models/src/help.rs card_named, words.rs OPTIONS)	Pill	after:button.0:18	foot:button.0	fit:buttonLabel.1:32	72	36	#FF5A6076	-	built
-buttonGlyph.1	65	the X disc, 44 inside its 2 px ring	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.1:16	mid:button.1	48	48	-	-	-	built
-buttonLabel.1	65	"Options"	the row's label	Text	after:buttonGlyph.1:14	mid:button.1	-	-	-	Tokens.text	24	built
-button.2	67	"Favourite", outlined, its 2 px line inside its box	the third row (qt-models/src/help.rs:105)	Pill	after:button.1:18	foot:button.0	fit:buttonLabel.2:32	72	36	#FF5A6076	-	built
-buttonGlyph.2	68	the Y disc, 44 inside its 2 px ring	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.2:16	mid:button.2	48	48	-	-	-	built
-buttonLabel.2	68	"Favourite"	the row's label	Text	after:buttonGlyph.2:14	mid:button.2	-	-	-	Tokens.text	24	built
-buttonHalo.0	61	the filled button's halo, 6 px out	the kit's Glow, exported (R-20261115-6)	Glow	in:button.0:0	foot:button.0	fit:button.0:0	72	36	#2EF6E7D8	-	built
-buttonGlow.0	61	the filled button's glow, 46 px of blur 6 px out	the kit's Glow	Glow	in:button.0:0	foot:button.0	fit:button.0:0	72	36	#73F0B4C4	-	built
-artLabel	75	"GAME ART · AURORA DRIFT"	nothing: no words say "game art"	-	-	-	-	-	-	-	-	nothing
-recentHeading	79	"Recent"	Words.recentEntry (qt-models/src/words.rs:73)	Text	96	790	-	-	-	Tokens.text	28	built
-recentCount	80	"1 of 24"	from Consoles (Words.place, qt-models/src/game_page.rs:387, EmuSen.Theme 1.5 on another branch): filled when the branches join	-	-	-	-	-	-	-	-	ruled
-tile.0	83	the focused game's tile	Library.recent, first row	Walkable	96	below:recentHeading:22	312	196	18	-	-	built
-tile.1	83	a game's tile	the second row	Walkable	after:tile.0:24	foot:tile.0	264	165	18	-	-	built
-tile.2	83	a game's tile	the third row	Walkable	after:tile.1:24	foot:tile.0	264	165	18	-	-	built
-tile.3	83	a game's tile	the fourth row	Walkable	after:tile.2:24	foot:tile.0	264	165	18	-	-	built
-tile.4	83	a game's tile	the fifth row	Walkable	after:tile.3:24	foot:tile.0	264	165	18	-	-	built
-tile.5	83	a game's tile	the sixth row	Walkable	after:tile.4:24	foot:tile.0	264	165	18	-	-	built
-tileArt.0	83	the tile's art	the row's hero (theme-qt/src/view.rs:213), the kit's RoundPicture	RoundPicture	in:tile.0:0	foot:tile.0	312	196	-	-	-	built
-tileShade.0	84	the shade under the words: the board's 96 px fade from rgba(4, 5, 10, 0.92) at the foot to clear	none: the board's own colours; the shared part TileWords	Rectangle	in:tile.0:0	foot:tile.0	312	96	-	#EB04050A	-	built
-tileTitle.0	85	the game's title, its foot 34 px over the tile's	the row's title	Text	in:tile.0:18	up:tile.0:34	inright:tile.0:18	-	-	#FFFFFFFF	21	built
-tileFacts.0	86	the console, "SUPER NINTENDO"	the row's consoleName, the console's name alone that the facts begin with (qt-models/src/library.rs:302, theme-qt/src/view.rs consoleName)	Text	in:tile.0:18	up:tile.0:12	-	-	-	#FFE3E6F0	15	built
-tileRing	83	the focused tile's ring	the kit's FocusRing (R-20261115-3, every control the gapped ring)	FocusRing	-	-	-	-	-	-	-	built
-tileShadow.1	83	a resting tile's shadow, 0 10 px 30 px	the kit's Glow with its offset (R-20261115-6)	Glow	in:tile.1:0	foot:tile.1	264	165	18	#73000000	-	built
-help	99	the help bar's entries	Help.entries(Help.Continue) (qt-models/src/help.rs:102), the kit's HelpBar	HelpBar	96	mid:1137	-	-	-	#FFD8DBE6	21	built
-ownGlyph-Resume	94	the help line's A, a filled disc of 34	Eclipse's Glyph, lead	-	in:help:0	mid:help	34	34	-	-	-	built
-ownGlyph-Options	95	the help line's X, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built
-ownGlyph-Home card	97	"MENU" in a 2 px capsule, 34 inside, the kit's name for Start in the pad's family	Eclipse's Glyph, named	-	-	mid:help	-	38	-	-	-	built
-helpGroup	105	"LB RB Sections"	nothing: Home steps no sections	-	-	-	-	-	-	-	-	ruled
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground	the kit's Backdrop, its ground: the board's own colour	Rectangle	0	0	right:0	1200	-	#FF0A1024	-	built	-
+backdropField.0	19	a colour field: #1FC9A8, an ellipse, blurred 90 px at 0.85	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1060	-140	900	760	-	opacity:0.85	blur:90	built	-
+backdropField.1	20	a colour field: #6A4CF0, an ellipse, blurred 110 px at 0.9	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1380	420	760	760	-	opacity:0.9	blur:110	built	-
+backdropField.2	21	a colour field: #1D6BF2, an ellipse, blurred 100 px at 0.8	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	900	-260	700	520	-	opacity:0.8	blur:100	built	-
+backdropField.3	22	a colour field: #B8FFE9, a bar turned -18 degrees, blurred 22 px at 0.55	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1240	250	620	46	-	opacity:0.55	blur:22	built	-
+backdropField.4	23	a colour field: #D9C8FF, a bar turned -14 degrees, blurred 18 px at 0.5	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1330	380	520	30	-	opacity:0.5	blur:18	built	-
+disc	25	the eclipse's disc, its rim and two glows	the kit's CoronaDisc (kit-qt/qml/CoronaDisc.qml), its corona the shown game's first hue at the look's rim's saturation and lightness	CoronaDisc	-900	-450	2100	2100	-	Tokens.surface	-	built	-
+mark	30	the crescent mark	Marks.crescent (theme-qt/src/marks.rs:48, qt-models/src/marks.rs:25)	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+wordmark	31	"EmuSen"	Words.title, "EMUSEN" (qt-models/src/words.rs:5)	Text	after:mark:14	mid:80	-	-	-	Tokens.text	24	built	600 0.02 none
+nav.home	33	"Home", the section shown	nothing: Home is no section the program steps to	-	-	-	-	-	-	-	-	ruled	-
+nav.library	34	"Library"	nothing: the program's Library is a tool (qt-models/src/words.rs:39), not a section	-	-	-	-	-	-	-	-	ruled	-
+nav.consoles	35	"Consoles"	nothing	-	-	-	-	-	-	-	-	ruled	-
+nav.collections	36	"Collections"	nothing (Library.collections is empty, theme-qt §3.2)	-	-	-	-	-	-	-	-	ruled	-
+nav.tools	37	"Tools"	nothing	-	-	-	-	-	-	-	-	ruled	-
+status	40	the status glass	none: the board's own colour	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
+search	41	the search button	Actions.search() (theme-qt/src/actions.rs), named by Words.search	Walkable	in:status:22	mid:80	44	44	-	-	-	built	-
+searchIcon	42	the magnifier	the theme's own drawing	Item	in:search:10	mid:80	24	24	-	Tokens.text	-	built	-
+battery	45	the battery and "82%"	Device.battery, which the program never feeds (qt-app/src/theme.rs:390); no words say a charge	-	-	-	-	-	-	-	-	nothing	-
+clock	49	"9:41 PM"	Device.shortTime, the machine's short form (qt-models/src/clock.rs short_time)	Text	after:search:22	mid:80	inright:status:22	-	-	Tokens.text	22	built	600 0 none
+eyebrow	54	"CONTINUE · SUPER NINTENDO"	Words.continuePlaying, "CONTINUE PLAYING" (qt-models/src/words.rs:36)	Text	96	250	-	-	-	#FFF3C9D2	20	built	600 0.22 upper
+titleLine	55	"Aurora Drift"'s line box, 112 px at the board's line height of 1.02	the title's line height, times its lines	Item	96	below:eyebrow:26	980	114.24	-	-	-	built	-
+title	55	"Aurora Drift", the face's own height about the line box's middle, as CSS spreads the leading (Main:55)	Session.title, or the focused game row's title	Text	96	mid:titleLine	-	-	-	Tokens.textStrong	112	built	600 -0.02 none
+facts	56	"Last played yesterday · 3 h 20 min played"	Words.pausedFacts (qt-models/src/words.rs:169), or the row's facts; Session.played is never fed (qt-app/src/theme.rs:351)	Text	96	below:titleLine:26	-	-	-	Tokens.muted	26	built	300 0 none
+resume	57	the resume point's row, 60 high, while the suspended game is shown	Session.hasGame and the shown tile its key	Item	96	below:facts:26	980	60	-	-	-	built	-
+resumePicture	58	the resume point's picture, 96 by 60 at radius 10	Session.frame, the paused picture, cut at its centre	Shape	in:resume:0	mid:resume	96	60	10	-	-	built	-
+resumeRim	58	its inset rim, 2 px of rgba(246, 231, 216, 0.5)	none: the board's own colour	Rectangle	in:resume:0	mid:resume	96	60	10	#80F6E7D8	-	built	-
+resumeWords	59	"Resume point · saved 9:12 PM"	Words.resumePoint(Session.pausedSince) (qt-models/src/words.rs resume_point), the time in the machine's short form (qt-models/src/clock.rs short_time)	Text	after:resumePicture:16	mid:resume	-	-	-	#FFD8DBE6	22	built	400 0 none
+button.0	61	Resume, filled	Help.entries(Help.Continue), first row (qt-models/src/help.rs:103)	Pill	96	below:resume:44	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built	-
+buttonGlyph.0	62	the A disc	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.0:14	mid:button.0	46	46	-	-	-	built	glyph 22 600
+buttonLabel.0	62	"Resume"	the row's label	Text	after:buttonGlyph.0:16	mid:button.0	-	-	-	Tokens.overAccent	26	built	600 0 none
+button.1	64	"Options", outlined, its 2 px line inside its box	the second row, X: Words' "Options" through Help.entries(kind, { card: true }) (qt-models/src/help.rs card_named, words.rs OPTIONS)	Pill	after:button.0:18	foot:button.0	fit:buttonLabel.1:32	72	36	#FF5A6076	-	built	-
+buttonGlyph.1	65	the X disc, 44 inside its 2 px ring	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.1:16	mid:button.1	48	48	-	-	-	built	glyph 20 400
+buttonLabel.1	65	"Options"	the row's label	Text	after:buttonGlyph.1:14	mid:button.1	-	-	-	Tokens.text	24	built	400 0 none
+button.2	67	"Favourite", outlined, its 2 px line inside its box	the third row (qt-models/src/help.rs:105)	Pill	after:button.1:18	foot:button.0	fit:buttonLabel.2:32	72	36	#FF5A6076	-	built	-
+buttonGlyph.2	68	the Y disc, 44 inside its 2 px ring	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.2:16	mid:button.2	48	48	-	-	-	built	glyph 20 400
+buttonLabel.2	68	"Favourite"	the row's label	Text	after:buttonGlyph.2:14	mid:button.2	-	-	-	Tokens.text	24	built	400 0 none
+buttonHalo.0	61	the filled button's halo, 6 px out	the kit's Glow, exported (R-20261115-6)	Glow	in:button.0:0	foot:button.0	fit:button.0:0	72	36	#2EF6E7D8	-	built	-
+buttonGlow.0	61	the filled button's glow, 46 px of blur 6 px out	the kit's Glow	Glow	in:button.0:0	foot:button.0	fit:button.0:0	72	36	#73F0B4C4	-	built	-
+artLabel	75	the art's glass, 8 by 16 px round the words at radius 18, rgba(7, 8, 15, 0.78)	the shown game's art, while Library.artHues reads hues of it	Rectangle	right:96	150	fit:artWords:16	up:artWords:-8	18	#C707080F	-	built	-
+artWords	75	"GAME ART · AURORA DRIFT", 0.14em apart	Words.gameArt(the shown game's title) (qt-models/src/words.rs game_art), in capitals	Text	in:artLabel:16	mid:artLabel	-	-	-	#FFD8DBE6	16	built	400 0.14 upper
+recentHeading	79	"Recent"	Words.recentEntry (qt-models/src/words.rs:73)	Text	96	790	-	-	-	Tokens.text	28	built	600 0 none
+recentCount	80	"1 of 24", its baseline on the heading's	Words.place(the shown tile, Library.recent's count) (qt-models/src/game_page.rs place)	Text	after:recentHeading:18	base:recentHeading	-	-	-	Tokens.muted	20	built	400 0 none
+tile.0	83	the focused game's tile	Library.recent, first row	Walkable	96	below:recentHeading:22	312	196	18	-	-	built	-
+tile.1	83	a game's tile	the second row	Walkable	after:tile.0:24	foot:tile.0	264	165	18	-	-	built	-
+tile.2	83	a game's tile	the third row	Walkable	after:tile.1:24	foot:tile.0	264	165	18	-	-	built	-
+tile.3	83	a game's tile	the fourth row	Walkable	after:tile.2:24	foot:tile.0	264	165	18	-	-	built	-
+tile.4	83	a game's tile	the fifth row	Walkable	after:tile.3:24	foot:tile.0	264	165	18	-	-	built	-
+tile.5	83	a game's tile	the sixth row	Walkable	after:tile.4:24	foot:tile.0	264	165	18	-	-	built	-
+tileArt.0	83	the tile's art	the row's hero (theme-qt/src/view.rs:213), the kit's RoundPicture	RoundPicture	in:tile.0:0	foot:tile.0	312	196	-	-	-	built	-
+tileShade.0	84	the shade under the words: the board's 96 px fade from rgba(4, 5, 10, 0.92) at the foot to clear	none: the board's own colours; the shared part TileWords	Rectangle	in:tile.0:0	foot:tile.0	312	96	-	#EB04050A	-	built	-
+tileTitle.0	85	the game's title, its foot 34 px over the tile's	the row's title	Text	in:tile.0:18	up:tile.0:34	inright:tile.0:18	-	-	#FFFFFFFF	21	built	600 0 none
+tileFacts.0	86	the console, "SUPER NINTENDO"	the row's consoleName, the console's name alone that the facts begin with (qt-models/src/library.rs:302, theme-qt/src/view.rs consoleName)	Text	in:tile.0:18	up:tile.0:12	-	-	-	#FFE3E6F0	15	built	400 0.08 upper
+tileRing	83	the focused tile's ring	the kit's FocusRing (R-20261115-3, every control the gapped ring)	FocusRing	-	-	-	-	-	-	-	built	-
+tileShadow.1	83	a resting tile's shadow, 0 10 px 30 px	the kit's Glow with its offset (R-20261115-6)	Glow	in:tile.1:0	foot:tile.1	264	165	18	#73000000	-	built	-
+help	99	the help bar's entries	Help.entries(Help.Continue) (qt-models/src/help.rs:102), the kit's HelpBar	HelpBar	96	mid:1137	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Resume	94	the help line's A, a filled disc of 34	Eclipse's Glyph, lead	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Options	95	the help line's X, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Home card	97	"MENU" in a 2 px capsule, 34 inside, the kit's name for Start in the pad's family	Eclipse's Glyph, named	-	-	mid:help	-	38	-	-	-	built	word 15 400
+helpGroup	105	"LB RB Sections"	nothing: Home steps no sections	-	-	-	-	-	-	-	-	ruled	-

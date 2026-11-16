@@ -14,7 +14,6 @@ use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::clients::ClientSource;
-use emusen_qt_models::help::{entries, Screen};
 use emusen_qt_models::library::{refresh, LibrarySource, LibraryView};
 use emusen_qt_models::words;
 use emusen_qt_test::harness::SIZES;
@@ -94,6 +93,8 @@ struct Row {
     colour: String,
     size: String,
     status: String,
+    /// The type as the board's CSS gives it: "weight spacing case" for words, "glyph size weight" or "word size weight".
+    kind: String,
 }
 
 fn rows() -> (f64, Vec<Row>) {
@@ -107,9 +108,9 @@ fn rows() -> (f64, Vec<Row>) {
         .filter(|l| !l.starts_with('#') && !l.starts_with("name\t") && !l.trim().is_empty())
         .map(|l| {
             let c: Vec<&str> = l.split('\t').collect();
-            assert_eq!(c.len(), 13, "a row of 13 columns: {l}");
+            assert_eq!(c.len(), 14, "a row of 14 columns: {l}");
             let s = |i: usize| c[i].to_owned();
-            Row { name: s(0), part: s(4), x: s(5), y: s(6), w: s(7), h: s(8), radius: s(9), colour: s(10), size: s(11), status: s(12) }
+            Row { name: s(0), part: s(4), x: s(5), y: s(6), w: s(7), h: s(8), radius: s(9), colour: s(10), size: s(11), status: s(12), kind: s(13) }
         })
         .collect();
     (height, rows)
@@ -229,6 +230,8 @@ fn rule(spec: &str, k: f64, got: &BTreeMap<String, Boxed>, canvas_width: f64) ->
         ["above", n, g] => Some(('b', of(n).y - num(g) * k)),
         ["mid", g] if g.parse::<f64>().is_ok() => Some(('m', num(g) * k)),
         ["mid", n] => Some(('m', of(n).middle())),
+        // A baseline is the words' own, which the loop reads from the tree.
+        ["base", _] => None,
         [v] => Some(('=', num(v) * k)),
         _ => panic!("{spec}: no such rule"),
     }
@@ -247,6 +250,92 @@ fn read(tree: &Tree, name: &str, property: &str) -> String {
     let Some(i) = tree.nodes.iter().rposition(|n| n.name == name) else { return String::new() };
     let id: u64 = tree.nodes[i as usize].id.parse().unwrap();
     emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(name), &QString::from(property)).to_string()
+}
+
+/// A QFont as Qt writes it: family, point size, pixel size, style hint, weight, style, underline, strike out, fixed pitch, 0,
+/// capitalization, letter spacing's type, letter spacing, ...; the weight, the case (1, all capitals) and the absolute spacing.
+fn font_of(text: &str) -> Option<(f64, f64, i32, i32, f64)> {
+    let f: Vec<&str> = text.split(',').collect();
+    let n = |i: usize| f.get(i).and_then(|v| v.parse::<f64>().ok());
+    Some((n(2)?, n(4)?, n(10)? as i32, n(11)? as i32, n(12)?))
+}
+
+/// What differs from a row's type: its words' weight, spacing and case, or its glyph's size and weight.
+fn typed(tree: &Tree, row: &Row) -> Vec<String> {
+    let parts: Vec<&str> = row.kind.split(' ').collect();
+    let mut out = Vec::new();
+    // The drawn one where a hidden item holds the name too (the frame's own help bar, not shown).
+    let node = tree.nodes.iter().rposition(|n| n.name == row.name && n.visible).or_else(|| tree.nodes.iter().rposition(|n| n.name == row.name)).expect("the row is drawn");
+    // The texts the row's type holds: a help line's entries' words, else the row's own words.
+    let texts: Vec<usize> = if row.part == "HelpBar" {
+        let mut inside = Vec::new();
+        for (i, n) in tree.nodes.iter().enumerate() {
+            let mut at = n.parent.clone();
+            while let Some(p) = tree.nodes.iter().find(|p| p.id == at) {
+                if p.id == tree.nodes[node].id {
+                    if n.visible && n.text.as_deref().is_some_and(|t| !t.is_empty()) && n.ty.contains("Text") {
+                        inside.push(i);
+                    }
+                    break;
+                }
+                at = p.parent.clone();
+            }
+        }
+        inside
+    } else {
+        vec![node]
+    };
+    let prop = |i: usize, p: &str| {
+        let id: u64 = tree.nodes[i].id.parse().unwrap();
+        emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(tree.nodes[i].name.as_str()), &QString::from(p)).to_string()
+    };
+    match parts.as_slice() {
+        [kind @ ("glyph" | "word"), size, weight] => {
+            // The glyph's own measures, in board pixels: the Glyph under the row, or the row itself.
+            let glyph = std::iter::once(node)
+                .chain(tree.nodes.iter().enumerate().filter(|(_, n)| n.parent == tree.nodes[node].id).map(|(i, _)| i))
+                .find(|&i| tree.nodes[i].cls.contains("Glyph") || tree.nodes[i].ty.contains("Glyph"))
+                .unwrap_or(node);
+            let lead = prop(glyph, "lead") == "true";
+            let (size_of, weight_of) = match (*kind, lead) {
+                ("word", _) => (prop(glyph, "wordSize"), "400".to_owned()),
+                (_, true) => (prop(glyph, "leadLetterSize"), prop(glyph, "leadWeight")),
+                (_, false) => (prop(glyph, "letterSize"), "400".to_owned()),
+            };
+            if size_of.parse::<f64>().ok() != size.parse::<f64>().ok() {
+                out.push(format!("glyph's {kind} at {size_of} where the board gives {size}"));
+            }
+            if weight_of != *weight {
+                out.push(format!("glyph's weight {weight_of} where the board gives {weight}"));
+            }
+        }
+        [weight, em, case] => {
+            let want_weight: f64 = weight.parse().unwrap();
+            let em: f64 = em.parse().unwrap();
+            for &i in &texts {
+                let Some((px, w, caps, spacing_type, spacing)) = font_of(&prop(i, "font")) else {
+                    out.push(format!("has no font to read: {:?}", prop(i, "font")));
+                    continue;
+                };
+                if w != want_weight {
+                    out.push(format!("weight {w} where the board gives {weight}"));
+                }
+                // An absolute spacing in the Text's own pixels, the board's em of its size, held within Qt's 64th.
+                let want = em * px;
+                if (spacing - want).abs() > 1.0 / 64.0 || (em != 0.0 && spacing_type != 1) {
+                    out.push(format!("letter spacing {spacing} (type {spacing_type}) where the board gives {want}"));
+                }
+                if (caps == 1) != (*case == "upper") {
+                    out.push(format!("case {caps} where the board gives {case}"));
+                }
+            }
+            if texts.is_empty() {
+                out.push("has no words drawn".to_owned());
+            }
+        }
+        _ => panic!("{}: no such type {:?}", row.name, row.kind),
+    }
+    out
 }
 
 /// The colour an element paints: a pill's, a mark's, a field's, a disc's fill, a help line's words, else its own colour.
@@ -369,6 +458,15 @@ pub fn oracle(backend: &str) {
                 differences.push(format!("{at}: {} is drawn by {} ({}), not {}", row.name, node.ty, node.cls, row.part));
             }
             for (spec, axis) in [(&row.x, 'x'), (&row.y, 'y'), (&row.w, 'w'), (&row.h, 'h')] {
+                if let Some(n) = spec.strip_prefix("base:") {
+                    // The words' baseline in canvas units: the Text's own offset, in board pixels, through the board's measure.
+                    let base = |name: &str| read(&tree, name, "baselineOffset").parse::<f64>().unwrap_or(f64::NAN) * k;
+                    let (want, have) = (got[n].y + base(n), b.y + base(&row.name));
+                    if !same(have, want) {
+                        differences.push(format!("{at}: {} baseline {have} where the board gives {want} ({spec})", row.name));
+                    }
+                    continue;
+                }
                 let Some((kind, want)) = rule(spec, k, &got, canvas_width) else { continue };
                 let (what, have) = match (kind, axis) {
                     ('=', 'x') | ('x', _) => ("x", b.x),
@@ -439,6 +537,13 @@ pub fn oracle(backend: &str) {
             }
         }
 
+        // Each text's weight, letter spacing and case, and each glyph's letter size and weight, as the board's CSS gives them.
+        for row in rows.iter().filter(|r| r.status == "built" && r.kind != "-") {
+            for problem in typed(&tree, row) {
+                differences.push(format!("{at}: {} {problem}", row.name));
+            }
+        }
+
         // The focused tile is ringed by the kit's FocusRing, and no other is.
         let rings: Vec<_> = tree.nodes.iter().filter(|n| n.name == "tileRing" && n.visible).collect();
         let tile0 = named("tile.0").map(|n| n.id.clone()).unwrap_or_default();
@@ -446,32 +551,70 @@ pub fn oracle(backend: &str) {
             differences.push(format!("{at}: the focused tile's ring is {:?}", rings.iter().map(|r| (&r.parent, &r.ty)).collect::<Vec<_>>()));
         }
 
-        // Every word is the program's.
-        let help = emusen_qt_models::help::card_named(entries(Screen::Home).to_vec());
+        // The words as drawn, the board's own literals (Main.dc.html:30, 49, 54-59, 62-68, 75, 79, 85-86, 94-97) where the
+        // fixture's game is the board's: its first game, Aurora Drift on the Super Nintendo, suspended yesterday at 9:12 PM
+        // after 3 h 20 min. "upper" words are drawn in capitals, which their type's case holds; their text is compared in them.
+        // The count is the fixture's six games where the board has 24, and the other tiles are the fixture's own games.
         let mut words_of = vec![
-            ("wordmark", words::NAME.to_owned()),
-            ("eyebrow", words::continue_line(&game.console)),
-            ("title", game.title.clone()),
-            ("facts", "Last played yesterday · 3 h 20 min played".to_owned()),
-            ("resumeWords", "Resume point · saved 9:12 PM".to_owned()),
-            ("clock", "9:41 PM".to_owned()),
-            ("recentHeading", words::RECENT_ENTRY.to_owned()),
-            ("tileFacts.0", game.console.clone()),
+            ("wordmark", "EmuSen", false),
+            ("clock", "9:41 PM", false),
+            ("eyebrow", "CONTINUE · SUPER NINTENDO", true),
+            ("title", "Aurora Drift", false),
+            ("facts", "Last played yesterday · 3 h 20 min played", false),
+            ("resumeWords", "Resume point · saved 9:12 PM", false),
+            ("buttonLabel.0", "Resume", false),
+            ("buttonLabel.1", "Options", false),
+            ("buttonLabel.2", "Favourite", false),
+            ("artWords", "GAME ART · AURORA DRIFT", true),
+            ("recentHeading", "Recent", false),
+            ("recentCount", "1 of 6", false),
+            ("tileTitle.0", "Aurora Drift", false),
+            ("tileFacts.0", "SUPER NINTENDO", true),
         ];
-        for (i, entry) in help.iter().take(3).enumerate() {
-            words_of.push((["buttonLabel.0", "buttonLabel.1", "buttonLabel.2"][i], entry.1.to_owned()));
-        }
-        for (i, (title, ext)) in GAMES.iter().enumerate() {
+        for (i, (title, _)) in GAMES.iter().enumerate().skip(1) {
             if named(&format!("tile.{i}")).is_some_and(|n| n.visible) {
-                let row = view.game(&rom(&world, title, ext)).expect("a game of the library");
-                words_of.push((["tileTitle.0", "tileTitle.1", "tileTitle.2", "tileTitle.3", "tileTitle.4", "tileTitle.5"][i], row.title));
+                words_of.push((["", "tileTitle.1", "tileTitle.2", "tileTitle.3", "tileTitle.4", "tileTitle.5"][i], title, false));
             }
         }
-        for (name, want) in words_of {
+        for (name, want, upper) in words_of {
             let have = read(&tree, name, "text");
-            if have != want {
-                differences.push(format!("{at}: {name} says {have:?} where the program says {want:?}"));
+            let drawn = if upper { have.to_uppercase() } else { have.clone() };
+            if drawn != want {
+                differences.push(format!("{at}: {name} says {drawn:?} where the board says {want:?}"));
             }
+        }
+        // The help line's words in order, the board's (Main:94-97), and its glyphs' letters and name.
+        let help_id = named("help").map(|n| n.id.clone()).unwrap_or_default();
+        let under_help = |n: &emusen_qt_test::tree::Node| {
+            let mut at = n.parent.clone();
+            while let Some(p) = tree.nodes.iter().find(|p| p.id == at) {
+                if p.id == help_id {
+                    return true;
+                }
+                at = p.parent.clone();
+            }
+            false
+        };
+        let line: Vec<&str> =
+            tree.nodes.iter().filter(|n| n.visible && n.ty.contains("Text") && under_help(n)).filter_map(|n| n.text.as_deref()).filter(|t| !t.is_empty()).collect();
+        if line != ["Resume", "Options", "Favourite", "Home card"] {
+            differences.push(format!("{at}: the help line says {line:?} where the board says Resume, Options, Favourite, Home card"));
+        }
+        let glyphs: Vec<String> = ["Resume", "Options", "Favourite", "Home card"]
+            .iter()
+            .map(|w| {
+                let g = tree.nodes.iter().rposition(|n| n.name == format!("ownGlyph-{w}") && n.visible);
+                let child = g.and_then(|g| tree.nodes.iter().position(|n| n.parent == tree.nodes[g].id));
+                child.map(|c| {
+                    let id: u64 = tree.nodes[c].id.parse().unwrap();
+                    let p = |q: &str| emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(tree.nodes[c].name.as_str()), &QString::from(q)).to_string();
+                    if p("named") == "true" { p("word") } else { p("letter") }
+                })
+                .unwrap_or_default()
+            })
+            .collect();
+        if glyphs != ["A", "X", "Y", "MENU"] {
+            differences.push(format!("{at}: the help line's glyphs read {glyphs:?} where the board draws A, X, Y, MENU"));
         }
         // Nothing on the row is cut: a shown tile's title and console line are drawn whole.
         for n in tree.nodes.iter().filter(|n| n.visible && (n.name.starts_with("tileTitle.") || n.name.starts_with("tileFacts."))) {

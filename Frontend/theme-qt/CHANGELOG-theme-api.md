@@ -29,6 +29,10 @@ or shadow. 1.3 is another piece's.
 - **`Words.resumePoint(pausedSince)`**: "Resume point · saved 9:12 PM", the time of pausing in the machine's short form
   (`qt-models/src/words.rs`, `resume_point`; `qt-models/src/clock.rs`, `short_time`). Eclipse's Home draws it beside the
   paused picture, as its board does (Main.dc.html:59).
+- **`Words.place(index, count)`** ("3 of 14", the game page's `place`, its one owner) and **`Words.gameArt(title)`**
+  ("Game art · Aurora Drift", `qt-models/src/words.rs`, `game_art`): Eclipse's Home draws the shown tile's place among
+  every game played beside Recent and names the art behind its disc under the status, as its board does
+  (Main.dc.html:75, 80).
 - **`Device.shortTime`**, **`Words.shortTime(at)`**: the time, and a moment in seconds since 1970, in the machine's zone
   and its locale's short form (`QLocale::system()`, `QLocale::ShortFormat`): "9:41 PM" under en_US, "21:41" under de_DE.
   `Device.clock` keeps the program's "hh:mm", so the other themes' clocks are unchanged (R-20261114-21). Eclipse's status

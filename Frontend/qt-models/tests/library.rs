@@ -437,3 +437,10 @@ fn eclipse_s_times_are_said_in_the_locale_s_short_form() {
     assert_eq!(short_time_in(status, true, "de_DE"), "21:41");
     assert_eq!(short_time_in(status, true, "en_GB"), "21:41");
 }
+
+#[test]
+fn eclipse_s_art_is_named_with_the_game_s_title() {
+    // Main.dc.html:75, "GAME ART · AURORA DRIFT", drawn in capitals from these words.
+    assert_eq!(emusen_qt_models::words::game_art("Aurora Drift"), "Game art · Aurora Drift");
+    assert_eq!(emusen_qt_models::game_page::place(0, 24), "1 of 24", "Main.dc.html:80");
+}

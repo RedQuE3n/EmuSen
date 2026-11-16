@@ -211,6 +211,15 @@ pub fn resume_point(time: &str) -> String {
     format!("{RESUME_POINT} {BETWEEN} saved {time}")
 }
 
+/// The art behind Home's disc, as Eclipse's Home names it (Main.dc.html:75).
+pub const GAME_ART: &str = "Game art";
+
+/// The words on the glass under Eclipse's status naming the art behind the disc (Main.dc.html:75): "Game art · Aurora
+/// Drift", drawn in capitals.
+pub fn game_art(title: &str) -> String {
+    format!("{GAME_ART} {BETWEEN} {title}")
+}
+
 /// X on a game, the game's page, as Eclipse's Home names it (Main.dc.html:66, 95).
 pub const OPTIONS: &str = "Options";
 

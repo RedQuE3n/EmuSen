@@ -335,9 +335,14 @@ pub fn oracle(backend: &str) {
     wait_for(&mut scene, "gamesTitle", "text", PLAYED, 2000);
     assert_eq!(focused(&mut scene), "gamesTile.0", "LT back to the first letter's first game");
 
-    // The walk off the tiles: Left to Start, Right to Game page and back to the tiles; Up to the chip in force, Up to the path.
+    // The walk off the tiles: Left to Start, Up to the path; Right to Game page and back to the tiles; Up to the chip in force, Up to the path.
     press(&mut scene, &sdl, &pad, PadControl::Left);
     assert_eq!(focused(&mut scene), "gamesStart");
+    press(&mut scene, &sdl, &pad, PadControl::Up);
+    assert_eq!(focused(&mut scene), "gamesPath", "Up from the column, the path above it");
+    press(&mut scene, &sdl, &pad, PadControl::Down);
+    let tree = scene.tree();
+    assert!(scene.focus_item(&tree, tree.find_named("gamesStart").unwrap()));
     press(&mut scene, &sdl, &pad, PadControl::Right);
     assert_eq!(focused(&mut scene), "gamesPage");
     press(&mut scene, &sdl, &pad, PadControl::Right);

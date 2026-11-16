@@ -351,7 +351,8 @@ ThemeScreen {
                                 pixelScale: canvas.unit
                                 onActivated: Actions.play(root.focusedCell?.key ?? "")
                                 KeyNavigation.right: pagePill
-                                Keys.onUpPressed: filterChips.itemAt(Math.max(0, root.filterAt))?.forceActiveFocus()
+                                // Up from the column reaches the path above it.
+                                KeyNavigation.up: crumb
                             }
                             Pill {
                                 id: pagePill
@@ -373,7 +374,7 @@ ThemeScreen {
                                 onActivated: Actions.openPage(root.focusedCell?.key ?? "")
                                 KeyNavigation.left: startPill
                                 Keys.onRightPressed: cells.forceActiveFocus()
-                                Keys.onUpPressed: filterChips.itemAt(Math.max(0, root.filterAt))?.forceActiveFocus()
+                                KeyNavigation.up: crumb
                             }
                         }
                     }

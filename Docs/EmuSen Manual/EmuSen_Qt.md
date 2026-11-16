@@ -1046,7 +1046,7 @@ naming both; one written for an older minor of the same major loads, its minors 
 before it a later minor may have removed what the theme uses, each removal listed in the changelog. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`. The API is the newest of what the module exports and the newest minor that changelog heads a section with, and nothing the module exports is newer, so a minor whose additions are members of types exported earlier is still that minor (decided 2026-11-11 by the tester, R-20261111-107; theme-check's `registry.rs`).
 `theme-qt/build.rs` registers each of the module's files at the minor it was added in, so a theme importing EmuSen.Theme
 1.0 still finds every 1.0 type. The help bar draws a pair of buttons as one entry (`help::pair_of`): LB with RB, as the
-accepted render draws the shoulders, the d-pad's Left with Right, and LT with RT.
+approved render draws the shoulders, the d-pad's Left with Right, and LT with RT.
 
 ### 3.4 The package
 

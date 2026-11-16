@@ -36,8 +36,7 @@ impl Sort {
     }
 }
 
-/// How a section is listed: the sort by its index in `Sort::ALL`, whether the Filter page's Favourites or Not played
-/// narrows it, the search's words, and the members of the collection the Filter page narrows it to.
+/// How a section is listed: the sort by its index in `Sort::ALL`, whether the Filter page's Favourites or Not played narrows it, the search's words, and the members of the collection the Filter page narrows it to.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Listing {
     pub sort: usize,
@@ -92,8 +91,7 @@ pub fn shown(games: &[GameRow], section: &str, listing: &Listing) -> Vec<GameRow
     out
 }
 
-/// One choice of the Filter page as it narrows the section: its action's key, its words and how many of the section's
-/// games it shows.
+/// One choice of the Filter page as it narrows the section: its action's key, its words and how many of the section's games it shows.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Choice {
     pub key: String,
@@ -101,8 +99,7 @@ pub struct Choice {
     pub count: usize,
 }
 
-/// The Filter page's choices for a section's games, each counted once per read: every game, Favourites (not in the
-/// Favourites section, which is them), Not played, then each collection. The one list the List card and a theme show.
+/// The Filter page's choices for a section's games, each counted once per read: every game, Favourites (not in the Favourites section, which is them), Not played, then each collection. The one list the List card and a theme show.
 pub fn choices(games: &[GameRow], section: &str, collections: &[crate::list_card::Listed]) -> Vec<Choice> {
     use crate::list_card::{EVERY_GAME, FAVOURITES_ONLY, NOT_PLAYED};
     let choice = |key: &str, name: &str, count: usize| Choice { key: key.to_owned(), name: name.to_owned(), count };
@@ -117,8 +114,7 @@ pub fn choices(games: &[GameRow], section: &str, collections: &[crate::list_card
     out
 }
 
-/// A sort's words with its direction, as Eclipse's games view says the order in force (EclipseLibrary:62): "Name, A to Z";
-/// an order that names its own direction (an ES-DE theme's, "Name, ascending") as it is.
+/// A sort's words with its direction, as Eclipse's games view says the order in force (EclipseLibrary:62): "Name, A to Z"; an order that names its own direction (an ES-DE theme's, "Name, ascending") as it is.
 pub fn sort_line(words: &str) -> String {
     let direction = match words {
         _ if words.contains(", ") => return words.to_owned(),
@@ -132,8 +128,7 @@ pub fn sort_line(words: &str) -> String {
     format!("{words}, {direction}")
 }
 
-/// A choice's name on Eclipse's games view's chips (EclipseLibrary:55-57): every game as All, Favourites and Not played as
-/// the Filter page names them; none for a collection, which the chips do not show.
+/// A choice's name on Eclipse's games view's chips (EclipseLibrary:55-57): every game as All, Favourites and Not played as the Filter page names them; none for a collection, which the chips do not show.
 pub fn chip_name(key: &str) -> Option<&'static str> {
     use crate::list_card::{EVERY_GAME, FAVOURITES_ONLY, NOT_PLAYED};
     match key {
@@ -144,8 +139,7 @@ pub fn chip_name(key: &str) -> Option<&'static str> {
     }
 }
 
-/// The words a list with nothing in it says (R-20261115-13): a search or a filter that leaves none, Recent, Favourites,
-/// and any other section.
+/// The words a list with nothing in it says (R-20261115-13): a search or a filter that leaves none, Recent, Favourites, and any other section.
 pub fn empty_words(section: &str, narrowed: bool) -> &'static str {
     match section {
         _ if narrowed => crate::words::NO_GAMES_FOUND,

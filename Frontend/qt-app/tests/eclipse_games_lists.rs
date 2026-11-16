@@ -1,6 +1,4 @@
-//! Eclipse's games view narrowed (EmuSen_Qt.md §3.4.10): over a library with a game played, three never played and two
-//! in a collection, Not played and the collection pressed on the chips and their lists and counts read; the filter, the
-//! sort and the letter set on the List card and read in the games view, and the reverse; a search with no game says so.
+//! Eclipse's games view narrowed (EmuSen_Qt.md §3.4.10): over a library with a game played, three never played and two in a collection, Not played and the collection pressed on the chips and their lists and counts read; the filter, the sort and the letter set on the List card and read in the games view, and the reverse; a search with no game says so.
 
 mod common;
 #[path = "eclipse/table.rs"]
@@ -118,8 +116,7 @@ fn qt_3_4_10_eclipses_chips_and_the_list_card_narrow_one_list() {
     wait_for(&mut scene, "gamesGrid", "count", &GAMES.len().to_string(), 3000);
     scene.wait(300);
 
-    // The chips count each list as the board names them: all, no favourite, three never played (R-20261115-10); the
-    // collection is the List card's alone, no chip.
+    // The chips count each list as the board names them: all, no favourite, three never played (R-20261115-10); the collection is the List card's alone, no chip.
     let chips: Vec<String> = (0..3).map(|i| words_of(&mut scene, &format!("gamesFilterWords.{i}")).0).collect();
     let never = GAMES.len() - 1;
     assert_eq!(chips, [words::choice_line(words::ALL, GAMES.len()), words::choice_line(words::FAVOURITES_FILTER, 0), words::choice_line(words::NOT_PLAYED, never)]);

@@ -1,9 +1,4 @@
-//! Eclipse's games view in the running program (EmuSen_Qt.md §3.4.10), driven by an SDL pad inside this process over a
-//! library of 120 games, three with covers, the first by name played and thirty favourites: every row of eclipse/games.tsv
-//! held at each of the gate's sizes, the fields and the disc in the focused game's colours; then over one game (a
-//! collection of one), the thirty favourites and all 120, at each size, every game reached by the pad, the pointer and
-//! the wheel, none cut and none under the help line; and the chips, the sort, the path, the letters and the buttons, each
-//! pressed by the pad and by the pointer. One test, as the harness is one per process.
+//! Eclipse's games view in the running program (EmuSen_Qt.md §3.4.10), driven by an SDL pad inside this process over a library of 120 games, three with covers, the first by name played and thirty favourites: every row of eclipse/games.tsv held at each of the gate's sizes, the fields and the disc in the focused game's colours; then over one game (a collection of one), the thirty favourites and all 120, at each size, every game reached by the pad, the pointer and the wheel, none cut and none under the help line; and the chips, the sort, the path, the letters and the buttons, each pressed by the pad and by the pointer. One test, as the harness is one per process.
 
 use crate::common::{draw_covers, sandbox, wait_for};
 use crate::eclipse_pad::{focused, press};
@@ -77,8 +72,7 @@ fn read_shown(tree: &Tree, name: &str, property: &str) -> String {
     emusen_qt_test::ffi::ffi::harness_property(crate::eclipse_board::object(n.id.parse().unwrap()), &cxx_qt_lib::QString::from(name), &cxx_qt_lib::QString::from(property)).to_string()
 }
 
-/// Every row of the board's table held to the screen at each of the gate's sizes with the played game focused; the fields
-/// in the board's saturation and lightness with the disc's hue; the line heights; five columns at the board's shape.
+/// Every row of the board's table held to the screen at each of the gate's sizes with the played game focused; the fields in the board's saturation and lightness with the disc's hue; the line heights; five columns at the board's shape.
 fn board_held(scene: &mut Scene<'_>) {
     let (board_height, rows) = crate::eclipse_board::rows(BOARD);
     let k = DESIGN_HEIGHT / board_height;
@@ -96,8 +90,7 @@ fn board_held(scene: &mut Scene<'_>) {
         if (scale - unit).abs() > 1e-9 {
             differences.push(format!("{at}: the disc's glows blurred at {scale} pixels a unit where the scene draws {unit}"));
         }
-        // The rim takes the art's first hue; the first field the same hue, both fields the board's saturation and lightness.
-        // The games' disc's rim, not the hidden empty board's.
+        // The rim takes the art's first hue; the first field the same hue, both fields the board's saturation and lightness. The games' disc's rim, not the hidden empty board's.
         let rim = Colour::parse(&read_shown(&tree, "coronaRim", "color")).map(|c| c.to_hsl());
         let token = tokens.get("coronaColor").and_then(|v| Colour::parse(v)).map(|c| c.to_hsl());
         let Some(rim) = rim.filter(|r| Some(*r) != token) else {
@@ -162,8 +155,7 @@ fn whole(tree: &Tree, i: usize) -> Result<(), String> {
     Ok(())
 }
 
-/// Over the list shown (`count` games) at every gate size: Right walks every game in order, each whole when focused; the
-/// wheel brings every row in from the top; the pointer moved onto each tile of a row brought in focuses it.
+/// Over the list shown (`count` games) at every gate size: Right walks every game in order, each whole when focused; the wheel brings every row in from the top; the pointer moved onto each tile of a row brought in focuses it.
 fn reached(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, count: usize) {
     for (width, height) in SIZES {
         scene.resize(width, height);

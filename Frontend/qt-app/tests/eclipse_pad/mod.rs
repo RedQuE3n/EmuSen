@@ -1,5 +1,4 @@
-//! The pad as a hand presses it, and the focus read back, for the oracles of Eclipse's screens (eclipse_consoles_oracle,
-//! eclipse_games_oracle): an SDL pad inside the test's process, as the program reads one.
+//! The pad as a hand presses it, and the focus read back, for the oracles of Eclipse's screens (eclipse_consoles_oracle, eclipse_games_oracle): an SDL pad inside the test's process, as the program reads one.
 #![allow(dead_code)]
 
 use emusen_kit_core::input::PadControl;
@@ -18,8 +17,7 @@ pub fn focused(scene: &mut Scene<'_>) -> String {
     scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
 }
 
-/// A control pressed and let go on the pad, as a hand does: down until the router holds it (or the screen it opens is
-/// shown, whose frame holds nothing yet), up until it has let it go.
+/// A control pressed and let go on the pad, as a hand does: down until the router holds it (or the screen it opens is shown, whose frame holds nothing yet), up until it has let it go.
 pub fn press(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, control: PadControl) {
     let button = control.press().expect("a control the interface hears");
     let shown = scene.property("screens", "shown");

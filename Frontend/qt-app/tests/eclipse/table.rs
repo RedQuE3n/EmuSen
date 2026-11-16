@@ -1,5 +1,4 @@
-//! Eclipse's games view held to its table (`empty.tsv`, EmuSen_Qt.md §3.4.10): every built row's checks against the
-//! scene's items, a board pixel converted by kit-core's design height over the board's height.
+//! Eclipse's games view held to its table (`empty.tsv`, EmuSen_Qt.md §3.4.10): every built row's checks against the scene's items, a board pixel converted by kit-core's design height over the board's height.
 
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::tokens::Colour;
@@ -8,8 +7,7 @@ use emusen_qt_test::Scene;
 
 pub const TABLE: &str = include_str!("empty.tsv");
 
-/// Two measures in canvas units are one where they differ by less than this: Qt's scene holds positions in single
-/// precision (about 7 digits), so a 3840-pixel window rounds at a few ten-thousandths of a unit; not a design allowance.
+/// Two measures in canvas units are one where they differ by less than this: Qt's scene holds positions in single precision (about 7 digits), so a 3840-pixel window rounds at a few ten-thousandths of a unit; not a design allowance.
 const SAME: f64 = 1e-3;
 
 /// One built row: the item it names, the board's height and its checks.
@@ -54,8 +52,7 @@ fn words_named(name: &str) -> &'static str {
     }
 }
 
-/// The built rows of the table, in its order; a row marked built with no item or no check is refused, since nothing
-/// would hold it.
+/// The built rows of the table, in its order; a row marked built with no item or no check is refused, since nothing would hold it.
 pub fn built() -> Vec<Row> {
     rows_of(TABLE)
 }
@@ -88,8 +85,7 @@ fn same(a: f64, b: f64) -> bool {
     (a - b).abs() < SAME
 }
 
-/// The differences between the rows given and the scene at the window's height `h` and width `w`, each a line; `states`
-/// names the rows held in this state (the games or the empty one).
+/// The differences between the rows given and the scene at the window's height `h` and width `w`, each a line; `states` names the rows held in this state (the games or the empty one).
 pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<String> {
     let tree = scene.tree();
     let unit = h / DESIGN_HEIGHT;
@@ -170,8 +166,7 @@ pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<
                     continue;
                 }
                 "colour" => {
-                    // The item's own colour where others draw over it, as the ground under the disc.
-                    // The shown element's, where a hidden screen holds the name too.
+                    // The item's own colour where others draw over it, as the ground under the disc. The shown element's, where a hidden screen holds the name too.
                     let id: u64 = node.id.parse().unwrap();
                     // Safety: the id was read from the live tree.
                     let object = unsafe { core::pin::Pin::new_unchecked(&mut *(id as *mut cxx_qt::QObject)) };
@@ -182,8 +177,7 @@ pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<
                     continue;
                 }
                 "fill" => {
-                    // Read as drawn, inside the box's left end at its middle (its centre where it is narrower than its ends'
-                    // offset), clear of the words a pill or a disc carries at its centre.
+                    // Read as drawn, inside the box's left end at its middle (its centre where it is narrower than its ends' offset), clear of the words a pill or a disc carries at its centre.
                     let at = if node.w > 8.0 { (node.x + 3.0, node.y + node.h / 2.0) } else { (node.x + node.w / 2.0, node.y + node.h / 2.0) };
                     let read = scene.colours_at(&[at])[0];
                     let want = Colour::parse(value).expect("a colour");
@@ -202,8 +196,7 @@ pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<
     out
 }
 
-/// The tiles by the board's rule: as many columns of the tile's width and gap as fit between its left edge and its right
-/// margin, the rows shown placed down from its top, each tile at its column and row.
+/// The tiles by the board's rule: as many columns of the tile's width and gap as fit between its left edge and its right margin, the rows shown placed down from its top, each tile at its column and row.
 fn tiles(scene: &mut Scene<'_>, tree: &Tree, row: &Row, unit: f64, canvas_width: f64, units: &dyn Fn(&str) -> f64) -> Vec<String> {
     let get = |key: &str| row.get(key);
     let (left, top, tw, th, gap, right) = (units(get("x").unwrap()), units(get("y").unwrap()), units(get("w").unwrap()), units(get("h").unwrap()), units(get("gap").unwrap()), units(get("right").unwrap()));

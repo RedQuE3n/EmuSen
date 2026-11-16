@@ -49,8 +49,7 @@ fn declared(block: &str, kind: &str) -> Vec<String> {
     out
 }
 
-/// The names declared in a component under `kind`, less the change signals and the setters of its own properties, which
-/// Qt makes for each writable one; any other method named set..., as Actions.setFilter, is the API's and is held.
+/// The names declared in a component under `kind`, less the change signals and the setters of its own properties, which Qt makes for each writable one; any other method named set..., as Actions.setFilter, is the API's and is held.
 fn names(block: &str, kind: &str) -> BTreeSet<String> {
     let properties = declared(block, "Property");
     let setter = |name: &str| {

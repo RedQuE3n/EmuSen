@@ -195,8 +195,7 @@ pub const PLACES: [(&str, &str); 3] = [("all", "All games"), (FAVOURITES, "Favou
 /// A console's games, as `section_kind` names the list.
 pub const CONSOLE_KIND: &str = "console";
 
-/// Which list a section is, as a theme is told it (R-20261115-13): every game, the favourites, the recently played, or a
-/// console's games; none for no section.
+/// Which list a section is, as a theme is told it (R-20261115-13): every game, the favourites, the recently played, or a console's games; none for no section.
 pub fn section_kind(key: &str) -> &'static str {
     match key {
         "" => "",

@@ -299,8 +299,7 @@ pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
 /// The group's entry on the triggers, where a screen's triggers step its makers (Eclipse's Choose a console, R-20261115-17).
 pub const MAKER: Entry = (UiButton::First, "Maker", None);
 pub const BACK: Entry = (UiButton::Back, "Back", None);
-/// The triggers on a games view that steps letters (R-20261115-12): LT the letter before, drawn as one entry with RT,
-/// the letter after; the List card's Jump to by the same actions.
+/// The triggers on a games view that steps letters (R-20261115-12): LT the letter before, drawn as one entry with RT, the letter after; the List card's Jump to by the same actions.
 pub const LETTER: Entry = (UiButton::First, "Letter", Some(crate::list_card::JUMP_BACK));
 pub const LETTER_ON: Entry = (UiButton::Last, "Letter", Some(crate::list_card::JUMP_ON));
 
@@ -386,8 +385,7 @@ pub fn options_named(list: Vec<Entry>) -> Vec<Entry> {
         .collect()
 }
 
-/// A list as Eclipse's games view's foot names and orders it (EclipseLibrary:84-86): A Start, B Back, Y Favourite; X is the Game page
-/// button the column draws, and the triggers' letters stand at the right.
+/// A list as Eclipse's games view's foot names and orders it (EclipseLibrary:84-86): A Start, B Back, Y Favourite; X is the Game page button the column draws, and the triggers' letters stand at the right.
 pub fn games_named(list: Vec<Entry>) -> Vec<Entry> {
     const ORDER: [UiButton; 3] = [UiButton::Accept, UiButton::Back, UiButton::Search];
     let mut named: Vec<Entry> = list

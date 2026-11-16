@@ -75,13 +75,11 @@ pub const NO_GAMES: &str = "No games yet";
 pub const NO_RECENT: &str = "Nothing played yet";
 pub const NO_CONSOLES: &str = "No consoles have games yet";
 pub const ADD_FOLDER: &str = "Settings › Library adds a folder";
-/// A list with nothing in it, by the list (decided 2026-11-15 by the tester, R-20261115-13): Favourites with none, and a
-/// search or a filter that leaves none; Recent keeps NO_RECENT.
+/// A list with nothing in it, by the list (decided 2026-11-15 by the tester, R-20261115-13): Favourites with none, and a search or a filter that leaves none; Recent keeps NO_RECENT.
 pub const NO_FAVOURITES: &str = "No favourites yet";
 pub const NO_GAMES_FOUND: &str = "No games found";
 
-/// The List card's filters as the Filter page and a theme's choices name them; "Not played" decided 2026-11-15 by the
-/// tester (R-20261115-10).
+/// The List card's filters as the Filter page and a theme's choices name them; "Not played" decided 2026-11-15 by the tester (R-20261115-10).
 pub const EVERY_GAME: &str = "Every game";
 pub const FAVOURITES_FILTER: &str = "Favourites";
 pub const NOT_PLAYED: &str = "Not played";

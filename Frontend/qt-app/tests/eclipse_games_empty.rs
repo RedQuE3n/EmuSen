@@ -1,6 +1,4 @@
-//! Eclipse's games view with no game in the library (EmuSen_Qt.md §3.4.10): the empty board's rows of `eclipse/empty.tsv`
-//! held to the screen at each of the gate's sizes, and the program's words; the theme's fit and contrast are theme-check's loaded step. With
-//! `ECLIPSE_GAMES_PICTURES` set, the state is saved there at 1280x800 and 1920x1200.
+//! Eclipse's games view with no game in the library (EmuSen_Qt.md §3.4.10): the empty board's rows of `eclipse/empty.tsv` held to the screen at each of the gate's sizes, and the program's words; the theme's fit and contrast are theme-check's loaded step. With `ECLIPSE_GAMES_PICTURES` set, the state is saved there at 1280x800 and 1920x1200.
 
 mod common;
 #[path = "eclipse/table.rs"]
@@ -36,8 +34,7 @@ fn qt_3_4_10_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table() 
     assert!(scene.focus_item(&tree, all));
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
-    // Eclipse chosen on the games view, reached through the reference's Choose a console: Eclipse's Home has no places
-    // until the top navigation's piece (R-20261115-7).
+    // Eclipse chosen on the games view, reached through the reference's Choose a console: Eclipse's Home has no places until the top navigation's piece (R-20261115-7).
     assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);
     let warnings = scene.property("host.theme", "warnings");

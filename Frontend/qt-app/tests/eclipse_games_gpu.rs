@@ -1,6 +1,4 @@
-//! Eclipse's games view in the running program on the graphics card (EmuSen_Qt.md §3.4.10), in a compositor of the
-//! test's own: the same oracle as eclipse_games.rs, so the disc's glows, the fields and the tiles' shadows blur at the
-//! scene's pixels on the card, and the pictures when EMUSEN_ECLIPSE_PICTURES names a folder. A GPU job.
+//! Eclipse's games view in the running program on the graphics card (EmuSen_Qt.md §3.4.10), in a compositor of the test's own: the same oracle as eclipse_games.rs, so the disc's glows, the fields and the tiles' shadows blur at the scene's pixels on the card, and the pictures when EMUSEN_ECLIPSE_PICTURES names a folder. A GPU job.
 
 mod common;
 mod eclipse_board;

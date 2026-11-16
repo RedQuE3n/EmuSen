@@ -1,5 +1,4 @@
-//! Eclipse's games view in the running program on the software backend (EmuSen_Qt.md §3.4.10): the oracle of
-//! eclipse_games_oracle, its table, its walk and its pictures; and the empty lists' table's reader and the listing's actions.
+//! Eclipse's games view in the running program on the software backend (EmuSen_Qt.md §3.4.10): the oracle of eclipse_games_oracle, its table, its walk and its pictures; and the empty lists' table's reader and the listing's actions.
 
 mod common;
 mod eclipse_board;

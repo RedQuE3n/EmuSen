@@ -142,8 +142,7 @@ fn startable(f: &Value) -> Vec<crate::home_card::Startable> {
     f.get("startable").cloned().and_then(|s| serde_json::from_value(s).ok()).unwrap_or_default()
 }
 
-/// The Filter page: the grid's choices as `listing::choices` makes them where the facts carry them; else every game,
-/// then Favourites except in the Favourites section, then the player's collections.
+/// The Filter page: the grid's choices as `listing::choices` makes them where the facts carry them; else every game, then Favourites except in the Favourites section, then the player's collections.
 fn filter_page(f: &Value) -> Page {
     if let Some(choices) = f.get("filters").cloned().and_then(|c| serde_json::from_value::<Vec<crate::listing::Choice>>(c).ok()) {
         let rows = choices.iter().map(|c| Row::new(&c.key, &c.name)).collect();

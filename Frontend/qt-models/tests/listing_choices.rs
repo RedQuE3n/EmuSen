@@ -1,7 +1,4 @@
-//! The grid's listing as a theme reads and drives it (EmuSen_Qt.md §3.4.10; R-20261115-10 to -13): Not played narrows to
-//! the games with no played time, the Filter page's choices with their counts are one list for the List card and a theme,
-//! a list with nothing in it says its own words, a section is told by its kind, and the triggers step letters where a
-//! bar asks for them.
+//! The grid's listing as a theme reads and drives it (EmuSen_Qt.md §3.4.10; R-20261115-10 to -13): Not played narrows to the games with no played time, the Filter page's choices with their counts are one list for the List card and a theme, a list with nothing in it says its own words, a section is told by its kind, and the triggers step letters where a bar asks for them.
 
 use emusen_kit_core::input::UiButton;
 use emusen_qt_models::card::pages_of;

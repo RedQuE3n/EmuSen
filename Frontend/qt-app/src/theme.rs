@@ -532,8 +532,6 @@ impl qobject::ThemeFeed {
         self.feed_device();
         self.feed_library();
         self.feed_session();
-        // A theme's engine starts with no facts: they are read again for it.
-        self.facts_for.borrow_mut().clear();
         self.feed_browse();
     }
 

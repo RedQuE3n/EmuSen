@@ -2,7 +2,7 @@ import QtQuick
 
 // The colours only the games view draws that no token holds, constants of the design with their board lines; those other screens draw too are Ink's (EmuSen_Qt.md §3.4.10).
 QtObject {
-    // The empty state's line (EclipseEmpty:30).
+    // The empty state's line and a game's description (EclipseEmpty:30, EclipseLibrary:44).
     readonly property color words: "#C9CDDB"
     // A filter chip at rest: its ground, rgba(7, 8, 15, 0.6); its line is Ink.chipLine and its words Ink.tileFacts (EclipseLibrary:56).
     readonly property color chipGround: "#9907080F"

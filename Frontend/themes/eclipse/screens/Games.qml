@@ -31,6 +31,12 @@ ThemeScreen {
             // A board pixel in canvas units, Board's.
             readonly property real px: board.unit
             readonly property var focusedCell: cells.currentItem
+            // Browse's facts, read off the GUI thread, once they are the focused game's (EmuSen_Qt.md §3.4.10).
+            readonly property bool factsHere: root.focusedCell !== null && Browse.factsKey === root.focusedCell.key
+            // The height the description may take: the foot less the column's other rows and the gaps between them.
+            readonly property real aboutRoom: root.foot - aside.y - eyebrow.height - titleWords.height - actions.height
+                - (chips.visible ? chips.height + 22 * root.px : 0) - (plays.visible ? plays.height + 22 * root.px : 0) - 3 * 22 * root.px
+            readonly property string year: root.focusedCell && root.focusedCell.year > 0 ? String(root.focusedCell.year) : (root.factsHere ? Browse.year : "")
             // No console has a game (Choose a console's "With games", Words.consoleShows[1]), so the library has none: the first-run state.
             readonly property bool noLibrary: Library.consolesBy(1, 0, []).count === 0 && cells.count === 0 && !Browse.searched
             // The board's measures in its pixels, constants of the design (EclipseLibrary:64-73, 88).
@@ -271,8 +277,9 @@ ThemeScreen {
                         y: 80 * root.px - height / 2
                     }
 
-                    // The focused game's column: its console and year, its name, its last play, and A and X as buttons (EclipseLibrary:37-53).
+                    // The focused game's column: its console and year, its name, its genre and players, its description, its plays and states, and A and X as buttons (EclipseLibrary:37-53); a fact the game has none of is left out.
                     Column {
+                        id: aside
                         objectName: "gamesAside"
                         visible: !root.noLibrary && root.focusedCell !== null
                         x: root.margin
@@ -280,10 +287,11 @@ ThemeScreen {
                         width: 440 * root.px
                         spacing: 22 * root.px
                         Line {
+                            id: eyebrow
                             objectName: "gamesConsole"
                             unit: root.px
                             width: parent.width
-                            text: root.focusedCell ? Words.line([root.focusedCell.consoleName, root.focusedCell.year > 0 ? String(root.focusedCell.year) : ""]) : ""
+                            text: root.focusedCell ? Words.line([root.focusedCell.consoleName, root.year]) : ""
                             wrapMode: Text.Wrap
                             color: ink.rose
                             size: 18
@@ -292,6 +300,7 @@ ThemeScreen {
                             capitalization: Font.AllUppercase
                         }
                         Line {
+                            id: titleWords
                             objectName: "gamesTitle"
                             unit: root.px
                             width: parent.width
@@ -304,29 +313,93 @@ ThemeScreen {
                             lineHeightMode: Text.FixedHeight
                             lineHeight: 62 * 1.04
                         }
-                        Item {
-                            objectName: "gamesFact.0"
-                            visible: root.focusedCell !== null && root.focusedCell.played
-                            width: parent.width
-                            height: factLabel.height
-                            Line {
-                                id: factLabel
-                                objectName: "gamesFactLabel.0"
-                                unit: root.px
-                                text: Words.gameFactLabels[0]
-                                color: Tokens.muted
-                                size: 20
+                        Row {
+                            id: chips
+                            objectName: "gamesChips"
+                            visible: root.factsHere && (Browse.genre.length > 0 || Browse.players.length > 0)
+                            spacing: 10 * root.px
+                            Repeater {
+                                model: [{ name: "genreChip", words: root.factsHere ? Browse.genre : "" }, { name: "playersChip", words: root.factsHere ? Browse.players : "" }]
+                                Rectangle {
+                                    required property var modelData
+                                    objectName: modelData.name
+                                    visible: modelData.words.length > 0
+                                    width: chipWords.width + 2 * 16 * root.px
+                                    height: 38 * root.px
+                                    radius: 19 * root.px
+                                    color: "transparent"
+                                    border.width: 2 * root.px
+                                    border.color: ink.chipLine
+                                    Line {
+                                        id: chipWords
+                                        objectName: parent.modelData.name + "Words"
+                                        unit: root.px
+                                        x: 16 * root.px
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: parent.modelData.words
+                                        color: Tokens.text
+                                        size: 18
+                                    }
+                                }
                             }
-                            Line {
-                                objectName: "gamesFactValue.0"
-                                unit: root.px
-                                x: parent.width - width
-                                text: root.focusedCell ? root.focusedCell.lastPlayedWords : ""
-                                color: Tokens.text
-                                size: 20
+                        }
+                        Line {
+                            id: about
+                            objectName: "description"
+                            visible: root.factsHere && Browse.description.length > 0
+                            unit: root.px
+                            width: parent.width
+                            text: root.factsHere ? Browse.description : ""
+                            wrapMode: Text.Wrap
+                            // As many whole lines as stand between the column's other rows and the foot (EmuSen_Qt.md §3.4.10).
+                            maximumLineCount: Math.max(1, Math.floor(root.aboutRoom / (20 * 1.5 * root.px)))
+                            elide: Text.ElideRight
+                            color: own.words
+                            size: 20
+                            weight: Font.Light
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 20 * 1.5
+                        }
+                        Column {
+                            id: plays
+                            objectName: "gamesFacts"
+                            visible: (root.focusedCell !== null && root.focusedCell.played) || (root.factsHere && (Browse.timePlayed.length > 0 || Browse.states > 0))
+                            width: parent.width
+                            spacing: 12 * root.px
+                            Repeater {
+                                model: [
+                                    root.focusedCell !== null && root.focusedCell.played ? root.focusedCell.lastPlayedWords : "",
+                                    root.factsHere ? Browse.timePlayed : "",
+                                    root.factsHere && Browse.states > 0 ? String(Browse.states) : ""
+                                ]
+                                Item {
+                                    required property int index
+                                    required property string modelData
+                                    objectName: "gamesFact." + index
+                                    visible: modelData.length > 0
+                                    width: plays.width
+                                    height: factLabel.height
+                                    Line {
+                                        id: factLabel
+                                        objectName: "gamesFactLabel." + parent.index
+                                        unit: root.px
+                                        text: Words.gameFactLabels[parent.index]
+                                        color: Tokens.muted
+                                        size: 20
+                                    }
+                                    Line {
+                                        objectName: "gamesFactValue." + parent.index
+                                        unit: root.px
+                                        x: parent.width - width
+                                        text: parent.modelData
+                                        color: Tokens.text
+                                        size: 20
+                                    }
+                                }
                             }
                         }
                         Row {
+                            id: actions
                             objectName: "gamesActions"
                             // The board's six pixels over the buttons (EclipseLibrary:50).
                             topPadding: 6 * root.px

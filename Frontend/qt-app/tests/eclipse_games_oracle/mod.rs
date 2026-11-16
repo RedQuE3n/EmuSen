@@ -6,7 +6,7 @@ use emusen_client_fixture::library;
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::input::PadControl;
 use emusen_kit_core::tokens::Colour;
-use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
+use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS, SAVE_RESUME_STATE, SAVE_STATE};
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
@@ -21,8 +21,12 @@ use serde_json::json;
 const BOARD: &str = include_str!("../eclipse/games.tsv");
 /// The covers drawn, each a shape of its own: tall, wide and square, at sizes that are constants of this test.
 const COVERS: [(&str, (u32, u32)); 3] = [("Aurora Drift", (300, 420)), ("Amber Relay", (420, 300)), ("Basalt Kings", (360, 360))];
-/// The first by name, played, so the column shows its last play as the board does.
+/// The first by name, played, so the column shows its last play as the board does; with every fact the board draws.
 const PLAYED: &str = "Amber Relay";
+/// The second by name, with no fact at all.
+const BARE: &str = "Aurora Drift";
+/// Its facts, as edits in games.db, which the scraper's metadata reads first: the board's words for a game invented for the tests.
+const DESCRIPTION: &str = "Amber Relay is a game invented for EmuSen's tests. It has no story and no pictures of its own; every image shown for it is a flat colour with its name written on it.";
 /// The library's size, the most this fixture shelves, and how many of its games are favourites.
 const GAMES: usize = 120;
 const FAVOURITES: usize = 30;
@@ -58,6 +62,17 @@ fn shown<'a>(tree: &'a Tree, name: &str) -> Option<&'a emusen_qt_test::tree::Nod
 fn words(scene: &mut Scene<'_>, name: &str) -> String {
     let tree = scene.tree();
     shown(&tree, name).and_then(|n| n.text.clone()).unwrap_or_default()
+}
+
+/// Waits until the shown element of a name says `want`, as a delegate's words are found by the tree alone.
+fn says(scene: &mut Scene<'_>, name: &str, want: &str) {
+    for _ in 0..100 {
+        if words(scene, name) == want {
+            return;
+        }
+        scene.wait(50);
+    }
+    assert_eq!(words(scene, name), want, "{name} after 5 s");
 }
 
 fn middle(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
@@ -123,15 +138,39 @@ fn board_held(scene: &mut Scene<'_>) {
 }
 
 /// The pictures for the tester, when a folder is named.
-fn pictures(scene: &mut Scene<'_>, backend: &str) {
+fn pictures(scene: &mut Scene<'_>, backend: &str, game: &str) {
     let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") else { return };
     std::fs::create_dir_all(&folder).unwrap();
     for (width, height) in [(1920, 1200), (1280, 800)] {
         scene.resize(width, height);
         scene.wait(500);
-        let path = std::path::Path::new(&folder).join(format!("games-{width}x{height}-{backend}.png"));
+        let path = std::path::Path::new(&folder).join(format!("games-{game}-{width}x{height}-{backend}.png"));
         assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
     }
+}
+
+/// The game with no facts focused: none of its rows or chips is made, and what follows moves up as the board's column flows.
+fn bare_flows(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad) {
+    press(scene, sdl, pad, PadControl::Right);
+    wait_for(scene, "gamesTitle", "text", BARE, 2000);
+    let mut tree = scene.tree();
+    for _ in 0..100 {
+        if shown(&tree, "gamesChips").is_none() && shown(&tree, "description").is_none() && shown(&tree, "gamesFacts").is_none() {
+            break;
+        }
+        scene.wait(50);
+        tree = scene.tree();
+    }
+    for name in ["gamesChips", "genreChip", "playersChip", "description", "gamesFacts", "gamesFact.0", "gamesFact.1", "gamesFact.2"] {
+        assert!(shown(&tree, name).is_none(), "{name} is drawn for a game with none of it");
+    }
+    assert!(!words(scene, "gamesConsole").contains('·'), "no year for a game with none: {}", words(scene, "gamesConsole"));
+    let unit: f64 = crate::eclipse_board::read(&tree, "gridCanvas", "unit").parse().unwrap();
+    let px = DESIGN_HEIGHT / 1200.0 * unit;
+    let title = shown(&tree, "gamesTitle").unwrap();
+    let start = shown(&tree, "gamesStart").unwrap();
+    let want = title.y + title.h + 28.0 * px;
+    assert!((start.y - want).abs() < 0.5, "Start {} under the title where the column flows to {want}", start.y);
 }
 
 /// The focused tile's index.
@@ -219,6 +258,10 @@ pub fn oracle(backend: &str) {
     let path = |title: &str| world.root.join("Roms/SNES").join(format!("{title}.sfc")).to_str().unwrap().to_owned();
     let games = records();
     games.change(&json!({ "op": "started", "path": path(PLAYED), "at": "2026-11-13T10:00:00Z" })).unwrap();
+    let changes = json!({ "releasedate": "1994-03-18", "genre": "Action", "players": "1-2", "description": DESCRIPTION });
+    games.change(&json!({ "op": "save_edits", "path": path(PLAYED), "changes": changes, "at": "2026-11-13T10:00:00Z" })).unwrap();
+    // 3 h 20 min played, the board's.
+    games.change(&json!({ "op": "played", "path": path(PLAYED), "seconds": 12_000.0, "max_hours": 24 })).unwrap();
     for title in titles.iter().skip(titles.len() - FAVOURITES) {
         games.change(&json!({ "op": "toggle_favourite", "path": path(title) })).unwrap();
     }
@@ -227,6 +270,18 @@ pub fn oracle(backend: &str) {
     drop(games);
     let platform = Platform::load(library()).unwrap();
     let media = world.dir("Media");
+    // Three states, the board's: two slots and the automatic one.
+    for (kind, slot) in [(SAVE_STATE, 1), (SAVE_STATE, 2), (SAVE_RESUME_STATE, 0)] {
+        let file = platform.save_path(kind, &path(PLAYED), None, slot).unwrap();
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, b"state").unwrap();
+    }
+    // The machine's battery at the board's 82%, discharging, in the world's made-up power_supply tree (EclipseLibrary:33).
+    let power = world.power_supply().join("BAT0");
+    std::fs::create_dir_all(&power).unwrap();
+    for (key, value) in [("type", "Battery"), ("capacity", "82"), ("status", "Discharging")] {
+        std::fs::write(power.join(key), format!("{value}\n")).unwrap();
+    }
 
     let sdl = Sdl::open();
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
@@ -279,9 +334,23 @@ pub fn oracle(backend: &str) {
     }
     assert_eq!(focused(&mut scene), "gamesTile.0", "the first game by name has the focus");
     wait_for(&mut scene, "gamesTitle", "text", PLAYED, 2000);
+    // Its facts, read off the GUI thread, and the battery, read on start.
+    says(&mut scene, "gamesFactValue.2", "3");
+    says(&mut scene, "battery", "82%");
     scene.wait(500);
     board_held(&mut scene);
-    pictures(&mut scene, backend);
+    assert_eq!(words(&mut scene, "genreChipWords"), "Action");
+    assert_eq!(words(&mut scene, "playersChipWords"), "1 to 2 players");
+    assert_eq!(words(&mut scene, "description"), DESCRIPTION);
+    assert_eq!(words(&mut scene, "gamesFactValue.1"), "3 h 20 min");
+    assert!(words(&mut scene, "gamesConsole").ends_with(" · 1994"), "the year from the scraper's release date: {}", words(&mut scene, "gamesConsole"));
+    pictures(&mut scene, backend, "facts");
+    scene.resize(1280, 800);
+    scene.wait(300);
+    bare_flows(&mut scene, &sdl, &pad);
+    pictures(&mut scene, backend, "none");
+    press(&mut scene, &sdl, &pad, PadControl::Left);
+    wait_for(&mut scene, "gamesTitle", "text", PLAYED, 2000);
     scene.resize(1280, 800);
     scene.wait(300);
 

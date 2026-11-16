@@ -2,7 +2,7 @@
 # board_height: 1200
 # Boxes are the board's pixels; tests/eclipse_games_oracle turns each into canvas units as value × canvas::DESIGN_HEIGHT / board_height.
 # The rules and types are eclipse_home.tsv's and consoles.tsv's, read by tests/eclipse_board/mod.rs.
-# The state held is the board's with the program's games: the first game by name played and focused, the chip Every game in force, the sort Name.
+# The state held is the board's with the program's games: the first game by name played and focused, with every fact the board draws (its year, genre, players and description as games.db's edits, 3 h 20 min played, three states), the machine's battery at 82%, the chip Every game in force, the sort Name.
 # The disc's colour, the fields' hue, the line heights and the tiles' columns are held by the oracle beside the table.
 # status: built, nothing (the program has nothing for it, so no element of it is made: the reason in "program"), or ruled (another piece's, by the ruling named).
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
@@ -20,20 +20,26 @@ gamesPathBack	26	"Consoles"	the help's B entry on the grid (help.rs Screen::Grid
 gamesPathSlash	27	"/"	Words.crumb (words::CRUMB)	Text	after:gamesPathBack:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
 gamesPathHere	28	"Super Nintendo"	Browse.heading, the section's name	Text	after:gamesPathSlash:14	mid:80	-	-	-	Tokens.text	24	built	600 0 none
 status	32	the status glass	the board's own colour, Ink.glass	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
-battery	33	"82%"	nothing: the program feeds Device.battery no charge on any machine yet; Status draws it, before the clock by 22, where one is fed	-	-	-	-	-	-	-	-	nothing	-
+battery	33	"82%"	Device.battery as Words.percent gives it, fed from the platform library (EmuSen_RustPlatform.md §58), Eclipse's Status part	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
 clock	33	"9:41 PM"	Device.shortTime, Eclipse's Status part	Text	-	mid:80	inright:status:22	-	-	Tokens.text	22	built	600 0 none
 gamesAside	37	the focused game's column, 440 px	-	Column	96	230	440	-	-	-	-	built	-
-gamesConsole	38	"SUPER NINTENDO · 1994"	the row's consoleName and year (library::GameRow), Words.line	Text	in:gamesAside:0	top:gamesAside:0	-	-	-	#FFF3C9D2	18	built	600 0.2 upper
+gamesConsole	38	"SUPER NINTENDO · 1994"	the row's consoleName and year (library::GameRow), else Browse.year, the focused game's release year (library::facts_of); Words.line	Text	in:gamesAside:0	top:gamesAside:0	-	-	-	#FFF3C9D2	18	built	600 0.2 upper
 gamesTitle	39	"Aurora Drift"	the row's title	Text	in:gamesAside:0	below:gamesConsole:22	440	-	-	Tokens.text	62	built	600 -0.02 none
-genreChip	41	the genre chip, "Action"	nothing: the grid's rows (library::GameRow) hold no genre; the scraper's facts reach the game page alone (game_page_source.rs)	-	-	-	-	-	-	-	-	nothing	-
-playersChip	42	the players chip, "1 to 2 players"	nothing: the grid's rows hold no players	-	-	-	-	-	-	-	-	nothing	-
-description	44	the game's description	nothing: the grid's rows hold no description	-	-	-	-	-	-	-	-	nothing	-
-gamesFact.0	46	"Last played", "Yesterday"	the row's lastPlayedWords (words::ago), drawn for a game played	Item	in:gamesAside:0	below:gamesTitle:22	440	-	-	-	-	built	-
+genreChip	41	the genre chip, "Action"	Browse.genre, the scraper's genre (library::facts_of); left out for a game with none	Rectangle	in:gamesAside:0	below:gamesTitle:22	fit:genreChipWords:16	38	19	-	-	built	line 2 #FF4A5068
+genreChipWords	41	its words	Browse.genre	Text	in:genreChip:16	mid:genreChip	-	-	-	Tokens.text	18	built	400 0 none
+playersChip	42	the players chip, "1 to 2 players"	Browse.players, the scraper's players in words (words::players); left out for a game with none	Rectangle	after:genreChip:10	foot:genreChip	fit:playersChipWords:16	38	19	-	-	built	line 2 #FF4A5068
+playersChipWords	42	its words	Browse.players	Text	in:playersChip:16	mid:playersChip	-	-	-	Tokens.text	18	built	400 0 none
+description	44	the game's description	Browse.description, the scraper's (library::facts_of); left out for a game with none	Text	in:gamesAside:0	below:genreChip:22	440	-	-	#FFC9CDDB	20	built	300 0 none
+gamesFact.0	46	"Last played", "Yesterday"	the row's lastPlayedWords (words::ago), drawn for a game played	Item	in:gamesAside:0	below:description:22	440	-	-	-	-	built	-
 gamesFactLabel.0	46	its label	Words.gameFactLabels[0] (words::GAME_FACT_LABELS)	Text	in:gamesFact.0:0	mid:gamesFact.0	-	-	-	Tokens.muted	20	built	400 0 none
 gamesFactValue.0	46	its value, right aligned	the row's lastPlayedWords	Text	-	mid:gamesFact.0	inright:gamesFact.0:0	-	-	Tokens.text	20	built	400 0 none
-timePlayed	47	"Time played", "3 h 20 min"	nothing: the grid's rows hold no time played; games.db's play_seconds reaches the game page alone	-	-	-	-	-	-	-	-	nothing	-
-states	48	"States", "3"	nothing: the grid's rows hold no count of states; the game page reads the states from their files	-	-	-	-	-	-	-	-	nothing	-
-gamesStart	51	Start, A	the help's A, named Start (help::games_named, words::START), Eclipse's Pill; plays the focused game	Pill	in:gamesAside:0	below:gamesFact.0:28	fit:buttonLabel.0:28	64	32	Tokens.accent	-	built	-
+gamesFact.1	47	"Time played", "3 h 20 min"	Browse.timePlayed, games.db's seconds played in words (words::time_played); left out under a minute	Item	in:gamesAside:0	below:gamesFact.0:12	440	-	-	-	-	built	-
+gamesFactLabel.1	47	its label	Words.gameFactLabels[1]	Text	in:gamesFact.1:0	mid:gamesFact.1	-	-	-	Tokens.muted	20	built	400 0 none
+gamesFactValue.1	47	its value, right aligned	Browse.timePlayed	Text	-	mid:gamesFact.1	inright:gamesFact.1:0	-	-	Tokens.text	20	built	400 0 none
+gamesFact.2	48	"States", "3"	Browse.states, the game's saved states counted where Galaxia's save paths put them; left out for none	Item	in:gamesAside:0	below:gamesFact.1:12	440	-	-	-	-	built	-
+gamesFactLabel.2	48	its label	Words.gameFactLabels[2]	Text	in:gamesFact.2:0	mid:gamesFact.2	-	-	-	Tokens.muted	20	built	400 0 none
+gamesFactValue.2	48	its value, right aligned	Browse.states	Text	-	mid:gamesFact.2	inright:gamesFact.2:0	-	-	Tokens.text	20	built	400 0 none
+gamesStart	51	Start, A	the help's A, named Start (help::games_named, words::START), Eclipse's Pill; plays the focused game	Pill	in:gamesAside:0	below:gamesFact.2:28	fit:buttonLabel.0:28	64	32	Tokens.accent	-	built	-
 buttonGlyph.0	51	A, filled, 42 px	the kit's lettered glyph through Eclipse's Glyph part	Glyph	in:gamesStart:12	mid:gamesStart	42	42	-	-	-	built	glyph 19 600
 buttonLabel.0	51	"Start"	the help's A, named Start	Text	after:buttonGlyph.0:12	mid:gamesStart	-	-	-	Tokens.overAccent	23	built	600 0 none
 gamesPage	52	Game page, X	the help's X entry, Eclipse's Pill; opens the focused game's page	Pill	after:gamesStart:14	foot:gamesStart	fit:buttonLabel.1:28	64	32	#FF5A6076	-	built	-

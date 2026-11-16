@@ -2004,7 +2004,7 @@ every other order reads no names, so its list is one whatever the plates show. A
 is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery's level
 is drawn as the board draws it, "82%" 22 before the clock with no picture (line 37), where the machine has one; `Status`
 makes it only where a board draws it (`battery` set, `batteryPicture` not), and the oracle writes an 82% battery,
-discharging, into its world's made-up power_supply tree and holds the row. The top navigation is Eclipse's `Nav` (§3.4.8). theme-audit's `eclipse_consoles.rs` reads the same table and holds its rows given in plain board pixels over its own
+discharging, into its world's made-up power_supply tree and holds the row. The top navigation is Eclipse's `Nav` (§3.4.8); theme-audit feeds the placed screen's `Library.section` as the program's screens name it, so the nav it records marks Consoles. theme-audit's `eclipse_consoles.rs` reads the same table and holds its rows given in plain board pixels over its own
 recording. The help line's row is 38 px tall, the ringed B's 34 and its ring (line 102), so its middle stands at 1141, 40
 px over the foot; Home's at 1137, its row the 46 px Sections pill (Main:99).
 

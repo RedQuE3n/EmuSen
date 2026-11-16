@@ -166,6 +166,8 @@ pub fn oracle(backend: &str) {
     };
     host::words(object(screen)).expect("Words").show_now(now as f64);
     host::library(object(screen)).expect("Library").show(&view, "[]");
+    // Home shown, the section the program's screens name (qt-models/src/sections.rs).
+    host::library(object(screen)).expect("Library").show_section(emusen_qt_models::sections::all()[0].key);
     host::session(object(screen)).expect("Session").show(&session);
     let frame: u64 = tree.nodes[tree.find_named("pausedFrame").expect("the paused picture") as usize].id.parse().unwrap();
     // Safety: the scene's item lives as long as the scene, longer than the screen that draws it.
@@ -238,6 +240,12 @@ pub fn oracle(backend: &str) {
             ("recentCount", "1 of 6", false),
             ("tileTitle.0", "Aurora Drift", false),
             ("tileFacts.0", "SUPER NINTENDO", true),
+            ("navWords.home", "Home", false),
+            ("navWords.library", "Library", false),
+            ("navWords.consoles", "Consoles", false),
+            ("navWords.collections", "Collections", false),
+            ("navWords.tools", "Tools", false),
+            ("helpSectionsWords", "Sections", false),
         ];
         for (i, (title, _)) in GAMES.iter().enumerate().skip(1) {
             if named(&format!("tile.{i}")).is_some_and(|n| n.visible) {
@@ -283,6 +291,22 @@ pub fn oracle(backend: &str) {
             .collect();
         if glyphs != ["A", "X", "Y", "MENU"] {
             differences.push(format!("{at}: the help line's glyphs read {glyphs:?} where the board draws A, X, Y, MENU"));
+        }
+        // The glass's shoulders, named in their boxes (Main:100-101).
+        let shoulders: Vec<String> = ["ownGlyph-Sections", "ownGlyph2-Sections"]
+            .iter()
+            .map(|g| {
+                let g = tree.nodes.iter().rposition(|n| n.name == *g && n.visible);
+                let child = g.and_then(|g| tree.nodes.iter().position(|n| n.parent == tree.nodes[g].id));
+                child.map(|c| {
+                    let id: u64 = tree.nodes[c].id.parse().unwrap();
+                    emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(tree.nodes[c].name.as_str()), &QString::from("word")).to_string()
+                })
+                .unwrap_or_default()
+            })
+            .collect();
+        if shoulders != ["LB", "RB"] {
+            differences.push(format!("{at}: the Sections glass's glyphs read {shoulders:?} where the board draws LB, RB"));
         }
         // Nothing on the row is cut: a shown tile's title and console line are drawn whole.
         for n in tree.nodes.iter().filter(|n| n.visible && (n.name.starts_with("tileTitle.") || n.name.starts_with("tileFacts."))) {

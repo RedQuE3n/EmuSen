@@ -20,6 +20,7 @@ public:
 bool harness_show(QObject& window, int width, int height);
 void harness_resize(QObject& window, int width, int height);
 QString harness_tree(QObject& window);
+QString harness_focus_tree(QObject& window);
 bool harness_made_since(QObject& window);
 bool harness_turning(QObject& window, std::uint64_t id);
 void harness_click(QObject& window, double x, double y, int button);

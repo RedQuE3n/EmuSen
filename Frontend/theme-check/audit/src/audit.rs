@@ -235,6 +235,8 @@ fn still(scene: &mut Scene<'_>) -> Option<String> {
 /// One pass of states: the library it was fed, named in each line when it is the crowd, whose consoles the pad must sweep.
 struct Pass<'a> {
     variants: &'a [Variant],
+    /// The window sizes judged, in the gate's order: all of them unless a run names fewer (man theme-check, --sizes).
+    sizes: &'a [(i32, i32)],
     label: &'a str,
     consoles: Option<&'a [(String, String)]>,
     /// The name of the element the pad walks the focus to before the state is judged.
@@ -254,8 +256,8 @@ struct Pass<'a> {
 }
 
 impl<'a> Pass<'a> {
-    fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [(String, String)]>) -> Pass<'a> {
-        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[], mockup: None, relined: None }
+    fn plain(variants: &'a [Variant], sizes: &'a [(i32, i32)], label: &'a str, consoles: Option<&'a [(String, String)]>) -> Pass<'a> {
+        Pass { variants, sizes, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[], mockup: None, relined: None }
     }
 }
 
@@ -269,7 +271,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
         if let Some(relined) = pass.relined {
             relined(id, variant == Variant::Dark);
         }
-        for (w, h) in SIZES {
+        for &(w, h) in pass.sizes {
             lines.at = format!("{w}x{h} {name}");
             scene.resize(w, h);
             // Read once every transition the resize started has ended, the sky's glow too; a held clock moves nothing (man theme-check).
@@ -489,9 +491,9 @@ struct Sweep {
 }
 
 impl Sweep {
-    /// Where the focus is, read from a fresh tree.
+    /// Where the focus is, read from a fresh focus's tree, which holds all the sweep reads (man theme-check).
     fn landed(&mut self, scene: &mut Scene<'_>) -> Option<Landed> {
-        let tree = scene.tree();
+        let tree = scene.focus_tree();
         self.landed_in(scene, &tree)
     }
 
@@ -522,7 +524,7 @@ impl Sweep {
     /// One press and where it landed, once the view brought it into sight.
     fn press(&mut self, scene: &mut Scene<'_>, button: UiButton) -> Option<Landed> {
         scene.key(key_of(button), 0);
-        let tree = scene.tree();
+        let tree = scene.focus_tree();
         if scene.settle(&tree) { self.landed(scene) } else { self.landed_in(scene, &tree) }
     }
 
@@ -623,6 +625,19 @@ pub struct Asked<'a> {
     pub states: Vec<&'static State>,
     pub mockups: Option<&'a Path>,
     pub focus: Option<&'a str>,
+    pub sizes: Vec<(i32, i32)>,
+    pub crowd: Crowd,
+}
+
+/// Whether a run judges the default state's Choose a console over 120 consoles (man theme-check, --crowd).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Crowd {
+    /// With every other pass, as without the option.
+    With,
+    /// Every pass but the crowd's.
+    Without,
+    /// The crowd's pass alone.
+    Only,
 }
 
 /// Places a screen afresh and feeds it; the host's words, a line each, when it cannot.
@@ -669,7 +684,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
         let label = format!(", {name}");
         let mockup = mockups.iter().find(|(s, _)| *s == screen).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
         let lines_in = |id: u64, dark: bool| relined(id, &library, view, dark);
-        let pass = Pass { focus: asked.focus, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &label, Some(names)) };
+        let pass = Pass { focus: asked.focus, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &asked.sizes, &label, Some(names)) };
         let session = library.session(view, None)?;
         let fed = Fed { session: &session, declined: &[], reduced: true, dark: true, screen };
         match placed(&mut scene, &real, screen, |id| feed(id, &library, view, &fed, &overrides, section)) {
@@ -691,21 +706,27 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
         // The element a state walks the focus to is the place a reader hears by its name.
         let focus = asked_state.focus.and_then(|key| place_name(&view, key));
         for screen in screens {
+            if asked.crowd == Crowd::Only && !(default && screen == Screen::Consoles) {
+                continue;
+            }
             logged();
             match asked_state.clock {
-                Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, (&label, &listed), (state, section, &overrides), &mut lines),
+                Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, (&label, &listed, &asked.sizes), (state, section, &overrides), &mut lines),
                 None => {
                     let fed = Fed { session: &session, declined: asked_state.declined, reduced: true, dark: true, screen };
                     let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
                     let mockup = mockups.iter().find(|(s, _)| *s == screen && default).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
                     let lines_in = |id: u64, dark: bool| relined(id, &library, &view, dark);
-                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &label, None) };
-                    match placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)) {
-                        Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
-                        Ok(id) => lines.guarded(screen, |lines| {
-                            if default {
-                                lines.at = "1280x800, judged still under reduced motion".to_owned();
-                                scene.resize(1280, 800);
+                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &asked.sizes, &label, None) };
+                    let judged = (asked.crowd != Crowd::Only).then(|| placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)));
+                    match judged {
+                        None => {}
+                        Some(Err(words)) => words.lines().for_each(|w| lines.add(screen, "load", w)),
+                        Some(Ok(id)) => lines.guarded(screen, |lines| {
+                            // Stillness is judged once a screen, at the gate's first size, by the run that judges that size.
+                            if default && asked.sizes.contains(&SIZES[0]) {
+                                lines.at = format!("{}x{}, judged still under reduced motion", SIZES[0].0, SIZES[0].1);
+                                scene.resize(SIZES[0].0, SIZES[0].1);
                                 if let Some(words) = still(&mut scene) {
                                     lines.add(screen, "motion", &words);
                                 }
@@ -713,9 +734,9 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
                             states(&mut scene, screen, id, &pass, state, lines);
                         }),
                     }
-                    if default && screen == Screen::Consoles {
+                    if default && screen == Screen::Consoles && asked.crowd != Crowd::Without {
                         // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
-                        let crowd = Pass::plain(first, ", 120 consoles", Some(&library.crowd_names));
+                        let crowd = Pass::plain(first, &asked.sizes, ", 120 consoles", Some(&library.crowd_names));
                         match placed(&mut scene, &real, screen, |id| feed(id, &library, &library.crowd, &fed, &overrides, section)) {
                             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                             Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &crowd, state, lines)),
@@ -761,7 +782,7 @@ fn held(
     screen: Screen,
     (library, view, session): (&Synthetic, &LibraryView, &SessionFacts),
     ms: i64,
-    (label, variants): (&str, &[Variant]),
+    (label, variants, sizes): (&str, &[Variant], &[(i32, i32)]),
     (state, section, overrides): (Option<&Path>, Option<&str>, &[(bool, String, String)]),
     lines: &mut Lines<'_>,
 ) {
@@ -782,7 +803,7 @@ fn held(
                 let before = scene.tree();
                 scene.hold_clock(Some(ms));
                 let moving = changing(&before, &scene.tree());
-                let pass = Pass { held: true, moving: Some(&moving), ..Pass::plain(std::slice::from_ref(&variant), label, None) };
+                let pass = Pass { held: true, moving: Some(&moving), ..Pass::plain(std::slice::from_ref(&variant), sizes, label, None) };
                 lines.guarded(screen, |lines| states(scene, screen, id, &pass, state, lines));
             }
         }

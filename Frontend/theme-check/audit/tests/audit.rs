@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use account::Part;
 use emusen_qt_test::harness::SIZES;
 use emusen_theme_check::run_with;
 
@@ -12,6 +13,8 @@ extern crate emusen_kit_qt;
 extern crate emusen_qt_models;
 extern crate emusen_theme_host;
 extern crate emusen_theme_qt;
+
+mod account;
 
 const PROGRAM: &str = env!("CARGO_BIN_EXE_theme-audit");
 
@@ -407,22 +410,47 @@ fn qt_3_7_a_screen_is_held_to_its_mockup_at_the_canvas_s_sizes_by_night() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The built-in themes' mockups (Testing/themes): Home, Games and Choose a console held to the canvases they were drawn from.
-fn built_in(theme: &str) {
+/// The built-in themes' mockups and their recorded accounts (Testing/themes), and the theme's folder.
+fn recorded(theme: &str) -> (PathBuf, PathBuf, String) {
     let mockups = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../Testing/themes");
     let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes").join(theme);
+    // The whole account as recorded from the audit before its sweep read less: findings, what was held, what rulings let pass (man theme-check).
+    let file = mockups.join("audit").join(format!("{theme}.findings"));
+    let expected = std::fs::read_to_string(&file).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+    (mockups, folder, expected)
+}
+
+/// The canvas's width and height its Home mockup states, whose shape the mockups are held at.
+fn canvas(mockups: &Path, theme: &str) -> (i32, i32) {
+    // Found as theme-audit finds a mockup, its file's name in any case.
+    let file = std::fs::read_dir(mockups).unwrap().flatten().map(|e| e.path()).find(|p| p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase() == format!("{theme}-home.mockup.spec"))).expect("the Home mockup");
+    let mockup = emusen_qt_test::mockup::parse(&std::fs::read_to_string(&file).unwrap()).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+    (mockup.width as i32, mockup.height as i32)
+}
+
+/// The variants a package lists, in its order, by their names.
+fn variants(folder: &Path) -> Vec<&'static str> {
+    let package = emusen_theme_host::package::read(&std::fs::read_to_string(folder.join("theme.json")).unwrap()).unwrap();
+    package.variants.iter().map(|v| v.name()).collect()
+}
+
+/// A built-in theme's Home, Games and Choose a console held to the canvases they were drawn from, in one part of the run.
+fn built_in(theme: &str, part: Part) {
+    let (mockups, folder, expected) = recorded(theme);
     let held = std::fs::read_dir(&mockups).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().to_lowercase().starts_with(&format!("{theme}-"))).count();
     assert_eq!(held, 3, "{theme}: Home, Games and Consoles");
-    let ran = audit_mockups(&folder, &mockups);
-    for screen in ["Home", "Games", "Consoles"] {
-        assert_eq!(ran.held(screen).1, 2, "{theme}: {screen} held to its mockup at the canvas's two sizes: {}", ran.err);
-    }
+    let mut command = Command::new(PROGRAM);
+    command.arg("--mockups").arg(&mockups);
+    match part {
+        Part::Size(w, h) => command.args(["--sizes", &format!("{w}x{h}"), "--crowd", "without"]),
+        Part::Crowd => command.args(["--crowd", "only"]),
+    };
+    let ran = Ran::judged(command.arg(&folder));
     let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ")).collect();
-    assert!(found.is_empty(), "{theme}: {} differences from its mockups:\n{}", found.len(), found.join("\n"));
-    // The whole account, findings and what was held and accepted, as recorded from the audit before its sweep read less (man theme-check).
-    let recorded = mockups.join("audit").join(format!("{theme}.findings"));
-    let expected = std::fs::read_to_string(&recorded).unwrap_or_else(|e| panic!("{}: {e}", recorded.display()));
-    assert_eq!(whole(&ran, &folder, theme), expected, "{theme}: the audit's whole account differs from {}", recorded.display());
+    assert!(found.is_empty(), "{theme} {part:?}: {} differences from its mockups:\n{}", found.len(), found.join("\n"));
+    // The part's share of the recorded account, whose parts joined are the whole file (qt_3_7_the_recorded_accounts_are_their_parts_joined).
+    let share = account::part(&expected, part, canvas(&mockups, theme));
+    assert_eq!(whole(&ran, &folder, theme), share, "{theme} {part:?}: the audit's account differs from its share of {theme}.findings");
 }
 
 /// A run's lines and its `theme-audit:` words, the theme's folder written `themes/<theme>` wherever it is checked out.
@@ -433,19 +461,59 @@ fn whole(ran: &Ran, folder: &Path, theme: &str) -> String {
     ran.out.lines().chain(words).map(|l| format!("{}\n", l.replace(&given, &format!("themes/{theme}")).replace(&real, &format!("themes/{theme}")))).collect()
 }
 
-#[test]
-fn qt_3_4_3_horizon_is_held_to_its_mockups() {
-    built_in("horizon");
+/// One test a part, so the parts run side by side; parts() names five sizes and the crowd.
+macro_rules! held_to_its_mockups {
+    ($name:ident, $theme:literal) => {
+        mod $name {
+            use super::{account, built_in};
+
+            #[test]
+            fn size_0() {
+                built_in($theme, account::parts()[0]);
+            }
+
+            #[test]
+            fn size_1() {
+                built_in($theme, account::parts()[1]);
+            }
+
+            #[test]
+            fn size_2() {
+                built_in($theme, account::parts()[2]);
+            }
+
+            #[test]
+            fn size_3() {
+                built_in($theme, account::parts()[3]);
+            }
+
+            #[test]
+            fn size_4() {
+                built_in($theme, account::parts()[4]);
+            }
+
+            #[test]
+            fn crowd() {
+                built_in($theme, account::Part::Crowd);
+            }
+        }
+    };
 }
 
-#[test]
-fn qt_3_4_4_meridian_is_held_to_its_mockups() {
-    built_in("meridian");
-}
+held_to_its_mockups!(qt_3_4_3_horizon_is_held_to_its_mockups, "horizon");
+held_to_its_mockups!(qt_3_4_4_meridian_is_held_to_its_mockups, "meridian");
+held_to_its_mockups!(qt_3_4_6_orrery_is_held_to_its_mockups, "orrery");
 
 #[test]
-fn qt_3_4_6_orrery_is_held_to_its_mockups() {
-    built_in("orrery");
+fn qt_3_7_the_recorded_accounts_are_their_parts_joined() {
+    assert_eq!(account::parts(), SIZES.iter().map(|&(w, h)| Part::Size(w, h)).chain([Part::Crowd]).collect::<Vec<_>>());
+    assert_eq!(SIZES.len(), 5, "a test a size in held_to_its_mockups and the Eclipse loaded step: one for each of the gate's sizes");
+    for theme in ["horizon", "meridian", "orrery"] {
+        let (mockups, folder, expected) = recorded(theme);
+        let parts: Vec<(Part, String)> = account::parts().into_iter().map(|p| (p, account::part(&expected, p, canvas(&mockups, theme)))).collect();
+        assert!(parts.iter().all(|(_, a)| !a.is_empty()), "{theme}: every part holds something");
+        assert_eq!(account::join(&parts, &variants(&folder)), expected, "{theme}: the parts joined are the recorded account");
+    }
 }
 
 /// Choose a console over the canvas's eleven consoles with its focus, judged against the canvas in a folder of `name`.
@@ -592,19 +660,60 @@ fn qt_3_7_a_theme_is_judged_in_the_variants_it_lists_and_no_other() {
     }
 }
 
-#[test]
-fn qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has() {
-    // Eclipse as the program finds it, every state theme-audit has that names one of its screens, at the gate's sizes in
-    // the one variant it lists.
+/// Eclipse as the program finds it, every state theme-audit has that names one of its screens, in the one variant it lists, in one part.
+fn eclipse_loaded(part: Part) {
     let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes/eclipse");
-    let ran = Ran::judged(Command::new(PROGRAM).args(["--states", "all"]).arg(&folder));
+    let mut command = Command::new(PROGRAM);
+    command.args(["--states", "all"]);
+    match part {
+        Part::Size(w, h) => command.args(["--sizes", &format!("{w}x{h}"), "--crowd", "without"]),
+        Part::Crowd => command.args(["--crowd", "only"]),
+    };
+    let ran = Ran::judged(command.arg(&folder));
     let screens: Vec<String> = std::fs::read_dir(folder.join("screens"))
         .expect("Eclipse's screens")
         .filter_map(|entry| entry.ok()?.file_name().to_str()?.strip_suffix(".qml").map(str::to_owned))
         .collect();
     assert!(screens.iter().any(|screen| screen == "Home"), "Eclipse's screens are read from its folder: {screens:?}");
-    for screen in &screens {
-        assert!(ran.held(screen).0 >= SIZES.len(), "{screen} held at the gate's sizes: {}", ran.err);
+    match part {
+        // Each screen held at this size, so at every one of the gate's sizes over the five parts.
+        Part::Size(..) => screens.iter().for_each(|screen| assert!(ran.held(screen).0 >= 1, "{screen} held at {part:?}: {}", ran.err)),
+        Part::Crowd => assert_eq!(ran.held("Consoles").0, SIZES.len(), "the crowd held at the gate's sizes: {}", ran.err),
     }
-    assert_eq!(ran.status, 0, "Eclipse's findings:\n{}", ran.out);
+    assert_eq!(ran.status, 0, "Eclipse's findings at {part:?}:\n{}", ran.out);
+}
+
+/// One test a part of the Eclipse loaded step, so the parts run side by side.
+mod qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has {
+    use super::{account, eclipse_loaded};
+
+    #[test]
+    fn size_0() {
+        eclipse_loaded(account::parts()[0]);
+    }
+
+    #[test]
+    fn size_1() {
+        eclipse_loaded(account::parts()[1]);
+    }
+
+    #[test]
+    fn size_2() {
+        eclipse_loaded(account::parts()[2]);
+    }
+
+    #[test]
+    fn size_3() {
+        eclipse_loaded(account::parts()[3]);
+    }
+
+    #[test]
+    fn size_4() {
+        eclipse_loaded(account::parts()[4]);
+    }
+
+    #[test]
+    fn crowd() {
+        eclipse_loaded(account::Part::Crowd);
+    }
 }

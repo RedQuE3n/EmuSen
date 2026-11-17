@@ -544,12 +544,12 @@ Window {
                 onActed: (key) => screens.act(key)
             }
         }
-        // What Settings.qml answers for the model while the chosen theme draws Settings: B with no page left, a page closed, Start.
+        // What Settings.qml answers for the model while the chosen theme draws Settings: B with no page left, and Start; a page
+        // closed refocuses its door's row in the theme's feed.
         Connections {
             target: settingsModel
             enabled: program.themeHost?.settings ?? false
             function onLeft() { screens.back() }
-            function onRefocus(row) { settingsModel.focused = row }
             function onPassed(key) { screens.act(key) }
         }
         // A console's options asked for on Choose a console: Settings opens at that console's page (none for an empty one).

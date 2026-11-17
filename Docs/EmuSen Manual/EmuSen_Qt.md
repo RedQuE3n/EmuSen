@@ -1052,9 +1052,10 @@ supplies neither gets today's screens. As built:
   owner in `qt-models/src/settings_shown.rs`: `Page::key`, and a row's `about` (the description's or its Galaxia row's
   `about`, which no description writes yet, so it reads empty), its switch state (the stored value of a `switch` row,
   `schema::is_on`) and a console row's tile, the entries read once a feed.
-- `ThemeHost.qml` feeds a view through `Qt.callLater` once its model has told a change, so a press that changes several
-  members feeds once; the feed (`qt-app/src/theme.rs`) feeds only a host whose theme provides the role, so no view is
-  made in an engine that draws neither.
+- `ThemeHost.qml` hands the feed each change its models tell; the feed (`qt-app/src/theme.rs`) queues one feed on the GUI
+  thread (`qt_thread().queue`) until it runs, so a press that changes several members feeds once and never from inside a
+  call of the model's, and it feeds only a host whose theme provides the role, so no view is made in an engine that draws
+  neither. A page B closes focuses its door's row again through the model's `refocus`, as the program's frame does.
 - Each settings and page call of `Actions` is one call of the model the program's own screen calls (`ScreenAction`, the
   sink's `screen`): `settingsStep` is `SettingsModel.step`, `pageAct` is `GamePageModel.act`, and so on. A help entry's
   `action` on a page kind goes to `pageDeclared`, which answers Y, X and Reset itself and passes Start on, as the program's

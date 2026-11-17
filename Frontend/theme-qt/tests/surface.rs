@@ -44,12 +44,19 @@ fn names(block: &str, kind: &str) -> BTreeSet<String> {
     while let Some(at) = rest.find(&format!("{kind} {{")) {
         rest = &rest[at..];
         let name = rest.split("name: \"").nth(1).and_then(|r| r.split('"').next()).unwrap_or_default().to_owned();
-        if !(name.ends_with("Changed") || (kind == "Method" && name.starts_with("set") && name.len() > 3)) {
+        if !(name.ends_with("Changed") || (kind == "Method" && setter_of(block, &name))) {
             out.insert(name);
         }
         rest = &rest[kind.len()..];
     }
     out
+}
+
+/// Whether a method is a property's setter, `setFoo` beside a property `foo`; `settingsStep` is no setter.
+fn setter_of(block: &str, name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("set").filter(|r| r.starts_with(|c: char| c.is_ascii_uppercase())) else { return false };
+    let property = format!("{}{}", rest[..1].to_lowercase(), &rest[1..]);
+    block.contains(&format!("Property {{ name: \"{property}\"")) || block.contains(&format!("name: \"{property}\"\n"))
 }
 
 fn set(items: &[&str]) -> BTreeSet<String> {

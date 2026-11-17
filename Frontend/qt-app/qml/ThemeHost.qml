@@ -60,9 +60,6 @@ Item {
     signal backed()
     signal focused(string game)
     signal favourite(string game)
-    // Settings and the page fed once their models have finished telling a change, so a press that changes several members feeds once.
-    function feedSettings() { feed.showSettings(themed.settingsModel) }
-    function feedPage() { feed.showPage(themed.pageModel) }
     // What a slot holds: the scope the theme's screen is made in, out of the window's items while not shown, so a forceActiveFocus
     // in it climbs no scope of the window's, the slot's included, and takes no focus from the screen shown (EmuSen_Qt.md §3.5.2).
     component Placing: Item {
@@ -145,49 +142,50 @@ Item {
     }
     Connections {
         target: host
-        function onGenerationChanged() { themed.feedSettings() }
+        function onGenerationChanged() { feed.showSettings(themed.settingsModel) }
     }
     Connections {
         target: host
-        function onGenerationChanged() { themed.feedPage() }
+        function onGenerationChanged() { feed.showPage(themed.pageModel) }
     }
+    // Each change of Settings' or the page's model, which the feed queues, so the changes of one press feed once.
     Connections {
         target: themed.settingsModel
-        function onRowsInserted() { Qt.callLater(themed.feedSettings) }
-        function onRowsRemoved() { Qt.callLater(themed.feedSettings) }
-        function onDataChanged() { Qt.callLater(themed.feedSettings) }
-        function onModelReset() { Qt.callLater(themed.feedSettings) }
-        function onSectionChanged() { Qt.callLater(themed.feedSettings) }
-        function onTrailChanged() { Qt.callLater(themed.feedSettings) }
-        function onFocusedChanged() { Qt.callLater(themed.feedSettings) }
-        function onHelpChanged() { Qt.callLater(themed.feedSettings) }
-        function onSentenceChanged() { Qt.callLater(themed.feedSettings) }
-        function onPaneLinesChanged() { Qt.callLater(themed.feedSettings) }
-        function onPaneMutedChanged() { Qt.callLater(themed.feedSettings) }
-        function onPreviewChanged() { Qt.callLater(themed.feedSettings) }
-        function onCaptionChanged() { Qt.callLater(themed.feedSettings) }
-        function onMeterChanged() { Qt.callLater(themed.feedSettings) }
-        function onSamplesChanged() { Qt.callLater(themed.feedSettings) }
+        function onRowsInserted() { feed.showSettings(themed.settingsModel) }
+        function onRowsRemoved() { feed.showSettings(themed.settingsModel) }
+        function onDataChanged() { feed.showSettings(themed.settingsModel) }
+        function onModelReset() { feed.showSettings(themed.settingsModel) }
+        function onSectionChanged() { feed.showSettings(themed.settingsModel) }
+        function onTrailChanged() { feed.showSettings(themed.settingsModel) }
+        function onFocusedChanged() { feed.showSettings(themed.settingsModel) }
+        function onHelpChanged() { feed.showSettings(themed.settingsModel) }
+        function onSentenceChanged() { feed.showSettings(themed.settingsModel) }
+        function onPaneLinesChanged() { feed.showSettings(themed.settingsModel) }
+        function onPaneMutedChanged() { feed.showSettings(themed.settingsModel) }
+        function onPreviewChanged() { feed.showSettings(themed.settingsModel) }
+        function onCaptionChanged() { feed.showSettings(themed.settingsModel) }
+        function onMeterChanged() { feed.showSettings(themed.settingsModel) }
+        function onSamplesChanged() { feed.showSettings(themed.settingsModel) }
     }
     Connections {
         target: themed.pageModel
-        function onDataChanged() { Qt.callLater(themed.feedPage) }
-        function onModelReset() { Qt.callLater(themed.feedPage) }
-        function onReadyChanged() { Qt.callLater(themed.feedPage) }
-        function onTitleChanged() { Qt.callLater(themed.feedPage) }
-        function onFactsChanged() { Qt.callLater(themed.feedPage) }
-        function onCoverChanged() { Qt.callLater(themed.feedPage) }
-        function onHeroChanged() { Qt.callLater(themed.feedPage) }
-        function onClipChanged() { Qt.callLater(themed.feedPage) }
-        function onSectionChanged() { Qt.callLater(themed.feedPage) }
-        function onShowsChanged() { Qt.callLater(themed.feedPage) }
-        function onWordsChanged() { Qt.callLater(themed.feedPage) }
-        function onPictureChanged() { Qt.callLater(themed.feedPage) }
-        function onActionsChanged() { Qt.callLater(themed.feedPage) }
-        function onHelpChanged() { Qt.callLater(themed.feedPage) }
-        function onCoverArtChanged() { Qt.callLater(themed.feedPage) }
-        function onAskingChanged() { Qt.callLater(themed.feedPage) }
-        function onQuestionTitleChanged() { Qt.callLater(themed.feedPage) }
+        function onDataChanged() { feed.showPage(themed.pageModel) }
+        function onModelReset() { feed.showPage(themed.pageModel) }
+        function onReadyChanged() { feed.showPage(themed.pageModel) }
+        function onTitleChanged() { feed.showPage(themed.pageModel) }
+        function onFactsChanged() { feed.showPage(themed.pageModel) }
+        function onCoverChanged() { feed.showPage(themed.pageModel) }
+        function onHeroChanged() { feed.showPage(themed.pageModel) }
+        function onClipChanged() { feed.showPage(themed.pageModel) }
+        function onSectionChanged() { feed.showPage(themed.pageModel) }
+        function onShowsChanged() { feed.showPage(themed.pageModel) }
+        function onWordsChanged() { feed.showPage(themed.pageModel) }
+        function onPictureChanged() { feed.showPage(themed.pageModel) }
+        function onActionsChanged() { feed.showPage(themed.pageModel) }
+        function onHelpChanged() { feed.showPage(themed.pageModel) }
+        function onCoverArtChanged() { feed.showPage(themed.pageModel) }
+        function onAskingChanged() { feed.showPage(themed.pageModel) }
+        function onQuestionTitleChanged() { feed.showPage(themed.pageModel) }
     }
     Connections {
         target: themed.library

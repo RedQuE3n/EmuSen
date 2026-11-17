@@ -5,7 +5,7 @@
 
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QList, QString, QStringList};
 use emusen_qt_models::game_model::qobject::GameModel;
 use emusen_qt_models::game_page_model::{action_items, qobject::GamePageModel};
@@ -136,6 +136,7 @@ pub mod qobject {
     }
 
     impl cxx_qt::Initialize for ThemeFeed {}
+    impl cxx_qt::Threading for ThemeFeed {}
 }
 
 /// The built-in themes' places in the resources (`emusen_qt_models::themes::BUILT_IN`) and their manifests.
@@ -186,6 +187,9 @@ pub struct ThemeFeedRust {
     /// The window's Settings and page models, which a theme's screens read and act through.
     settings: *mut SettingsModel,
     page: *mut GamePageModel,
+    /// A feed of Settings or of the page queued and not yet run, so the changes of one press feed once.
+    settings_queued: bool,
+    page_queued: bool,
     session: Option<Shown>,
     section: Option<Section>,
     controllers: i32,
@@ -208,6 +212,8 @@ impl Default for ThemeFeedRust {
             library: std::ptr::null(),
             settings: std::ptr::null_mut(),
             page: std::ptr::null_mut(),
+            settings_queued: false,
+            page_queued: false,
             session: None,
             section: None,
             controllers: 0,
@@ -474,8 +480,27 @@ impl qobject::ThemeFeed {
     /// # Safety
     /// `settings` is the window's `SettingsModel`, alive as long as the feed.
     pub unsafe fn show_settings(mut self: Pin<&mut Self>, settings: *mut cxx_qt::QObject) {
-        self.as_mut().rust_mut().settings = unsafe { model::<SettingsModel>(settings) } as *mut SettingsModel;
-        self.feed_settings();
+        let settings = unsafe { model::<SettingsModel>(settings) } as *mut SettingsModel;
+        if self.settings != settings {
+            // Safety: the model is the window's, alive as long as the feed; B closing a page focuses its door's row, as the
+            // program's frame does.
+            if let Some(model) = unsafe { settings.as_mut() } {
+                unsafe { Pin::new_unchecked(model) }.on_refocus(|model, row| model.set_focused(row)).release();
+            }
+            self.as_mut().rust_mut().settings = settings;
+        }
+        if self.settings_queued {
+            return;
+        }
+        self.as_mut().rust_mut().settings_queued = true;
+        // Fed once the model has finished telling its change, never from inside a call of the model's.
+        let queued = self.qt_thread().queue(|mut feed| {
+            feed.as_mut().rust_mut().settings_queued = false;
+            feed.feed_settings();
+        });
+        if queued.is_err() {
+            self.as_mut().rust_mut().settings_queued = false;
+        }
     }
 
     /// Whether the host's theme draws a role, so a view no screen reads is never made in its engine.
@@ -500,7 +525,18 @@ impl qobject::ThemeFeed {
     /// `page` is the window's `GamePageModel`, alive as long as the feed.
     pub unsafe fn show_page(mut self: Pin<&mut Self>, page: *mut cxx_qt::QObject) {
         self.as_mut().rust_mut().page = unsafe { model::<GamePageModel>(page) } as *mut GamePageModel;
-        self.feed_page();
+        if self.page_queued {
+            return;
+        }
+        self.as_mut().rust_mut().page_queued = true;
+        // As Settings: once the model has finished telling its change.
+        let queued = self.qt_thread().queue(|mut feed| {
+            feed.as_mut().rust_mut().page_queued = false;
+            feed.feed_page();
+        });
+        if queued.is_err() {
+            self.as_mut().rust_mut().page_queued = false;
+        }
     }
 
     fn feed_page(&self) {

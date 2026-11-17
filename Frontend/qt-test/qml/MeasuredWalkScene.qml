@@ -34,6 +34,7 @@ Window {
         y: -walk.offset
         Repeater {
             model: rows
+            onItemAdded: (index, item) => walk.measure(index, item.height)
             delegate: Rectangle {
                 required property int index
                 required property real tall
@@ -41,7 +42,6 @@ Window {
                 height: index === 0 && scene.grown ? 200 : tall
                 color: index === walk.current ? "#ffffff" : "#404040"
                 onHeightChanged: walk.measure(index, height)
-                Component.onCompleted: walk.measure(index, height)
             }
         }
     }

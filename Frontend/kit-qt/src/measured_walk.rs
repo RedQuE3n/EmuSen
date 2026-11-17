@@ -4,10 +4,11 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use emusen_kit_core::settings::{MeasuredWalk, RowOutcome};
+use emusen_kit_core::settings::MeasuredWalk;
 
 use crate::kinds::{self, PadButton};
 use crate::qt_keys;
+use crate::settings::{tell, Told};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -135,28 +136,6 @@ impl cxx_qt::Initialize for qobject::MeasuredWalk {
                 this.sync();
             })
             .release();
-        self.as_mut()
-            .on_sections_changed(|mut this| {
-                let count = usize::try_from(this.sections).unwrap_or(0);
-                let wanted = usize::try_from(this.section).unwrap_or(0);
-                let mut r = this.as_mut().rust_mut();
-                r.walk.set_sections(count);
-                r.walk.select_section(wanted);
-                this.sync_section();
-            })
-            .release();
-        self.as_mut()
-            .on_section_changed(|mut this| {
-                let section = usize::try_from(this.section).unwrap_or(usize::MAX);
-                this.as_mut().rust_mut().walk.select_section(section);
-            })
-            .release();
-        self.as_mut()
-            .on_trail_shown_changed(|mut this| {
-                let open = this.trail_shown;
-                this.as_mut().rust_mut().walk.set_trail(open);
-            })
-            .release();
     }
 }
 
@@ -173,41 +152,30 @@ impl qobject::MeasuredWalk {
 
     pub fn press(mut self: Pin<&mut Self>, button: PadButton) -> bool {
         let Some(ui) = kinds::ui_button(button) else { return false };
-        let outcome = self.as_mut().rust_mut().walk.press(ui);
-        match outcome {
-            RowOutcome::Moved(_) => self.as_mut().sync(),
-            RowOutcome::Stepped { row, by } => self.as_mut().stepped(row as i32, by),
-            RowOutcome::Slid { row, amount } => self.as_mut().slid(row as i32, amount),
-            RowOutcome::Chosen(row) => {
-                self.as_mut().sync();
-                self.as_mut().chosen(row as i32);
-            }
-            RowOutcome::Section(section) => {
-                self.as_mut().sync_section();
-                self.as_mut().section_chosen(section as i32);
-            }
-            RowOutcome::Kept => {}
-            RowOutcome::Declined => return false,
-        }
-        true
+        // The sections and the trail as the screen has them now, read at each press.
+        let (sections, section, trail) = (usize::try_from(self.sections).unwrap_or(0), usize::try_from(self.section).unwrap_or(0), self.trail_shown);
+        let mut me = self.as_mut().rust_mut();
+        me.walk.set_sections(sections);
+        me.walk.select_section(section);
+        me.walk.set_trail(trail);
+        let outcome = me.walk.press(ui);
+        tell(self, outcome)
     }
 
     pub fn key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
-        match qt_keys::press_of(key, modifiers) {
-            Some(button) => self.press(kinds::pad_button(button)),
-            None => false,
-        }
+        qt_keys::press_of(key, modifiers).is_some_and(|button| self.press(kinds::pad_button(button)))
     }
 
     pub fn focus_row(mut self: Pin<&mut Self>, row: i32) {
-        let Ok(row) = usize::try_from(row) else { return };
-        if self.as_mut().rust_mut().walk.focus(row) {
+        let moved = usize::try_from(row).is_ok_and(|row| self.as_mut().rust_mut().walk.focus(row));
+        if moved {
             self.sync();
         }
     }
 
     pub fn scroll_to(mut self: Pin<&mut Self>, first: i32) {
-        if self.as_mut().rust_mut().walk.scroll_to(usize::try_from(first).unwrap_or(0)) {
+        let moved = self.as_mut().rust_mut().walk.scroll_to(usize::try_from(first).unwrap_or(0));
+        if moved {
             self.sync();
         }
     }
@@ -219,6 +187,7 @@ impl qobject::MeasuredWalk {
         self.sync();
     }
 
+    /// The walk's section where a shoulder stepped it.
     fn sync_section(self: Pin<&mut Self>) {
         let section = self.walk.section() as i32;
         if self.section != section {
@@ -238,5 +207,26 @@ impl qobject::MeasuredWalk {
         r.offset = offset;
         r.marked = marked;
         self.walked();
+    }
+}
+
+impl Told for qobject::MeasuredWalk {
+    fn sync(self: Pin<&mut Self>) {
+        qobject::MeasuredWalk::sync(self)
+    }
+    fn sync_section(self: Pin<&mut Self>) {
+        qobject::MeasuredWalk::sync_section(self)
+    }
+    fn stepped(self: Pin<&mut Self>, row: i32, by: i32) {
+        qobject::MeasuredWalk::stepped(self, row, by)
+    }
+    fn slid(self: Pin<&mut Self>, row: i32, amount: f64) {
+        qobject::MeasuredWalk::slid(self, row, amount)
+    }
+    fn chosen(self: Pin<&mut Self>, row: i32) {
+        qobject::MeasuredWalk::chosen(self, row)
+    }
+    fn section_chosen(self: Pin<&mut Self>, section: i32) {
+        qobject::MeasuredWalk::section_chosen(self, section)
     }
 }

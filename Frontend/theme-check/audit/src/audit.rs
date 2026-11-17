@@ -208,7 +208,7 @@ fn section_of(screen: Screen) -> &'static str {
         Screen::Home => Shown::Home,
         Screen::Consoles => Shown::Consoles,
         Screen::Games => Shown::Grid,
-        Screen::Splash => return "",
+        Screen::Splash | Screen::Settings | Screen::Game => return "",
     };
     sections::current(shown).map_or("", |s| s.key)
 }

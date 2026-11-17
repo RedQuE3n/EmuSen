@@ -5,7 +5,8 @@ NAME
 
 SYNOPSIS
     theme-check [--static] [--state DIR] <folder>...
-    theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE]
+    theme-audit [--gpu] [--state DIR] [--states LIST] [--sizes LIST]
+                [--crowd with|without|only] [--catalogue FILE]
                 [--section KEY] [--focus NAME] [--mockups DIR] <folder>
     theme-audit --list-states
 
@@ -179,6 +180,51 @@ THE LOADED STEP
     (cargo test --release --test audit, beside another gate). Run side
     by side with the other built-in themes, the audit over Orrery took
     1512 s and 1500 s on trunk and 448 s after.
+
+    Where a size of the crowd's pass went, measured on 2026-11-16 with
+    a timestamp a press (a build of the audit that printed them, over
+    Eclipse and n120 at 1280 x 800 and 1920 x 1200, beside a landing's
+    tests): 1269 and 1280 presses, 66 consoles heard by the rows' part
+    (12.6 s and 18.5 s) and 138 elements found by the second (82 s and
+    98 s), 74 direct gifts of focus, each read from a whole tree, and the
+    resize 74 ms and 123 ms. Of each press, the key took 2.6 ms, the
+    settle 0.3 ms and never waited (no view was moving in 2549 presses),
+    and the window's whole tree, 2525 items, 73 ms: 86 s and 105 s of
+    the two sizes' 95 s and 116 s. The judging of the size itself, every
+    rule, took under half a second. Stacks sampled every 3 s over
+    Orrery's crowd held harness_tree in 19 of 25 (building each item's
+    node, QJsonObject and QJsonDocument::toJson) and serde's parse in 2.
+    So a size of the crowd costs a hundred times a mockup state's: the
+    sweep reads the whole window once a press, and there are about ten
+    presses a console.
+
+    The sweep now reads the focus's tree (emusen-qt-test's focus_tree,
+    EmuSen_Kit.md 7.9): the focus's ancestors, the whole subtree of the
+    walkable it stands in, and every view, each node written by the code
+    that writes the whole tree's. That is every node a press's reading
+    looks at: the views the settle waits on, the focus and its walkable,
+    its box, its objectName and the words under it. A direct gift of
+    focus still reads the whole tree, since it looks for an element the
+    focus is not on. Every recording of Eclipse over n30 and n120 (each
+    size's spec and picture, the states after each size's sweep among
+    them), its lines and what it held were byte for byte those of the
+    whole-tree sweep, and so were the three recorded accounts, whose
+    crowd lines at the four later sizes are judged where the previous
+    size's sweep left the focus. Eclipse over n120 at the five sizes
+    took 127 s, against 566 s for the whole-tree sweep run beside it,
+    and over n30 25 s against 70 s (2026-11-16, the two side by side
+    beside a landing's tests).
+
+    The crowd's pass is not divided, by size, by maker or by a range of
+    consoles. By size, because a size is judged in the state the
+    previous size's sweep left (PARTS). By maker or by range, because
+    the sweep is one continuous walk by the pad from the screen's own
+    first focus: its rows' part steps Up and Left to the start and then
+    each row in turn, and its second part follows every press from
+    where the first ended, each console heard only when a press reaches
+    it. A part that began at another maker would have the focus given
+    there, which is no press, so it would judge a reach the player never
+    has, and the size after it would be judged in another state.
 
     Each size of a state is read once the screen rests after its
     resize (the harness's rest), no longer 150 ms after it; a held
@@ -389,6 +435,55 @@ THE LOADED STEP
     its rows out as tall as they are, and with 120 consoles runs off
     every size. A package takes about 80 s, most of it the crowd.
 
+PARTS
+    --sizes LIST judges the window sizes LIST names, comma-separated as
+    the lines write them (1280x800,3840x2160), or all of them for all,
+    the default; a size the gate does not have is refused, naming the
+    gate's own (kit-core's audit SIZES, the list's one owner, in whose
+    order the sizes are judged whatever the list's order). Stillness
+    under reduced motion is judged by the run whose list holds the
+    gate's first size, once a screen, as without the option.
+    --crowd with|without|only judges the default state's Choose a
+    console over 120 consoles with the other passes (the default),
+    without it, or alone. A run of fewer sizes or passes judges each
+    state it keeps exactly as the whole run does.
+
+    The two options let one package's audit run as six processes side
+    by side, one a size without the crowd and one for the crowd at
+    every size: theme-audit's tests of Horizon, Meridian and Orrery
+    against their mockups, and of Eclipse in every state, are a test a
+    part (tests/audit.rs). The crowd is not cut by size, for the pass
+    is history: one placing is judged at each size in turn, and the
+    sweep at one size leaves the focus, the views' positions and their
+    delegates where the next size is judged. Run alone at 1920 x 1200,
+    Eclipse over n30 was recorded with the first maker focused where
+    the whole run had the last (Amstrad), and Orrery's crowd lines at
+    1920 x 1200, 1920 x 1080, 1280 x 720 and 3840 x 2160 named other
+    items than its recorded account (measured 2026-11-16). For the same
+    reason a --catalogue run, which is that pass over a catalogue, is
+    not cut by size: the tests of one to 120 consoles stay whole.
+    Every other pass places its screen afresh and puts the focus back
+    after its walk; its lines at each size alone were those of the whole
+    run (Orrery, all five sizes, 2026-11-16).
+
+    A recorded account (Testing/themes/audit/<theme>.findings) is held
+    whole by its parts. Each part's test compares its run with the
+    part's share of the file: the lines naming its size and not the
+    crowd, or the crowd's lines, each in the file's order, and the held
+    lines cut as the passes are (the crowd holds Consoles once a size,
+    in the first variant, never against a mockup; every other state is
+    judged at every size, and against its mockup at the sizes of the
+    canvas's shape alone). The shares joined are the file byte for
+    byte, which qt_3_7_the_recorded_accounts_are_their_parts_joined
+    holds for the three files: the findings, then the held lines
+    summed, screens in the order first held, then the lines a ruling
+    lets pass; within each of those two, a screen at a time, each
+    listed variant in the package's order, each size in the gate's
+    order, then the crowd, a part's own lines in its own order. That is
+    the nesting of a whole run's loops (screens, then variants, then
+    sizes, the crowd after Consoles' own pass), so every part passing
+    is the whole file matched.
+
 STATES
     --states LIST records the states LIST names, comma-separated, or all
     of them for all; without it the run is the default alone. A state
@@ -479,6 +574,7 @@ EXAMPLES
     theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
     theme-audit --states all --state /tmp/states Frontend/themes/meridian
     theme-audit --states nogame,splash-3s Frontend/themes/meridian
+    theme-audit --mockups Testing/themes --sizes 1920x1080 --crowd without Frontend/themes/orrery
     theme-audit --mockups Testing/themes Frontend/themes/horizon
     theme-audit --catalogue Testing/themes/catalogues/eleven.tsv --focus "Super Nintendo" --mockups /tmp/m Frontend/themes/emusen
     theme-audit Frontend/theme-check/tests/themes/dim-picture

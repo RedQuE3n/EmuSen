@@ -10,6 +10,7 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QSet>
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QMutex>
 #include <QtCore/QMetaProperty>
@@ -149,11 +150,11 @@ QRectF glyphBox(QQuickItem* item)
     return QRectF(x, y, tw, th);
 }
 
-void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArray& out)
+// One item's node as the tree writes it, its opacity the effective one.
+QJsonObject nodeOf(QQuickItem* item, std::uint64_t parent, double opacity)
 {
     const QRectF rect = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
     const QRectF unit = item->mapRectToScene(QRectF(0, 0, 1, 1)); // words are measured in the item's units; the rules read the scene's
-    const double opacity = parentOpacity * item->opacity();
     const bool control = item->inherits("QQuickControl");
     const bool handlers = hasPointerHandler(item);
     item->setProperty("harnessRead", true); // read once, so an item made since (a delegate made again) is told apart
@@ -265,9 +266,30 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     node["colors"] = coloursOf(item);
     node["kept"] = keptOf(item);
     node["scoped"] = item->scopedFocusItem() != nullptr ? QString::number(idOf(item->scopedFocusItem())) : QString();
-    out.append(node);
+    return node;
+}
+
+void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArray& out)
+{
+    const double opacity = parentOpacity * item->opacity();
+    out.append(nodeOf(item, parent, opacity));
     for (QQuickItem* child : item->childItems()) {
         dump(child, idOf(item), opacity, out);
+    }
+}
+
+// Every view under an item not yet written, a node each as the tree writes it (a view: a node that keeps contentY or offset).
+void views(QQuickItem* item, std::uint64_t parent, double parentOpacity, const QSet<std::uint64_t>& written, QJsonArray& out)
+{
+    const double opacity = parentOpacity * item->opacity();
+    if (!written.contains(idOf(item))) {
+        const QJsonObject kept = keptOf(item);
+        if (kept.contains(QLatin1String("contentY")) || kept.contains(QLatin1String("offset"))) {
+            out.append(nodeOf(item, parent, opacity));
+        }
+    }
+    for (QQuickItem* child : item->childItems()) {
+        views(child, idOf(item), opacity, written, out);
     }
 }
 
@@ -441,6 +463,52 @@ QString harness_tree(QObject& window)
         }
         dump(w->contentItem(), 0, 1.0, nodes);
     }
+    return QString::fromUtf8(QJsonDocument(nodes).toJson(QJsonDocument::Compact));
+}
+
+QString harness_focus_tree(QObject& window)
+{
+    QJsonArray nodes;
+    QQuickWindow* w = quick(window);
+    if (w == nullptr) {
+        return QStringLiteral("[]");
+    }
+    if (QQuickTest::qIsPolishScheduled(w)) {
+        QQuickTest::qWaitForPolish(w, 1000);
+    }
+    // The focus's ancestors from the content item down, each with the opacity it is drawn at (EmuSen_Kit.md §7.9, the focus's tree).
+    QList<QQuickItem*> chain;
+    QQuickItem* up = w->activeFocusItem();
+    for (; up != nullptr && up != w->contentItem(); up = up->parentItem()) {
+        chain.prepend(up);
+    }
+    // A focus outside the content item is in no tree: the whole tree is written, as harness_tree writes it.
+    if (up == nullptr) {
+        chain.clear();
+    }
+    chain.prepend(w->contentItem());
+    QList<double> opacity;
+    QList<QJsonObject> written;
+    for (qsizetype i = 0; i < chain.size(); ++i) {
+        opacity.append((i > 0 ? opacity[i - 1] : 1.0) * chain[i]->opacity());
+        written.append(nodeOf(chain[i], i > 0 ? idOf(chain[i - 1]) : 0, opacity[i]));
+    }
+    qsizetype walkable = chain.size() - 1;
+    while (walkable > 0 && !written[walkable][QLatin1String("operable")].toBool()) {
+        --walkable;
+    }
+    if (!written[walkable][QLatin1String("operable")].toBool()) {
+        walkable = chain.size() - 1;
+    }
+    for (qsizetype i = 0; i < walkable; ++i) {
+        nodes.append(written[i]);
+    }
+    dump(chain[walkable], walkable > 0 ? idOf(chain[walkable - 1]) : 0, walkable > 0 ? opacity[walkable - 1] : 1.0, nodes);
+    QSet<std::uint64_t> ids;
+    for (const QJsonValue& node : nodes) {
+        ids.insert(node[QLatin1String("id")].toString().toULongLong());
+    }
+    views(w->contentItem(), 0, 1.0, ids, nodes);
     return QString::fromUtf8(QJsonDocument(nodes).toJson(QJsonDocument::Compact));
 }
 

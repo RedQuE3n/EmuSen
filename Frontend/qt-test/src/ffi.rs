@@ -14,6 +14,7 @@ pub mod ffi {
         fn harness_show(window: Pin<&mut QObject>, width: i32, height: i32) -> bool;
         fn harness_resize(window: Pin<&mut QObject>, width: i32, height: i32);
         fn harness_tree(window: Pin<&mut QObject>) -> QString;
+        fn harness_focus_tree(window: Pin<&mut QObject>) -> QString;
         /// Whether the window holds an item made since its tree was last read.
         fn harness_made_since(window: Pin<&mut QObject>) -> bool;
         /// Whether the view numbered `id` still turns to its current item: its highlight follows it and stands elsewhere.

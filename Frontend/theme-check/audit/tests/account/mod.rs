@@ -2,8 +2,8 @@
 
 use emusen_qt_test::harness::SIZES;
 
-/// How a line a ruling lets pass begins, as theme-audit writes it.
-const RULED: &str = "theme-audit: accepted by ";
+/// How theme-audit begins a word of its own: what it held, and the lines a ruling lets pass; a finding has none.
+const OWN: &str = "theme-audit: ";
 
 /// The label the default state's Choose a console over 120 consoles carries after its variant, as theme-audit writes it.
 const CROWD: &str = ", 120 consoles";
@@ -96,7 +96,7 @@ pub fn join(parts: &[(Part, String)], variants: &[&str]) -> String {
         let mut out = String::new();
         let lines = |part: Part| {
             let account = parts.iter().find(|(p, _)| *p == part).map(|(_, a)| a.as_str()).unwrap_or("");
-            account.lines().filter(move |l| l.starts_with(RULED) == ruled && held(l).is_none()).map(|l| (l, place(l).unwrap_or_else(|| panic!("a line no part judges: {l}"))))
+            account.lines().filter(move |l| l.starts_with(OWN) == ruled && held(l).is_none()).map(|l| (l, place(l).unwrap_or_else(|| panic!("a line no part judges: {l}"))))
         };
         for (screen, _, _) in &screens {
             for variant in variants {

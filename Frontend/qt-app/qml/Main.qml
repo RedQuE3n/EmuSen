@@ -550,7 +550,7 @@ Window {
             enabled: (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings
             function onLeft() { screens.back() }
             function onPassed(key) { screens.act(key) }
-            function onRefocus(row) { settingsModel.focused = row }
+            function onRefocus(row) { settingsModel.setFocused(row) }
         }
         // A console's options asked for on Choose a console: Settings opens at that console's page (none for an empty one).
         Connections {

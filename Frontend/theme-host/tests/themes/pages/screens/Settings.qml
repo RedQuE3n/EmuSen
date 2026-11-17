@@ -27,7 +27,7 @@ ThemeScreen {
         objectName: "setPane"
         y: 120
         text: [Settings.sentence, Settings.lines.join("/"), Settings.muted.join("/"), Settings.tones.join("/"), Settings.preview, Settings.caption,
-            Settings.meter, Settings.samples.join("/")].join("|")
+            Settings.meter, Settings.samples.join("/"), Settings.sampleScales.join("/")].join("|")
     }
     Row {
         y: 140

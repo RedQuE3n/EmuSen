@@ -123,8 +123,7 @@ pub const KINDS: [HelpKind; 23] = [
     HelpKind::PageCoverArt,
 ];
 
-/// The help bar a kind shows: Home's three, Choose a console's, the grid's and the search's, Settings' four and a game's
-/// page's by what its focus is on.
+/// The help bar a kind shows (EmuSen_Qt.md §3.2, `Help`).
 pub fn screen_of(kind: HelpKind) -> Screen {
     match kind {
         HelpKind::Game => Screen::HomeShelf,
@@ -153,8 +152,7 @@ pub fn screen_of(kind: HelpKind) -> Screen {
     }
 }
 
-/// The kind whose bar is a screen's, for Settings' and a game's page's models; none for a screen no kind shows (a bindings
-/// page, a row listening, the media viewer). Home's kinds are a theme's own choice and never answered here.
+/// The kind whose bar is a model's screen's; none for a screen no kind shows (EmuSen_Qt.md §3.2, `Help`).
 pub fn kind_of(screen: Screen) -> Option<HelpKind> {
     KINDS.into_iter().skip_while(|k| *k != HelpKind::Settings).find(|k| screen_of(*k) == screen)
 }

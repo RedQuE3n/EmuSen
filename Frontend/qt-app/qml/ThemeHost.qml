@@ -112,6 +112,8 @@ Item {
         clock: themed.clock.time
         shortTime: themed.clock.shortTime
         now: themed.clock.now
+        settingsShown: settingsSlot.shown
+        pageShown: gameSlot.shown
         onPlayed: (game) => themed.played(game)
         onResumed: themed.resumed()
         onPlaceChosen: (index) => themed.screens.place(index)
@@ -186,6 +188,7 @@ Item {
         function onCoverArtChanged() { feed.showPage(themed.pageModel) }
         function onAskingChanged() { feed.showPage(themed.pageModel) }
         function onQuestionTitleChanged() { feed.showPage(themed.pageModel) }
+        function onFocusMoved() { feed.showPage(themed.pageModel) }
     }
     Connections {
         target: themed.library

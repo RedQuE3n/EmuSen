@@ -67,8 +67,7 @@ pub mod qobject {
         #[qinvokable]
         fn enabled(self: &ThemeActions, key: &QString) -> bool;
 
-        /// Settings' calls (§3.2, `Settings`), each the program's own: Left (-1) or Right (+1) on a row, A on a row, a
-        /// slider moved to an amount, a section chosen, the focus on a row, the shoulders on a page, and B.
+        /// Settings' calls, each the program's own (EmuSen_Qt.md §3.2, `Settings`).
         #[qinvokable]
         #[cxx_name = "settingsStep"]
         fn settings_step(self: Pin<&mut ThemeActions>, row: i32, by: i32) -> bool;
@@ -91,9 +90,7 @@ pub mod qobject {
         #[cxx_name = "settingsBack"]
         fn settings_back(self: Pin<&mut ThemeActions>) -> bool;
 
-        /// A game's page's calls (§3.2, `Page`), each the program's own: a section (tab) chosen, A on an action and Left or
-        /// Right on it, A on a row or a card and Left or Right on a row, the focus, a help entry's action, the question's
-        /// answer, and B.
+        /// A game's page's calls, each the program's own (EmuSen_Qt.md §3.2, `Page`).
         #[qinvokable]
         #[cxx_name = "pageSection"]
         fn page_section(self: Pin<&mut ThemeActions>, section: i32) -> bool;

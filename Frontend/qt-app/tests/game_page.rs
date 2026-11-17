@@ -7,7 +7,7 @@
 
 mod common;
 
-use common::{draw_covers, hold, sandbox, wait_for, write_clip};
+use common::{draw_covers, hold, sandbox, saved_state as state, wait_for, write_clip};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
 use emusen_platform_client::galaxia::consts::{DIR_SCREENSHOTS, FILE_GAMES, MODEL_APP_SETTINGS, SAVE_RESUME_STATE, SAVE_STATE};
@@ -16,8 +16,6 @@ use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
 use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
-use std::path::Path;
-use std::time::{Duration, SystemTime};
 
 const COBALT: &str = "Cobalt Harbor (Synthetic)";
 const LANTERN: &str = "Lantern Bay (Synthetic)";
@@ -112,15 +110,6 @@ fn comes_to_read(scene: &mut Scene<'_>, words: &str) -> bool {
         scene.wait(50);
     }
     false
-}
-
-/// A state's file, saved `ago` seconds before now.
-fn state(platform: &Platform, kind: u32, rom: &Path, slot: i32, ago: u64) {
-    let file = platform.save_path(kind, rom.to_str().unwrap(), None, slot).unwrap();
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(&file, b"state").unwrap();
-    let f = std::fs::File::options().write(true).open(&file).unwrap();
-    f.set_modified(SystemTime::now() - Duration::from_secs(ago)).unwrap();
 }
 
 fn set_setting(platform: &Platform, key: &str, value: serde_json::Value) {

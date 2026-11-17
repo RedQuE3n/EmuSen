@@ -544,13 +544,13 @@ Window {
                 onActed: (key) => screens.act(key)
             }
         }
-        // What Settings.qml answers for the model while the chosen theme draws Settings: B with no page left, and Start; a page
-        // closed refocuses its door's row in the theme's feed.
+        // Settings.qml's answers to the model while the chosen theme's Settings is shown (EmuSen_Qt.md §3.2, `Settings`).
         Connections {
             target: settingsModel
-            enabled: program.themeHost?.settings ?? false
+            enabled: (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings
             function onLeft() { screens.back() }
             function onPassed(key) { screens.act(key) }
+            function onRefocus(row) { settingsModel.focused = row }
         }
         // A console's options asked for on Choose a console: Settings opens at that console's page (none for an empty one).
         Connections {

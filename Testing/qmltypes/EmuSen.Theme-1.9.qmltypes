@@ -1281,7 +1281,16 @@ Module {
             lineNumber: 44
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 65 }
+        Property {
+            name: "sampleScales"
+            type: "QList_f64"
+            read: "getSampleScales"
+            notify: "shown"
+            index: 16
+            lineNumber: 45
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 67 }
     }
     Component {
         file: "words.cxxqt.h"

@@ -1,5 +1,4 @@
-//! `MeasuredWalk`: the rows' walk of `RowWalk` over rows of their own heights, in a window of a given height, with no
-//! geometry of its own (EmuSen_Kit.md §7.122). The window moves only when the focus leaves it, by whole rows.
+//! `MeasuredWalk`: `RowWalk`'s walk over rows of their own heights, no geometry of its own (EmuSen_Kit.md §7.122).
 
 use super::rows::{Row, RowOutcome, RowWalk};
 use crate::input::UiButton;

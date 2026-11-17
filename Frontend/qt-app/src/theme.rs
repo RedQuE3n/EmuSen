@@ -8,7 +8,7 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QList, QString, QStringList};
 use emusen_qt_models::game_model::qobject::GameModel;
-use emusen_qt_models::game_page_model::{action_items, qobject::GamePageModel};
+use emusen_qt_models::game_page_model::qobject::GamePageModel;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
 use emusen_qt_models::settings_model::qobject::SettingsModel;
 use emusen_qt_models::{help, screens, themes, words};
@@ -56,6 +56,9 @@ pub mod qobject {
         #[qproperty(bool, swap)]
         /// The program's clock's time, in seconds since 1970, 0 for the wall clock: the theme's `Words.now`.
         #[qproperty(i64, now)]
+        /// Whether the window shows Settings and the game's page, so a theme's calls are taken only on the screen shown.
+        #[qproperty(bool, settings_shown, cxx_name = "settingsShown")]
+        #[qproperty(bool, page_shown, cxx_name = "pageShown")]
         type ThemeFeed = super::ThemeFeedRust;
     }
 
@@ -192,6 +195,8 @@ pub struct ThemeFeedRust {
     page_queued: bool,
     session: Option<Shown>,
     section: Option<Section>,
+    settings_shown: bool,
+    page_shown: bool,
     controllers: i32,
     family: i32,
     clock: QString,
@@ -216,6 +221,8 @@ impl Default for ThemeFeedRust {
             page_queued: false,
             session: None,
             section: None,
+            settings_shown: false,
+            page_shown: false,
             controllers: 0,
             family: 0,
             clock: QString::default(),
@@ -342,30 +349,53 @@ impl ActionSink for Sink {
     fn screen(&mut self, action: &ScreenAction) -> bool {
         // Safety: as `act`; the models are the window's, alive as long as the feed, and pinned where QML made them.
         let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
-        let settings = unsafe { feed.settings.as_mut() }.map(|m| unsafe { Pin::new_unchecked(m) });
-        let page = unsafe { feed.page.as_mut() }.map(|m| unsafe { Pin::new_unchecked(m) });
+        let settings = feed.taken(Role::Settings).then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
+        let page = feed.taken(Role::Game).then(|| unsafe { feed.page.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
+        let within = |at: i32, count: usize| usize::try_from(at).is_ok_and(|at| at < count);
         match (action, settings, page) {
             (ScreenAction::SettingsStep(row, by), Some(s), _) => s.step(*row, *by),
             (ScreenAction::SettingsChoose(row), Some(s), _) => s.choose(*row),
             (ScreenAction::SettingsSlide(row, amount), Some(s), _) => s.slide(*row, *amount),
-            (ScreenAction::SettingsSection(section), Some(s), _) => s.set_section(*section),
-            (ScreenAction::SettingsFocus(row), Some(s), _) => s.set_focused(*row),
-            (ScreenAction::SettingsShoulder(by), Some(s), _) => return s.shoulder(*by),
+            (ScreenAction::SettingsSection(section), Some(s), _) => {
+                let took = within(*section, s.sections().iter().count());
+                if took {
+                    s.set_section(*section);
+                }
+                took
+            }
+            (ScreenAction::SettingsFocus(row), Some(s), _) => {
+                let took = within(*row, s.shown_rows().len());
+                if took {
+                    s.set_focused(*row);
+                }
+                took
+            }
+            (ScreenAction::SettingsShoulder(by), Some(s), _) => s.shoulder(*by),
             (ScreenAction::SettingsBack, Some(s), _) => s.back(),
-            (ScreenAction::PageSection(section), _, Some(p)) => p.set_section(*section),
+            (ScreenAction::PageSection(section), _, Some(p)) => {
+                let took = within(*section, p.sections().iter().count());
+                if took {
+                    p.set_section(*section);
+                }
+                took
+            }
             (ScreenAction::PageAct(action), _, Some(p)) => p.act(*action),
-            (ScreenAction::PageStepAction(action, by), _, Some(p)) => return p.step_action(*action, *by),
+            (ScreenAction::PageStepAction(action, by), _, Some(p)) => p.step_action(*action, *by),
             (ScreenAction::PageChoose(row), _, Some(p)) => p.choose(*row),
             (ScreenAction::PageStep(row, by), _, Some(p)) => p.step(*row, *by),
-            (ScreenAction::PageFocus(action, row), _, Some(p)) => p.focus(*action, *row),
+            (ScreenAction::PageFocus(action, row), _, Some(p)) => {
+                let actions = p.shown_actions().len();
+                let took = (*action == -1 || within(*action, actions)) && (*row == 0 || within(*row, p.shown_items().len()));
+                if took {
+                    p.focus(*action, *row);
+                }
+                took
+            }
             (ScreenAction::PageDeclared(key), _, Some(p)) => p.declared(&QString::from(key.as_str())),
             (ScreenAction::PageAnswer(choice), _, Some(p)) => p.answer(*choice),
-            (ScreenAction::PageBack, _, Some(p)) => {
-                p.back();
-            }
-            _ => return false,
+            (ScreenAction::PageBack, _, Some(p)) => p.back(),
+            _ => false,
         }
-        true
     }
 }
 
@@ -480,15 +510,7 @@ impl qobject::ThemeFeed {
     /// # Safety
     /// `settings` is the window's `SettingsModel`, alive as long as the feed.
     pub unsafe fn show_settings(mut self: Pin<&mut Self>, settings: *mut cxx_qt::QObject) {
-        let settings = unsafe { model::<SettingsModel>(settings) } as *mut SettingsModel;
-        if self.settings != settings {
-            // Safety: the model is the window's, alive as long as the feed; B closing a page focuses its door's row, as the
-            // program's frame does.
-            if let Some(model) = unsafe { settings.as_mut() } {
-                unsafe { Pin::new_unchecked(model) }.on_refocus(|model, row| model.set_focused(row)).release();
-            }
-            self.as_mut().rust_mut().settings = settings;
-        }
+        self.as_mut().rust_mut().settings = unsafe { model::<SettingsModel>(settings) } as *mut SettingsModel;
         if self.settings_queued {
             return;
         }
@@ -499,7 +521,9 @@ impl qobject::ThemeFeed {
             feed.feed_settings();
         });
         if queued.is_err() {
+            // A queue refused (cxx-qt's ThreadingQueueError) feeds at once, so no change is lost.
             self.as_mut().rust_mut().settings_queued = false;
+            self.feed_settings();
         }
     }
 
@@ -509,13 +533,25 @@ impl qobject::ThemeFeed {
         unsafe { self.host.as_ref() }.is_some_and(|h| h.provides(role))
     }
 
+    /// Whether a theme's call of the screen's is taken: the theme draws it and the window shows it.
+    fn taken(&self, role: Role) -> bool {
+        let shown = (role == Role::Settings && self.settings_shown) || (role == Role::Game && self.page_shown);
+        shown && self.draws(role)
+    }
+
     fn feed_settings(&self) {
         // Safety: the model is the window's, alive as long as the feed.
         let Some(settings) = (unsafe { self.settings.as_ref() }) else { return };
         if !self.draws(Role::Settings) {
             return;
         }
-        let facts = emusen_theme_qt::settings::facts_of(settings.view(), settings.shown_rows(), *settings.focused());
+        let facts = match emusen_theme_qt::settings::facts_of(settings.view(), settings.shown_rows(), *settings.focused()) {
+            Ok(facts) => facts,
+            Err(why) => {
+                eprintln!("theme feed: Settings not shown to the theme: {why}");
+                return;
+            }
+        };
         if let Some(view) = self.engine().and_then(host::settings) {
             view.show(&facts);
         }
@@ -525,17 +561,22 @@ impl qobject::ThemeFeed {
     /// `page` is the window's `GamePageModel`, alive as long as the feed.
     pub unsafe fn show_page(mut self: Pin<&mut Self>, page: *mut cxx_qt::QObject) {
         self.as_mut().rust_mut().page = unsafe { model::<GamePageModel>(page) } as *mut GamePageModel;
+        self.queue_page();
+    }
+
+    /// As Settings: fed once the model has finished telling its change, at once where the queue is refused.
+    fn queue_page(mut self: Pin<&mut Self>) {
         if self.page_queued {
             return;
         }
         self.as_mut().rust_mut().page_queued = true;
-        // As Settings: once the model has finished telling its change.
         let queued = self.qt_thread().queue(|mut feed| {
             feed.as_mut().rust_mut().page_queued = false;
             feed.feed_page();
         });
         if queued.is_err() {
             self.as_mut().rust_mut().page_queued = false;
+            self.feed_page();
         }
     }
 
@@ -555,7 +596,7 @@ impl qobject::ThemeFeed {
             cover: text(page.cover()),
             hero: text(page.hero()),
             clip: text(page.clip()),
-            actions: action_rows(&action_items(&page.actions().to_string())),
+            actions: action_rows(&page.shown_actions()),
             sections: words(page.sections()),
             section: *page.section(),
             shows: *page.shows(),

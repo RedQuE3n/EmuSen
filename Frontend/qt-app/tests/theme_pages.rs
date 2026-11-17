@@ -1,16 +1,16 @@
-//! A theme's Settings and game page in the program (EmuSen_Qt.md §3.2, `Settings` and `Page`): the test theme `pages` draws
-//! both as plain text, reads every row of every section, page and tab through the read-only views, and does each change
-//! through Actions, which the window carries out on its own models. One Qt program a process, so one test a file.
+//! A theme's Settings and game page read and acted on in the program (EmuSen_Qt.md §3.2, the proof paragraph).
 
 mod common;
 
-use common::{sandbox, wait_for};
+use common::{first_game_page, sandbox, saved_state, wait_for};
 use cxx_qt::casting::Upcast;
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
 use emusen_kit_core::settings::RowKind;
+use emusen_platform_client::galaxia::consts::SAVE_STATE;
+use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
-use emusen_qt_models::game_page_model::{action_items, qobject::GamePageModel};
+use emusen_qt_models::game_page_model::qobject::GamePageModel;
 use emusen_qt_models::library_model::qobject::QAbstractListModel;
 use emusen_qt_models::settings_model::qobject::SettingsModel;
 use emusen_qt_test::Scene;
@@ -33,8 +33,7 @@ fn ask(scene: &mut Scene<'_>, screen: &str, command: &str) -> String {
     scene.property(screen, "took")
 }
 
-/// The words of an item the theme drew by its name: a delegate of a Repeater has no QObject parent to be found by, so it is
-/// read from the window's item tree.
+/// The words of an item the theme drew, from the item tree, as a Repeater's delegate has no QObject parent.
 fn drawn(scene: &mut Scene<'_>, name: &str) -> String {
     let tree = scene.tree();
     tree.nodes.iter().find(|n| n.name == name).and_then(|n| n.text.clone()).unwrap_or_default()
@@ -57,17 +56,25 @@ fn settings_read_whole(scene: &mut Scene<'_>, at: &str) {
     assert_eq!(scene.property("setFocused", "text"), format!("{focused} of {}", rows.len()), "{at}: the focus and the count");
     assert_eq!(scene.property("setPage", "text"), settings.view().page_key(), "{at}: the page's key");
     assert_eq!(scene.property("setTrail", "text"), settings.trail().iter().map(|t| t.to_string()).collect::<Vec<_>>().join("|"), "{at}");
-    let pane = scene.property("setPane", "text");
-    assert!(pane.starts_with(&settings.sentence().to_string()), "{at}: the pane's sentence is the model's: {pane}");
+    let joined = |list: &cxx_qt_lib::QStringList| list.iter().map(|t| t.to_string()).collect::<Vec<_>>().join("/");
+    let tones = settings.view().pane(focused.max(0) as usize).tones.iter().map(|t| (*t as i32).to_string()).collect::<Vec<_>>().join("/");
+    let scales = (0..settings.samples().iter().count()).map(|i| settings.sample_scale(i as i32).to_string()).collect::<Vec<_>>().join("/");
+    let pane = [settings.sentence().to_string(), joined(settings.pane_lines()), joined(settings.pane_muted()), tones, settings.preview().to_string(),
+        settings.caption().to_string(), settings.meter().to_string(), joined(settings.samples()), scales];
+    assert_eq!(scene.property("setPane", "text"), pane.join("|"), "{at}: the pane is the model's, each sample's scale with it");
     for (i, (row, drawn)) in rows.iter().zip(drawn_rows(scene, rows.len())).enumerate() {
         assert_eq!(drawn.len(), 18, "{at} row {i} drawn with every role: {drawn:?} {}", scene.property("theme", "warnings"));
-        let kind = RowKind::ALL.iter().position(|k| *k == row.kind).unwrap();
+        let kind = row.kind.index();
         let facet = &facets[i];
         assert_eq!(drawn[..2], [row.id.clone(), row.label.clone()], "{at} row {i}: key and label");
         assert_eq!(drawn[2], facet.about, "{at} row {i}: about");
         assert_eq!(drawn[3], row.value, "{at} row {i}: value");
         assert_eq!(drawn[4], kind.to_string(), "{at} row {i}: kind");
         assert_eq!(drawn[5..10], [facet.switch.is_some(), facet.switch == Some(true), row.held, row.marked, row.code].map(|b| b.to_string()), "{at} row {i}");
+        if let Some(slider) = settings.view().slider(i) {
+            let fields: Vec<f64> = drawn[10..14].iter().map(|t| t.parse().unwrap()).collect();
+            assert_eq!(fields, slider, "{at} row {i}: the slider's minimum, maximum, step and amount");
+        }
         if let Some(tile) = &facet.tile {
             assert_eq!(drawn[14..], [tile.console.clone(), tile.system.clone(), tile.games.to_string(), tile.engine.clone()], "{at} row {i}: the tile");
         }
@@ -81,9 +88,32 @@ fn row_where(scene: &mut Scene<'_>, test: impl Fn(usize, &emusen_qt_models::sett
     settings.shown_rows().iter().enumerate().position(|(i, r)| test(i, r))
 }
 
+/// The page's question as `Page` holds it is the model's.
+fn question_read(scene: &mut Scene<'_>, page: &GamePageModel) {
+    let joined = |list: &cxx_qt_lib::QStringList| list.iter().map(|t| t.to_string()).collect::<Vec<_>>().join("/");
+    let want = [page.asking().to_string(), page.question_title().to_string(), joined(page.question_sentences()), joined(page.question_choices()),
+        page.question_back().to_string()];
+    assert_eq!(scene.property("gameQuestion", "text"), want.join("|"), "the question as the model asks it");
+}
+
+/// The page's words, art and focus as `Page` holds them are the model's.
+fn page_read(scene: &mut Scene<'_>, page: &GamePageModel, at: &str) {
+    let want = [page.title(), page.facts(), page.cover(), page.hero(), page.clip(), page.words(), page.picture()].map(|t| t.to_string());
+    assert_eq!(scene.property("gameWords", "text"), want.join("|"), "{at}: the page's words and art");
+    let (action, content) = page.focused();
+    let help = emusen_theme_qt::help::kind_of(page.help_screen()).map_or(-1, |k| k.repr);
+    assert_eq!(scene.property("gameFocus", "text"), format!("{action} {content} {help}"), "{at}: the focus and its help");
+    assert!(scene.property("gameSections", "text").ends_with(&format!("|{}", page.cover_art())), "{at}: whether cover art is open");
+}
+
 #[test]
 fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
-    let _world = sandbox("qt-app-theme-pages", &[("NES", "One.nes"), ("NES", "Two.nes")]);
+    let world = sandbox("qt-app-theme-pages", &[("NES", "One.nes"), ("NES", "Two.nes")]);
+    // Two states of the first game, so Resume steps between them.
+    let platform = Platform::load(library()).unwrap();
+    let one = world.root.join("Roms/NES/One.nes");
+    saved_state(&platform, SAVE_STATE, &one, 1, 3600);
+    saved_state(&platform, SAVE_STATE, &one, 2, 2 * 3600);
     let mut harness = emusen_qt_test::Harness::new();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
@@ -118,6 +148,14 @@ fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
     let display = sections.iter().position(|s| s == "Display").unwrap();
     ask(&mut scene, "pagesSettings", &format!("settingsSection {display}"));
     wait_for(&mut scene, "setPage", "text", "display", 1000);
+    // The page's calls from Settings are declined, and none reaches the page's model; nor does a section past the last.
+    let page_section = scene.property("pageModel", "section");
+    assert_eq!(ask(&mut scene, "pagesSettings", "pageSection 1"), "false", "a page's call from Settings");
+    assert_eq!(ask(&mut scene, "pagesSettings", "pageAct 0"), "false");
+    assert_eq!(scene.property("pageModel", "section"), page_section, "the page's model untouched");
+    assert_eq!(ask(&mut scene, "pagesSettings", &format!("settingsSection {}", sections.len())), "false", "no section past the last");
+    assert_eq!(ask(&mut scene, "pagesSettings", "settingsFocus -1"), "false", "no row before the first");
+    assert_eq!(scene.property("setPage", "text"), "display");
     let switch = (0..40).find(|i| drawn(&mut scene, &format!("setRow{i}")).split('|').nth(5) == Some("true")).expect("a switch on Display");
     let before = drawn(&mut scene, &format!("setRow{switch}"));
     assert_eq!(ask(&mut scene, "pagesSettings", &format!("settingsFocus {switch}")), "true");
@@ -135,11 +173,17 @@ fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
     assert_eq!(ask(&mut scene, "pagesSettings", &format!("settingsStep {choice} -1")), "true");
     scene.wait(200);
     assert_eq!(drawn(&mut scene, &format!("setRow{choice}")), value, "Left steps it back: of three choices, only a step by -1 returns");
+    assert_eq!(ask(&mut scene, "pagesSettings", &format!("settingsFocus {choice}")), "true");
+    wait_for(&mut scene, "settingsModel", "focused", &choice.to_string(), 1000);
+    settings_read_whole(&mut scene, "Text size focused");
+    let samples = model::<SettingsModel>(&mut scene, "settingsModel").samples().iter().count();
+    assert!(samples > 1, "Text size's pane shows a sample at each size: {}", scene.property("setPane", "text"));
 
     // A page of choices: Shaders, a console, the CRT chosen among its shaders and the mark moved to it.
     let shaders = row_where(&mut scene, |_, r| r.id == "shaders").expect("Display's Shaders");
-    ask(&mut scene, "pagesSettings", &format!("settingsChoose {shaders}"));
+    assert_eq!(ask(&mut scene, "pagesSettings", &format!("settingsChoose {shaders}")), "true");
     wait_for(&mut scene, "setPage", "text", "shaderConsoles", 1000);
+    settings_read_whole(&mut scene, "the shaders' consoles");
     let first = row_where(&mut scene, |_, r| r.kind == RowKind::Opens && !r.held).expect("a console's shaders");
     ask(&mut scene, "pagesSettings", &format!("settingsChoose {first}"));
     scene.wait(300);
@@ -197,41 +241,44 @@ fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
     wait_for(&mut scene, "setPage", "text", &format!("console:{}", parts[14]), 1000);
     settings_read_whole(&mut scene, "the NES's page");
     assert_eq!(drawn(&mut scene, "setHelpEntry2"), "Console", "a console's page steps the console on the shoulders");
-    ask(&mut scene, "pagesSettings", "settingsShoulder 1");
+    assert_eq!(ask(&mut scene, "pagesSettings", "settingsShoulder 1"), "true");
     scene.wait(200);
+    let next = scene.property("setPage", "text");
+    assert!(next.starts_with("console:") && next != format!("console:{}", parts[14]), "the shoulder stepped the console: {next}");
     settings_read_whole(&mut scene, "the console after the NES");
-    ask(&mut scene, "pagesSettings", "settingsBack");
+    assert_eq!(ask(&mut scene, "pagesSettings", "settingsBack"), "true", "B closing a page is Settings' own");
     wait_for(&mut scene, "setPage", "text", "consoles", 1000);
-    ask(&mut scene, "pagesSettings", "settingsBack");
+    assert_eq!(ask(&mut scene, "pagesSettings", "settingsBack"), "false", "B with no page left leaves Settings");
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
 
     // The game's page: Games, All Games and X on the first game open the theme's page in place of the program's.
     scene.wait(200);
-    for _ in 0..5 {
-        scene.pad(UiButton::Left);
-    }
-    scene.pad(UiButton::Accept);
-    wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
-    let tree = scene.tree();
-    let all = tree.find_named("tile.0").expect("All Games");
-    assert!(scene.focus_item(&tree, all));
-    scene.pad(UiButton::Accept);
-    wait_for(&mut scene, "screens", "shown", "Grid", 2000);
-    scene.wait(300);
-    scene.pad(UiButton::Screensaver);
-    wait_for(&mut scene, "screens", "shown", "Page", 2000);
+    first_game_page(&mut scene);
     wait_for(&mut scene, "theme", "game", "true", 2000);
     wait_for(&mut scene, "gameReady", "text", "true", 10000);
     assert_eq!(scene.property("gamePage", "visible"), "false", "the program's page is not drawn under the theme's");
     let page = model::<GamePageModel>(&mut scene, "pageModel");
     assert!(scene.property("gameKey", "text").ends_with("One.nes"), "the game's key: {}", scene.property("gameKey", "text"));
-    assert!(scene.property("gameWords", "text").starts_with(&format!("{}|{}|", page.title(), page.facts())));
+    page_read(&mut scene, page, "opened");
+    question_read(&mut scene, page);
+
+    // Settings' calls from the page are declined, and none reaches Settings' model.
+    let settings = model::<SettingsModel>(&mut scene, "settingsModel");
+    let values = |s: &SettingsModel| s.shown_rows().iter().map(|r| r.value.clone()).collect::<Vec<_>>();
+    let (stored, section) = (values(settings), scene.property("settingsModel", "section"));
+    for call in ["settingsStep 0 1", "settingsChoose 0", "settingsSlide 0 1", "settingsSection 0", "settingsFocus 1", "settingsShoulder 1", "settingsBack"] {
+        assert_eq!(ask(&mut scene, "pagesGame", call), "false", "{call} from the page");
+    }
+    scene.wait(200);
+    assert_eq!(values(settings), stored, "no stored setting changed");
+    assert_eq!(scene.property("settingsModel", "section"), section);
+    assert_eq!(scene.property("screens", "shown"), "Page");
 
     // Each tab, its rows or cards read whole through Page.rows; the actions through Page.actions.
-    let actions = action_items(&page.actions().to_string());
+    let actions = page.shown_actions();
     for (i, a) in actions.iter().enumerate() {
         let shown = drawn(&mut scene, &format!("gameAction{i}"));
-        assert!(shown.starts_with(&format!("{}|{}|{}|", a.label, a.value, a.button)), "action {i}: {shown}");
+        assert!(shown.starts_with(&format!("{}|{}|{}|", a.label(), a.value(), a.button())), "action {i}: {shown}");
     }
     let tabs: Vec<String> = page.sections().iter().map(|s| s.to_string()).collect();
     for (i, tab) in tabs.iter().enumerate() {
@@ -240,17 +287,25 @@ fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
         scene.wait(200);
         assert!(scene.property("gameSections", "text").starts_with(&format!("{}|{i}|{}|", tabs.join("|"), page.shows())), "{tab}");
         for (r, item) in page.shown_items().iter().enumerate() {
-            let want = [item.key.clone(), item.label.clone(), item.value.clone(), item.line.clone(), item.picture.clone()].join("|");
+            let want = [item.key().to_owned(), item.label().to_owned(), item.value().to_owned(), item.line().to_owned(), item.picture().to_owned()].join("|");
             let shown = drawn(&mut scene, &format!("gameRow{r}"));
             assert!(shown.starts_with(&want), "{tab} row {r}: {shown} against {want}");
-            assert!(shown.ends_with(&format!("|{}|{}|{}", item.steps, item.opens, item.marked)), "{tab} row {r}: {shown}");
+            assert!(shown.ends_with(&format!("|{}|{}|{}", item.steps(), item.opens(), item.marked())), "{tab} row {r}: {shown}");
+        }
+        page_read(&mut scene, page, tab);
+        // The focus walked down the tab's items, each move read back, though the help may stay the same.
+        for r in 0..page.shown_items().len().min(3) {
+            assert_eq!(ask(&mut scene, "pagesGame", &format!("pageFocus -1 {r}")), "true");
+            wait_for(&mut scene, "gameFocus", "text", &format!("-1 {r} {}", emusen_theme_qt::help::kind_of(page.help_screen()).map_or(-1, |k| k.repr)), 1000);
         }
     }
+    assert_eq!(ask(&mut scene, "pagesGame", &format!("pageSection {}", tabs.len())), "false", "no tab past the last");
+    assert_eq!(ask(&mut scene, "pagesGame", &format!("pageFocus {} 0", actions.len())), "false", "no action past the last");
 
     // The focus told to the page moves its help; a stepped row of Options steps; Favourite is the program's own.
     ask(&mut scene, "pagesGame", "pageSection 0");
     wait_for(&mut scene, "pageModel", "section", "0", 1000);
-    let favourite = actions.iter().position(|a| a.label == "Favourite").expect("Favourite among the actions");
+    let favourite = actions.iter().position(|a| a.label() == "Favourite").expect("Favourite among the actions");
     assert_eq!(ask(&mut scene, "pagesGame", &format!("pageFocus {favourite} 0")), "true");
     scene.wait(100);
     assert_eq!(scene.property("gameFocus", "text").split(' ').next(), Some(favourite.to_string().as_str()));
@@ -266,7 +321,7 @@ fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
     ask(&mut scene, "pagesGame", &format!("pageSection {options}"));
     wait_for(&mut scene, "pageModel", "section", &options.to_string(), 1000);
     scene.wait(200);
-    let stepped = page.shown_items().iter().position(|i| i.steps).expect("a stepped row on Options");
+    let stepped = page.shown_items().iter().position(|i| i.steps()).expect("a stepped row on Options");
     let value = drawn(&mut scene, &format!("gameRow{stepped}"));
     assert_eq!(ask(&mut scene, "pagesGame", &format!("pageStep {stepped} 1")), "true");
     scene.wait(400);
@@ -279,8 +334,8 @@ fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
     ask(&mut scene, "pagesGame", &format!("pageSection {details}"));
     wait_for(&mut scene, "pageModel", "section", &details.to_string(), 1000);
     scene.wait(200);
-    let keys: Vec<String> = page.shown_items().iter().map(|i| format!("{}:{}", i.key, i.opens)).collect();
-    let edit = page.shown_items().iter().position(|i| i.opens).unwrap_or_else(|| panic!("a door on Details: {keys:?}"));
+    let keys: Vec<String> = page.shown_items().iter().map(|i| format!("{}:{}", i.key(), i.opens())).collect();
+    let edit = page.shown_items().iter().position(|i| i.opens()).unwrap_or_else(|| panic!("a door on Details: {keys:?}"));
     {
         assert_eq!(ask(&mut scene, "pagesGame", &format!("pageFocus -1 {edit}")), "true");
         assert_eq!(ask(&mut scene, "pagesGame", &format!("pageChoose {edit}")), "true");
@@ -289,18 +344,45 @@ fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
         scene.wait(300);
         assert_eq!(scene.property("screens", "shown"), "Page", "B on a deeper part stays on the page");
     }
-    let asks = page.shown_items().iter().position(|i| i.key == "hide").unwrap_or_else(|| panic!("Hide on Details: {keys:?}"));
+    let asks = page.shown_items().iter().position(|i| i.key() == "hide").unwrap_or_else(|| panic!("Hide on Details: {keys:?}"));
     {
         ask(&mut scene, "pagesGame", &format!("pageChoose {asks}"));
         wait_for(&mut scene, "pageModel", "asking", "true", 1000);
         scene.wait(100);
-        assert!(scene.property("gameQuestion", "text").starts_with("true|"), "the question as Page holds it");
+        question_read(&mut scene, page);
         assert_eq!(ask(&mut scene, "pagesGame", "pageAnswer 0"), "true");
         wait_for(&mut scene, "pageModel", "asking", "false", 1000);
+        assert_eq!(ask(&mut scene, "pagesGame", "pageAnswer 0"), "false", "no question left to answer");
     }
 
     // B with nothing of the page's own open leaves the page for the grid.
-    assert_eq!(ask(&mut scene, "pagesGame", "pageBack"), "true");
+    assert_eq!(ask(&mut scene, "pagesGame", "pageBack"), "false", "B with nothing of the page's own open leaves it");
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+
+    // The page again: Resume stepped to its other state by pageStepAction, and run: the game starts from that state.
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "screens", "shown", "Page", 2000);
+    wait_for(&mut scene, "gameReady", "text", "true", 10000);
+    scene.wait(200);
+    let actions = page.shown_actions();
+    let resume = actions.iter().position(|a| a.label() == "Resume").unwrap_or_else(|| panic!("Resume of the two states: {actions:?}"));
+    let by = if actions[resume].step_right() { 1 } else { -1 };
+    let before = drawn(&mut scene, &format!("gameAction{resume}"));
+    assert_eq!(ask(&mut scene, "pagesGame", &format!("pageStepAction {resume} {by}")), "true");
+    scene.wait(300);
+    assert_ne!(drawn(&mut scene, &format!("gameAction{resume}")), before, "Resume stepped its state");
+    assert_eq!(ask(&mut scene, "pagesGame", &format!("pageStepAction {resume} {by}")), "false", "past the last state Resume does not step");
+    let stepped_to = page.shown_actions()[resume].value().to_owned();
+    let slot = (1..=2).find(|n| stepped_to.starts_with(&format!("Slot {n} "))).unwrap_or_else(|| panic!("Resume names a slot: {stepped_to}"));
+    let chosen = platform.save_path(SAVE_STATE, one.to_str().unwrap(), None, slot).unwrap();
+    assert_eq!(ask(&mut scene, "pagesGame", &format!("pageAct {resume}")), "true");
+    for _ in 0..40 {
+        if scene.property("session", "startState") == chosen.to_str().unwrap() {
+            break;
+        }
+        scene.wait(50);
+    }
+    let said = (scene.property("pageModel", "problem"), scene.property("screens", "shown"), scene.property("launch", "asking"));
+    assert_eq!(scene.property("session", "startState"), chosen.to_str().unwrap(), "the game starts from the state stepped to: {said:?}");
     scene.assert_quiet();
 }

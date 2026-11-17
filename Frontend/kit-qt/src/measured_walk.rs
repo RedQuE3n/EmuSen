@@ -1,5 +1,4 @@
-//! `MeasuredWalk`: kit-core's walk over rows of their own heights on Qt, read from a list model's roles as `SettingsLayout`
-//! reads them, the heights told by the screen that draws the rows; no geometry of its own (EmuSen_Kit.md §7.122).
+//! `MeasuredWalk`: kit-core's walk over rows of their own heights on Qt (EmuSen_Kit.md §7.122).
 
 use core::pin::Pin;
 

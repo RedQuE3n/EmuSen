@@ -273,13 +273,13 @@ impl Told for qobject::SettingsLayout {
     }
 }
 
-/// A model's rows as the walk reads them: its `kind`, `held` and `marked` roles and a slider's `minimum`, `maximum`, `step`
-/// and `amount`; `SettingsLayout` and `MeasuredWalk` read the same.
+/// A model's rows as `SettingsLayout` and `MeasuredWalk` read them (EmuSen_Kit.md §7.122).
 pub(crate) fn walk_rows(model: Option<&qobject::QAbstractItemModel>) -> Vec<Row> {
     let role = |name: &str| crate::item_model::role_texts(model, &QString::from(name));
     let (kinds, held, marked) = (role("kind"), role("held"), role("marked"));
     let (minimum, maximum, step, amount) = (role("minimum"), role("maximum"), role("step"), role("amount"));
     let real = |list: &[String], i: usize, or: f64| list.get(i).and_then(|t| t.trim().parse::<f64>().ok()).unwrap_or(or);
+    let (range, unset) = (SliderRange::default(), Row::default());
     kinds
         .iter()
         .enumerate()
@@ -287,8 +287,8 @@ pub(crate) fn walk_rows(model: Option<&qobject::QAbstractItemModel>) -> Vec<Row>
             kind: RowKind::from_index(number(kind)),
             held: held.get(i).is_some_and(|t| flag(t)),
             marked: marked.get(i).is_some_and(|t| flag(t)),
-            range: SliderRange { minimum: real(&minimum, i, 0.0), maximum: real(&maximum, i, 1.0), step: real(&step, i, 0.0) },
-            amount: real(&amount, i, 0.0),
+            range: SliderRange { minimum: real(&minimum, i, range.minimum), maximum: real(&maximum, i, range.maximum), step: real(&step, i, range.step) },
+            amount: real(&amount, i, unset.amount),
         })
         .collect()
 }

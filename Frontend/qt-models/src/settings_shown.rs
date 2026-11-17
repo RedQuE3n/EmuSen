@@ -1,5 +1,4 @@
-//! What a theme's Settings reads beyond a row's words (EmuSen_Qt.md §3.2, `Settings`): the page's key, a row's about line,
-//! a switch's state as a state, and a console row's tile, each from the owner its row's words come from.
+//! What a theme's Settings reads beyond a row's words (EmuSen_Qt.md §3.2, `Settings`).
 
 use crate::schema;
 use crate::settings::{Page, SettingsView};
@@ -13,8 +12,7 @@ pub struct RowFacets {
     pub tile: Option<ConsoleTile>,
 }
 
-/// A console row of the Consoles section as its tile reads it: the console's stored name, the system key the library's
-/// consoles are keyed by, its games and the engine that runs it.
+/// A console row's tile: its stored name, its system key, its games and the engine that runs it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ConsoleTile {
     pub console: String,

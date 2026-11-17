@@ -1,6 +1,4 @@
-//! `Settings`, the Settings screen as a theme reads it (EmuSen_Qt.md §3.2): the sections, the trail, the page's key, the
-//! rows and the focused row's pane, a read-only view the host feeds from the program's SettingsModel. A theme changes them
-//! only through `Actions`' settings calls.
+//! `Settings`, the Settings screen as a theme reads it, read-only (EmuSen_Qt.md §3.2).
 
 use crate::glue::ffi;
 use crate::help::kind_of;
@@ -10,8 +8,8 @@ use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QList, QString, QStringList};
-use emusen_kit_core::settings::RowKind;
-use emusen_qt_models::settings::{Pane, Preview, SettingsView};
+use emusen_kit_core::settings::{Row as WalkRow, RowKind, SliderRange};
+use emusen_qt_models::settings::{Pane, SettingsView};
 use emusen_qt_models::settings;
 
 #[cxx_qt::bridge]
@@ -23,6 +21,7 @@ pub mod qobject {
         type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qlist.h");
         type QList_i32 = cxx_qt_lib::QList<i32>;
+        type QList_f64 = cxx_qt_lib::QList<f64>;
         include!("emusen-theme-qt/src/rows.cxxqt.h");
         type ThemeRows = crate::rows::qobject::ThemeRows;
     }
@@ -47,6 +46,7 @@ pub mod qobject {
         #[qproperty(QString, caption, READ, NOTIFY = shown)]
         #[qproperty(f64, meter, READ, NOTIFY = shown)]
         #[qproperty(QStringList, samples, READ, NOTIFY = shown)]
+        #[qproperty(QList_f64, sample_scales, cxx_name = "sampleScales", READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -59,8 +59,7 @@ pub mod qobject {
     impl cxx_qt::Initialize for ThemeSettings {}
 }
 
-/// `Settings.rows`' roles: the row's words and kind, a switch as a state (`isSwitch`, `switchOn`), a slider's fields, and a
-/// console row's tile (`console`, `system`, `games`, `engine`).
+/// `Settings.rows`' roles (EmuSen_Qt.md §3.2, `Settings`).
 pub const SETTINGS_ROW_ROLES: [&str; 18] = [
     "key", "label", "about", "value", "kind", "isSwitch", "switchOn", "held", "marked", "code", "minimum", "maximum", "step", "amount", "consoleName",
     "system", "games", "engine",
@@ -80,23 +79,27 @@ pub struct SettingsFacts {
     pub pane: Pane,
 }
 
-/// The facts of a view whose rows were last told as `rows`, with the focus on `focused`.
-pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> SettingsFacts {
+/// The facts of a view whose rows were last told as `rows`; an error where those are not the view's rows.
+pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Result<SettingsFacts, String> {
     let facets = view.facets();
+    if facets.len() != rows.len() {
+        return Err(format!("{} rows told and {} in the view", rows.len(), facets.len()));
+    }
+    let (range, unset) = (SliderRange::default(), WalkRow::default());
     let cells = rows
         .iter()
+        .zip(facets)
         .enumerate()
-        .map(|(i, r)| {
-            let facet = facets.get(i).cloned().unwrap_or_default();
+        .map(|(i, (r, facet))| {
             let slider = if r.kind == RowKind::Slider { view.slider(i) } else { None };
-            let [minimum, maximum, step, amount] = slider.unwrap_or([0.0, 1.0, 0.0, 0.0]);
+            let [minimum, maximum, step, amount] = slider.unwrap_or([range.minimum, range.maximum, range.step, unset.amount]);
             let tile = facet.tile.unwrap_or_default();
             vec![
                 Cell::Text(r.id.clone()),
                 Cell::Text(r.label.clone()),
                 Cell::Text(facet.about),
                 Cell::Text(r.value.clone()),
-                Cell::Whole(RowKind::ALL.iter().position(|k| *k == r.kind).unwrap_or(0) as i32),
+                Cell::Whole(r.kind.index() as i32),
                 Cell::Flag(facet.switch.is_some()),
                 Cell::Flag(facet.switch.unwrap_or(false)),
                 Cell::Flag(r.held),
@@ -113,7 +116,7 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Se
             ]
         })
         .collect();
-    SettingsFacts {
+    Ok(SettingsFacts {
         sections: view.sections(),
         section: view.section as i32,
         trail: view.trail(),
@@ -122,19 +125,7 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Se
         focused,
         help: kind_of(view.help()).map_or(-1, |k| k.repr),
         pane: view.pane(focused.max(0) as usize),
-    }
-}
-
-/// The pane's preview by the number `Settings.preview` gives it: 0 none, 1 picture, 2 meter, 3 variants, 4 sizes, 5 heading.
-fn preview_number(preview: Preview) -> i32 {
-    match preview {
-        Preview::None => 0,
-        Preview::Picture => 1,
-        Preview::Meter => 2,
-        Preview::Variants => 3,
-        Preview::Sizes => 4,
-        Preview::Heading => 5,
-    }
+    })
 }
 
 fn list(words: &[String]) -> QStringList {
@@ -160,6 +151,7 @@ pub struct ThemeSettingsRust {
     caption: QString,
     meter: f64,
     samples: QStringList,
+    sample_scales: QList<f64>,
     last: SettingsFacts,
 }
 
@@ -182,6 +174,7 @@ impl Default for ThemeSettingsRust {
             caption: QString::default(),
             meter: 0.0,
             samples: QStringList::default(),
+            sample_scales: QList::default(),
             last: SettingsFacts { help: -1, ..SettingsFacts::default() },
         }
     }
@@ -223,10 +216,13 @@ impl qobject::ThemeSettings {
         me.lines = list(&pane.lines);
         me.muted = list(&pane.muted);
         me.tones = tones;
-        me.preview = preview_number(pane.preview);
+        me.preview = pane.preview.number();
         me.caption = QString::from(pane.caption.as_str());
         me.meter = pane.meter;
         me.samples = list(&pane.samples.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>());
+        let mut scales = QList::<f64>::default();
+        pane.samples.iter().for_each(|(_, scale)| scales.append(*scale));
+        me.sample_scales = scales;
         me.last = facts.clone();
         drop(me);
         self.shown();

@@ -1,6 +1,4 @@
-//! `Page`, a game's page as a theme reads it (EmuSen_Qt.md §3.2): the game's words and pictures, the actions, the
-//! sections (tabs) and the section's rows or state cards, the focus and the question, a read-only view the host feeds
-//! from the program's GamePageModel. A theme changes them only through `Actions`' page calls.
+//! `Page`, a game's page as a theme reads it, read-only (EmuSen_Qt.md §3.2).
 
 use crate::glue::ffi;
 use crate::rows::qobject::ThemeRows;
@@ -101,13 +99,13 @@ pub fn action_rows(actions: &[ActionItem]) -> Vec<Row> {
         .iter()
         .map(|a| {
             vec![
-                Cell::Text(a.label.clone()),
-                Cell::Text(a.value.clone()),
-                Cell::Whole(a.button),
-                Cell::Flag(a.filled),
-                Cell::Flag(a.stepped),
-                Cell::Flag(a.step_left),
-                Cell::Flag(a.step_right),
+                Cell::Text(a.label().to_owned()),
+                Cell::Text(a.value().to_owned()),
+                Cell::Whole(a.button()),
+                Cell::Flag(a.filled()),
+                Cell::Flag(a.stepped()),
+                Cell::Flag(a.step_left()),
+                Cell::Flag(a.step_right()),
             ]
         })
         .collect()
@@ -119,14 +117,14 @@ pub fn content_rows(items: &[Item]) -> Vec<Row> {
         .iter()
         .map(|i| {
             vec![
-                Cell::Text(i.key.clone()),
-                Cell::Text(i.label.clone()),
-                Cell::Text(i.value.clone()),
-                Cell::Text(i.line.clone()),
-                Cell::Text(i.picture.clone()),
-                Cell::Flag(i.steps),
-                Cell::Flag(i.opens),
-                Cell::Flag(i.marked),
+                Cell::Text(i.key().to_owned()),
+                Cell::Text(i.label().to_owned()),
+                Cell::Text(i.value().to_owned()),
+                Cell::Text(i.line().to_owned()),
+                Cell::Text(i.picture().to_owned()),
+                Cell::Flag(i.steps()),
+                Cell::Flag(i.opens()),
+                Cell::Flag(i.marked()),
             ]
         })
         .collect()

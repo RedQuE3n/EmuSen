@@ -78,6 +78,22 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
 }
 
 #[test]
+fn qt_3_2_settings_and_page_offer_a_theme_nothing_writable() {
+    let registry = built("plugin.qmltypes");
+    for export in ["Settings", "Page", "Rows"] {
+        let block = component(&registry, &format!("EmuSen.Theme/{export}"));
+        let properties: Vec<&str> = block.split("Property {").skip(1).map(|p| p.split('}').next().unwrap_or_default()).collect();
+        assert!(!properties.is_empty(), "{export} has properties");
+        for property in properties {
+            assert!(property.contains("isReadonly: true"), "{export}: a property a theme could write: {property}");
+        }
+        let methods = names(block, "Method");
+        assert!(methods.iter().all(|m| ["data", "roleNames", "rowCount"].contains(&m.as_str())), "{export}: a call beyond reading rows: {methods:?}");
+    }
+    assert!(!component(&registry, "EmuSen.Theme/Rows").contains("\"setData\""), "the rows take no write");
+}
+
+#[test]
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
     let api: [(&str, &[&str], &[&str]); 14] = [
@@ -162,7 +178,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),
         (
             "Settings",
-            &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples"],
+            &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples", "sampleScales"],
             &[],
         ),
         (

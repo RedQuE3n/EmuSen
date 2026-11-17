@@ -119,6 +119,20 @@ pub enum Preview {
     Heading,
 }
 
+impl Preview {
+    /// Its number as the screens read it: 0 none, 1 picture, 2 meter, 3 variants, 4 sizes, 5 heading.
+    pub fn number(self) -> i32 {
+        match self {
+            Preview::None => 0,
+            Preview::Picture => 1,
+            Preview::Meter => 2,
+            Preview::Variants => 3,
+            Preview::Sizes => 4,
+            Preview::Heading => 5,
+        }
+    }
+}
+
 /// The focused row's pane: the sentence, plain lines after it, muted lines after those, and the preview.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Pane {

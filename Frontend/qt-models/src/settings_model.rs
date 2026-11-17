@@ -5,7 +5,7 @@
 use crate::consoles_source::{ClientConsoles, ScriptedConsoles};
 use crate::help::Screen;
 use crate::help_model::shown_screen;
-use crate::settings::{self, Outcome, Preview, SettingsView};
+use crate::settings::{self, Outcome, SettingsView};
 use crate::settings_source::ClientSettings;
 use crate::settings::SettingsSource;
 use core::pin::Pin;
@@ -161,26 +161,26 @@ pub mod qobject {
         #[cxx_name = "sampleScale"]
         fn sample_scale(self: &SettingsModel, index: i32) -> f64;
 
-        /// Left (-1) or Right (+1) on a row.
+        /// Left (-1) or Right (+1) on a row: whether it did anything.
         #[qinvokable]
-        fn step(self: Pin<&mut SettingsModel>, row: i32, by: i32);
+        fn step(self: Pin<&mut SettingsModel>, row: i32, by: i32) -> bool;
 
-        /// A on a row.
+        /// A on a row: whether it did anything.
         #[qinvokable]
-        fn choose(self: Pin<&mut SettingsModel>, row: i32);
+        fn choose(self: Pin<&mut SettingsModel>, row: i32) -> bool;
 
-        /// A slider row moved to `amount`, by the pad's walk or the pointer.
+        /// A slider row moved to `amount`, by the pad's walk or the pointer: whether it did anything.
         #[qinvokable]
-        fn slide(self: Pin<&mut SettingsModel>, row: i32, amount: f64);
+        fn slide(self: Pin<&mut SettingsModel>, row: i32, amount: f64) -> bool;
 
         /// A lever of the shader of `system` (a console by its stored name) moved to `value` and saved: a game of that
         /// console draws with it at once.
         #[qsignal]
         fn lever(self: Pin<&mut SettingsModel>, system: QString, id: QString, value: f64);
 
-        /// B: the page closed, or `left` raised on a section.
+        /// B: the page closed (true), or `left` raised on a section (false).
         #[qinvokable]
-        fn back(self: Pin<&mut SettingsModel>);
+        fn back(self: Pin<&mut SettingsModel>) -> bool;
 
         /// A door to another screen chosen, by its name in the description.
         #[qsignal]
@@ -571,7 +571,7 @@ impl qobject::SettingsModel {
             LABEL => text(&row.label),
             VALUE => text(&row.value),
             SENTENCE => text(&self.view.pane(index.row() as usize).sentence),
-            KIND => QVariant::from(&(emusen_kit_core::settings::RowKind::ALL.iter().position(|k| *k == row.kind).unwrap_or(0) as i32)),
+            KIND => QVariant::from(&(row.kind.index() as i32)),
             HELD => QVariant::from(&row.held),
             MARKED => QVariant::from(&row.marked),
             KEY => text(&row.id),
@@ -657,32 +657,36 @@ impl qobject::SettingsModel {
         });
     }
 
-    pub fn step(mut self: Pin<&mut Self>, row: i32, by: i32) {
+    pub fn step(mut self: Pin<&mut Self>, row: i32, by: i32) -> bool {
         let outcome = self.as_mut().rust_mut().view.step(row.max(0) as usize, by);
-        self.outcome(outcome);
+        self.outcome(outcome)
     }
 
-    pub fn choose(mut self: Pin<&mut Self>, row: i32) {
+    pub fn choose(mut self: Pin<&mut Self>, row: i32) -> bool {
         let outcome = self.as_mut().rust_mut().view.choose(row.max(0) as usize);
-        self.outcome(outcome);
+        self.outcome(outcome)
     }
 
-    pub fn slide(mut self: Pin<&mut Self>, row: i32, amount: f64) {
+    pub fn slide(mut self: Pin<&mut Self>, row: i32, amount: f64) -> bool {
         let outcome = self.as_mut().rust_mut().view.slide(row.max(0) as usize, amount);
-        self.outcome(outcome);
+        self.outcome(outcome)
     }
 
-    pub fn back(mut self: Pin<&mut Self>) {
+    pub fn back(mut self: Pin<&mut Self>) -> bool {
         if self.as_mut().rust_mut().view.back_taken() {
             self.shown(false);
-            return;
+            return true;
         }
         match self.as_mut().rust_mut().view.back() {
             Some(row) => {
                 self.as_mut().shown(true);
                 self.refocus(row as i32);
+                true
             }
-            None => self.left(),
+            None => {
+                self.left();
+                false
+            }
         }
     }
 
@@ -715,7 +719,14 @@ impl qobject::SettingsModel {
         }
     }
 
-    fn outcome(mut self: Pin<&mut Self>, outcome: Outcome) {
+    /// What a press did carried out; whether it did anything.
+    fn outcome(self: Pin<&mut Self>, outcome: Outcome) -> bool {
+        let did = !matches!(outcome, Outcome::Nothing);
+        self.carry(outcome);
+        did
+    }
+
+    fn carry(mut self: Pin<&mut Self>, outcome: Outcome) {
         if matches!(outcome, Outcome::Saved(..) | Outcome::Set { .. } | Outcome::NewCard(_)) {
             self.as_mut().said(String::new());
         }
@@ -1152,7 +1163,9 @@ impl qobject::SettingsModel {
     fn tester_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32, down: bool) -> bool {
         match emusen_qt_endymion::keys::heard(key, modifiers) {
             emusen_qt_endymion::keys::Heard::Nothing => {}
-            emusen_qt_endymion::keys::Heard::Escape if down => self.as_mut().back(),
+            emusen_qt_endymion::keys::Heard::Escape if down => {
+                self.as_mut().back();
+            }
             emusen_qt_endymion::keys::Heard::Escape => {}
             emusen_qt_endymion::keys::Heard::Key(word) => {
                 match self.as_mut().rust_mut().view.tester_key(word, down) {
@@ -1207,14 +1220,7 @@ impl qobject::SettingsModel {
             self.as_mut().rust_mut().pane_muted = muted;
             self.as_mut().pane_muted_changed();
         }
-        let preview = match pane.preview {
-            Preview::None => 0,
-            Preview::Picture => 1,
-            Preview::Meter => 2,
-            Preview::Variants => 3,
-            Preview::Sizes => 4,
-            Preview::Heading => 5,
-        };
+        let preview = pane.preview.number();
         if self.preview != preview {
             self.as_mut().rust_mut().preview = preview;
             self.as_mut().preview_changed();

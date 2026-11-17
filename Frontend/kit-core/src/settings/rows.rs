@@ -31,6 +31,11 @@ impl RowKind {
     pub fn from_index(index: i64) -> RowKind {
         usize::try_from(index).ok().and_then(|i| Self::ALL.get(i).copied()).unwrap_or_default()
     }
+
+    /// The kind's number, `from_index`'s inverse.
+    pub fn index(self) -> i64 {
+        Self::ALL.iter().position(|k| *k == self).unwrap_or(0) as i64
+    }
 }
 
 /// One row as the walk sees it: its kind, whether something holds it (shown with why, taking no change), whether it is

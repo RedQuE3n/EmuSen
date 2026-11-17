@@ -173,13 +173,31 @@ fn qt_3_4_9_eclipse_s_consoles_stands_where_its_board_stands_it() {
     assert!(out.trim().is_empty(), "no finding over the eleven consoles:\n{out}\n{err}");
 }
 
+/// Eclipse's Choose a console judged over one crowd at every size.
+fn holds(catalogue: &str) {
+    let dir = std::env::temp_dir().join(format!("theme-audit-eclipse-{catalogue}-{}", std::process::id()));
+    let (out, err) = audit(catalogue, None, &dir);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(out.trim().is_empty(), "{catalogue}: no finding at any size:\n{out}\n{err}");
+    assert!(err.contains("theme-audit: held Consoles in "), "{catalogue}: Consoles judged: {err}");
+}
+
 #[test]
-fn qt_3_4_9_eclipse_s_consoles_holds_one_to_120_consoles_at_every_size() {
-    for catalogue in ["one-console", "n30", "maker40", "n120"] {
-        let dir = std::env::temp_dir().join(format!("theme-audit-eclipse-{catalogue}-{}", std::process::id()));
-        let (out, err) = audit(catalogue, None, &dir);
-        let _ = std::fs::remove_dir_all(&dir);
-        assert!(out.trim().is_empty(), "{catalogue}: no finding at any size:\n{out}\n{err}");
-        assert!(err.contains("theme-audit: held Consoles in "), "{catalogue}: Consoles judged: {err}");
-    }
+fn qt_3_4_9_eclipse_s_consoles_holds_one_console_at_every_size() {
+    holds("one-console");
+}
+
+#[test]
+fn qt_3_4_9_eclipse_s_consoles_holds_30_consoles_at_every_size() {
+    holds("n30");
+}
+
+#[test]
+fn qt_3_4_9_eclipse_s_consoles_holds_40_consoles_of_one_maker_at_every_size() {
+    holds("maker40");
+}
+
+#[test]
+fn qt_3_4_9_eclipse_s_consoles_holds_120_consoles_at_every_size() {
+    holds("n120");
 }

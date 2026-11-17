@@ -98,7 +98,7 @@ impl ClientSource {
     }
 
     /// The states, slot by slot and then the automatic one, each where its file is, the most recent first.
-    fn states(&self, game: &GameFile, settings: &Value) -> Result<Vec<State>, String> {
+    pub(crate) fn states(&self, game: &GameFile, settings: &Value) -> Result<Vec<State>, String> {
         let directory = settings.get("StateDirectory").and_then(Value::as_str).filter(|d| !d.trim().is_empty());
         let path_of = |slot: Slot| {
             let (n, slot_no) = match slot {

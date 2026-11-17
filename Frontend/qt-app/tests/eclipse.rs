@@ -147,6 +147,12 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
         assert_eq!(Colour::parse(border), Colour::parse("#5E647B"), "{engine}: Eclipse's border");
     }
 
+    // The foot under words over a picture, from the games board's tile foot, rgba(4, 5, 10, 0.94) at EclipseLibrary:70, so a tile's title reads over its cover (EmuSen_Qt.md §3.4.7).
+    for (engine, tokens) in [("the theme's engine", &theirs), ("the program's engine", &ours)] {
+        let scrim = tokens.get("overArtScrim").map(String::as_str).unwrap_or("(no overArtScrim)");
+        assert_eq!(Colour::parse(scrim), Colour::parse("#F004050A"), "{engine}: Eclipse's overArtScrim");
+    }
+
     // The reference again: the program's tokens are the kit's once more, and the chosen theme's host is gone.
     scene.pad(UiButton::Up);
     wait_for(&mut scene, "themesModel", "name", "EmuSen", 2000);

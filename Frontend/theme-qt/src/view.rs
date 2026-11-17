@@ -69,8 +69,37 @@ pub const GAME_ROLES: [&str; 19] = [
     "facts",
     "consoleName",
 ];
+/// `Browse.filters`: the Filter page's choices (1.7).
+pub const FILTER_ROLES: [&str; 5] = ["key", "name", "count", "line", "chip"];
+/// `Browse.letters`: the shown games' first letters (1.7).
+pub const LETTER_ROLES: [&str; 1] = ["letter"];
+
+/// The Filter page's choices as `Browse.filters` holds them.
+pub fn filters(choices: &[emusen_qt_models::listing::Choice]) -> Vec<Row> {
+    choices
+        .iter()
+        .map(|c| {
+            let chip = emusen_qt_models::listing::chip_name(&c.key).map_or(String::new(), |name| words::choice_line(name, c.count));
+            vec![text(&c.key), text(&c.name), Cell::Whole(c.count as i32), Cell::Text(words::choice_line(&c.name, c.count)), Cell::Text(chip)]
+        })
+        .collect()
+}
+
+/// The letters as `Browse.letters` holds them.
+pub fn letters(letters: &[String]) -> Vec<Row> {
+    letters.iter().map(|l| vec![text(l)]).collect()
+}
+
 /// `Library.collections`: the player's collections.
 pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
+/// `Library.sections`: the program's top sections, in a nav's order (1.8).
+pub const SECTION_ROLES: [&str; 2] = ["key", "name"];
+
+/// The program's sections as rows, from their one owner (emusen_qt_models::sections).
+pub fn sections() -> Vec<Row> {
+    emusen_qt_models::sections::all().iter().map(|s| vec![Cell::Text(s.key.to_owned()), Cell::Text(s.name.to_owned())]).collect()
+}
+
 /// `Help.entries`: the help bar's entries, as the kit's `HelpBar` reads them.
 pub const HELP_ROLES: [&str; 5] = ["button", "label", "pair", "enabled", "action"];
 
@@ -223,9 +252,9 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
         Cell::Flag(played),
         text(&g.system),
         Cell::Number(g.hue),
-        // Players, year, genre, rating, description and video wait on the scraper's facts in the own look's view (§3.2 as built).
+        // Players, genre, rating, description and video wait on the scraper's facts in the own look's view (§3.2 as built).
         Cell::Whole(0),
-        Cell::Whole(0),
+        Cell::Whole(g.year.parse().unwrap_or(0)),
         text(""),
         Cell::Number(0.0),
         text(""),

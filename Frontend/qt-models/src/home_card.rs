@@ -195,7 +195,7 @@ fn first_page(f: &Facts) -> Page {
     }
     let tools_at = rows.len();
     let attention = ATTENTION_ORDER.iter().filter(|k| screened(k) && needs_player(&f.tools, k)).find_map(|k| summary(&f.tools, k, "markedBrief").or(summary(&f.tools, k, "brief")));
-    rows.push(Row::new(TOOLS, "Tools").value(attention.unwrap_or_default()).opens().pane(tool_lines(&f.tools)));
+    rows.push(Row::new(TOOLS, crate::words::TOOLS_SECTION).value(attention.unwrap_or_default()).opens().pane(tool_lines(&f.tools)));
     if tools_at > 0 {
         end_section_before(&mut rows, tools_at);
     }
@@ -219,7 +219,7 @@ fn tools_page(f: &Facts) -> Page {
         })
         .collect();
     rows.extend(OTHER_TOOLS.iter().filter(|r| screened(r.0)).map(|(key, name)| Row::new(key, name).opens().pane(Pane::said(name, &hint(name)))));
-    Page { title: "Tools".to_owned(), breadcrumb: TITLE.to_owned(), rows, footer: String::new() }
+    Page { title: crate::words::TOOLS_SECTION.to_owned(), breadcrumb: TITLE.to_owned(), rows, footer: String::new() }
 }
 
 fn article(name: &str) -> &'static str {

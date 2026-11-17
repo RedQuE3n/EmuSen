@@ -38,6 +38,9 @@ pub mod qobject {
         #[qproperty(*mut ThemeRows, favourites, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, collections, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, shelf, READ, CONSTANT)]
+        /// The program's top sections (1.8), and the key of the one shown, empty where the screen shown is none.
+        #[qproperty(*mut ThemeRows, sections, READ, CONSTANT)]
+        #[qproperty(QString, section, READ, NOTIFY)]
         /// Moves each time a picture's hues have been read and each time the library is fed, so a binding on `artHues` asks again.
         #[qproperty(i32, art_hues_read, cxx_name = "artHuesRead", READ, NOTIFY)]
         type ThemeLibrary = super::ThemeLibraryRust;
@@ -83,6 +86,8 @@ pub struct ThemeLibraryRust {
     suspended: String,
     favourites: *mut ThemeRows,
     collections: *mut ThemeRows,
+    sections: *mut ThemeRows,
+    section: QString,
     games: HashMap<String, *mut ThemeRows>,
     firsts: HashMap<(String, usize), *mut ThemeRows>,
     listed: HashMap<(usize, usize, Vec<String>), *mut ThemeRows>,
@@ -115,6 +120,8 @@ impl Default for ThemeLibraryRust {
             suspended: String::new(),
             favourites: none,
             collections: none,
+            sections: none,
+            section: QString::default(),
             games: HashMap::new(),
             firsts: HashMap::new(),
             listed: HashMap::new(),
@@ -148,6 +155,8 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
         let favourites = self.as_mut().made(&view::GAME_ROLES);
         let collections = self.as_mut().made(&view::COLLECTION_ROLES);
         let found = self.as_mut().made(&view::GAME_ROLES);
+        let sections = self.as_mut().made(&view::SECTION_ROLES);
+        fill(sections, view::sections());
         let mut me = self.as_mut().rust_mut();
         me.consoles = consoles;
         me.places = places;
@@ -157,6 +166,7 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
         me.favourites = favourites;
         me.collections = collections;
         me.found = found;
+        me.sections = sections;
         drop(me);
         self.show(&LibraryView::empty(), "[]");
     }
@@ -252,6 +262,15 @@ impl qobject::ThemeLibrary {
         }
     }
 
+    /// The host's feed of the shown screen's section, by its key; empty for a screen that is none.
+    pub fn show_section(mut self: Pin<&mut Self>, key: &str) {
+        let key = QString::from(key);
+        if self.section != key {
+            self.as_mut().rust_mut().section = key;
+            self.as_mut().section_changed();
+        }
+    }
+
     /// The host's feed of the suspended game's file, which the shelf leaves out; empty for none.
     pub fn show_suspended(mut self: Pin<&mut Self>, key: &str) {
         if self.suspended != key {
@@ -315,6 +334,7 @@ impl qobject::ThemeLibrary {
             "shelf" => self.shelf,
             "favourites" => self.favourites,
             "collections" => self.collections,
+            "sections" => self.sections,
             _ => return None,
         };
         // Safety: as `fill`.

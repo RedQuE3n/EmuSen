@@ -3,6 +3,7 @@
 mod common;
 mod eclipse_board;
 mod eclipse_consoles_oracle;
+mod eclipse_pad;
 
 #[test]
 fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_in_its_colour_in_the_program() {

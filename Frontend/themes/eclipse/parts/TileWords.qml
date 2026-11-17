@@ -11,6 +11,9 @@ Item {
     required property string facts
     // The tile's place in its row, which names its parts for a reader and the tests.
     property int place
+    // The title's lines, none for as many as it needs, and its line box in board pixels, none for the face's own.
+    property int titleLines: 1
+    property real titleLineHeight: 0
     // The shade's corners, the tile's where nothing clips it.
     property real radius: 0
     property real titleSize: 21
@@ -47,7 +50,14 @@ Item {
         y: root.height - root.titleFoot * root.unit - height
         width: root.width - 2 * root.inset * root.unit
         text: root.title
+        wrapMode: root.titleLines === 1 ? Text.NoWrap : Text.Wrap
+        lineHeightMode: root.titleLineHeight > 0 ? Text.FixedHeight : Text.ProportionalHeight
+        lineHeight: root.titleLineHeight > 0 ? root.titleLineHeight : 1
         elide: Text.ElideRight
+        Binding on maximumLineCount {
+            when: root.titleLines > 0
+            value: root.titleLines
+        }
         color: root.titleInk
         size: root.titleSize
         weight: Font.DemiBold

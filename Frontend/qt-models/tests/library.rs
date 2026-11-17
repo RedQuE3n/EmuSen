@@ -475,3 +475,18 @@ fn eclipse_s_art_pill_says_the_game_s_title() {
     assert_eq!(emusen_qt_models::words::game_art("Aurora Drift"), "Game art · Aurora Drift");
     assert_eq!(emusen_qt_models::game_page::place(0, 24), "1 of 24", "Main.dc.html:80");
 }
+
+#[test]
+fn the_games_boards_time_played_and_players_are_its_words() {
+    use emusen_qt_models::words::{players, time_played};
+    assert_eq!(time_played(3 * 3600 + 20 * 60 + 59).as_deref(), Some("3 h 20 min"));
+    assert_eq!(time_played(45 * 60).as_deref(), Some("45 min"));
+    assert_eq!(time_played(2 * 3600).as_deref(), Some("2 h"));
+    assert_eq!(time_played(59), None, "under a minute is none");
+    assert_eq!(players("1-2"), "1 to 2 players");
+    assert_eq!(players(" 1 - 4 "), "1 to 4 players");
+    assert_eq!(players("1"), "1 player");
+    assert_eq!(players("2"), "2 players");
+    assert_eq!(players("Up to 8"), "Up to 8");
+    assert_eq!(players(""), "");
+}

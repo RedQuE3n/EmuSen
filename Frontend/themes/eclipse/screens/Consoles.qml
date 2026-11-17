@@ -53,6 +53,14 @@ ThemeScreen {
             property Item lastPlate: null
             // The plate the screen opens on: the console last opened, else the first maker's first console; and the maker focused.
             property Item firstPlate: null
+            // The console last opened, where the grid last shown was one's; empty after a place or a section (every game, Favourites).
+            readonly property string openedKey: {
+                for (let i = 0; i < plates.count; i++) {
+                    if (plates.itemAt(i)?.key === Browse.section)
+                        return Browse.section
+                }
+                return ""
+            }
             property Item firstChip: null
             property Item focusedMaker: null
             // The help's actions for Y and X (Help.entries' `action`), read from the frame's own list.
@@ -206,11 +214,18 @@ ThemeScreen {
                     width: root.width
                     height: root.height
 
-                    // The header: the mark and the program's name, and the battery and the clock at the right (board lines 22 to 40); the sections' place is left empty (R-20261115-17).
+                    // The header: the mark and the program's name, the sections 64 px after them, and the battery and the clock at the right (board lines 22 to 40).
                     Brand {
+                        id: brand
                         objectName: "consolesBrand"
                         unit: root.px
                         x: root.margin
+                        y: 80 * root.px - height / 2
+                    }
+                    Nav {
+                        unit: root.px
+                        controller: frame.controller
+                        x: brand.x + brand.width + 64 * root.px
                         y: 80 * root.px - height / 2
                     }
                     Status {
@@ -458,7 +473,7 @@ ThemeScreen {
                                 objectName: "plate." + plate.index
                                 visible: plate.group === root.chosenGroup
                                 // The console last opened has the focus, else the first maker's first console.
-                                readonly property bool opening: Browse.section.length > 0 ? plate.key === Browse.section : plate.group === 0 && plate.groupIndex === 0
+                                readonly property bool opening: root.openedKey.length > 0 ? plate.key === root.openedKey : plate.group === 0 && plate.groupIndex === 0
                                 focus: plate.opening
                                 Accessible.name: plate.displayName
                                 Accessible.description: Words.facts(plate.maker, plate.year, plate.count, Words.runsOn(plate.engineName, plate.engineKind))

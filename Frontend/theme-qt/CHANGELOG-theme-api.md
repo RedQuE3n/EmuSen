@@ -3,6 +3,54 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.8, an addition: the program's sections (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-7): Eclipse's top navigation is built as its own piece, a model for the
+sections and an addition to what a theme may read.
+
+- **`Library.sections`** (a list, roles `key` and `name`): the program's top sections in a nav's order, from their one
+  owner (`qt-models/src/screens.rs`, `SECTIONS`; the words from `words.rs`): Home, Library, Consoles, Collections and
+  Tools, as the boards draw them, each opening the screen the program has for it (EmuSen_Qt.md §3.4.8).
+- **`Library.section`**: the key of the section shown, empty where the screen shown is none.
+- **`Actions.openSection(key)`**: opens a section by its key; the host declines a key that names none, the one shown, or a
+  move from a screen that is no section.
+- **`Help.sections`**: the shoulders' "Sections" entry alone, for a nav's help. It declares no action, since the frame's
+  walk steps the sections (`controller.sections`, `EmuSen_Kit.md` §7.27) and the theme opens the one chosen.
+- No type is added, so a theme that imports `EmuSen.Theme 1.0` finds what it found before. The module is 1.8 and
+  `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.8.*`.
+
+## 1.7, an addition: the grid's listing (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-10 to -13): a theme reads and drives the listing the List card holds.
+
+- **`Browse.filters`** (rows of `key`, `name`, `count`), **`Browse.filter`** (the key in force) and
+  **`Actions.setFilter(key)`**: the Filter page's choices, each counted once a read (`listing::choices`): Every game,
+  Favourites (not in the Favourites section), Not played (new: the games with no played time), then each collection.
+  The List card's Filter page shows the same list.
+- **`Browse.sort`** (the sort in force, in the List card's words) and **`Actions.stepSort(by)`**: the List card's Sort
+  row, one state.
+- **`Browse.letters`** (rows of `letter`), **`Browse.letter`** (the focused game's) and **`Actions.stepLetter(by)`**: the
+  List card's Jump to, one state.
+- **`Help.entries(kind, {letters: true})`**: LT RT Letter added after the grid's Console entry, and the triggers declared
+  as the letter before and after (`jump-1`, `jump+1`), carried out as Jump to. A bar not asked for it keeps LT and RT as
+  the first and last entry.
+- **`Browse.kind`** (`all`, `favourites`, `recent` or `console`) and **`Browse.emptyWords`**: which list is shown and what
+  it says with nothing in it ("No favourites yet", "Nothing played yet", "No games found" for a search or filter, else
+  "No games yet").
+- **`Browse.filters`' `chip`** (added role): a choice's words on Eclipse's games view's chips, "All · 214" for every game
+  (`listing::chip_name`, `words::ALL`), Favourites and Not played as named; empty for a collection, which has no chip.
+- **`Browse.sortLine`**: the sort in force with its direction, "Name, A to Z" (`listing::sort_line`).
+- **`Words.gameFactLabels`** ("Last played", "Time played", "States") and **`Words.crumb`** ("/"), the games board's words.
+- **`Help.entries(kind, {games: true})`**: A Start, B Back and Y Favourite, in that order, as Eclipse's games board's foot
+  names them (`help::games_named`, `words::START`); the action lines the list's own.
+- **`Browse.factsKey`, `year`, `genre`, `players`, `description`, `timePlayed`, `states`**: the focused game's facts as
+  Eclipse's games board draws them beside it, read off the GUI thread each time the focus moves to another game
+  (`library::facts_of`: one scraper answer for the game, games.db's seconds played, its states counted where Galaxia's save
+  paths put them). `factsKey` names the game they belong to, set last, so a theme draws them only while it is the focused
+  game's; each is empty, or 0, where the program holds none. `players` is in words ("1 to 2 players", `words::players`),
+  `timePlayed` too ("3 h 20 min", `words::time_played`, none under a minute).
+- These members were added as 1.7, which landed together with 1.8; every type keeps the minor it was added in.
+
 ## 1.5, an addition: a console's played games (2026-11-15)
 
 Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played games is added to what a theme may read.
@@ -35,7 +83,7 @@ Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played
   action. **`Actions.consoleOptions(key)`** (added): Settings opened at the console's page.
 - **`GroupGridLayout`** (the kit's, by name; 1.5 in the qmldir): groups as a column and the chosen group's items as a
   grid, with the walk inside it (`EmuSen_Kit.md` §7.120), so a theme lays such a screen out without logic of its own.
-- The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.
+- The module is 1.5 and `theme.json`'s `api` may name it; its registry was `Testing/qmltypes/EmuSen.Theme-1.5.*` until 1.8.
   A role is no QML type, so the qmldir's types keep their minors and `import EmuSen.Theme 1.0` finds what it found before.
 
 ## 1.4, an addition: the backdrop and the glow (2026-11-15)

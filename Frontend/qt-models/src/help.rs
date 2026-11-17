@@ -299,6 +299,46 @@ pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
 /// The group's entry on the triggers, where a screen's triggers step its makers (Eclipse's Choose a console, R-20261115-17).
 pub const MAKER: Entry = (UiButton::First, "Maker", None);
 pub const BACK: Entry = (UiButton::Back, "Back", None);
+/// The triggers on a games view that steps letters (R-20261115-12): LT the letter before, drawn as one entry with RT, the letter after; the List card's Jump to by the same actions.
+pub const LETTER: Entry = (UiButton::First, "Letter", Some(crate::list_card::JUMP_BACK));
+pub const LETTER_ON: Entry = (UiButton::Last, "Letter", Some(crate::list_card::JUMP_ON));
+
+/// Where the letters' entry goes in a screen's bar that takes it: after the shoulders' Console.
+pub fn letters_at(screen: Screen) -> Option<usize> {
+    match screen {
+        Screen::Grid | Screen::GridSearched => entries(screen).iter().position(|e| e.0 == UiButton::PageUp).map(|at| at + 1),
+        _ => None,
+    }
+}
+
+/// As `entries_with`, the letters' entry added where the screen takes it and `letters` asks for it.
+pub fn entries_with_letters(screen: Screen, group: bool, back: bool, letters: bool) -> Vec<Entry> {
+    with_letters(screen, entries_with(screen, group, back), letters)
+}
+
+/// A screen's list with the letters' entry added after its shoulders' entry where the screen takes it and `letters` asks.
+pub fn with_letters(screen: Screen, mut list: Vec<Entry>, letters: bool) -> Vec<Entry> {
+    let at = list.iter().position(|e| e.0 == UiButton::PageUp).map(|at| at + 1);
+    if let Some(at) = at.filter(|_| letters && letters_at(screen).is_some()) {
+        list.insert(at, LETTER);
+    }
+    list
+}
+
+/// As `action_lines`, with the triggers' two actions where the letters' entry is added.
+pub fn action_lines_with(screen: Screen, letters: bool) -> String {
+    action_lines(screen) + &letter_lines(screen, letters)
+}
+
+/// The triggers' two action lines where the screen takes the letters' entry and `letters` asks for it.
+pub fn letter_lines(screen: Screen, letters: bool) -> String {
+    let added = if letters && letters_at(screen).is_some() { [LETTER, LETTER_ON].as_slice() } else { &[] };
+    added.iter().filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
+}
+
+/// The shoulders' entry where a screen draws the program's sections (crate::sections): no action, since the walk steps
+/// them and the theme opens the one chosen.
+pub const SECTIONS: Entry = (UiButton::PageUp, "Sections", None);
 
 /// A game's page's shared entries: Y the heart, the shoulders the sections (the frame steps them), Start Home.
 const PAGE_HEART: Entry = (UiButton::Search, "Favourite", Some(FAVOURITE));
@@ -347,6 +387,22 @@ pub fn options_named(list: Vec<Entry>) -> Vec<Entry> {
             _ => (button, label, action),
         })
         .collect()
+}
+
+/// A list as Eclipse's games view's foot names and orders it (EclipseLibrary:84-86): A Start, B Back, Y Favourite; X is the Game page button the column draws, and the triggers' letters stand at the right.
+pub fn games_named(list: Vec<Entry>) -> Vec<Entry> {
+    const ORDER: [UiButton; 3] = [UiButton::Accept, UiButton::Back, UiButton::Search];
+    let mut named: Vec<Entry> = list
+        .into_iter()
+        .filter_map(|(button, label, action)| match button {
+            UiButton::Accept => Some((button, crate::words::START, action)),
+            UiButton::Back => Some((button, BACK.1, action)),
+            UiButton::Search => Some((button, label, action)),
+            _ => None,
+        })
+        .collect();
+    named.sort_by_key(|e| ORDER.iter().position(|b| *b == e.0));
+    named
 }
 
 /// The frame's action lines of a list as it stands, with the screen's unnamed actions after.

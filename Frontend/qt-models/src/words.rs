@@ -52,6 +52,8 @@ pub const BETWEEN: &str = "·";
 pub const SEARCH: &str = "Search";
 /// The labels of a console's facts, a row each, in their order: its games, those played, its core and its screen.
 pub const FACT_LABELS: [&str; 4] = ["Games", "Played", "Core", "Screen"];
+/// The labels of a game's facts on Eclipse's games view, a row each (EclipseLibrary:46-48).
+pub const GAME_FACT_LABELS: [&str; 3] = ["Last played", "Time played", "States"];
 /// Choose a console's chips (EclipseConsoles:43-45), in `console_list::Show`'s order.
 pub const CONSOLE_SHOWS: [&str; 3] = ["All", "With games", "Favourites"];
 /// Choose a console's orders as Y's entry says them (EclipseConsoles:49), in `console_list::Order`'s order.
@@ -73,6 +75,25 @@ pub const NO_GAMES: &str = "No games yet";
 pub const NO_RECENT: &str = "Nothing played yet";
 pub const NO_CONSOLES: &str = "No consoles have games yet";
 pub const ADD_FOLDER: &str = "Settings › Library adds a folder";
+/// A list with nothing in it, by the list (decided 2026-11-15 by the tester, R-20261115-13): Favourites with none, and a search or a filter that leaves none; Recent keeps NO_RECENT.
+pub const NO_FAVOURITES: &str = "No favourites yet";
+pub const NO_GAMES_FOUND: &str = "No games found";
+
+/// The List card's filters as the Filter page and a theme's choices name them; "Not played" decided 2026-11-15 by the tester (R-20261115-10).
+pub const EVERY_GAME: &str = "Every game";
+pub const FAVOURITES_FILTER: &str = "Favourites";
+pub const NOT_PLAYED: &str = "Not played";
+/// Every game, as Eclipse's games view's first chip names it (EclipseLibrary:55).
+pub const ALL: &str = "All";
+/// Between the places of the path in Eclipse's games view's header (EclipseLibrary:27).
+pub const CRUMB: &str = "/";
+/// A, which plays the focused game, as Eclipse's games view names it (EclipseLibrary:51, 85).
+pub const START: &str = "Start";
+
+/// A filter's choice as a chip says it: its name and how many games it shows ("Not played · 153").
+pub fn choice_line(name: &str, count: usize) -> String {
+    format!("{name} {BETWEEN} {}", grouped(count))
+}
 
 /// The eyebrow over Home's places.
 pub const PLACES: &str = "PLACES";
@@ -81,12 +102,21 @@ pub const PLACES: &str = "PLACES";
 pub const CONTINUE_ENTRY: &str = "Continue";
 pub const RECENT_ENTRY: &str = "Recent";
 
+/// The program's top sections as a nav names them (crate::screens::SECTIONS).
+pub const HOME_SECTION: &str = "Home";
+pub const LIBRARY_SECTION: &str = "Library";
+pub const CONSOLES_SECTION: &str = "Consoles";
+pub const COLLECTIONS_SECTION: &str = "Collections";
+pub const TOOLS_SECTION: &str = "Tools";
+
 /// Whether `words` are one of the fixed words above or a shelf's name, which a screen must show whole; anything else it shows
 /// (a title, a console's name, a phrase counted or built from them) is data and may elide (EmuSen_Qt.md §3.7.2).
 pub fn is_fixed(words: &str) -> bool {
     let single = [
         TITLE, NAME, GAMES, CHOOSE_A_CONSOLE, GAMES_PATH, CONTINUE_PLAYING, RECENT, POWER_LINE, BETWEEN, SEARCH, EMUSEN_TAG, LIBRETRO_TAG,
-        FAVOURITES_LINE, NO_GAMES, NO_RECENT, NO_CONSOLES, ADD_FOLDER, PLACES, CONTINUE_ENTRY, RECENT_ENTRY,
+        FAVOURITES_LINE, NO_GAMES, NO_RECENT, NO_CONSOLES, ADD_FOLDER, PLACES, CONTINUE_ENTRY, RECENT_ENTRY, NO_FAVOURITES,
+        NO_GAMES_FOUND, EVERY_GAME, FAVOURITES_FILTER, NOT_PLAYED, ALL, START, CRUMB,
+        HOME_SECTION, LIBRARY_SECTION, CONSOLES_SECTION, COLLECTIONS_SECTION, TOOLS_SECTION,
     ];
     single.contains(&words)
         || HOME_PLACES.contains(&words)
@@ -206,15 +236,34 @@ pub fn when_ago(at: i64, now: i64) -> String {
     }
 }
 
-/// A time played, as Eclipse's boards write it (Main.dc.html:56): "3 h 20 min played", "45 min played", "2 h played"; none
-/// for under a minute.
-pub fn played_for(seconds: i64) -> Option<String> {
+/// A time played as Eclipse's games board writes it (EclipseLibrary.dc.html:47): "3 h 20 min", "45 min", "2 h"; none for
+/// under a minute.
+pub fn time_played(seconds: i64) -> Option<String> {
     let minutes = seconds.max(0) / 60;
     match (minutes / 60, minutes % 60) {
         (0, 0) => None,
-        (0, m) => Some(format!("{m} min played")),
-        (h, 0) => Some(format!("{h} h played")),
-        (h, m) => Some(format!("{h} h {m} min played")),
+        (0, m) => Some(format!("{m} min")),
+        (h, 0) => Some(format!("{h} h")),
+        (h, m) => Some(format!("{h} h {m} min")),
+    }
+}
+
+/// A time played, as Eclipse's Home writes it (Main.dc.html:56): "3 h 20 min played", "45 min played", "2 h played"; none
+/// for under a minute.
+pub fn played_for(seconds: i64) -> Option<String> {
+    time_played(seconds).map(|t| format!("{t} played"))
+}
+
+/// The scraper's players ("1", "1-2", as ES-DE keeps them) as Eclipse's games board says them: "1 player", "1 to 2 players";
+/// any other text as it is, and none for none.
+pub fn players(scraped: &str) -> String {
+    let scraped = scraped.trim();
+    let number = |n: &str| n.trim().parse::<u32>().ok();
+    match scraped.split_once('-') {
+        Some((a, b)) if number(a).is_some() && number(b).is_some() => format!("{} to {} players", a.trim(), b.trim()),
+        None if number(scraped) == Some(1) => "1 player".to_owned(),
+        None if number(scraped).is_some() => format!("{scraped} players"),
+        _ => scraped.to_owned(),
     }
 }
 

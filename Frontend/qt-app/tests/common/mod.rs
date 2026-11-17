@@ -30,6 +30,34 @@ pub fn wait_for(scene: &mut emusen_qt_test::Scene<'_>, object: &str, property: &
     assert_eq!(scene.property(object, property), value, "{object}.{property} after {ms} ms");
 }
 
+/// From Home: Games, All Games, and X on the grid's first game, which opens its page.
+#[allow(dead_code)]
+pub fn first_game_page(scene: &mut Scene<'_>) {
+    for _ in 0..5 {
+        scene.pad(UiButton::Left);
+    }
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Consoles", 2000);
+    let tree = scene.tree();
+    let all = tree.find_named("tile.0").expect("All Games");
+    assert!(scene.focus_item(&tree, all));
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Grid", 2000);
+    scene.wait(300);
+    scene.pad(UiButton::Screensaver);
+    wait_for(scene, "screens", "shown", "Page", 2000);
+}
+
+/// A state's file, saved `ago` seconds before now.
+#[allow(dead_code)]
+pub fn saved_state(platform: &Platform, kind: u32, rom: &std::path::Path, slot: i32, ago: u64) {
+    let file = platform.save_path(kind, rom.to_str().unwrap(), None, slot).unwrap();
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, b"state").unwrap();
+    let f = std::fs::File::options().write(true).open(&file).unwrap();
+    f.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(ago)).unwrap();
+}
+
 /// A scratch tree whose settings name its ROM folder, holding one synthetic image for each (folder, file) given.
 pub fn sandbox(name: &str, games: &[(&str, &str)]) -> World {
     let world = World::new(name);

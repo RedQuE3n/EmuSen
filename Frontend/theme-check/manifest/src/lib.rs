@@ -9,7 +9,7 @@ use serde_json::{Map, Value};
 pub const SCHEMA: u64 = 1;
 
 /// The `EmuSen.Theme` API this build carries, major and minor.
-pub const API: (u64, u64) = (1, 8);
+pub const API: (u64, u64) = (1, 9);
 
 /// The cue names a theme may give its own file (EmuSen_Qt.md §3.2, `EmuSen_Interface.md` §23).
 pub const CUES: [&str; 7] = ["scroll", "systembrowse", "select", "back", "favorite", "launch", "quicksysselect"];
@@ -45,10 +45,14 @@ pub enum Screen {
     Consoles,
     Games,
     Splash,
+    /// Settings (EmuSen_Qt.md §3.2, `Settings`): a theme that leaves it out gets the program's own.
+    Settings,
+    /// A game's page (§3.2, `Page`): a theme that leaves it out gets the program's own.
+    Game,
 }
 
 impl Screen {
-    pub const ALL: [Screen; 4] = [Screen::Home, Screen::Consoles, Screen::Games, Screen::Splash];
+    pub const ALL: [Screen; 6] = [Screen::Home, Screen::Consoles, Screen::Games, Screen::Splash, Screen::Settings, Screen::Game];
 
     /// The name in `screens` and in `ThemeScreen.role`.
     pub fn name(self) -> &'static str {
@@ -57,6 +61,8 @@ impl Screen {
             Screen::Consoles => "consoles",
             Screen::Games => "games",
             Screen::Splash => "splash",
+            Screen::Settings => "settings",
+            Screen::Game => "game",
         }
     }
 
@@ -67,11 +73,20 @@ impl Screen {
             Screen::Consoles => "screens/Consoles.qml",
             Screen::Games => "screens/Games.qml",
             Screen::Splash => "screens/Splash.qml",
+            Screen::Settings => "screens/Settings.qml",
+            Screen::Game => "screens/Game.qml",
         }
     }
 
     fn named(name: &str) -> Option<Screen> {
         Screen::ALL.into_iter().find(|s| s.name() == name)
+    }
+
+    /// Every screen's name, as a finding lists them: "home, consoles, … or game".
+    fn listed() -> String {
+        let names: Vec<&str> = Screen::ALL.iter().map(|s| s.name()).collect();
+        let (last, rest) = names.split_last().expect("screens");
+        format!("{} or {last}", rest.join(", "))
     }
 }
 
@@ -300,7 +315,7 @@ pub fn parse(text: &str) -> Result<(Manifest, Vec<Finding>), Finding> {
         match Screen::named(&name) {
             Some(s) if !m.screens.contains(&s) => m.screens.push(s),
             Some(_) => {}
-            None => r.find(&["screens"], Kind::Schema, format!("{name} is not a screen: home, consoles, games or splash")),
+            None => r.find(&["screens"], Kind::Schema, format!("{name} is not a screen: {}", Screen::listed())),
         }
     }
     if let Some(sizes) = top.get("fontSizes") {

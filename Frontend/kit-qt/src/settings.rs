@@ -222,6 +222,77 @@ fn flag(text: &str) -> bool {
     matches!(text.trim(), "true" | "1")
 }
 
+/// A walk's Qt type as an outcome tells it: `SettingsLayout` and `MeasuredWalk` alike.
+pub(crate) trait Told {
+    fn sync(self: Pin<&mut Self>);
+    fn sync_section(self: Pin<&mut Self>);
+    fn stepped(self: Pin<&mut Self>, row: i32, by: i32);
+    fn slid(self: Pin<&mut Self>, row: i32, amount: f64);
+    fn chosen(self: Pin<&mut Self>, row: i32);
+    fn section_chosen(self: Pin<&mut Self>, section: i32);
+}
+
+/// A press's outcome told through the walk's properties and signals; false where the press was not the walk's.
+pub(crate) fn tell<T: Told>(mut this: Pin<&mut T>, outcome: RowOutcome) -> bool {
+    match outcome {
+        RowOutcome::Moved(_) => this.as_mut().sync(),
+        RowOutcome::Stepped { row, by } => this.as_mut().stepped(row as i32, by),
+        RowOutcome::Slid { row, amount } => this.as_mut().slid(row as i32, amount),
+        RowOutcome::Chosen(row) => {
+            this.as_mut().sync();
+            this.as_mut().chosen(row as i32);
+        }
+        RowOutcome::Section(section) => {
+            this.as_mut().sync_section();
+            this.as_mut().section_chosen(section as i32);
+        }
+        RowOutcome::Kept => {}
+        RowOutcome::Declined => return false,
+    }
+    true
+}
+
+impl Told for qobject::SettingsLayout {
+    fn sync(self: Pin<&mut Self>) {
+        qobject::SettingsLayout::sync(self)
+    }
+    fn sync_section(self: Pin<&mut Self>) {
+        qobject::SettingsLayout::sync_section(self)
+    }
+    fn stepped(self: Pin<&mut Self>, row: i32, by: i32) {
+        qobject::SettingsLayout::stepped(self, row, by)
+    }
+    fn slid(self: Pin<&mut Self>, row: i32, amount: f64) {
+        qobject::SettingsLayout::slid(self, row, amount)
+    }
+    fn chosen(self: Pin<&mut Self>, row: i32) {
+        qobject::SettingsLayout::chosen(self, row)
+    }
+    fn section_chosen(self: Pin<&mut Self>, section: i32) {
+        qobject::SettingsLayout::section_chosen(self, section)
+    }
+}
+
+/// A model's rows as `SettingsLayout` and `MeasuredWalk` read them (EmuSen_Kit.md §7.122).
+pub(crate) fn walk_rows(model: Option<&qobject::QAbstractItemModel>) -> Vec<Row> {
+    let role = |name: &str| crate::item_model::role_texts(model, &QString::from(name));
+    let (kinds, held, marked) = (role("kind"), role("held"), role("marked"));
+    let (minimum, maximum, step, amount) = (role("minimum"), role("maximum"), role("step"), role("amount"));
+    let real = |list: &[String], i: usize, or: f64| list.get(i).and_then(|t| t.trim().parse::<f64>().ok()).unwrap_or(or);
+    let (range, unset) = (SliderRange::default(), Row::default());
+    kinds
+        .iter()
+        .enumerate()
+        .map(|(i, kind)| Row {
+            kind: RowKind::from_index(number(kind)),
+            held: held.get(i).is_some_and(|t| flag(t)),
+            marked: marked.get(i).is_some_and(|t| flag(t)),
+            range: SliderRange { minimum: real(&minimum, i, range.minimum), maximum: real(&maximum, i, range.maximum), step: real(&step, i, range.step) },
+            amount: real(&amount, i, unset.amount),
+        })
+        .collect()
+}
+
 impl qobject::SettingsLayout {
     pub fn read(self: Pin<&mut Self>) {
         self.take_rows(true);
@@ -230,22 +301,7 @@ impl qobject::SettingsLayout {
     pub fn press(mut self: Pin<&mut Self>, button: PadButton) -> bool {
         let Some(ui) = kinds::ui_button(button) else { return false };
         let outcome = self.as_mut().rust_mut().walk.press(ui);
-        match outcome {
-            RowOutcome::Moved(_) => self.as_mut().sync(),
-            RowOutcome::Stepped { row, by } => self.as_mut().stepped(row as i32, by),
-            RowOutcome::Slid { row, amount } => self.as_mut().slid(row as i32, amount),
-            RowOutcome::Chosen(row) => {
-                self.as_mut().sync();
-                self.as_mut().chosen(row as i32);
-            }
-            RowOutcome::Section(section) => {
-                self.as_mut().sync_section();
-                self.as_mut().section_chosen(section as i32);
-            }
-            RowOutcome::Kept => {}
-            RowOutcome::Declined => return false,
-        }
-        true
+        tell(self, outcome)
     }
 
     pub fn key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
@@ -271,22 +327,8 @@ impl qobject::SettingsLayout {
     fn take_rows(mut self: Pin<&mut Self>, keep: bool) {
         // SAFETY: QML hands the pointer of a live model, cleared by the engine when the model is destroyed.
         let model = unsafe { self.model.as_ref() };
-        let role = |name: &str| crate::item_model::role_texts(model, &QString::from(name));
-        let (kinds, held, marked) = (role("kind"), role("held"), role("marked"));
-        let (minimum, maximum, step, amount) = (role("minimum"), role("maximum"), role("step"), role("amount"));
-        let real = |list: &[String], i: usize, or: f64| list.get(i).and_then(|t| t.trim().parse::<f64>().ok()).unwrap_or(or);
-        self.as_mut().rust_mut().sentences = role("sentence");
-        let rows = kinds
-            .iter()
-            .enumerate()
-            .map(|(i, kind)| Row {
-                kind: RowKind::from_index(number(kind)),
-                held: held.get(i).is_some_and(|t| flag(t)),
-                marked: marked.get(i).is_some_and(|t| flag(t)),
-                range: SliderRange { minimum: real(&minimum, i, 0.0), maximum: real(&maximum, i, 1.0), step: real(&step, i, 0.0) },
-                amount: real(&amount, i, 0.0),
-            })
-            .collect();
+        self.as_mut().rust_mut().sentences = crate::item_model::role_texts(model, &QString::from("sentence"));
+        let rows = walk_rows(model);
         self.as_mut().rust_mut().walk.set_rows(rows, keep);
         self.sync();
     }

@@ -76,7 +76,7 @@ fn baked_shader() -> PathBuf {
 fn main() {
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Kit").version(1, 9).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
+        QmlModule::new("EmuSen.Kit").version(1, 10).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
     )
     .qrc("style/EmuSen.qrc")
     .qrc("fonts/Fonts.qrc")
@@ -105,6 +105,7 @@ fn main() {
         "src/keypass.rs",
         "src/current.rs",
         "src/settings.rs",
+        "src/measured_walk.rs",
         "src/tones.rs",
         "src/tool.rs",
         "src/page.rs",

@@ -17,6 +17,9 @@ Item {
     required property GameModel grid
     // The item the game's picture is drawn in, for Continue.
     property Item picture
+    // The window's Settings and game page models, for a theme that draws either screen; none, and neither slot is made.
+    property SettingsModel settingsModel: null
+    property GamePageModel pageModel: null
     property alias controllers: feed.controllers
     property alias family: feed.family
     // The machine's battery, -1 for none, and whether it charges, as the window's Battery reads them.
@@ -40,14 +43,16 @@ Item {
     readonly property bool consoles: consolesSlot.themed
     readonly property bool games: gamesSlot.themed
     readonly property bool splash: splashSlot.themed
+    readonly property bool settings: settingsSlot.themed
+    readonly property bool game: gameSlot.themed
     readonly property alias failed: host.failed
     readonly property alias warnings: host.warnings
     readonly property alias host: host
     readonly property alias feed: feed
     // Whether one of the theme's screens holds the focus, so the pad's presses go to the theme's engine.
-    readonly property bool holdsFocus: homeSlot.activeFocus || consolesSlot.activeFocus || gamesSlot.activeFocus
+    readonly property bool holdsFocus: homeSlot.activeFocus || consolesSlot.activeFocus || gamesSlot.activeFocus || settingsSlot.activeFocus || gameSlot.activeFocus
     // Whether one of its screens is to take the keys, for a host made inside a focus scope (the window's Loader).
-    readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus
+    readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus || settingsSlot.focus || gameSlot.focus
     // The Home screen placed, read as a theme's ThemeScreen (its engine's type, so not named here).
     readonly property var homeScreen: homeSlot.placed ? (homeSlot.item as Placing)?.screen.children[0] ?? null : null
     signal played(string path)
@@ -107,6 +112,8 @@ Item {
         clock: themed.clock.time
         shortTime: themed.clock.shortTime
         now: themed.clock.now
+        settingsShown: settingsSlot.shown
+        pageShown: gameSlot.shown
         shownSection: themed.screens.section
         onPlayed: (game) => themed.played(game)
         onResumed: themed.resumed()
@@ -137,6 +144,54 @@ Item {
     Connections {
         target: host
         function onGenerationChanged() { feed.showBrowse(themed.grid, themed.screens.key, themed.searching, themed.typing, themed.listOpen) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showSettings(themed.settingsModel) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showPage(themed.pageModel) }
+    }
+    // Each change of Settings' or the page's model, which the feed queues, so the changes of one press feed once.
+    Connections {
+        target: themed.settingsModel
+        function onRowsInserted() { feed.showSettings(themed.settingsModel) }
+        function onRowsRemoved() { feed.showSettings(themed.settingsModel) }
+        function onDataChanged() { feed.showSettings(themed.settingsModel) }
+        function onModelReset() { feed.showSettings(themed.settingsModel) }
+        function onSectionChanged() { feed.showSettings(themed.settingsModel) }
+        function onTrailChanged() { feed.showSettings(themed.settingsModel) }
+        function onFocusedChanged() { feed.showSettings(themed.settingsModel) }
+        function onHelpChanged() { feed.showSettings(themed.settingsModel) }
+        function onSentenceChanged() { feed.showSettings(themed.settingsModel) }
+        function onPaneLinesChanged() { feed.showSettings(themed.settingsModel) }
+        function onPaneMutedChanged() { feed.showSettings(themed.settingsModel) }
+        function onPreviewChanged() { feed.showSettings(themed.settingsModel) }
+        function onCaptionChanged() { feed.showSettings(themed.settingsModel) }
+        function onMeterChanged() { feed.showSettings(themed.settingsModel) }
+        function onSamplesChanged() { feed.showSettings(themed.settingsModel) }
+    }
+    Connections {
+        target: themed.pageModel
+        function onDataChanged() { feed.showPage(themed.pageModel) }
+        function onModelReset() { feed.showPage(themed.pageModel) }
+        function onReadyChanged() { feed.showPage(themed.pageModel) }
+        function onTitleChanged() { feed.showPage(themed.pageModel) }
+        function onFactsChanged() { feed.showPage(themed.pageModel) }
+        function onCoverChanged() { feed.showPage(themed.pageModel) }
+        function onHeroChanged() { feed.showPage(themed.pageModel) }
+        function onClipChanged() { feed.showPage(themed.pageModel) }
+        function onSectionChanged() { feed.showPage(themed.pageModel) }
+        function onShowsChanged() { feed.showPage(themed.pageModel) }
+        function onWordsChanged() { feed.showPage(themed.pageModel) }
+        function onPictureChanged() { feed.showPage(themed.pageModel) }
+        function onActionsChanged() { feed.showPage(themed.pageModel) }
+        function onHelpChanged() { feed.showPage(themed.pageModel) }
+        function onCoverArtChanged() { feed.showPage(themed.pageModel) }
+        function onAskingChanged() { feed.showPage(themed.pageModel) }
+        function onQuestionTitleChanged() { feed.showPage(themed.pageModel) }
+        function onFocusMoved() { feed.showPage(themed.pageModel) }
     }
     Connections {
         target: themed.library
@@ -193,6 +248,24 @@ Item {
         inputs: themed.inputs && !themed.typing && !themed.listOpen
         backdrop: themed.listOpen
         shown: themed.screens.shown === Screens.Grid || themed.listOpen || themed.searching
+    }
+    Slot {
+        id: settingsSlot
+        objectName: "settings." + themed.objectName
+        role: Host.ThemeHost.Settings
+        host: host
+        wanted: themed.settingsModel !== null
+        inputs: themed.inputs
+        shown: themed.screens.shown === Screens.Settings
+    }
+    Slot {
+        id: gameSlot
+        objectName: "game." + themed.objectName
+        role: Host.ThemeHost.Game
+        host: host
+        wanted: themed.pageModel !== null
+        inputs: themed.inputs
+        shown: themed.screens.shown === Screens.Page
     }
     Slot {
         id: splashSlot

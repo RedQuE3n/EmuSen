@@ -373,6 +373,8 @@ Window {
                 inputs: !program.splashShown
                 splashShown: program.splashShown
                 splashLayer: splashLayer
+                settingsModel: settingsModel
+                pageModel: pageScreen.page
                 onPlayed: (path) => program.play(path)
                 onFavourite: (path) => library.toggleFavourite(path)
                 onResumed: screens.resume()
@@ -525,7 +527,8 @@ Window {
             id: settingsSlot
             objectName: "settingsSlot"
             anchors.fill: parent
-            active: screens.shown === Screens.Settings
+            // The chosen theme's Settings stands in its place where the theme draws one (EmuSen_Qt.md §3.2, `Settings`).
+            active: screens.shown === Screens.Settings && !(program.themeHost?.settings ?? false)
             focus: active
             // Opened again on the row it was left on, which the model holds, before the frame's own row is written back.
             onLoaded: {
@@ -540,6 +543,14 @@ Window {
                 onBacked: screens.back()
                 onActed: (key) => screens.act(key)
             }
+        }
+        // Settings.qml's answers to the model while the chosen theme's Settings is shown (EmuSen_Qt.md §3.2, `Settings`).
+        Connections {
+            target: settingsModel
+            enabled: (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings
+            function onLeft() { screens.back() }
+            function onPassed(key) { screens.act(key) }
+            function onRefocus(row) { settingsModel.setFocused(row) }
         }
         // A console's options asked for on Choose a console: Settings opens at that console's page (none for an empty one).
         Connections {
@@ -589,7 +600,9 @@ Window {
             onLibraryChanged: library.refresh()
         }
         PageScreen {
+            id: pageScreen
             objectName: "gamePage"
+            themed: program.themeHost?.game ?? false
             screens: screens
             library: library
             platformLibrary: program.platformLibrary

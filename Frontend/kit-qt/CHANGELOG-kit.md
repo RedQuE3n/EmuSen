@@ -5,6 +5,15 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.10: the rows' walk over rows of their own heights (2026-11-16)
+
+- **`MeasuredWalk`**: kit-core's `MeasuredWalk` on Qt, the walk of `SettingsLayout` (Up and Down, Left and Right stepping
+  or sliding, A choosing, the shoulders stepping sections) over a list model's rows, each row's height told by the screen
+  that draws it (`measure`), in a window of a given height (`window`, `gap`), with no geometry of its own; `first` and
+  `offset` say where the window starts. For a theme's Settings (a screen a theme can supply, decided 2026-11-16 by the
+  tester, R-20261116-19), whose rows may be of any height, which is this piece's technical choice. Exported to themes in
+  EmuSen.Theme 1.9. `EmuSen_Kit.md` §7.122.
+
 ## 1.9: groups as a column and the chosen group as a grid (2026-11-15)
 
 - **`HelpBar`**: a help entry's pair is drawn in a theme's own glyph too (`ownGlyph2-<label>`), as `glyph2` draws it in the

@@ -36,6 +36,22 @@ pub mod qobject {
         Section,
         Search,
         SectionSearched,
+        Settings,
+        SettingsPage,
+        SettingsConsole,
+        SettingsChoices,
+        Page,
+        PageResume,
+        PageResumeSlots,
+        PageFavourite,
+        PageLoad,
+        PageView,
+        PageValue,
+        PageChange,
+        PageChoose,
+        PageNone,
+        PageEdit,
+        PageCoverArt,
     }
 
     extern "RustQt" {
@@ -83,7 +99,7 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 7] = [
+pub const KINDS: [HelpKind; 23] = [
     HelpKind::Continue,
     HelpKind::Game,
     HelpKind::Console,
@@ -91,9 +107,25 @@ pub const KINDS: [HelpKind; 7] = [
     HelpKind::Section,
     HelpKind::Search,
     HelpKind::SectionSearched,
+    HelpKind::Settings,
+    HelpKind::SettingsPage,
+    HelpKind::SettingsConsole,
+    HelpKind::SettingsChoices,
+    HelpKind::Page,
+    HelpKind::PageResume,
+    HelpKind::PageResumeSlots,
+    HelpKind::PageFavourite,
+    HelpKind::PageLoad,
+    HelpKind::PageView,
+    HelpKind::PageValue,
+    HelpKind::PageChange,
+    HelpKind::PageChoose,
+    HelpKind::PageNone,
+    HelpKind::PageEdit,
+    HelpKind::PageCoverArt,
 ];
 
-/// The help bar a kind shows: Home's three, Choose a console's, the grid's and the search's.
+/// The help bar a kind shows (EmuSen_Qt.md §3.2, `Help`).
 pub fn screen_of(kind: HelpKind) -> Screen {
     match kind {
         HelpKind::Game => Screen::HomeShelf,
@@ -102,8 +134,29 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::Section => Screen::Grid,
         HelpKind::Search => Screen::Search,
         HelpKind::SectionSearched => Screen::GridSearched,
+        HelpKind::Settings => Screen::Settings,
+        HelpKind::SettingsPage => Screen::SettingsPage,
+        HelpKind::SettingsConsole => Screen::SettingsConsole,
+        HelpKind::SettingsChoices => Screen::SettingsChoices,
+        HelpKind::Page => Screen::GamePage,
+        HelpKind::PageResume => Screen::GamePageResume,
+        HelpKind::PageResumeSlots => Screen::GamePageResumeSlots,
+        HelpKind::PageFavourite => Screen::GamePageFavourite,
+        HelpKind::PageLoad => Screen::GamePageLoad,
+        HelpKind::PageView => Screen::GamePageView,
+        HelpKind::PageValue => Screen::GamePageValue,
+        HelpKind::PageChange => Screen::GamePageChange,
+        HelpKind::PageChoose => Screen::GamePageChoose,
+        HelpKind::PageNone => Screen::GamePageNone,
+        HelpKind::PageEdit => Screen::GamePageEdit,
+        HelpKind::PageCoverArt => Screen::GamePageCoverArt,
         _ => Screen::Home,
     }
+}
+
+/// The kind whose bar is a model's screen's; none for a screen no kind shows (EmuSen_Qt.md §3.2, `Help`).
+pub fn kind_of(screen: Screen) -> Option<HelpKind> {
+    KINDS.into_iter().skip_while(|k| *k != HelpKind::Settings).find(|k| screen_of(*k) == screen)
 }
 
 /// What a list may differ by, a kind's 192 lists: group, back, accept, actions kept, `Names` and letters (EmuSen_Qt.md §3.2).
@@ -130,13 +183,13 @@ pub enum Names {
 
 /// A hundred and ninety-two lists for each kind, one for each of `FLAGS`, the singleton's children.
 pub struct ThemeHelpRust {
-    lists: [[*mut qobject::ThemeHelpEntries; 192]; 7],
+    lists: [[*mut qobject::ThemeHelpEntries; 192]; KINDS.len()],
     sections: *mut qobject::ThemeHelpEntries,
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [[std::ptr::null_mut(); 192]; 7], sections: std::ptr::null_mut() }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 192]; KINDS.len()], sections: std::ptr::null_mut() }
     }
 }
 

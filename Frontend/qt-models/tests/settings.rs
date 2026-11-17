@@ -313,3 +313,25 @@ fn the_cheats_door_is_held_until_the_game_last_played_has_cheats_and_the_discs_d
     assert_eq!(view.choose(cheats), Outcome::Door("cheats".into()));
     assert_eq!(view.choose(index(&view, "discs")), Outcome::Door("compressed".into()), "the Compressed Discs tool's key");
 }
+
+#[test]
+fn qt_3_2_the_page_s_key_and_each_row_s_facets_a_theme_reads() {
+    let source = fake(json!({}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "Controllers");
+    assert_eq!(view.page_key(), "controllers", "a section is its id");
+    let facets = view.facets();
+    assert_eq!(facets.len(), view.rows().len(), "a facet for every row shown");
+    let swap = index(&view, "swap");
+    assert_eq!(facets[swap].switch, Some(false), "Swap A and B is a switch, off at its default");
+    view.step(swap, 1);
+    assert_eq!(view.facets()[swap].switch, Some(true), "turned on, its state follows the stored value, not its word");
+    assert!(view.rows().iter().zip(view.facets()).all(|(r, f)| f.about.is_empty() && f.tile.is_none() && (r.kind == RowKind::Steps || f.switch.is_none())), "no description writes an about line yet, no row here is a console's, only a stepped row is a switch");
+    section(&mut view, "Library");
+    let scraping = index(&view, "scraping");
+    assert_eq!(view.choose(scraping), Outcome::Opened);
+    assert_eq!(view.page_key(), "group:Scraping", "a page is its kind and what it is of");
+    assert_eq!(view.facets()[0].switch, Some(true), "Use ScreenScraper, a switch on by default");
+    view.back();
+    assert_eq!(view.page_key(), "library");
+}

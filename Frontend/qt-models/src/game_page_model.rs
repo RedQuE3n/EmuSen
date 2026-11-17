@@ -123,24 +123,24 @@ pub mod qobject {
 
         /// A on an action, by its index.
         #[qinvokable]
-        fn act(self: Pin<&mut GamePageModel>, index: i32);
+        fn act(self: Pin<&mut GamePageModel>, index: i32) -> bool;
 
         /// Left (-1) or Right (+1) on an action: whether it stepped its value (Resume's states); else the focus moves on.
         #[qinvokable]
         #[cxx_name = "stepAction"]
         fn step_action(self: Pin<&mut GamePageModel>, index: i32, by: i32) -> bool;
 
-        /// A on a row or a tile of the content.
+        /// A on a row or a tile of the content: whether it did anything.
         #[qinvokable]
-        fn choose(self: Pin<&mut GamePageModel>, index: i32);
+        fn choose(self: Pin<&mut GamePageModel>, index: i32) -> bool;
 
-        /// Left or Right on a row of the content.
+        /// Left or Right on a row of the content: whether it did anything.
         #[qinvokable]
-        fn step(self: Pin<&mut GamePageModel>, index: i32, by: i32);
+        fn step(self: Pin<&mut GamePageModel>, index: i32, by: i32) -> bool;
 
         /// A help bar's declared action: the page answers Y, the heart, itself, and passes every other on.
         #[qinvokable]
-        fn declared(self: Pin<&mut GamePageModel>, key: &QString);
+        fn declared(self: Pin<&mut GamePageModel>, key: &QString) -> bool;
 
         /// Where an item stands among its list: "2 of 8".
         #[qinvokable]
@@ -152,7 +152,7 @@ pub mod qobject {
 
         /// The question answered, by the answer's index: the second makes the change asked about.
         #[qinvokable]
-        fn answer(self: Pin<&mut GamePageModel>, index: i32);
+        fn answer(self: Pin<&mut GamePageModel>, index: i32) -> bool;
 
         /// A detail of the game was edited: the library reads its names again.
         #[qsignal]
@@ -177,6 +177,11 @@ pub mod qobject {
         /// The focus moved: an action's index, else -1 and the content's index; the help bar follows it.
         #[qinvokable]
         fn focus(self: Pin<&mut GamePageModel>, action: i32, content: i32);
+
+        /// The focus told moved, though the help may not have.
+        #[qsignal]
+        #[cxx_name = "focusMoved"]
+        fn focus_moved(self: Pin<&mut GamePageModel>);
 
         /// B on the page: Edit Details goes back to Details (true); else the page is the screens' to leave.
         #[qinvokable]
@@ -292,7 +297,7 @@ fn list(words: impl Iterator<Item = String>) -> QStringList {
 
 /// One item of the content as the frame's delegates read it.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct Item {
+pub struct Item {
     key: String,
     label: String,
     value: String,
@@ -301,6 +306,34 @@ struct Item {
     steps: bool,
     opens: bool,
     marked: bool,
+}
+
+/// An item's roles, read-only outside the model.
+impl Item {
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+    pub fn line(&self) -> &str {
+        &self.line
+    }
+    pub fn picture(&self) -> &str {
+        &self.picture
+    }
+    pub fn steps(&self) -> bool {
+        self.steps
+    }
+    pub fn opens(&self) -> bool {
+        self.opens
+    }
+    pub fn marked(&self) -> bool {
+        self.marked
+    }
 }
 
 fn items(content: &Content) -> Vec<Item> {
@@ -601,6 +634,31 @@ impl qobject::GamePageModel {
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
         self.items.len() as i32
+    }
+
+    /// The content's items as the list's roles give them, for a theme's read-only view (EmuSen_Qt.md §3.2, `Page`).
+    pub fn shown_items(&self) -> &[Item] {
+        &self.items
+    }
+
+    /// The actions as the frame's delegates read them.
+    pub fn shown_actions(&self) -> Vec<ActionItem> {
+        action_items(&self.actions.to_string())
+    }
+
+    /// The game's file, the key the library's rows and `Library.artHues` take; empty before a game is read.
+    pub fn game_key(&self) -> &str {
+        &self.file.path
+    }
+
+    /// The focus as last told: an action's index or -1, and the content's index.
+    pub fn focused(&self) -> (i32, i32) {
+        (self.focus.0.map_or(-1, |a| a as i32), self.focus.1 as i32)
+    }
+
+    /// The help bar's screen for the focus, which `help` numbers for the program's HelpModel.
+    pub fn help_screen(&self) -> crate::help::Screen {
+        self.page.help(self.focus.0, self.focus.1)
     }
 
     pub fn refresh(mut self: Pin<&mut Self>) {
@@ -1157,9 +1215,9 @@ impl qobject::GamePageModel {
         self.shown(false);
     }
 
-    pub fn act(self: Pin<&mut Self>, index: i32) {
+    pub fn act(self: Pin<&mut Self>, index: i32) -> bool {
         let outcome = self.page.act(index.max(0) as usize);
-        self.outcome(outcome);
+        self.did(outcome)
     }
 
     pub fn step_action(mut self: Pin<&mut Self>, index: i32, by: i32) -> bool {
@@ -1170,45 +1228,56 @@ impl qobject::GamePageModel {
         stepped
     }
 
-    pub fn choose(self: Pin<&mut Self>, index: i32) {
+    pub fn choose(self: Pin<&mut Self>, index: i32) -> bool {
         let index = index.max(0) as usize;
         let outcome = match self.page.content() {
             Content::Tiles(_) => self.page.choose_tile(index),
             _ => self.page.choose_row(index),
         };
-        self.outcome(outcome);
+        self.did(outcome)
     }
 
-    pub fn step(mut self: Pin<&mut Self>, index: i32, by: i32) {
+    pub fn step(mut self: Pin<&mut Self>, index: i32, by: i32) -> bool {
         let outcome = self.as_mut().rust_mut().page.step_row(index.max(0) as usize, by);
+        self.did(outcome)
+    }
+
+    /// What a press did carried out; whether it did anything.
+    fn did(self: Pin<&mut Self>, outcome: Outcome) -> bool {
+        let did = !matches!(outcome, Outcome::Nothing);
         self.outcome(outcome);
+        did
     }
 
     pub fn place(&self, index: i32, count: i32) -> QString {
         QString::from(crate::game_page::place(index.max(0) as usize, count.max(0) as usize).as_str())
     }
 
-    pub fn declared(self: Pin<&mut Self>, key: &QString) {
+    pub fn declared(self: Pin<&mut Self>, key: &QString) -> bool {
         match key.to_string().as_str() {
-            crate::help::FAVOURITE => self.outcome(Outcome::Changed(crate::game_page::Change::Favourite)),
+            crate::help::FAVOURITE => self.did(Outcome::Changed(crate::game_page::Change::Favourite)),
             crate::help::RESET => {
                 let outcome = self.page.reset(self.focus.1);
-                self.outcome(outcome);
+                self.did(outcome)
             }
             crate::help::DELETE => {
                 let outcome = self.page.delete(self.focus.1);
-                self.outcome(outcome);
+                self.did(outcome)
             }
-            crate::help::SET_COVER => {
-                if let Some(kind) = self.viewer.as_ref().and_then(|v| self.page.viewer_cover(v)) {
-                    self.outcome(Outcome::Changed(crate::game_page::Change::Cover(Some(kind))));
-                }
+            crate::help::SET_COVER => match self.viewer.as_ref().and_then(|v| self.page.viewer_cover(v)) {
+                Some(kind) => self.did(Outcome::Changed(crate::game_page::Change::Cover(Some(kind)))),
+                None => false,
+            },
+            _ => {
+                self.passed(key.clone());
+                true
             }
-            _ => self.passed(key.clone()),
         }
     }
 
-    pub fn answer(self: Pin<&mut Self>, index: i32) {
+    /// Whether a question was asked to answer.
+    pub fn answer(self: Pin<&mut Self>, index: i32) -> bool {
+        let asked = self.asking;
         self.telling(|mut model| {
             let pending = model.as_mut().rust_mut().pending.take();
             if model.asking {
@@ -1232,20 +1301,26 @@ impl qobject::GamePageModel {
                 _ => {}
             }
         });
+        asked
     }
 
     /// Told while the page tells QML of a change, the focus is kept and applied once the telling has finished (EmuSen_Qt.md §7.8.1).
     pub fn focus(mut self: Pin<&mut Self>, action: i32, content: i32) {
-        self.as_mut().rust_mut().focus = (usize::try_from(action).ok(), content.max(0) as usize);
+        let focus = (usize::try_from(action).ok(), content.max(0) as usize);
+        let moved = self.focus != focus;
+        self.as_mut().rust_mut().focus = focus;
         if self.telling == 0 {
-            self.helped();
+            self.as_mut().helped();
+        }
+        if moved {
+            self.focus_moved();
         }
     }
 }
 
 /// One action as the frame's delegate reads it.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct ActionItem {
+pub struct ActionItem {
     label: String,
     value: String,
     button: i32,
@@ -1253,6 +1328,31 @@ struct ActionItem {
     stepped: bool,
     step_left: bool,
     step_right: bool,
+}
+
+/// An action's roles, read-only outside the model.
+impl ActionItem {
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+    pub fn button(&self) -> i32 {
+        self.button
+    }
+    pub fn filled(&self) -> bool {
+        self.filled
+    }
+    pub fn stepped(&self) -> bool {
+        self.stepped
+    }
+    pub fn step_left(&self) -> bool {
+        self.step_left
+    }
+    pub fn step_right(&self) -> bool {
+        self.step_right
+    }
 }
 
 /// GamePageModel's actions text read back.

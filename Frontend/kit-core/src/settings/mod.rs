@@ -2,9 +2,11 @@
 //! rows, a stepped value, a slider and a page of choices among them. It names no setting: a host hands it rows by kind.
 
 pub mod frame;
+pub mod measured;
 pub mod rows;
 pub mod slider;
 
 pub use frame::{SETTINGS, SettingsGeometry};
+pub use measured::MeasuredWalk;
 pub use rows::{Row, RowKind, RowOutcome, RowWalk};
 pub use slider::SliderRange;

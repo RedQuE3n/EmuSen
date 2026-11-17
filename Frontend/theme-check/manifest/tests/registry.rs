@@ -3,8 +3,8 @@
 
 use emusen_theme_manifest::{API, CUES};
 
-const TYPES: &str = include_str!("../../../../Testing/qmltypes/EmuSen.Theme-1.8.qmltypes");
-const QMLDIR: &str = include_str!("../../../../Testing/qmltypes/EmuSen.Theme-1.8.qmldir");
+const TYPES: &str = include_str!("../../../../Testing/qmltypes/EmuSen.Theme-1.9.qmltypes");
+const QMLDIR: &str = include_str!("../../../../Testing/qmltypes/EmuSen.Theme-1.9.qmldir");
 
 const CHANGELOG: &str = include_str!("../../../theme-qt/CHANGELOG-theme-api.md");
 

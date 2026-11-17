@@ -112,6 +112,97 @@ Module {
             lineNumber: 44
             Parameter { name: "key"; type: "QString" }
         }
+        Method {
+            name: "settingsStep"
+            type: "bool"
+            lineNumber: 45
+            Parameter { name: "row"; type: "int" }
+            Parameter { name: "by"; type: "int" }
+        }
+        Method {
+            name: "settingsChoose"
+            type: "bool"
+            lineNumber: 46
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "settingsSlide"
+            type: "bool"
+            lineNumber: 47
+            Parameter { name: "row"; type: "int" }
+            Parameter { name: "amount"; type: "double" }
+        }
+        Method {
+            name: "settingsSection"
+            type: "bool"
+            lineNumber: 48
+            Parameter { name: "section"; type: "int" }
+        }
+        Method {
+            name: "settingsFocus"
+            type: "bool"
+            lineNumber: 49
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "settingsShoulder"
+            type: "bool"
+            lineNumber: 50
+            Parameter { name: "by"; type: "int" }
+        }
+        Method { name: "settingsBack"; type: "bool"; lineNumber: 51 }
+        Method {
+            name: "pageSection"
+            type: "bool"
+            lineNumber: 52
+            Parameter { name: "section"; type: "int" }
+        }
+        Method {
+            name: "pageAct"
+            type: "bool"
+            lineNumber: 53
+            Parameter { name: "action"; type: "int" }
+        }
+        Method {
+            name: "pageStepAction"
+            type: "bool"
+            lineNumber: 54
+            Parameter { name: "action"; type: "int" }
+            Parameter { name: "by"; type: "int" }
+        }
+        Method {
+            name: "pageChoose"
+            type: "bool"
+            lineNumber: 55
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "pageStep"
+            type: "bool"
+            lineNumber: 56
+            Parameter { name: "row"; type: "int" }
+            Parameter { name: "by"; type: "int" }
+        }
+        Method {
+            name: "pageFocus"
+            type: "bool"
+            lineNumber: 57
+            Parameter { name: "action"; type: "int" }
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "pageDeclared"
+            type: "bool"
+            lineNumber: 58
+            Parameter { name: "key"; type: "QString" }
+        }
+        Method {
+            name: "pageAnswer"
+            type: "bool"
+            lineNumber: 59
+            Parameter { name: "choice"; type: "int" }
+        }
+        Method { name: "pageBack"; type: "bool"; lineNumber: 60 }
     }
     Component {
         file: "bells.cxxqt.h"
@@ -567,7 +658,23 @@ Module {
                 "Place",
                 "Section",
                 "Search",
-                "SectionSearched"
+                "SectionSearched",
+                "Settings",
+                "SettingsPage",
+                "SettingsConsole",
+                "SettingsChoices",
+                "Page",
+                "PageResume",
+                "PageResumeSlots",
+                "PageFavourite",
+                "PageLoad",
+                "PageView",
+                "PageValue",
+                "PageChange",
+                "PageChoose",
+                "PageNone",
+                "PageEdit",
+                "PageCoverArt"
             ]
         }
         Property {
@@ -585,7 +692,7 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 44
+            lineNumber: 60
             Parameter { name: "kind"; type: "HelpKind" }
         }
         Method {
@@ -593,14 +700,14 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 45
+            lineNumber: 61
             Parameter { name: "kind"; type: "HelpKind" }
             Parameter { name: "flags"; type: "QMap_QString_QVariant" }
         }
     }
     Component {
         file: "help.cxxqt.h"
-        lineNumber: 66
+        lineNumber: 82
         name: "ThemeHelpEntries"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -612,7 +719,7 @@ Module {
             type: "QString"
             read: "getActionLines"
             index: 0
-            lineNumber: 72
+            lineNumber: 88
             isReadonly: true
             isPropertyConstant: true
         }
@@ -620,7 +727,7 @@ Module {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 78
+            lineNumber: 94
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -628,13 +735,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 79
+            lineNumber: 95
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 80
+            lineNumber: 96
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }
@@ -860,6 +967,227 @@ Module {
         }
     }
     Component {
+        file: "page.cxxqt.h"
+        lineNumber: 23
+        name: "ThemePage"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Theme/Page 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "ready"
+            type: "bool"
+            read: "getReady"
+            notify: "shown"
+            index: 0
+            lineNumber: 29
+            isReadonly: true
+        }
+        Property {
+            name: "key"
+            type: "QString"
+            read: "getKey"
+            notify: "shown"
+            index: 1
+            lineNumber: 30
+            isReadonly: true
+        }
+        Property {
+            name: "title"
+            type: "QString"
+            read: "getTitle"
+            notify: "shown"
+            index: 2
+            lineNumber: 31
+            isReadonly: true
+        }
+        Property {
+            name: "facts"
+            type: "QString"
+            read: "getFacts"
+            notify: "shown"
+            index: 3
+            lineNumber: 32
+            isReadonly: true
+        }
+        Property {
+            name: "cover"
+            type: "QString"
+            read: "getCover"
+            notify: "shown"
+            index: 4
+            lineNumber: 33
+            isReadonly: true
+        }
+        Property {
+            name: "hero"
+            type: "QString"
+            read: "getHero"
+            notify: "shown"
+            index: 5
+            lineNumber: 34
+            isReadonly: true
+        }
+        Property {
+            name: "clip"
+            type: "QString"
+            read: "getClip"
+            notify: "shown"
+            index: 6
+            lineNumber: 35
+            isReadonly: true
+        }
+        Property {
+            name: "actions"
+            type: "ThemeRows"
+            isPointer: true
+            read: "getActions"
+            index: 7
+            lineNumber: 36
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "sections"
+            type: "QStringList"
+            read: "getSections"
+            notify: "shown"
+            index: 8
+            lineNumber: 37
+            isReadonly: true
+        }
+        Property {
+            name: "section"
+            type: "int"
+            read: "getSection"
+            notify: "shown"
+            index: 9
+            lineNumber: 38
+            isReadonly: true
+        }
+        Property {
+            name: "shows"
+            type: "int"
+            read: "getShows"
+            notify: "shown"
+            index: 10
+            lineNumber: 39
+            isReadonly: true
+        }
+        Property {
+            name: "words"
+            type: "QString"
+            read: "getWords"
+            notify: "shown"
+            index: 11
+            lineNumber: 40
+            isReadonly: true
+        }
+        Property {
+            name: "picture"
+            type: "QString"
+            read: "getPicture"
+            notify: "shown"
+            index: 12
+            lineNumber: 41
+            isReadonly: true
+        }
+        Property {
+            name: "rows"
+            type: "ThemeRows"
+            isPointer: true
+            read: "getRows"
+            index: 13
+            lineNumber: 42
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "coverArt"
+            type: "bool"
+            read: "getCoverArt"
+            notify: "shown"
+            index: 14
+            lineNumber: 43
+            isReadonly: true
+        }
+        Property {
+            name: "focusedAction"
+            type: "int"
+            read: "getFocusedAction"
+            notify: "shown"
+            index: 15
+            lineNumber: 44
+            isReadonly: true
+        }
+        Property {
+            name: "focusedContent"
+            type: "int"
+            read: "getFocusedContent"
+            notify: "shown"
+            index: 16
+            lineNumber: 45
+            isReadonly: true
+        }
+        Property {
+            name: "help"
+            type: "int"
+            read: "getHelp"
+            notify: "shown"
+            index: 17
+            lineNumber: 46
+            isReadonly: true
+        }
+        Property {
+            name: "asking"
+            type: "bool"
+            read: "getAsking"
+            notify: "shown"
+            index: 18
+            lineNumber: 47
+            isReadonly: true
+        }
+        Property {
+            name: "questionTitle"
+            type: "QString"
+            read: "getQuestionTitle"
+            notify: "shown"
+            index: 19
+            lineNumber: 48
+            isReadonly: true
+        }
+        Property {
+            name: "questionSentences"
+            type: "QStringList"
+            read: "getQuestionSentences"
+            notify: "shown"
+            index: 20
+            lineNumber: 49
+            isReadonly: true
+        }
+        Property {
+            name: "questionChoices"
+            type: "QStringList"
+            read: "getQuestionChoices"
+            notify: "shown"
+            index: 21
+            lineNumber: 50
+            isReadonly: true
+        }
+        Property {
+            name: "questionBack"
+            type: "int"
+            read: "getQuestionBack"
+            notify: "shown"
+            index: 22
+            lineNumber: 51
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 79 }
+    }
+    Component {
         file: "rows.cxxqt.h"
         lineNumber: 32
         name: "ThemeRows"
@@ -1001,6 +1329,172 @@ Module {
         Signal { name: "keyChanged"; lineNumber: 129 }
         Signal { name: "consoleChanged"; lineNumber: 130 }
         Signal { name: "hueChanged"; lineNumber: 131 }
+    }
+    Component {
+        file: "settings.cxxqt.h"
+        lineNumber: 23
+        name: "ThemeSettings"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Theme/Settings 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "sections"
+            type: "QStringList"
+            read: "getSections"
+            notify: "shown"
+            index: 0
+            lineNumber: 29
+            isReadonly: true
+        }
+        Property {
+            name: "section"
+            type: "int"
+            read: "getSection"
+            notify: "shown"
+            index: 1
+            lineNumber: 30
+            isReadonly: true
+        }
+        Property {
+            name: "trail"
+            type: "QStringList"
+            read: "getTrail"
+            notify: "shown"
+            index: 2
+            lineNumber: 31
+            isReadonly: true
+        }
+        Property {
+            name: "page"
+            type: "QString"
+            read: "getPage"
+            notify: "shown"
+            index: 3
+            lineNumber: 32
+            isReadonly: true
+        }
+        Property {
+            name: "rows"
+            type: "ThemeRows"
+            isPointer: true
+            read: "getRows"
+            index: 4
+            lineNumber: 33
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "focused"
+            type: "int"
+            read: "getFocused"
+            notify: "shown"
+            index: 5
+            lineNumber: 34
+            isReadonly: true
+        }
+        Property {
+            name: "count"
+            type: "int"
+            read: "getCount"
+            notify: "shown"
+            index: 6
+            lineNumber: 35
+            isReadonly: true
+        }
+        Property {
+            name: "help"
+            type: "int"
+            read: "getHelp"
+            notify: "shown"
+            index: 7
+            lineNumber: 36
+            isReadonly: true
+        }
+        Property {
+            name: "sentence"
+            type: "QString"
+            read: "getSentence"
+            notify: "shown"
+            index: 8
+            lineNumber: 37
+            isReadonly: true
+        }
+        Property {
+            name: "lines"
+            type: "QStringList"
+            read: "getLines"
+            notify: "shown"
+            index: 9
+            lineNumber: 38
+            isReadonly: true
+        }
+        Property {
+            name: "muted"
+            type: "QStringList"
+            read: "getMuted"
+            notify: "shown"
+            index: 10
+            lineNumber: 39
+            isReadonly: true
+        }
+        Property {
+            name: "tones"
+            type: "QList_i32"
+            read: "getTones"
+            notify: "shown"
+            index: 11
+            lineNumber: 40
+            isReadonly: true
+        }
+        Property {
+            name: "preview"
+            type: "int"
+            read: "getPreview"
+            notify: "shown"
+            index: 12
+            lineNumber: 41
+            isReadonly: true
+        }
+        Property {
+            name: "caption"
+            type: "QString"
+            read: "getCaption"
+            notify: "shown"
+            index: 13
+            lineNumber: 42
+            isReadonly: true
+        }
+        Property {
+            name: "meter"
+            type: "double"
+            read: "getMeter"
+            notify: "shown"
+            index: 14
+            lineNumber: 43
+            isReadonly: true
+        }
+        Property {
+            name: "samples"
+            type: "QStringList"
+            read: "getSamples"
+            notify: "shown"
+            index: 15
+            lineNumber: 44
+            isReadonly: true
+        }
+        Property {
+            name: "sampleScales"
+            type: "QList_f64"
+            read: "getSampleScales"
+            notify: "shown"
+            index: 16
+            lineNumber: 45
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 67 }
     }
     Component {
         file: "words.cxxqt.h"

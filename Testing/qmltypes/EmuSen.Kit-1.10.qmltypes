@@ -1906,6 +1906,204 @@ Module {
         }
     }
     Component {
+        file: "measured_walk.cxxqt.h"
+        lineNumber: 113
+        name: "MeasuredWalk"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/MeasuredWalk 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "model"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getModel"
+            write: "setModel"
+            notify: "modelChanged"
+            index: 0
+            lineNumber: 118
+        }
+        Property {
+            name: "window"
+            type: "double"
+            read: "getWindow"
+            write: "setWindow"
+            notify: "windowChanged"
+            index: 1
+            lineNumber: 119
+        }
+        Property {
+            name: "gap"
+            type: "double"
+            read: "getGap"
+            write: "setGap"
+            notify: "gapChanged"
+            index: 2
+            lineNumber: 120
+        }
+        Property {
+            name: "sections"
+            type: "int"
+            read: "getSections"
+            write: "setSections"
+            notify: "sectionsChanged"
+            index: 3
+            lineNumber: 121
+        }
+        Property {
+            name: "section"
+            type: "int"
+            read: "getSection"
+            write: "setSection"
+            notify: "sectionChanged"
+            index: 4
+            lineNumber: 122
+        }
+        Property {
+            name: "trailShown"
+            type: "bool"
+            read: "getTrailShown"
+            write: "setTrailShown"
+            notify: "trailShownChanged"
+            index: 5
+            lineNumber: 123
+        }
+        Property {
+            name: "count"
+            type: "int"
+            read: "getCount"
+            notify: "walked"
+            index: 6
+            lineNumber: 124
+            isReadonly: true
+        }
+        Property {
+            name: "current"
+            type: "int"
+            read: "getCurrent"
+            notify: "walked"
+            index: 7
+            lineNumber: 125
+            isReadonly: true
+        }
+        Property {
+            name: "first"
+            type: "int"
+            read: "getFirst"
+            notify: "walked"
+            index: 8
+            lineNumber: 126
+            isReadonly: true
+        }
+        Property {
+            name: "offset"
+            type: "double"
+            read: "getOffset"
+            notify: "walked"
+            index: 9
+            lineNumber: 127
+            isReadonly: true
+        }
+        Property {
+            name: "marked"
+            type: "int"
+            read: "getMarked"
+            notify: "walked"
+            index: 10
+            lineNumber: 128
+            isReadonly: true
+        }
+        Signal { name: "modelChanged"; lineNumber: 150 }
+        Signal { name: "windowChanged"; lineNumber: 151 }
+        Signal { name: "gapChanged"; lineNumber: 152 }
+        Signal { name: "sectionsChanged"; lineNumber: 153 }
+        Signal { name: "sectionChanged"; lineNumber: 154 }
+        Signal { name: "trailShownChanged"; lineNumber: 155 }
+        Signal { name: "walked"; lineNumber: 162 }
+        Signal {
+            name: "stepped"
+            lineNumber: 163
+            Parameter { name: "row"; type: "int" }
+            Parameter { name: "by"; type: "int" }
+        }
+        Signal {
+            name: "sectionChosen"
+            lineNumber: 164
+            Parameter { name: "section"; type: "int" }
+        }
+        Signal {
+            name: "slid"
+            lineNumber: 165
+            Parameter { name: "row"; type: "int" }
+            Parameter { name: "amount"; type: "double" }
+        }
+        Signal {
+            name: "chosen"
+            lineNumber: 166
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "setModel"
+            lineNumber: 134
+            Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
+        }
+        Method {
+            name: "setWindow"
+            lineNumber: 136
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setGap"
+            lineNumber: 138
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setSections"
+            lineNumber: 140
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setSection"
+            lineNumber: 142
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setTrailShown"
+            lineNumber: 144
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method { name: "read"; lineNumber: 156 }
+        Method {
+            name: "measure"
+            lineNumber: 157
+            Parameter { name: "row"; type: "int" }
+            Parameter { name: "height"; type: "double" }
+        }
+        Method {
+            name: "press"
+            type: "bool"
+            lineNumber: 158
+            Parameter { name: "button"; type: "Pad::PadButton" }
+        }
+        Method {
+            name: "key"
+            type: "bool"
+            lineNumber: 159
+            Parameter { name: "key"; type: "int" }
+            Parameter { name: "modifiers"; type: "int" }
+        }
+        Method {
+            name: "focusRow"
+            lineNumber: 160
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "scrollTo"
+            lineNumber: 161
+            Parameter { name: "first"; type: "int" }
+        }
+    }
+    Component {
         file: "moonrise.cxxqt.h"
         lineNumber: 430
         name: "MoonriseModel"

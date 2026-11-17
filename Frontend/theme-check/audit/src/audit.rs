@@ -55,6 +55,8 @@ fn role(screen: Screen) -> i32 {
         Screen::Consoles => 1,
         Screen::Games => 2,
         Screen::Splash => 3,
+        Screen::Settings => 4,
+        Screen::Game => 5,
     }
 }
 
@@ -64,6 +66,8 @@ fn title(screen: Screen) -> &'static str {
         Screen::Consoles => "Consoles",
         Screen::Games => "Games",
         Screen::Splash => "Splash",
+        Screen::Settings => "Settings",
+        Screen::Game => "Game",
     }
 }
 
@@ -204,7 +208,7 @@ fn section_of(screen: Screen) -> &'static str {
         Screen::Home => Shown::Home,
         Screen::Consoles => Shown::Consoles,
         Screen::Games => Shown::Grid,
-        Screen::Splash => return "",
+        Screen::Splash | Screen::Settings | Screen::Game => return "",
     };
     sections::current(shown).map_or("", |s| s.key)
 }

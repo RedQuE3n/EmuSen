@@ -66,7 +66,7 @@ fn qt_3_4_missing_keys_wrong_shapes_and_unknown_names_are_schema_findings() {
         vec!["api is missing", "name is missing", "author is missing", "licence is missing", "variants is missing", "screens is missing"]
     );
     let odd = GOOD
-        .replace("[\"home\", \"games\", \"splash\"]", "[\"home\", \"settings\", \"home\"]")
+        .replace("[\"home\", \"games\", \"splash\"]", "[\"home\", \"pause\", \"home\"]")
         .replace("\"light\": { \"accent\": \"#B4442A\" }", "\"dusk\": {}");
     let found = parse(&odd).unwrap().1;
     let words: Vec<String> = found.iter().filter(|f| f.refuses()).map(|f| format!("{}:{}", f.line, f.words)).collect();
@@ -74,7 +74,7 @@ fn qt_3_4_missing_keys_wrong_shapes_and_unknown_names_are_schema_findings() {
         words,
         vec![
             "9:screens names home twice",
-            "9:settings is not a screen: home, consoles, games or splash",
+            "9:pause is not a screen: home, consoles, games, splash, settings or game",
             "12:dusk is not a variant: dark or light"
         ]
     );

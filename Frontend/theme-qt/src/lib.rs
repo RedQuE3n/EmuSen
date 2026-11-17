@@ -11,8 +11,10 @@ pub mod glue;
 pub mod help;
 pub mod library;
 pub mod marks;
+pub mod page;
 pub mod rows;
 pub mod session;
+pub mod settings;
 pub mod view;
 pub mod words;
 
@@ -27,7 +29,9 @@ pub mod host {
     use crate::glue::ffi;
     use crate::help::qobject::ThemeHelp;
     use crate::library::qobject::ThemeLibrary;
+    use crate::page::qobject::ThemePage;
     use crate::session::qobject::ThemeSession;
+    use crate::settings::qobject::ThemeSettings;
     use crate::words::qobject::ThemeWords;
     use core::pin::Pin;
     use cxx_qt::casting::Upcast;
@@ -81,6 +85,14 @@ pub mod host {
 
     pub fn browse(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeBrowse>> {
         find(within, "Browse")
+    }
+
+    pub fn settings(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeSettings>> {
+        find(within, "Settings")
+    }
+
+    pub fn page(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemePage>> {
+        find(within, "Page")
     }
 
     /// The kit's tokens in the theme's engine, which the host keeps in step with the program's (reduced motion).

@@ -66,6 +66,61 @@ pub mod qobject {
         /// Whether the host would take `act(key)` now, without acting: a declined action's item and help entry look disabled.
         #[qinvokable]
         fn enabled(self: &ThemeActions, key: &QString) -> bool;
+
+        /// Settings' calls (§3.2, `Settings`), each the program's own: Left (-1) or Right (+1) on a row, A on a row, a
+        /// slider moved to an amount, a section chosen, the focus on a row, the shoulders on a page, and B.
+        #[qinvokable]
+        #[cxx_name = "settingsStep"]
+        fn settings_step(self: Pin<&mut ThemeActions>, row: i32, by: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "settingsChoose"]
+        fn settings_choose(self: Pin<&mut ThemeActions>, row: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "settingsSlide"]
+        fn settings_slide(self: Pin<&mut ThemeActions>, row: i32, amount: f64) -> bool;
+        #[qinvokable]
+        #[cxx_name = "settingsSection"]
+        fn settings_section(self: Pin<&mut ThemeActions>, section: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "settingsFocus"]
+        fn settings_focus(self: Pin<&mut ThemeActions>, row: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "settingsShoulder"]
+        fn settings_shoulder(self: Pin<&mut ThemeActions>, by: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "settingsBack"]
+        fn settings_back(self: Pin<&mut ThemeActions>) -> bool;
+
+        /// A game's page's calls (§3.2, `Page`), each the program's own: a section (tab) chosen, A on an action and Left or
+        /// Right on it, A on a row or a card and Left or Right on a row, the focus, a help entry's action, the question's
+        /// answer, and B.
+        #[qinvokable]
+        #[cxx_name = "pageSection"]
+        fn page_section(self: Pin<&mut ThemeActions>, section: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pageAct"]
+        fn page_act(self: Pin<&mut ThemeActions>, action: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pageStepAction"]
+        fn page_step_action(self: Pin<&mut ThemeActions>, action: i32, by: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pageChoose"]
+        fn page_choose(self: Pin<&mut ThemeActions>, row: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pageStep"]
+        fn page_step(self: Pin<&mut ThemeActions>, row: i32, by: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pageFocus"]
+        fn page_focus(self: Pin<&mut ThemeActions>, action: i32, row: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pageDeclared"]
+        fn page_declared(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pageAnswer"]
+        fn page_answer(self: Pin<&mut ThemeActions>, choice: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pageBack"]
+        fn page_back(self: Pin<&mut ThemeActions>) -> bool;
     }
 }
 
@@ -89,9 +144,34 @@ pub enum Action {
     Focus(String),
 }
 
+/// A change a theme's Settings or game page asks for, each a call of the program's model for that screen.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ScreenAction {
+    SettingsStep(i32, i32),
+    SettingsChoose(i32),
+    SettingsSlide(i32, f64),
+    SettingsSection(i32),
+    SettingsFocus(i32),
+    SettingsShoulder(i32),
+    SettingsBack,
+    PageSection(i32),
+    PageAct(i32),
+    PageStepAction(i32, i32),
+    PageChoose(i32),
+    PageStep(i32, i32),
+    PageFocus(i32, i32),
+    PageDeclared(String),
+    PageAnswer(i32),
+    PageBack,
+}
+
 /// The host's side: takes an action, or declines it, and says which.
 pub trait ActionSink {
     fn act(&mut self, action: &Action) -> bool;
+    /// A screen's call; a host that draws neither screen for a theme declines them all.
+    fn screen(&mut self, _action: &ScreenAction) -> bool {
+        false
+    }
     /// Whether `act` would take the action, asked without acting; a host that declines nothing need not say.
     fn would(&self, _action: &Action) -> bool {
         true
@@ -111,6 +191,74 @@ impl qobject::ThemeActions {
 
     fn take(mut self: Pin<&mut Self>, action: Action) -> bool {
         self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.act(&action))
+    }
+
+    fn call(mut self: Pin<&mut Self>, action: ScreenAction) -> bool {
+        self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.screen(&action))
+    }
+
+    pub fn settings_step(self: Pin<&mut Self>, row: i32, by: i32) -> bool {
+        self.call(ScreenAction::SettingsStep(row, by))
+    }
+
+    pub fn settings_choose(self: Pin<&mut Self>, row: i32) -> bool {
+        self.call(ScreenAction::SettingsChoose(row))
+    }
+
+    pub fn settings_slide(self: Pin<&mut Self>, row: i32, amount: f64) -> bool {
+        self.call(ScreenAction::SettingsSlide(row, amount))
+    }
+
+    pub fn settings_section(self: Pin<&mut Self>, section: i32) -> bool {
+        self.call(ScreenAction::SettingsSection(section))
+    }
+
+    pub fn settings_focus(self: Pin<&mut Self>, row: i32) -> bool {
+        self.call(ScreenAction::SettingsFocus(row))
+    }
+
+    pub fn settings_shoulder(self: Pin<&mut Self>, by: i32) -> bool {
+        self.call(ScreenAction::SettingsShoulder(by))
+    }
+
+    pub fn settings_back(self: Pin<&mut Self>) -> bool {
+        self.call(ScreenAction::SettingsBack)
+    }
+
+    pub fn page_section(self: Pin<&mut Self>, section: i32) -> bool {
+        self.call(ScreenAction::PageSection(section))
+    }
+
+    pub fn page_act(self: Pin<&mut Self>, action: i32) -> bool {
+        self.call(ScreenAction::PageAct(action))
+    }
+
+    pub fn page_step_action(self: Pin<&mut Self>, action: i32, by: i32) -> bool {
+        self.call(ScreenAction::PageStepAction(action, by))
+    }
+
+    pub fn page_choose(self: Pin<&mut Self>, row: i32) -> bool {
+        self.call(ScreenAction::PageChoose(row))
+    }
+
+    pub fn page_step(self: Pin<&mut Self>, row: i32, by: i32) -> bool {
+        self.call(ScreenAction::PageStep(row, by))
+    }
+
+    pub fn page_focus(self: Pin<&mut Self>, action: i32, row: i32) -> bool {
+        self.call(ScreenAction::PageFocus(action, row))
+    }
+
+    pub fn page_declared(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call(ScreenAction::PageDeclared(key.to_string()))
+    }
+
+    pub fn page_answer(self: Pin<&mut Self>, choice: i32) -> bool {
+        self.call(ScreenAction::PageAnswer(choice))
+    }
+
+    pub fn page_back(self: Pin<&mut Self>) -> bool {
+        self.call(ScreenAction::PageBack)
     }
 
     pub fn play(self: Pin<&mut Self>, game: &QString) -> bool {

@@ -596,6 +596,16 @@ impl qobject::SettingsModel {
         self.rows.len() as i32
     }
 
+    /// The screen's view as the rows were last told from it, for a theme's read-only view (EmuSen_Qt.md §3.2, `Settings`).
+    pub fn view(&self) -> &SettingsView {
+        &self.view
+    }
+
+    /// The rows shown, as the list's roles give them.
+    pub fn shown_rows(&self) -> &[settings::Row] {
+        &self.rows
+    }
+
     pub fn line_tone(&self, index: i32) -> i32 {
         usize::try_from(index).ok().and_then(|i| self.line_tones.get(i)).copied().unwrap_or(0)
     }

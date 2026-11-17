@@ -17,6 +17,9 @@ Item {
     required property GameModel grid
     // The item the game's picture is drawn in, for Continue.
     property Item picture
+    // The window's Settings and game page models, for a theme that draws either screen; none, and neither slot is made.
+    property SettingsModel settingsModel: null
+    property GamePageModel pageModel: null
     property alias controllers: feed.controllers
     property alias family: feed.family
     // The machine's battery, -1 for none, and whether it charges, as the window's Battery reads them.
@@ -40,14 +43,16 @@ Item {
     readonly property bool consoles: consolesSlot.themed
     readonly property bool games: gamesSlot.themed
     readonly property bool splash: splashSlot.themed
+    readonly property bool settings: settingsSlot.themed
+    readonly property bool game: gameSlot.themed
     readonly property alias failed: host.failed
     readonly property alias warnings: host.warnings
     readonly property alias host: host
     readonly property alias feed: feed
     // Whether one of the theme's screens holds the focus, so the pad's presses go to the theme's engine.
-    readonly property bool holdsFocus: homeSlot.activeFocus || consolesSlot.activeFocus || gamesSlot.activeFocus
+    readonly property bool holdsFocus: homeSlot.activeFocus || consolesSlot.activeFocus || gamesSlot.activeFocus || settingsSlot.activeFocus || gameSlot.activeFocus
     // Whether one of its screens is to take the keys, for a host made inside a focus scope (the window's Loader).
-    readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus
+    readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus || settingsSlot.focus || gameSlot.focus
     // The Home screen placed, read as a theme's ThemeScreen (its engine's type, so not named here).
     readonly property var homeScreen: homeSlot.placed ? (homeSlot.item as Placing)?.screen.children[0] ?? null : null
     signal played(string path)
@@ -55,6 +60,9 @@ Item {
     signal backed()
     signal focused(string game)
     signal favourite(string game)
+    // Settings and the page fed once their models have finished telling a change, so a press that changes several members feeds once.
+    function feedSettings() { feed.showSettings(themed.settingsModel) }
+    function feedPage() { feed.showPage(themed.pageModel) }
     // What a slot holds: the scope the theme's screen is made in, out of the window's items while not shown, so a forceActiveFocus
     // in it climbs no scope of the window's, the slot's included, and takes no focus from the screen shown (EmuSen_Qt.md §3.5.2).
     component Placing: Item {
@@ -136,6 +144,52 @@ Item {
         function onGenerationChanged() { feed.showBrowse(themed.grid, themed.screens.key, themed.searching, themed.typing, themed.listOpen) }
     }
     Connections {
+        target: host
+        function onGenerationChanged() { themed.feedSettings() }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { themed.feedPage() }
+    }
+    Connections {
+        target: themed.settingsModel
+        function onRowsInserted() { Qt.callLater(themed.feedSettings) }
+        function onRowsRemoved() { Qt.callLater(themed.feedSettings) }
+        function onDataChanged() { Qt.callLater(themed.feedSettings) }
+        function onModelReset() { Qt.callLater(themed.feedSettings) }
+        function onSectionChanged() { Qt.callLater(themed.feedSettings) }
+        function onTrailChanged() { Qt.callLater(themed.feedSettings) }
+        function onFocusedChanged() { Qt.callLater(themed.feedSettings) }
+        function onHelpChanged() { Qt.callLater(themed.feedSettings) }
+        function onSentenceChanged() { Qt.callLater(themed.feedSettings) }
+        function onPaneLinesChanged() { Qt.callLater(themed.feedSettings) }
+        function onPaneMutedChanged() { Qt.callLater(themed.feedSettings) }
+        function onPreviewChanged() { Qt.callLater(themed.feedSettings) }
+        function onCaptionChanged() { Qt.callLater(themed.feedSettings) }
+        function onMeterChanged() { Qt.callLater(themed.feedSettings) }
+        function onSamplesChanged() { Qt.callLater(themed.feedSettings) }
+    }
+    Connections {
+        target: themed.pageModel
+        function onDataChanged() { Qt.callLater(themed.feedPage) }
+        function onModelReset() { Qt.callLater(themed.feedPage) }
+        function onReadyChanged() { Qt.callLater(themed.feedPage) }
+        function onTitleChanged() { Qt.callLater(themed.feedPage) }
+        function onFactsChanged() { Qt.callLater(themed.feedPage) }
+        function onCoverChanged() { Qt.callLater(themed.feedPage) }
+        function onHeroChanged() { Qt.callLater(themed.feedPage) }
+        function onClipChanged() { Qt.callLater(themed.feedPage) }
+        function onSectionChanged() { Qt.callLater(themed.feedPage) }
+        function onShowsChanged() { Qt.callLater(themed.feedPage) }
+        function onWordsChanged() { Qt.callLater(themed.feedPage) }
+        function onPictureChanged() { Qt.callLater(themed.feedPage) }
+        function onActionsChanged() { Qt.callLater(themed.feedPage) }
+        function onHelpChanged() { Qt.callLater(themed.feedPage) }
+        function onCoverArtChanged() { Qt.callLater(themed.feedPage) }
+        function onAskingChanged() { Qt.callLater(themed.feedPage) }
+        function onQuestionTitleChanged() { Qt.callLater(themed.feedPage) }
+    }
+    Connections {
         target: themed.library
         function onLoadingChanged() { feed.showLibrary(themed.library) }
         function onHomeLinesChanged() { feed.showLibrary(themed.library) }
@@ -190,6 +244,24 @@ Item {
         inputs: themed.inputs && !themed.typing && !themed.listOpen
         backdrop: themed.listOpen
         shown: themed.screens.shown === Screens.Grid || themed.listOpen || themed.searching
+    }
+    Slot {
+        id: settingsSlot
+        objectName: "settings." + themed.objectName
+        role: Host.ThemeHost.Settings
+        host: host
+        wanted: themed.settingsModel !== null
+        inputs: themed.inputs
+        shown: themed.screens.shown === Screens.Settings
+    }
+    Slot {
+        id: gameSlot
+        objectName: "game." + themed.objectName
+        role: Host.ThemeHost.Game
+        host: host
+        wanted: themed.pageModel !== null
+        inputs: themed.inputs
+        shown: themed.screens.shown === Screens.Page
     }
     Slot {
         id: splashSlot

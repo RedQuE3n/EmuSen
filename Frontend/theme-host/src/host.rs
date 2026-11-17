@@ -28,6 +28,8 @@ pub mod qobject {
         Consoles,
         Games,
         Splash,
+        Settings,
+        Game,
     }
 
     extern "RustQt" {
@@ -100,6 +102,8 @@ fn screen(role: qobject::Role) -> Screen {
         qobject::Role::Consoles => Screen::Consoles,
         qobject::Role::Games => Screen::Games,
         qobject::Role::Splash => Screen::Splash,
+        qobject::Role::Settings => Screen::Settings,
+        qobject::Role::Game => Screen::Game,
         _ => Screen::Home,
     }
 }

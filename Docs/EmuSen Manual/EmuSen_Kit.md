@@ -4446,3 +4446,24 @@ sizes (20 and above) pass the floor, so the reference's sizes do not move. Tests
 and qt-app's `eclipse_floor`, which uses Eclipse and runs the kit's gate's legibility rule over the Themes tab and Settings'
 six sections at every gate size: 85 words under the floor at 1280 × 720 before, none after.
 
+
+### 7.122 MeasuredWalk: the rows' walk over rows of their own heights (2026-11-16)
+
+`kit-core/src/settings/measured.rs` (`MeasuredWalk`) is `RowWalk`'s grammar (§7.40: Up and Down stop at the ends, Left
+and Right step a stepped row or slide a slider, A chooses and moves a page of choices' mark, the shoulders step the
+sections unless a trail is open) over rows whose heights are given one by one, in a window of a given height with a gap
+between rows. It holds no geometry: the rows' heights are told by the screen that draws them, and the window is the
+screen's. The window moves only when the focus leaves it: up to the focused row when the focus goes above it, and down a
+row at a time until the rows from the first shown to the focused one fit; a row taller than the window is shown from its
+top, and the window never starts so late that space shows below the last row. A window of 0 shows every row from the
+first. `SettingsLayout`'s walk (§7.40) counts whole rows of one height in a fixed geometry and is unchanged beside it.
+
+`kit-qt/src/measured_walk.rs` puts it on Qt as `MeasuredWalk`: it reads a list model's `kind`, `held`, `marked` and a
+slider's `minimum`, `maximum`, `step` and `amount` as `SettingsLayout` reads them (one function, `settings::walk_rows`, for
+both), takes `window` and `gap`, a row's height by `measure(row, height)`, and the pad and the keys by `press` and `key`;
+it gives `current`, `first`, `offset` (the scroll to the first row shown), `marked` and `count`, and raises `stepped`,
+`slid`, `chosen` and `sectionChosen` as `SettingsLayout` does. Decided 2026-11-16 by the tester (R-20261116-19): Settings
+becomes a screen a theme can supply, and its board's rows differ in height. Exported to themes in EmuSen.Theme 1.9.
+Test: kit-core's `measured.rs`, four tests: rows of 84, 120, 84, 160 and 84 with a gap of 10 in a window of 300, the
+window following the focus a row at a time and holding while the focus moves inside it; a row taller than the window; a
+window and a height given late; and the grammar shared with `RowWalk`.

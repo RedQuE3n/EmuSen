@@ -33,3 +33,4 @@ BackdropField 1.4 qml/BackdropField.qml
 Backdrop 1.4 qml/Backdrop.qml
 Glow 1.4 qml/Glow.qml
 GroupGridLayout 1.5 qml/GroupGridLayout.qml
+MeasuredWalk 1.9 qml/MeasuredWalk.qml

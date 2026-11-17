@@ -6,9 +6,9 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.5.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.5.qmldir");
-const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.9.qmltypes");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.9.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.9.qmldir");
+const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.10.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
@@ -61,19 +61,19 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.5.qmltypes"
+        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.9.qmltypes"
     );
     assert_eq!(
         normalized(COMMITTED_QMLDIR),
         normalized(&built("qmldir")),
-        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.5.qmldir"
+        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.9.qmldir"
     );
 }
 
 #[test]
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
-    let api: [(&str, &[&str], &[&str]); 12] = [
+    let api: [(&str, &[&str], &[&str]); 14] = [
         ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead"], &["gamesOf", "search", "firstOf", "artHues", "consolesBy"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
         ("Device", &["controllers", "family", "clock", "shortTime", "battery", "charging", "network", "bigScreen", "form"], &[]),
@@ -97,6 +97,22 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "act",
                 "focus",
                 "enabled",
+                "settingsStep",
+                "settingsChoose",
+                "settingsSlide",
+                "settingsSection",
+                "settingsFocus",
+                "settingsShoulder",
+                "settingsBack",
+                "pageSection",
+                "pageAct",
+                "pageStepAction",
+                "pageChoose",
+                "pageStep",
+                "pageFocus",
+                "pageDeclared",
+                "pageAnswer",
+                "pageBack",
             ],
         ),
         ("Cues", &[], &["scroll", "systembrowse", "select", "back", "favorite", "launch", "quicksysselect"]),
@@ -137,6 +153,40 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             &[],
         ),
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),
+        (
+            "Settings",
+            &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples"],
+            &[],
+        ),
+        (
+            "Page",
+            &[
+                "ready",
+                "key",
+                "title",
+                "facts",
+                "cover",
+                "hero",
+                "clip",
+                "actions",
+                "sections",
+                "section",
+                "shows",
+                "words",
+                "picture",
+                "rows",
+                "coverArt",
+                "focusedAction",
+                "focusedContent",
+                "help",
+                "asking",
+                "questionTitle",
+                "questionSentences",
+                "questionChoices",
+                "questionBack",
+            ],
+            &[],
+        ),
         ("Rows", &["count"], &rows),
         ("HelpEntries", &["actionLines"], &rows),
     ];
@@ -170,6 +220,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "Glow",
             "GroupGridLayout",
             "HelpBar",
+            "MeasuredWalk",
             "Moonrise",
             "NormalizedCanvas",
             "OrbitLayout",
@@ -189,7 +240,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     );
     assert!(COMMITTED_QMLDIR.contains("singleton Tokens 1.0"), "Tokens is a singleton");
     // 1.4's additions keep 1.4, so a theme importing 1.0 or 1.2 finds what it found before (CHANGELOG-theme-api.md).
-    for (name, minor) in [("Backdrop", "1.4"), ("BackdropField", "1.4"), ("Glow", "1.4"), ("CoronaDisc", "1.2"), ("FocusRing", "1.1"), ("Walkable", "1.0")] {
+    for (name, minor) in [("MeasuredWalk", "1.9"), ("Backdrop", "1.4"), ("BackdropField", "1.4"), ("Glow", "1.4"), ("CoronaDisc", "1.2"), ("FocusRing", "1.1"), ("Walkable", "1.0")] {
         assert!(COMMITTED_QMLDIR.lines().any(|l| l == format!("{name} {minor} qml/{name}.qml")), "{name} is {minor}'s");
     }
     assert!(!COMMITTED_QMLDIR.lines().any(|l| l.starts_with("import ")), "the qmldir does not hand a theme the kit");

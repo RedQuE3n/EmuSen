@@ -292,15 +292,15 @@ fn list(words: impl Iterator<Item = String>) -> QStringList {
 
 /// One item of the content as the frame's delegates read it.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct Item {
-    key: String,
-    label: String,
-    value: String,
-    line: String,
-    picture: String,
-    steps: bool,
-    opens: bool,
-    marked: bool,
+pub struct Item {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+    pub line: String,
+    pub picture: String,
+    pub steps: bool,
+    pub opens: bool,
+    pub marked: bool,
 }
 
 fn items(content: &Content) -> Vec<Item> {
@@ -601,6 +601,26 @@ impl qobject::GamePageModel {
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
         self.items.len() as i32
+    }
+
+    /// The content's items as the list's roles give them, for a theme's read-only view (EmuSen_Qt.md §3.2, `Page`).
+    pub fn shown_items(&self) -> &[Item] {
+        &self.items
+    }
+
+    /// The game's file, the key the library's rows and `Library.artHues` take; empty before a game is read.
+    pub fn game_key(&self) -> &str {
+        &self.file.path
+    }
+
+    /// The focus as last told: an action's index or -1, and the content's index.
+    pub fn focused(&self) -> (i32, i32) {
+        (self.focus.0.map_or(-1, |a| a as i32), self.focus.1 as i32)
+    }
+
+    /// The help bar's screen for the focus, which `help` numbers for the program's HelpModel.
+    pub fn help_screen(&self) -> crate::help::Screen {
+        self.page.help(self.focus.0, self.focus.1)
     }
 
     pub fn refresh(mut self: Pin<&mut Self>) {
@@ -1245,18 +1265,18 @@ impl qobject::GamePageModel {
 
 /// One action as the frame's delegate reads it.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct ActionItem {
-    label: String,
-    value: String,
-    button: i32,
-    filled: bool,
-    stepped: bool,
-    step_left: bool,
-    step_right: bool,
+pub struct ActionItem {
+    pub label: String,
+    pub value: String,
+    pub button: i32,
+    pub filled: bool,
+    pub stepped: bool,
+    pub step_left: bool,
+    pub step_right: bool,
 }
 
 /// GamePageModel's actions text read back.
-fn action_items(text: &str) -> Vec<ActionItem> {
+pub fn action_items(text: &str) -> Vec<ActionItem> {
     let all: serde_json::Value = serde_json::from_str(text).unwrap_or_default();
     let item = |a: &serde_json::Value| {
         let text = |k: &str| a[k].as_str().unwrap_or("").to_owned();

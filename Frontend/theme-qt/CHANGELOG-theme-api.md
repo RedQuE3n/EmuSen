@@ -3,6 +3,28 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.9, an addition: Settings and the game page as a theme's screens (2026-11-16)
+
+Decided 2026-11-16 by the tester (R-20261116-19, R-20261116-27): Settings and the game page become screens a theme can
+supply, each with a read-only view; a theme that supplies neither gets the program's own. 1.6 to 1.8 are other pieces'.
+
+- **`theme.json`'s `screens`**: `settings` and `game` (`screens/Settings.qml`, `screens/Game.qml`); **`ThemeScreen.Settings`**
+  and **`ThemeScreen.Game`** (added to `Kind`).
+- **`Settings`** (added): the sections, the section, the trail, the page's key, the rows (with `about`, a switch's
+  `isSwitch` and `switchOn`, a slider's fields and a console row's tile), the focus and the count, the help kind and the
+  focused row's pane, read from the program's `SettingsModel` (EmuSen_Qt.md §3.2).
+- **`Page`** (added): a game's page, its words and pictures, the actions, the tabs, the rows or cards, the focus, the help
+  kind and the question, read from the program's `GamePageModel`.
+- **`Actions`**: `settingsStep`, `settingsChoose`, `settingsSlide`, `settingsSection`, `settingsFocus`, `settingsShoulder`,
+  `settingsBack`, `pageSection`, `pageAct`, `pageStepAction`, `pageChoose`, `pageStep`, `pageFocus`, `pageDeclared`,
+  `pageAnswer`, `pageBack` (added), each one call of the model the program's own screen calls.
+- **`Help`**: the kinds `Settings`, `SettingsPage`, `SettingsConsole`, `SettingsChoices`, `Page`, `PageResume`,
+  `PageResumeSlots`, `PageFavourite`, `PageLoad`, `PageView`, `PageValue`, `PageChange`, `PageChoose`, `PageNone`,
+  `PageEdit`, `PageCoverArt` (added), `help.rs`'s bars for those screens.
+- **`MeasuredWalk`** (the kit's, by name; 1.9 in the qmldir): the rows' walk over rows of their own heights
+  (`EmuSen_Kit.md` §7.122).
+- The module is 1.9 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.9.*`.
+
 ## 1.5, an addition: a console's played games (2026-11-15)
 
 Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played games is added to what a theme may read.

@@ -64,6 +64,7 @@ pub mod settings_controllers;
 pub mod settings_model;
 pub mod settings_saves;
 pub mod settings_shaders;
+pub mod settings_shown;
 pub mod settings_source;
 pub mod themes;
 pub mod themes_model;

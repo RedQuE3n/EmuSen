@@ -8,12 +8,16 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QList, QString, QStringList};
 use emusen_qt_models::game_model::qobject::GameModel;
+use emusen_qt_models::game_page_model::{action_items, qobject::GamePageModel};
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
+use emusen_qt_models::settings_model::qobject::SettingsModel;
 use emusen_qt_models::{help, screens, themes, words};
-use emusen_theme_qt::actions::{Action, ActionSink};
+use emusen_theme_host::host::qobject::Role;
+use emusen_theme_qt::actions::{Action, ActionSink, ScreenAction};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::host;
+use emusen_theme_qt::page::{action_rows, content_rows, PageFacts};
 use emusen_theme_qt::session::SessionFacts;
 use emusen_theme_qt::view;
 use std::cell::Cell;
@@ -82,6 +86,16 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "showBrowse"]
         unsafe fn show_browse(self: Pin<&mut ThemeFeed>, games: *mut QObject, section: &QString, searching: bool, typing: bool, list_open: bool);
+
+        /// Settings as the window's SettingsModel holds it, for a theme that draws Settings (EmuSen_Qt.md §3.2, `Settings`).
+        #[qinvokable]
+        #[cxx_name = "showSettings"]
+        unsafe fn show_settings(self: Pin<&mut ThemeFeed>, settings: *mut QObject);
+
+        /// The game's page as the window's GamePageModel holds it, for a theme that draws the page (§3.2, `Page`).
+        #[qinvokable]
+        #[cxx_name = "showPage"]
+        unsafe fn show_page(self: Pin<&mut ThemeFeed>, page: *mut QObject);
 
         /// The host's engine as it is now: its `Actions` carried by this feed, and everything shown so far shown again.
         #[qinvokable]
@@ -169,6 +183,9 @@ struct Section {
 pub struct ThemeFeedRust {
     host: *mut qobject::ThemeHost,
     library: *const LibraryModel,
+    /// The window's Settings and page models, which a theme's screens read and act through.
+    settings: *mut SettingsModel,
+    page: *mut GamePageModel,
     session: Option<Shown>,
     section: Option<Section>,
     controllers: i32,
@@ -189,6 +206,8 @@ impl Default for ThemeFeedRust {
         ThemeFeedRust {
             host: std::ptr::null_mut(),
             library: std::ptr::null(),
+            settings: std::ptr::null_mut(),
+            page: std::ptr::null_mut(),
             session: None,
             section: None,
             controllers: 0,
@@ -313,6 +332,35 @@ impl ActionSink for Sink {
     fn would(&self, action: &Action) -> bool {
         !self.feed.get().is_null() && carried(action, None, &[]).is_some()
     }
+
+    fn screen(&mut self, action: &ScreenAction) -> bool {
+        // Safety: as `act`; the models are the window's, alive as long as the feed, and pinned where QML made them.
+        let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
+        let settings = unsafe { feed.settings.as_mut() }.map(|m| unsafe { Pin::new_unchecked(m) });
+        let page = unsafe { feed.page.as_mut() }.map(|m| unsafe { Pin::new_unchecked(m) });
+        match (action, settings, page) {
+            (ScreenAction::SettingsStep(row, by), Some(s), _) => s.step(*row, *by),
+            (ScreenAction::SettingsChoose(row), Some(s), _) => s.choose(*row),
+            (ScreenAction::SettingsSlide(row, amount), Some(s), _) => s.slide(*row, *amount),
+            (ScreenAction::SettingsSection(section), Some(s), _) => s.set_section(*section),
+            (ScreenAction::SettingsFocus(row), Some(s), _) => s.set_focused(*row),
+            (ScreenAction::SettingsShoulder(by), Some(s), _) => return s.shoulder(*by),
+            (ScreenAction::SettingsBack, Some(s), _) => s.back(),
+            (ScreenAction::PageSection(section), _, Some(p)) => p.set_section(*section),
+            (ScreenAction::PageAct(action), _, Some(p)) => p.act(*action),
+            (ScreenAction::PageStepAction(action, by), _, Some(p)) => return p.step_action(*action, *by),
+            (ScreenAction::PageChoose(row), _, Some(p)) => p.choose(*row),
+            (ScreenAction::PageStep(row, by), _, Some(p)) => p.step(*row, *by),
+            (ScreenAction::PageFocus(action, row), _, Some(p)) => p.focus(*action, *row),
+            (ScreenAction::PageDeclared(key), _, Some(p)) => p.declared(&QString::from(key.as_str())),
+            (ScreenAction::PageAnswer(choice), _, Some(p)) => p.answer(*choice),
+            (ScreenAction::PageBack, _, Some(p)) => {
+                p.back();
+            }
+            _ => return false,
+        }
+        true
+    }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeFeed {
@@ -423,6 +471,75 @@ impl qobject::ThemeFeed {
         }
     }
 
+    /// # Safety
+    /// `settings` is the window's `SettingsModel`, alive as long as the feed.
+    pub unsafe fn show_settings(mut self: Pin<&mut Self>, settings: *mut cxx_qt::QObject) {
+        self.as_mut().rust_mut().settings = unsafe { model::<SettingsModel>(settings) } as *mut SettingsModel;
+        self.feed_settings();
+    }
+
+    /// Whether the host's theme draws a role, so a view no screen reads is never made in its engine.
+    fn draws(&self, role: Role) -> bool {
+        // Safety: the host is the window's, alive as long as the feed it is handed to.
+        unsafe { self.host.as_ref() }.is_some_and(|h| h.provides(role))
+    }
+
+    fn feed_settings(&self) {
+        // Safety: the model is the window's, alive as long as the feed.
+        let Some(settings) = (unsafe { self.settings.as_ref() }) else { return };
+        if !self.draws(Role::Settings) {
+            return;
+        }
+        let facts = emusen_theme_qt::settings::facts_of(settings.view(), settings.shown_rows(), *settings.focused());
+        if let Some(view) = self.engine().and_then(host::settings) {
+            view.show(&facts);
+        }
+    }
+
+    /// # Safety
+    /// `page` is the window's `GamePageModel`, alive as long as the feed.
+    pub unsafe fn show_page(mut self: Pin<&mut Self>, page: *mut cxx_qt::QObject) {
+        self.as_mut().rust_mut().page = unsafe { model::<GamePageModel>(page) } as *mut GamePageModel;
+        self.feed_page();
+    }
+
+    fn feed_page(&self) {
+        // Safety: the model is the window's, alive as long as the feed.
+        let Some(page) = (unsafe { self.page.as_ref() }) else { return };
+        if !self.draws(Role::Game) {
+            return;
+        }
+        let text = |t: &QString| t.to_string();
+        let words = |l: &QStringList| QList::<QString>::from(l).iter().map(|w| w.to_string()).collect::<Vec<_>>();
+        let facts = PageFacts {
+            ready: *page.ready(),
+            key: page.game_key().to_owned(),
+            title: text(page.title()),
+            facts: text(page.facts()),
+            cover: text(page.cover()),
+            hero: text(page.hero()),
+            clip: text(page.clip()),
+            actions: action_rows(&action_items(&page.actions().to_string())),
+            sections: words(page.sections()),
+            section: *page.section(),
+            shows: *page.shows(),
+            words: text(page.words()),
+            picture: text(page.picture()),
+            rows: content_rows(page.shown_items()),
+            cover_art: *page.cover_art(),
+            focused: page.focused(),
+            help: emusen_theme_qt::help::kind_of(page.help_screen()).map_or(-1, |k| k.repr),
+            asking: *page.asking(),
+            question_title: text(page.question_title()),
+            question_sentences: words(page.question_sentences()),
+            question_choices: words(page.question_choices()),
+            question_back: *page.question_back(),
+        };
+        if let Some(view) = self.engine().and_then(host::page) {
+            view.show(&facts);
+        }
+    }
+
     fn feed_device(&self) {
         let facts = DeviceFacts { controllers: self.controllers, family: self.family, clock: self.clock.to_string(),
             short_time: self.short_time.to_string(), battery: self.battery, charging: self.charging,
@@ -478,6 +595,8 @@ impl qobject::ThemeFeed {
         self.feed_library();
         self.feed_session();
         self.feed_browse();
+        self.feed_settings();
+        self.feed_page();
     }
 
     pub fn push(self: Pin<&mut Self>, button: i32, down: bool) {

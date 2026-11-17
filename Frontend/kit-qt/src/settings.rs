@@ -222,6 +222,26 @@ fn flag(text: &str) -> bool {
     matches!(text.trim(), "true" | "1")
 }
 
+/// A model's rows as the walk reads them: its `kind`, `held` and `marked` roles and a slider's `minimum`, `maximum`, `step`
+/// and `amount`; `SettingsLayout` and `MeasuredWalk` read the same.
+pub(crate) fn walk_rows(model: Option<&qobject::QAbstractItemModel>) -> Vec<Row> {
+    let role = |name: &str| crate::item_model::role_texts(model, &QString::from(name));
+    let (kinds, held, marked) = (role("kind"), role("held"), role("marked"));
+    let (minimum, maximum, step, amount) = (role("minimum"), role("maximum"), role("step"), role("amount"));
+    let real = |list: &[String], i: usize, or: f64| list.get(i).and_then(|t| t.trim().parse::<f64>().ok()).unwrap_or(or);
+    kinds
+        .iter()
+        .enumerate()
+        .map(|(i, kind)| Row {
+            kind: RowKind::from_index(number(kind)),
+            held: held.get(i).is_some_and(|t| flag(t)),
+            marked: marked.get(i).is_some_and(|t| flag(t)),
+            range: SliderRange { minimum: real(&minimum, i, 0.0), maximum: real(&maximum, i, 1.0), step: real(&step, i, 0.0) },
+            amount: real(&amount, i, 0.0),
+        })
+        .collect()
+}
+
 impl qobject::SettingsLayout {
     pub fn read(self: Pin<&mut Self>) {
         self.take_rows(true);
@@ -271,22 +291,8 @@ impl qobject::SettingsLayout {
     fn take_rows(mut self: Pin<&mut Self>, keep: bool) {
         // SAFETY: QML hands the pointer of a live model, cleared by the engine when the model is destroyed.
         let model = unsafe { self.model.as_ref() };
-        let role = |name: &str| crate::item_model::role_texts(model, &QString::from(name));
-        let (kinds, held, marked) = (role("kind"), role("held"), role("marked"));
-        let (minimum, maximum, step, amount) = (role("minimum"), role("maximum"), role("step"), role("amount"));
-        let real = |list: &[String], i: usize, or: f64| list.get(i).and_then(|t| t.trim().parse::<f64>().ok()).unwrap_or(or);
-        self.as_mut().rust_mut().sentences = role("sentence");
-        let rows = kinds
-            .iter()
-            .enumerate()
-            .map(|(i, kind)| Row {
-                kind: RowKind::from_index(number(kind)),
-                held: held.get(i).is_some_and(|t| flag(t)),
-                marked: marked.get(i).is_some_and(|t| flag(t)),
-                range: SliderRange { minimum: real(&minimum, i, 0.0), maximum: real(&maximum, i, 1.0), step: real(&step, i, 0.0) },
-                amount: real(&amount, i, 0.0),
-            })
-            .collect();
+        self.as_mut().rust_mut().sentences = crate::item_model::role_texts(model, &QString::from("sentence"));
+        let rows = walk_rows(model);
         self.as_mut().rust_mut().walk.set_rows(rows, keep);
         self.sync();
     }

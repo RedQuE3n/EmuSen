@@ -12,6 +12,8 @@ GamePage {
     // The game in hand, whose page is shown.
     required property string inHand
     required property bool splashShown
+    // The chosen theme draws the page: this one keeps its model and its answers to the model, and is neither drawn nor reached.
+    property bool themed: false
     // The recorded ScreenScraper a test names for the scraper; empty for ScreenScraper itself.
     property alias scraperTest: pageModel.scraperTest
     // A game played, from its start or from a saved state's file; Open Folder; what failed.
@@ -19,7 +21,7 @@ GamePage {
     signal playFrom(string path, string state)
     signal openFolder(string path)
     signal said(string words)
-    visible: pageScreen.screens.shown === Screens.Page
+    visible: pageScreen.screens.shown === Screens.Page && !pageScreen.themed
     page: pageModel
     inputs: visible && !pageScreen.splashShown
     onBacked: pageScreen.screens.back()

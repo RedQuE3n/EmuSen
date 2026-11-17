@@ -333,9 +333,9 @@ pub(crate) fn wrapped(at: usize, by: i32, n: usize) -> usize {
 }
 
 /// A key's row resolved: its model, its row of Galaxia's, and the consoles it is set for (none: the model's own key).
-struct Keyed<'a> {
+pub(crate) struct Keyed<'a> {
     model: &'a str,
-    row: &'a Value,
+    pub(crate) row: &'a Value,
     consoles: Vec<String>,
 }
 
@@ -576,7 +576,7 @@ impl SettingsView {
     }
 
     /// Whether a page of the card manager is shown, whose rows `settings_saves.rs` resolves.
-    fn on_saves(&self) -> bool {
+    pub(crate) fn on_saves(&self) -> bool {
         matches!(self.page(), Some(Page::Saves(..) | Page::Save(..) | Page::Delete(..)))
     }
 
@@ -603,7 +603,7 @@ impl SettingsView {
         out
     }
 
-    fn keyed(&self, entry: &Value) -> Option<Keyed<'_>> {
+    pub(crate) fn keyed(&self, entry: &Value) -> Option<Keyed<'_>> {
         let reference = entry["row"].as_str()?;
         let (model, key) = reference.split_once(' ')?;
         let (model_name, list) = self.read.rows.as_object()?.iter().find(|(m, _)| m.as_str() == model)?;
@@ -618,7 +618,7 @@ impl SettingsView {
 
     /// The stored texts of a key's row: one, or one per console it is set for, a blank or a console without one at the
     /// default.
-    fn stored(&self, keyed: &Keyed<'_>) -> Vec<String> {
+    pub(crate) fn stored(&self, keyed: &Keyed<'_>) -> Vec<String> {
         let key = text_of(&keyed.row["key"]);
         let default = text_of(&keyed.row["default"]);
         if keyed.consoles.is_empty() {
@@ -1190,7 +1190,7 @@ fn said(line: &str, names: &[(&str, &str)]) -> String {
 
 impl SettingsView {
     /// The games a console's systems hold, as the library counted them.
-    fn games_of(&self, console: &Console) -> usize {
+    pub(crate) fn games_of(&self, console: &Console) -> usize {
         console.systems.iter().map(|s| self.facts["systems"][s].as_u64().unwrap_or(0) as usize).sum()
     }
 

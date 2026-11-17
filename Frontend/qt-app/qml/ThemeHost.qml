@@ -114,12 +114,15 @@ Item {
         now: themed.clock.now
         settingsShown: settingsSlot.shown
         pageShown: gameSlot.shown
+        shownSection: themed.screens.section
         onPlayed: (game) => themed.played(game)
         onResumed: themed.resumed()
         onPlaceChosen: (index) => themed.screens.place(index)
         onOpened: (key) => themed.screens.open(key)
+        onSectionOpened: (key) => themed.screens.openSection(key)
         onBacked: themed.backed()
         onActed: (key) => themed.screens.act(key)
+        onListed: (key) => themed.grid.focused = themed.grid.listAct(key)
         onFocused: (game) => themed.focused(game)
         onFavourite: (game) => themed.favourite(game)
         onSelected: (index) => themed.library.select(index)

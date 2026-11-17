@@ -37,6 +37,8 @@ pub mod qobject {
         #[qproperty(QString, recent_entry, cxx_name = "recentEntry", READ, CONSTANT)]
         #[qproperty(QStringList, fact_labels, cxx_name = "factLabels", READ, CONSTANT)]
         #[qproperty(QStringList, console_shows, cxx_name = "consoleShows", READ, CONSTANT)]
+        #[qproperty(QStringList, game_fact_labels, cxx_name = "gameFactLabels", READ, CONSTANT)]
+        #[qproperty(QString, crumb, READ, CONSTANT)]
         #[qproperty(QString, no_games_line, cxx_name = "noGamesLine", READ, CONSTANT)]
         #[qproperty(QStringList, console_sorts, cxx_name = "consoleSorts", READ, CONSTANT)]
         /// The time the timed phrases are said against, in seconds since 1970; 0, the default, is the wall clock. The
@@ -136,6 +138,8 @@ pub struct ThemeWordsRust {
     recent_entry: QString,
     fact_labels: cxx_qt_lib::QStringList,
     console_shows: cxx_qt_lib::QStringList,
+    game_fact_labels: cxx_qt_lib::QStringList,
+    crumb: QString,
     no_games_line: QString,
     console_sorts: cxx_qt_lib::QStringList,
     now: f64,
@@ -164,6 +168,8 @@ impl Default for ThemeWordsRust {
             recent_entry: QString::from(words::RECENT_ENTRY),
             fact_labels: string_list(&words::FACT_LABELS),
             console_shows: string_list(&words::CONSOLE_SHOWS),
+            game_fact_labels: string_list(&words::GAME_FACT_LABELS),
+            crumb: QString::from(words::CRUMB),
             no_games_line: QString::from(words::NO_GAMES_LINE),
             console_sorts: string_list(&words::CONSOLE_SORTS),
             now: 0.0,

@@ -58,6 +58,8 @@ pub mod qobject {
         #[qobject]
         #[qml_element = "Help"]
         #[qml_singleton]
+        /// The shoulders' Sections entry alone, for a nav's own help (1.8): the walk steps the sections, so it declares nothing.
+        #[qproperty(*mut ThemeHelpEntries, sections, READ, CONSTANT)]
         type ThemeHelp = super::ThemeHelpRust;
 
         #[qobject]
@@ -71,7 +73,7 @@ pub mod qobject {
     extern "RustQt" {
         #[qinvokable]
         fn entries(self: &ThemeHelp, kind: HelpKind) -> *mut ThemeHelpEntries;
-        /// The kind's list with the entries `group`, `back` and `accept` ask for (EmuSen_Qt.md §3.2, `Help`).
+        /// The kind's list with the entries `group`, `back`, `accept`, `actions`, the names and `letters` ask for (EmuSen_Qt.md §3.2, `Help`).
         #[qinvokable]
         #[cxx_name = "entries"]
         fn entries_with(self: &ThemeHelp, kind: HelpKind, flags: &QMap_QString_QVariant) -> *mut ThemeHelpEntries;
@@ -157,56 +159,64 @@ pub fn kind_of(screen: Screen) -> Option<HelpKind> {
     KINDS.into_iter().skip_while(|k| *k != HelpKind::Settings).find(|k| screen_of(*k) == screen)
 }
 
-/// What a list may differ by, a kind's 72 lists: group, back, accept, actions kept, and `Names` (EmuSen_Qt.md §3.2).
-pub const FLAGS: [(Option<Entry>, bool, bool, bool, Names); 72] = {
+/// What a list may differ by, a kind's 192 lists: group, back, accept, actions kept, `Names` and letters (EmuSen_Qt.md §3.2).
+pub const FLAGS: [(Option<Entry>, bool, bool, bool, Names, bool); 192] = {
     const G: [Option<Entry>; 3] = [None, Some(help::GROUP), Some(help::MAKER)];
-    const N: [Names; 3] = [Names::Own, Names::Card, Names::Options];
-    let mut flags = [(None, false, true, true, Names::Own); 72];
+    const N: [Names; 4] = [Names::Own, Names::Card, Names::Options, Names::Games];
+    let mut flags = [(None, false, true, true, Names::Own, false); 192];
     let mut f = 0;
-    while f < 72 {
-        flags[f] = (G[f % 3], (f / 3) % 2 == 1, (f / 6) % 2 == 0, (f / 12) % 2 == 0, N[f / 24]);
+    while f < 192 {
+        flags[f] = (G[f % 3], (f / 3) % 2 == 1, (f / 6) % 2 == 0, (f / 12) % 2 == 0, N[(f / 24) % 4], f >= 96);
         f += 1;
     }
     flags
 };
 
-/// How a list's entries are named: the screen's own, Eclipse Home's, or Eclipse's Choose a console's Sort and Options.
+/// How a list's entries are named: the screen's own, Eclipse Home's, Choose a console's Sort and Options, or the games board's foot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Names {
     Own,
     Card,
     Options,
+    Games,
 }
 
-/// Seventy-two lists for each kind, one for each of `FLAGS`, the singleton's children.
+/// A hundred and ninety-two lists for each kind, one for each of `FLAGS`, the singleton's children.
 pub struct ThemeHelpRust {
-    lists: [[*mut qobject::ThemeHelpEntries; 72]; KINDS.len()],
+    lists: [[*mut qobject::ThemeHelpEntries; 192]; KINDS.len()],
+    sections: *mut qobject::ThemeHelpEntries,
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [[std::ptr::null_mut(); 72]; KINDS.len()] }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 192]; KINDS.len()], sections: std::ptr::null_mut() }
     }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeHelp {
     fn initialize(mut self: Pin<&mut Self>) {
         for (i, kind) in KINDS.into_iter().enumerate() {
-            for (f, (group, back, accept, actions, names)) in FLAGS.into_iter().enumerate() {
+            for (f, (group, back, accept, actions, names, letters)) in FLAGS.into_iter().enumerate() {
                 let list = ffi::new_help_entries(self.as_mut().upcast_pin());
                 // Safety: the list was just made, a child of this singleton.
                 if let Some(entries) = unsafe { list.as_mut() } {
-                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept, actions, names);
+                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept, actions, names, letters);
                 }
                 self.as_mut().rust_mut().lists[i][f] = list;
             }
         }
+        let sections = ffi::new_help_entries(self.as_mut().upcast_pin());
+        // Safety: as above.
+        if let Some(entries) = unsafe { sections.as_mut() } {
+            unsafe { Pin::new_unchecked(entries) }.show_entries(vec![help::SECTIONS]);
+        }
+        self.as_mut().rust_mut().sections = sections;
     }
 }
 
 impl qobject::ThemeHelp {
     pub fn entries(&self, kind: HelpKind) -> *mut qobject::ThemeHelpEntries {
-        self.list(kind, None, false, true, true, Names::Own)
+        self.list(kind, None, false, true, true, Names::Own, false)
     }
 
     pub fn entries_with(&self, kind: HelpKind, flags: &QMap<QMapPair_QString_QVariant>) -> *mut qobject::ThemeHelpEntries {
@@ -216,15 +226,18 @@ impl qobject::ThemeHelp {
             Names::Card
         } else if flag("options", false) {
             Names::Options
+        } else if flag("games", false) {
+            Names::Games
         } else {
             Names::Own
         };
-        self.list(kind, group, flag("back", false), flag("accept", true), flag("actions", true), names)
+        self.list(kind, group, flag("back", false), flag("accept", true), flag("actions", true), names, flag("letters", false))
     }
 
     /// A kind's list with the entries asked for added.
-    pub fn list(&self, kind: HelpKind, group: Option<Entry>, back: bool, accept: bool, actions: bool, names: Names) -> *mut qobject::ThemeHelpEntries {
-        let f = FLAGS.iter().position(|x| *x == (group, back, accept, actions, names)).unwrap_or(0);
+    #[allow(clippy::too_many_arguments)]
+    pub fn list(&self, kind: HelpKind, group: Option<Entry>, back: bool, accept: bool, actions: bool, names: Names, letters: bool) -> *mut qobject::ThemeHelpEntries {
+        let f = FLAGS.iter().position(|x| *x == (group, back, accept, actions, names, letters)).unwrap_or(0);
         KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.lists[i][f])
     }
 }
@@ -250,7 +263,8 @@ impl Default for ThemeHelpEntriesRust {
 
 impl qobject::ThemeHelpEntries {
     /// The screen whose entries the list holds, with the added entries asked for, set once when it is made.
-    fn show(mut self: Pin<&mut Self>, screen: Screen, group: Option<Entry>, back: bool, accept: bool, actions: bool, names: Names) {
+    #[allow(clippy::too_many_arguments)]
+    fn show(mut self: Pin<&mut Self>, screen: Screen, group: Option<Entry>, back: bool, accept: bool, actions: bool, names: Names, letters: bool) {
         self.as_mut().rust_mut().screen = screen;
         self.as_mut().rust_mut().accept = accept;
         let list = entries_grouped(screen, group, back);
@@ -258,14 +272,21 @@ impl qobject::ThemeHelpEntries {
         let (list, lines) = match names {
             Names::Own => (list, action_lines(screen)),
             Names::Card => (help::card_named(list), action_lines(screen)),
+            Names::Games => (help::games_named(list), action_lines(screen)),
             Names::Options => {
                 let named = help::options_named(list);
                 let lines = help::lines_of(screen, &named);
                 (named, lines)
             }
         };
+        self.as_mut().rust_mut().list = help::with_letters(screen, list, letters);
+        self.as_mut().rust_mut().action_lines = QString::from((lines + &help::letter_lines(screen, letters)).as_str());
+    }
+
+    /// A list of the entries given, declaring no action, set once when it is made.
+    fn show_entries(mut self: Pin<&mut Self>, list: Vec<Entry>) {
         self.as_mut().rust_mut().list = list;
-        self.as_mut().rust_mut().action_lines = QString::from(lines.as_str());
+        self.as_mut().rust_mut().action_lines = QString::default();
     }
 
     /// The help bar's screen, for the host's tests.

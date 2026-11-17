@@ -16,7 +16,7 @@
 # pixels, its Gaussian at the scene's pixels; a focus ring's gap, thickness, glow blur and spread, band radius, glow
 # colour, gap colour and ring colour (Main:113, the focused tile's box-shadow).
 # colour: a kit token by name, or the board's own as #AARRGGBB. status: built, or nothing (the program has nothing for it,
-# so it is not drawn), or ruled (the section tabs, another piece's by R-20261115-7: nothing drawn here).
+# so it is not drawn).
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 backdropGround	17	the ground	the kit's Backdrop, its ground: the board's own colour	Rectangle	0	0	right:0	1200	-	#FF0A1024	-	built	-
 backdropField.0	19	a colour field: #1FC9A8, an ellipse, blurred 90 px at 0.85	the kit's BackdropField: the board's saturation, lightness and alpha with the shown game's hue (Library.artHues, qt-models/src/art_hues.rs), spread by the board's offsets; the console's hue for art with none	-	1060	-140	900	760	-	opacity:0.85	blur:90	built	field 0 -1 #1FC9A8 0
@@ -27,11 +27,18 @@ backdropField.4	23	a colour field: #D9C8FF, a bar turned -14 degrees, blurred 18
 disc	25	the eclipse's disc, its rim and two glows	the kit's CoronaDisc (kit-qt/qml/CoronaDisc.qml), its corona the shown game's first hue at the look's rim's saturation and lightness	CoronaDisc	-900	-450	2100	2100	-	Tokens.surface	-	built	-
 mark	30	the crescent mark	Marks.crescent (theme-qt/src/marks.rs:48, qt-models/src/marks.rs:25)	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
 wordmark	31	"EmuSen"	Words.title, "EMUSEN" (qt-models/src/words.rs:5)	Text	after:mark:14	mid:80	-	-	-	Tokens.text	24	built	600 0.02 none
-nav.home	33	"Home", the section shown	nothing: Home is no section the program steps to	-	-	-	-	-	-	-	-	ruled	-
-nav.library	34	"Library"	nothing: the program's Library is a tool (qt-models/src/words.rs:39), not a section	-	-	-	-	-	-	-	-	ruled	-
-nav.consoles	35	"Consoles"	nothing	-	-	-	-	-	-	-	-	ruled	-
-nav.collections	36	"Collections"	nothing (Library.collections is empty, theme-qt §3.2)	-	-	-	-	-	-	-	-	ruled	-
-nav.tools	37	"Tools"	nothing	-	-	-	-	-	-	-	-	ruled	-
+nav	33	the sections, 64 px after the brand, 44 px apart	Library.sections, the program's sections from their one owner (qt-models/src/screens.rs SECTIONS), Eclipse's Nav part	-	after:wordmark:64	mid:80	-	-	-	-	-	built	-
+nav.home	34	"Home", the section shown, its words 10 px over a 3 px underline	Library.sections' row; LB, RB and a tap open it through Actions.openSection: Home (qt-models/src/screens.rs SECTIONS)	-	in:nav:0	mid:80	-	-	-	-	-	built	-
+navWords.home	34	"Home", white and semi-bold	the row's name, words::HOME_SECTION	Text	in:nav.home:0	top:nav.home:0	-	-	-	#FFFFFFFF	24	built	600 0 none
+navUnderline.home	34	the 3 px underline in the corona's colour	none: the accent token	Rectangle	in:nav.home:0	foot:nav.home	fit:nav.home:0	3	-	Tokens.accent	-	built	-
+nav.library	35	"Library", a section	Library.sections' row; LB, RB and a tap open it through Actions.openSection: the games view at every game (Shown::Grid at library::ALL)	-	after:nav.home:44	mid:80	-	-	-	-	-	built	-
+navWords.library	35	"Library", muted	the row's name, words::LIBRARY_SECTION	Text	in:nav.library:0	top:nav.library:0	-	-	-	Tokens.muted	24	built	400 0 none
+nav.consoles	36	"Consoles", a section	Library.sections' row; LB, RB and a tap open it through Actions.openSection: Choose a console (Shown::Consoles)	-	after:nav.library:44	mid:80	-	-	-	-	-	built	-
+navWords.consoles	36	"Consoles", muted	the row's name, words::CONSOLES_SECTION	Text	in:nav.consoles:0	top:nav.consoles:0	-	-	-	Tokens.muted	24	built	400 0 none
+nav.collections	37	"Collections", a section	Library.sections' row; LB, RB and a tap open it through Actions.openSection: the List card's Filter page, which lists the collections, over every game (Shown::List)	-	after:nav.consoles:44	mid:80	-	-	-	-	-	built	-
+navWords.collections	37	"Collections", muted	the row's name, words::COLLECTIONS_SECTION	Text	in:nav.collections:0	top:nav.collections:0	-	-	-	Tokens.muted	24	built	400 0 none
+nav.tools	38	"Tools", a section	Library.sections' row; LB, RB and a tap open it through Actions.openSection: the Home card's Tools page (Shown::HomeCard at home_card::TOOLS)	-	after:nav.collections:44	mid:80	-	-	-	-	-	built	-
+navWords.tools	38	"Tools", muted	the row's name, words::TOOLS_SECTION	Text	in:nav.tools:0	top:nav.tools:0	-	-	-	Tokens.muted	24	built	400 0 none
 status	40	the status glass	none: the board's own colour	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
 search	41	the search button	Actions.search() (theme-qt/src/actions.rs), named by Words.search	Walkable	in:status:22	mid:80	44	44	-	-	-	built	-
 searchIcon	42	the magnifier	the theme's own drawing	Item	in:search:10	mid:80	24	24	-	Tokens.text	-	built	-
@@ -81,4 +88,7 @@ help	99	the help bar's entries	Help.entries(Help.Continue) (qt-models/src/help.r
 ownGlyph-Resume	94	the help line's A, a filled disc of 34	Eclipse's Glyph, lead	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
 ownGlyph-Options	95	the help line's X, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Home card	97	"MENU" in a 2 px capsule, 34 inside, the kit's name for Start in the pad's family	Eclipse's Glyph, named	-	-	mid:help	-	38	-	-	-	built	word 15 400
-helpGroup	105	"LB RB Sections"	nothing: Home steps no sections	-	-	-	-	-	-	-	-	ruled	-
+helpSections	99	the glass at the help line's right, 46 tall, 18 px in, rgba(7, 8, 15, 0.78)	none: the board's own colour (Ink.glass), Eclipse's SectionsHelp part	SectionsHelp	-	mid:help	right:96	46	23	#C707080F	-	built	-
+ownGlyph-Sections	100	LB in a 2 px box, 30 px inside, corner 8, padding 10	Help.sections (qt-models/src/help.rs SECTIONS), the kit's named glyph through Eclipse's Glyph part	-	in:helpSections:18	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Sections	101	RB, the pair's second, in the same box	the kit's HelpBar's pair through Eclipse's Glyph part	-	after:ownGlyph-Sections:10	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
+helpSectionsWords	102	"Sections"	the entry's label, help.rs SECTIONS	Text	after:ownGlyph2-Sections:10	mid:helpSections	inright:helpSections:18	-	-	#FFD8DBE6	21	built	400 0 none

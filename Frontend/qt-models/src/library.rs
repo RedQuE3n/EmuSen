@@ -100,6 +100,51 @@ pub trait LibrarySource: Send + Sync {
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
         Ok(Vec::new())
     }
+    /// How many saved states `game` has, slots and the automatic one, where Galaxia's save paths put them; a source with no
+    /// saves has none.
+    fn state_count(&self, _game: &GameFile) -> Result<usize, String> {
+        Ok(0)
+    }
+}
+
+/// The facts a games view draws beside its focused game (EmuSen_Qt.md §3.4.10), each empty or 0 where the program holds none.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GameFacts {
+    /// The game's file, whose facts these are.
+    pub path: String,
+    /// Its year of release, from the scraper's release date, which a refresh reads only for the sorts that need it.
+    pub year: String,
+    /// The scraper's genre, as it keeps it.
+    pub genre: String,
+    /// The scraper's players, in words: "1 to 2 players" (`words::players`).
+    pub players: String,
+    /// The scraper's description.
+    pub description: String,
+    /// Its time played, games.db's, in words: "3 h 20 min" (`words::time_played`); empty under a minute.
+    pub time_played: String,
+    /// How many saved states it has.
+    pub states: usize,
+}
+
+/// A game's seconds played as the catalog last read them; 0 for none.
+pub fn seconds_played(catalog: &Catalog, path: &str) -> i64 {
+    catalog.plays.iter().find(|(p, _)| p == path).map_or(0, |(_, n)| n.seconds)
+}
+
+/// The facts of one game: its metadata by one scraper answer, its `seconds` played, and its states counted where they
+/// are saved. Run off the GUI thread.
+pub fn facts_of(source: &dyn LibrarySource, game: &GameFile, seconds: i64) -> Result<GameFacts, String> {
+    let metadata = source.metadata(std::slice::from_ref(game))?.into_iter().next().map(|(_, m)| m).unwrap_or_default();
+    let field = |key: &str| metadata.get(key).cloned().unwrap_or_default();
+    Ok(GameFacts {
+        path: game.path.clone(),
+        year: crate::esde_shelves::release_date(&metadata).and_then(|d| crate::esde_shelves::year_of(&d)).unwrap_or_default(),
+        genre: field("genre"),
+        players: words::players(&field("players")),
+        description: field("description"),
+        time_played: words::time_played(seconds).unwrap_or_default(),
+        states: source.state_count(game)?,
+    })
 }
 
 /// An engine as a tile shows it: its name from its own info, and whether it is a hosted libretro core.
@@ -191,6 +236,20 @@ impl Keyed for LibraryRow {
 
 /// The places, their keys and their names, in order (EmuSen_Interface.md §24).
 pub const PLACES: [(&str, &str); 3] = [("all", "All games"), (FAVOURITES, "Favourites"), (RECENT, "Recently played")];
+
+/// A console's games, as `section_kind` names the list.
+pub const CONSOLE_KIND: &str = "console";
+
+/// Which list a section is, as a theme is told it (R-20261115-13): every game, the favourites, the recently played, or a console's games; none for no section.
+pub fn section_kind(key: &str) -> &'static str {
+    match key {
+        "" => "",
+        ALL => ALL,
+        FAVOURITES => FAVOURITES,
+        RECENT => RECENT,
+        _ => CONSOLE_KIND,
+    }
+}
 
 /// The places' headings on the grid, as the accepted render writes them (EmuSen_Interface.md §24.2).
 pub const PLACE_HEADINGS: [&str; 3] = ["All", "Favourites", "Recent"];

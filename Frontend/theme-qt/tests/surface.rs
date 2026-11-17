@@ -37,26 +37,29 @@ fn component<'a>(registry: &'a str, export: &str) -> &'a str {
     &registry[start..end]
 }
 
-/// The names declared in a component under `kind` (`Property`, `Method`, `Signal`), less the change signals and setters.
-fn names(block: &str, kind: &str) -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
+/// Every name declared in a component under `kind` (`Property`, `Method`, `Signal`).
+fn declared(block: &str, kind: &str) -> Vec<String> {
+    let mut out = Vec::new();
     let mut rest = block;
     while let Some(at) = rest.find(&format!("{kind} {{")) {
         rest = &rest[at..];
-        let name = rest.split("name: \"").nth(1).and_then(|r| r.split('"').next()).unwrap_or_default().to_owned();
-        if !(name.ends_with("Changed") || (kind == "Method" && setter_of(block, &name))) {
-            out.insert(name);
-        }
+        out.push(rest.split("name: \"").nth(1).and_then(|r| r.split('"').next()).unwrap_or_default().to_owned());
         rest = &rest[kind.len()..];
     }
     out
 }
 
-/// Whether a method is a property's setter, `setFoo` beside a property `foo`; `settingsStep` is no setter.
-fn setter_of(block: &str, name: &str) -> bool {
-    let Some(rest) = name.strip_prefix("set").filter(|r| r.starts_with(|c: char| c.is_ascii_uppercase())) else { return false };
-    let property = format!("{}{}", rest[..1].to_lowercase(), &rest[1..]);
-    block.contains(&format!("Property {{ name: \"{property}\"")) || block.contains(&format!("name: \"{property}\"\n"))
+/// The names declared in a component under `kind`, less the change signals and the setters of its own properties, which Qt makes for each writable one; any other method named set..., as Actions.setFilter, is the API's and is held.
+fn names(block: &str, kind: &str) -> BTreeSet<String> {
+    let properties = declared(block, "Property");
+    let setter = |name: &str| {
+        name.strip_prefix("set").and_then(|rest| {
+            let mut chars = rest.chars();
+            chars.next().map(|first| first.to_lowercase().chain(chars).collect::<String>())
+        })
+        .is_some_and(|property| properties.contains(&property))
+    };
+    declared(block, kind).into_iter().filter(|name| !(name.ends_with("Changed") || (kind == "Method" && setter(name)))).collect()
 }
 
 fn set(items: &[&str]) -> BTreeSet<String> {
@@ -97,7 +100,7 @@ fn qt_3_2_settings_and_page_offer_a_theme_nothing_writable() {
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
     let api: [(&str, &[&str], &[&str]); 14] = [
-        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead"], &["gamesOf", "search", "firstOf", "artHues", "consolesBy"]),
+        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead", "sections", "section"], &["gamesOf", "search", "firstOf", "artHues", "consolesBy"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
         ("Device", &["controllers", "family", "clock", "shortTime", "battery", "charging", "network", "bigScreen", "form"], &[]),
         (
@@ -111,6 +114,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "openConsole",
                 "consoleOptions",
                 "openPlace",
+                "openSection",
                 "home",
                 "back",
                 "stepSection",
@@ -119,6 +123,9 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "search",
                 "act",
                 "focus",
+                "stepSort",
+                "stepLetter",
+                "setFilter",
                 "enabled",
                 "settingsStep",
                 "settingsChoose",
@@ -161,6 +168,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "continueEntry",
                 "recentEntry",
                 "factLabels",
+                "gameFactLabels",
+                "crumb",
                 "consoleShows",
                 "consoleSorts",
                 "noGamesLine",
@@ -169,10 +178,11 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             ],
             &["games", "count", "line", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "percent", "shortTime", "gameArt"],
         ),
-        ("Help", &[], &["entries"]),
+        ("Help", &["sections"], &["entries"]),
         (
             "Browse",
-            &["section", "heading", "world", "hue", "countLine", "previous", "next", "focusRow", "searching", "typing", "listOpen", "games", "searched"],
+            &["section", "heading", "world", "hue", "countLine", "previous", "next", "focusRow", "searching", "typing", "listOpen", "games", "searched",
+              "kind", "emptyWords", "filters", "filter", "sort", "sortLine", "letters", "letter", "factsKey", "year", "genre", "players", "description", "timePlayed", "states"],
             &[],
         ),
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),

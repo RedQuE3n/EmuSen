@@ -2,6 +2,7 @@
 
 
 use crate::common::{approved_console_core, wait_for, CONSOLES};
+use crate::eclipse_pad::{focused, press};
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
@@ -12,7 +13,6 @@ use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
-use emusen_qt_endymion::reading::sdl_button;
 use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::library::{refresh, LibrarySource, LibraryView};
 use emusen_qt_models::{themes, words};
@@ -23,11 +23,6 @@ use emusen_qt_test::Scene;
 use emusen_qt_models::console_list::{Order, Show};
 use emusen_theme_qt::view::{consoles_listed, Cell, CONSOLE_ROLES};
 use serde_json::json;
-
-/// SDL's trigger axes (SDL_GAMEPAD_AXIS_LEFT_TRIGGER and _RIGHT_TRIGGER) and a full pull.
-const LEFT_TRIGGER: i32 = 4;
-const RIGHT_TRIGGER: i32 = 5;
-const PULLED: i16 = i16::MAX;
 
 /// The board's elements, one a row (eclipse/consoles.tsv), held by eclipse_board's rules.
 const BOARD: &str = include_str!("../eclipse/consoles.tsv");
@@ -49,6 +44,13 @@ fn board_held(scene: &mut Scene<'_>, c: &Console) {
         let screen: u64 = tree.nodes[tree.find_named("consolesScreen").expect("Eclipse's Choose a console") as usize].id.parse().unwrap();
         let tokens = crate::eclipse_board::tokens(screen);
         crate::eclipse_board::held(&tree, &rows, k, unit, f64::from(width) / unit, &tokens, &at, &|_, _, _| false, &mut differences);
+        // The nav's words, the board's (EclipseConsoles:29-33).
+        for (key, want) in [("home", "Home"), ("library", "Library"), ("consoles", "Consoles"), ("collections", "Collections"), ("tools", "Tools")] {
+            let have = crate::eclipse_board::read(&tree, &format!("navWords.{key}"), "text");
+            if have != want {
+                differences.push(format!("{at}: navWords.{key} says {have:?} where the board says {want:?}"));
+            }
+        }
         // The disc's glows blurred at the scene's pixels.
         let scale = crate::eclipse_board::read(&tree, "consoleDisc", "pixelScale").parse::<f64>().unwrap_or(f64::NAN);
         if (scale - unit).abs() > 1e-9 {
@@ -225,32 +227,6 @@ fn library_of(world: &World, cores: &std::path::Path) -> (Vec<Console>, LibraryV
 }
 
 /// The focused item's objectName.
-fn focused(scene: &mut Scene<'_>) -> String {
-    let tree = scene.tree();
-    scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
-}
-
-/// A control pressed and let go as a hand does: down until the router holds it, up until it let go (EmuSen_Qt.md §3.4.9).
-fn press(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, control: PadControl) {
-    let button = control.press().expect("a control the interface hears");
-    let shown = scene.property("screens", "shown");
-    let set = |down: bool| match sdl_button(control) {
-        Some(b) => sdl.press(pad, b, down),
-        None => sdl.axis(pad, if control == PadControl::LeftTrigger { LEFT_TRIGGER } else { RIGHT_TRIGGER }, if down { PULLED } else { 0 }),
-    };
-    for down in [true, false] {
-        set(down);
-        let heard = |s: &mut Scene<'_>| s.pad_held(button) == down || (down && s.property("screens", "shown") != shown);
-        let mut waited = 0;
-        while !heard(scene) && waited < 2000 {
-            scene.wait(8);
-            waited += 8;
-        }
-        assert!(heard(scene), "the router heard {control:?} {}; shown {}, focus {}", if down { "down" } else { "up" }, scene.property("screens", "shown"), focused(scene));
-    }
-    scene.wait(60);
-}
-
 /// Back on plate `k`: Open's Left and a maker's Right land on a plate, LT and RT step to its maker, then Down and Right along.
 fn go_to(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, grid: &emusen_kit_core::group_grid::GroupGrid, places: &[(usize, usize)], k: usize) {
     for _ in 0..64 {
@@ -537,10 +513,19 @@ pub fn oracle(backend: &str) {
     assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 1]), "RT on the last maker stays");
     press(&mut scene, &sdl, &pad, PadControl::LeftTrigger);
     assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 2]), "LT to the maker before");
-    for shoulder in [PadControl::LeftShoulder, PadControl::RightShoulder] {
-        press(&mut scene, &sdl, &pad, shoulder);
-        assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 2]), "{shoulder:?} is not bound here (R-20261115-17)");
+    // LB and RB step the sections, not the makers (R-20261115-17): LB opens Library, and B comes back to the plate.
+    press(&mut scene, &sdl, &pad, PadControl::LeftShoulder);
+    wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+    assert_eq!(scene.property("screens", "key"), emusen_qt_models::library::ALL, "LB on Consoles opens Library, every game (R-20261115-17)");
+    press(&mut scene, &sdl, &pad, PadControl::East);
+    wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
+    for _ in 0..40 {
+        if focused(&mut scene).starts_with("plate.") {
+            break;
+        }
+        scene.wait(50);
     }
+    assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 2]), "back from Library, the plate keeps the focus");
     let tree = scene.tree();
     let bar = edges(shown(&tree, "consolesHelp").expect("the help line"));
     let help: Vec<String> = tree.nodes.iter().filter(|n| n.visible && n.text.is_some() && overlap(edges(n), bar)).filter_map(|n| n.text.clone()).collect();

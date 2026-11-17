@@ -21,7 +21,8 @@ use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
 use emusen_theme_manifest::Screen;
 use emusen_qt_models::library::{Kind, LibraryView, ALL};
-use emusen_qt_models::words;
+use emusen_qt_models::screens::Shown;
+use emusen_qt_models::{sections, words};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::host;
 use emusen_theme_qt::session::SessionFacts;
@@ -175,6 +176,8 @@ struct Fed<'a> {
     reduced: bool,
     /// The variant Home's Settings line names, as the program's library model words it.
     dark: bool,
+    /// The screen placed, whose section (Library.section) the program's screens name.
+    screen: Screen,
 }
 
 /// The views fed as the program's host feeds them, the kit's tokens set to the big screen, with reduced motion on but for a held clock.
@@ -182,6 +185,7 @@ fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, ove
     let mut theme = host::library(object(screen)).ok_or("EmuSen.Theme's Library is not in the theme's engine")?;
     theme.as_mut().show_declined(&fed.declined.iter().map(|d| (*d).to_owned()).collect::<Vec<_>>());
     theme.as_mut().show(view, &library.home_lines(view, fed.dark));
+    theme.as_mut().show_section(section_of(fed.screen));
     // The Games screen's section as the program's showBrowse gives it: the named one, else the first console's, else the All shelf.
     let first = view.rows.rows().iter().find(|r| r.kind == Some(Kind::Console)).map(|r| r.key.clone()).or(Some(ALL.to_owned()));
     if let Some(key) = section.map(str::to_owned).or(first) {
@@ -196,6 +200,17 @@ fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, ove
     kit.as_mut().set_reduced_motion(fed.reduced);
     host::set_token_overrides(object(screen), overrides);
     Ok(())
+}
+
+/// The section the program names while a screen is shown (qt-models/src/sections.rs), empty for a screen that is none.
+fn section_of(screen: Screen) -> &'static str {
+    let shown = match screen {
+        Screen::Home => Shown::Home,
+        Screen::Consoles => Shown::Consoles,
+        Screen::Games => Shown::Grid,
+        Screen::Splash => return "",
+    };
+    sections::current(shown).map_or("", |s| s.key)
 }
 
 /// Home's lines fed afresh in a variant: the Settings place's line names the look, as the program's does.
@@ -660,7 +675,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
         let lines_in = |id: u64, dark: bool| relined(id, &library, view, dark);
         let pass = Pass { focus: asked.focus, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &label, Some(names)) };
         let session = library.session(view, None)?;
-        let fed = Fed { session: &session, declined: &[], reduced: true, dark: true };
+        let fed = Fed { session: &session, declined: &[], reduced: true, dark: true, screen };
         match placed(&mut scene, &real, screen, |id| feed(id, &library, view, &fed, &overrides, section)) {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
             Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &pass, state, lines)),
@@ -684,7 +699,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
             match asked_state.clock {
                 Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, (&label, &listed), (state, section, &overrides), &mut lines),
                 None => {
-                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true, dark: true };
+                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true, dark: true, screen };
                     let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
                     let mockup = mockups.iter().find(|(s, _)| *s == screen && default).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
                     let lines_in = |id: u64, dark: bool| relined(id, &library, &view, dark);
@@ -756,7 +771,7 @@ fn held(
 ) {
     for &variant in variants {
         scene.hold_clock(Some(0));
-        let fed = Fed { session, declined: &[], reduced: false, dark: variant == Variant::Dark };
+        let fed = Fed { session, declined: &[], reduced: false, dark: variant == Variant::Dark, screen };
         let id = placed(scene, folder, screen, |id| {
             feed(id, library, view, &fed, overrides, section)?;
             let mut kit = tokens(id).ok_or("the kit's Tokens are not in the theme's engine")?;

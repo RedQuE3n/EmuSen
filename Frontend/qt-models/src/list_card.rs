@@ -15,12 +15,19 @@ pub const FILTER: &str = "filter";
 pub const SEARCH: &str = "search";
 pub const SORT: &str = "sort";
 pub const JUMP: &str = "jump";
+/// Jump to's two steps as one action each, the letter before and the letter after (the grid's triggers, R-20261115-12).
+pub const JUMP_BACK: &str = "jump-1";
+pub const JUMP_ON: &str = "jump+1";
+/// The Sort row's step to the next sort, as one action (a theme's sort pill, R-20261115-11).
+pub const SORT_ON: &str = "sort+1";
 pub const RANDOM: &str = "random";
 pub const START_CONSOLE: &str = crate::home_card::START_CONSOLE;
 pub const COLLECTIONS: &str = "collections";
 /// The Filter page's rows: every game, and Favourites.
 pub const EVERY_GAME: &str = "every";
 pub const FAVOURITES_ONLY: &str = "favourites";
+/// The Filter page's Not played (R-20261115-10).
+pub const NOT_PLAYED: &str = "notPlayed";
 /// A collection's row on the Filter page and the grid's action by the same key: `collection:<id>`.
 const COLLECTION: &str = "collection:";
 
@@ -53,8 +60,11 @@ pub fn stepped(key: &str, by: i32) -> String {
     format!("{key}{by:+}")
 }
 
-/// An action read back: its key and its step, 0 for none.
+/// An action read back: its key and its step, 0 for none; a collection's key is never a step, whatever its id holds.
 pub fn action_of(action: &str) -> (&str, i32) {
+    if is_collection(action) {
+        return (action, 0);
+    }
     match action.find(['+', '-']) {
         Some(at) => (&action[..at], action[at..].parse().unwrap_or(0)),
         None => (action, 0),
@@ -91,7 +101,8 @@ fn first_page(f: &Value) -> Page {
     let others: Vec<&str> = offered.into_iter().filter(|s| *s != sort).collect();
     let shows = match filter {
         "" => "Shows every game in the section.".to_owned(),
-        "Favourites" => "Shows the section's favourites.".to_owned(),
+        crate::words::FAVOURITES_FILTER => "Shows the section's favourites.".to_owned(),
+        crate::words::NOT_PLAYED => "Shows the section's games never played.".to_owned(),
         collection => format!("Shows {collection}."),
     };
     let mut rows = Vec::new();
@@ -117,7 +128,7 @@ fn first_page(f: &Value) -> Page {
     if !startable(f).is_empty() {
         rows.push(Row::new(START_CONSOLE, "Start Console").opens().pane(Pane::said("Starts a console with no disc in it.", "Change Disc on the Pause Card puts a game in.")));
     }
-    rows.push(Row::new(COLLECTIONS, "Collections").opens().pane(Pane::said("Your collections, and the automatic ones.", "A opens a collection as a section of the library.")));
+    rows.push(Row::new(COLLECTIONS, crate::words::COLLECTIONS_SECTION).opens().pane(Pane::said("Your collections, and the automatic ones.", "A opens a collection as a section of the library.")));
     Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer }
 }
 
@@ -131,11 +142,15 @@ fn startable(f: &Value) -> Vec<crate::home_card::Startable> {
     f.get("startable").cloned().and_then(|s| serde_json::from_value(s).ok()).unwrap_or_default()
 }
 
-/// The Filter page: every game, then Favourites except in the Favourites section, then the player's collections.
+/// The Filter page: the grid's choices as `listing::choices` makes them where the facts carry them; else every game, then Favourites except in the Favourites section, then the player's collections.
 fn filter_page(f: &Value) -> Page {
-    let mut rows = vec![Row::new(EVERY_GAME, "Every game")];
+    if let Some(choices) = f.get("filters").cloned().and_then(|c| serde_json::from_value::<Vec<crate::listing::Choice>>(c).ok()) {
+        let rows = choices.iter().map(|c| Row::new(&c.key, &c.name)).collect();
+        return Page { title: "Filter".to_owned(), breadcrumb: "List".to_owned(), rows, footer: String::new() };
+    }
+    let mut rows = vec![Row::new(EVERY_GAME, crate::words::EVERY_GAME)];
     if !f.get("favouritesSection").and_then(Value::as_bool).unwrap_or(false) {
-        rows.push(Row::new(FAVOURITES_ONLY, "Favourites"));
+        rows.push(Row::new(FAVOURITES_ONLY, crate::words::FAVOURITES_FILTER));
     }
     for c in f.get("collections").and_then(Value::as_array).into_iter().flatten() {
         rows.push(Row::new(words(c, "key"), words(c, "name")));

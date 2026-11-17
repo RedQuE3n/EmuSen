@@ -158,7 +158,7 @@ fn collections_opens_the_filter_page_whose_collections_narrow_the_section_to_the
     assert_eq!(list.choose(list_card::FILTER, &key), Choice::Act(key.clone()), "the grid narrows to it");
     assert_eq!(action_of(&key), (key.as_str(), 0), "a collection's key is no step");
     let games = [game("brass", false, 0), game("Aurora", true, 0)];
-    let only = Listing { collection: Some(listed[0].members.iter().cloned().collect()), ..Listing::default() };
+    let only = Listing { collection: Some(std::sync::Arc::new(listed[0].members.iter().cloned().collect())), ..Listing::default() };
     assert_eq!(shown(&games, "all", &only).iter().map(|g| g.title.as_str()).collect::<Vec<_>>(), ["brass"]);
     assert!(only.narrowed(), "the count says how many of the section");
 }

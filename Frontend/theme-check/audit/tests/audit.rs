@@ -414,7 +414,7 @@ fn qt_3_7_a_screen_is_held_to_its_mockup_at_the_canvas_s_sizes_by_night() {
 fn recorded(theme: &str) -> (PathBuf, PathBuf, String) {
     let mockups = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../Testing/themes");
     let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes").join(theme);
-    // The whole account, findings and what was held and accepted, as recorded from the audit before its sweep read less (man theme-check).
+    // The whole account as recorded from the audit before its sweep read less: findings, what was held, what rulings let pass (man theme-check).
     let file = mockups.join("audit").join(format!("{theme}.findings"));
     let expected = std::fs::read_to_string(&file).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
     (mockups, folder, expected)

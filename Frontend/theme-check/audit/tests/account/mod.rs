@@ -2,6 +2,9 @@
 
 use emusen_qt_test::harness::SIZES;
 
+/// How a line a ruling lets pass begins, as theme-audit writes it.
+const RULED: &str = "theme-audit: accepted by ";
+
 /// The label the default state's Choose a console over 120 consoles carries after its variant, as theme-audit writes it.
 const CROWD: &str = ", 120 consoles";
 
@@ -22,7 +25,7 @@ fn place(line: &str) -> Option<(&str, (i32, i32), &str, bool)> {
     let at = line.find(".qml")?;
     let screen = line[..at].rsplit('/').next()?;
     let rest = &line[at + 4..];
-    // A finding's `:1 kind ` stands between the file and the size; an accepted line has none.
+    // A finding's `:1 kind ` stands between the file and the size; a ruling's line has none.
     let rest = match rest.strip_prefix(":1 ") {
         Some(kinded) => kinded.split_once(' ')?.1,
         None => rest.strip_prefix(' ')?,
@@ -89,11 +92,11 @@ pub fn join(parts: &[(Part, String)], variants: &[&str]) -> String {
             }
         }
     }
-    let group = |accepted: bool| {
+    let group = |ruled: bool| {
         let mut out = String::new();
         let lines = |part: Part| {
             let account = parts.iter().find(|(p, _)| *p == part).map(|(_, a)| a.as_str()).unwrap_or("");
-            account.lines().filter(move |l| l.starts_with("theme-audit: accepted by ") == accepted && held(l).is_none()).map(|l| (l, place(l).unwrap_or_else(|| panic!("a line no part judges: {l}"))))
+            account.lines().filter(move |l| l.starts_with(RULED) == ruled && held(l).is_none()).map(|l| (l, place(l).unwrap_or_else(|| panic!("a line no part judges: {l}"))))
         };
         for (screen, _, _) in &screens {
             for variant in variants {

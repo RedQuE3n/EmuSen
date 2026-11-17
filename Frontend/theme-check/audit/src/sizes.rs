@@ -3,7 +3,7 @@
 use emusen_qt_test::harness::SIZES;
 
 /// A size as the lines and recordings write it, `1280x800`.
-pub fn named((w, h): (i32, i32)) -> String {
+pub fn written((w, h): (i32, i32)) -> String {
     format!("{w}x{h}")
 }
 
@@ -13,11 +13,11 @@ pub fn chosen(list: &str) -> Result<Vec<(i32, i32)>, String> {
     if names.is_empty() {
         return Err("theme-audit: --sizes names no size".to_owned());
     }
-    if let Some(unknown) = names.iter().find(|n| **n != "all" && !SIZES.iter().any(|s| named(*s) == **n)) {
-        let known: Vec<String> = SIZES.iter().map(|s| named(*s)).collect();
+    if let Some(unknown) = names.iter().find(|n| **n != "all" && !SIZES.iter().any(|s| written(*s) == **n)) {
+        let known: Vec<String> = SIZES.iter().map(|s| written(*s)).collect();
         return Err(format!("theme-audit: {unknown} is not one of the gate's sizes ({})", known.join(", ")));
     }
-    Ok(SIZES.into_iter().filter(|s| names.contains(&"all") || names.contains(&named(*s).as_str())).collect())
+    Ok(SIZES.into_iter().filter(|s| names.contains(&"all") || names.contains(&written(*s).as_str())).collect())
 }
 
 #[cfg(test)]

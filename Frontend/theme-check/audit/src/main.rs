@@ -5,6 +5,7 @@ mod audit;
 mod catalogue;
 mod crowd;
 mod shape;
+mod sizes;
 mod states;
 mod world;
 
@@ -14,7 +15,7 @@ use std::path::{Path, PathBuf};
 extern crate emusen_theme_host;
 extern crate emusen_theme_qt;
 
-const USAGE: &str = "Usage: theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE] [--section KEY] [--focus NAME] [--mockups DIR] <folder>\n       theme-audit --list-states\n  Exit 1 for a finding, 0 for none, 2 when it could not run. See man theme-check.";
+const USAGE: &str = "Usage: theme-audit [--gpu] [--state DIR] [--states LIST] [--sizes LIST] [--crowd with|without|only] [--catalogue FILE] [--section KEY] [--focus NAME] [--mockups DIR] <folder>\n       theme-audit --list-states\n  Exit 1 for a finding, 0 for none, 2 when it could not run. See man theme-check.";
 
 /// What the command line asks for.
 struct Options {
@@ -24,6 +25,10 @@ struct Options {
     section: Option<String>,
     /// The states a run records, by name, `all` for every one; the default alone when not given.
     states: String,
+    /// The window sizes a run judges, by name, `all` for every one, the default.
+    sizes: String,
+    /// Whether the default state's Choose a console over 120 consoles is judged with the rest, without, or alone.
+    crowd: audit::Crowd,
     /// The folder of the package's mockups, `<package>-<Screen>.mockup.spec`, held at the canvas's sizes by night.
     mockups: Option<PathBuf>,
     /// The console a catalogue's Choose a console is judged with the focus on, by the name a reader hears.
@@ -35,6 +40,8 @@ struct Options {
 fn options(args: &[String]) -> Result<Options, String> {
     let (mut folder, mut state, mut catalogue, mut section, mut mockups, mut focus, mut gpu) = (None, None, None, None, None, None, false);
     let mut states = states::DEFAULT.to_owned();
+    let mut sizes = "all".to_owned();
+    let mut crowd = audit::Crowd::With;
     let mut words = args.iter().skip(1);
     while let Some(word) = words.next() {
         match word.as_str() {
@@ -44,13 +51,22 @@ fn options(args: &[String]) -> Result<Options, String> {
             "--focus" => focus = Some(words.next().ok_or(format!("theme-audit: --focus needs a name\n{USAGE}"))?.to_owned()),
             "--gpu" => gpu = true,
             "--states" => states = words.next().ok_or(format!("theme-audit: --states needs a list of states, or all\n{USAGE}"))?.to_owned(),
+            "--sizes" => sizes = words.next().ok_or(format!("theme-audit: --sizes needs a list of sizes, or all\n{USAGE}"))?.to_owned(),
+            "--crowd" => {
+                crowd = match words.next().map(String::as_str) {
+                    Some("with") => audit::Crowd::With,
+                    Some("without") => audit::Crowd::Without,
+                    Some("only") => audit::Crowd::Only,
+                    _ => return Err(format!("theme-audit: --crowd needs with, without or only\n{USAGE}")),
+                }
+            }
             "--section" => section = Some(words.next().ok_or(format!("theme-audit: --section needs a key\n{USAGE}"))?.to_owned()),
             other if other.starts_with("--") => return Err(format!("theme-audit: {other} is not an option\n{USAGE}")),
             other if folder.is_none() => folder = Some(other.to_owned()),
             _ => return Err(format!("theme-audit: one folder at a time\n{USAGE}")),
         }
     }
-    Ok(Options { folder: folder.ok_or(format!("theme-audit: a folder is needed\n{USAGE}"))?, state, catalogue, section, states, mockups, focus, gpu })
+    Ok(Options { folder: folder.ok_or(format!("theme-audit: a folder is needed\n{USAGE}"))?, state, catalogue, section, states, sizes, crowd, mockups, focus, gpu })
 }
 
 /// The catalogue's name (its file's stem, which labels its states) and its entries.
@@ -84,6 +100,8 @@ fn main() {
             states: states::chosen(&o.states)?,
             mockups: o.mockups.as_deref(),
             focus: o.focus.as_deref(),
+            sizes: sizes::chosen(&o.sizes)?,
+            crowd: o.crowd,
         };
         audit::run(&PathBuf::from(&o.folder), &o.folder, &asked)
     };

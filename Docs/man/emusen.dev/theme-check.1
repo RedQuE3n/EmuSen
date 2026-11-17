@@ -5,7 +5,8 @@ NAME
 
 SYNOPSIS
     theme-check [--static] [--state DIR] <folder>...
-    theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE]
+    theme-audit [--gpu] [--state DIR] [--states LIST] [--sizes LIST]
+                [--crowd with|without|only] [--catalogue FILE]
                 [--section KEY] [--focus NAME] [--mockups DIR] <folder>
     theme-audit --list-states
 
@@ -389,6 +390,55 @@ THE LOADED STEP
     its rows out as tall as they are, and with 120 consoles runs off
     every size. A package takes about 80 s, most of it the crowd.
 
+PARTS
+    --sizes LIST judges the window sizes LIST names, comma-separated as
+    the lines write them (1280x800,3840x2160), or all of them for all,
+    the default; a size the gate does not have is refused, naming the
+    gate's own (kit-core's audit SIZES, the list's one owner, in whose
+    order the sizes are judged whatever the list's order). Stillness
+    under reduced motion is judged by the run whose list holds the
+    gate's first size, once a screen, as without the option.
+    --crowd with|without|only judges the default state's Choose a
+    console over 120 consoles with the other passes (the default),
+    without it, or alone. A run of fewer sizes or passes judges each
+    state it keeps exactly as the whole run does.
+
+    The two options let one package's audit run as six processes side
+    by side, one a size without the crowd and one for the crowd at
+    every size: theme-audit's tests of Horizon, Meridian and Orrery
+    against their mockups, and of Eclipse in every state, are a test a
+    part (tests/audit.rs). The crowd is not cut by size, for the pass
+    is history: one placing is judged at each size in turn, and the
+    sweep at one size leaves the focus, the views' positions and their
+    delegates where the next size is judged. Run alone at 1920 x 1200,
+    Eclipse over n30 was recorded with the first maker focused where
+    the whole run had the last (Amstrad), and Orrery's crowd lines at
+    1920 x 1200, 1920 x 1080, 1280 x 720 and 3840 x 2160 named other
+    items than its recorded account (measured 2026-11-16). For the same
+    reason a --catalogue run, which is that pass over a catalogue, is
+    not cut by size: the tests of one to 120 consoles stay whole.
+    Every other pass places its screen afresh and puts the focus back
+    after its walk; its lines at each size alone were those of the whole
+    run (Orrery, all five sizes, 2026-11-16).
+
+    A recorded account (Testing/themes/audit/<theme>.findings) is held
+    whole by its parts. Each part's test compares its run with the
+    part's share of the file: the lines naming its size and not the
+    crowd, or the crowd's lines, each in the file's order, and the held
+    lines cut as the passes are (the crowd holds Consoles once a size,
+    in the first variant, never against a mockup; every other state is
+    judged at every size, and against its mockup at the sizes of the
+    canvas's shape alone). The shares joined are the file byte for
+    byte, which qt_3_7_the_recorded_accounts_are_their_parts_joined
+    holds for the three files: the findings, then the held lines
+    summed, screens in the order first held, then the accepted lines;
+    within the findings and the accepted, a screen at a time, each
+    listed variant in the package's order, each size in the gate's
+    order, then the crowd, a part's own lines in its own order. That is
+    the nesting of a whole run's loops (screens, then variants, then
+    sizes, the crowd after Consoles' own pass), so every part passing
+    is the whole file matched.
+
 STATES
     --states LIST records the states LIST names, comma-separated, or all
     of them for all; without it the run is the default alone. A state
@@ -479,6 +529,7 @@ EXAMPLES
     theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
     theme-audit --states all --state /tmp/states Frontend/themes/meridian
     theme-audit --states nogame,splash-3s Frontend/themes/meridian
+    theme-audit --mockups Testing/themes --sizes 1920x1080 --crowd without Frontend/themes/orrery
     theme-audit --mockups Testing/themes Frontend/themes/horizon
     theme-audit --catalogue Testing/themes/catalogues/eleven.tsv --focus "Super Nintendo" --mockups /tmp/m Frontend/themes/emusen
     theme-audit Frontend/theme-check/tests/themes/dim-picture

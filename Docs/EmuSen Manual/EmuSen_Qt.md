@@ -1047,17 +1047,33 @@ supplies neither gets today's screens. As built:
   `GamePage.qml`; the page's model and its answers (B leaving the page, Start passed on) stay the program's.
 - `theme-qt/src/settings.rs` and `page.rs` hold the two singletons. Each member is read from the model's own owner: the
   rows from `SettingsModel::shown_rows` and `GamePageModel::shown_items` (the list the program's frames read), the pane
-  from `SettingsView::pane`, the trail and sections from `SettingsView`, the actions from `action_items` over the model's
-  `actions`, the help from `SettingsView::help` and `GamePage::help`. What the models held for no role is added at its
-  owner in `qt-models/src/settings_shown.rs`: `Page::key`, and a row's `about` (the description's or its Galaxia row's
-  `about`, which no description writes yet, so it reads empty), its switch state (the stored value of a `switch` row,
-  `schema::is_on`) and a console row's tile, the entries read once a feed.
+  from `SettingsView::pane`, the trail and sections from `SettingsView`, the actions from `GamePageModel::shown_actions`
+  (each item and action read through accessors, its fields the model's own), the help from `SettingsView::help` and
+  `GamePage::help`. What the models held for no role is added at its owner in `qt-models/src/settings_shown.rs`:
+  `Page::key`, and a row's `about` (the description's or its Galaxia row's `about`; nothing writes it until the piece
+  that writes the rows' words, so until then it reads empty), its switch state (the stored value of a `switch` row,
+  `schema::is_on`) and a console row's tile, the entries read once a feed. The pane's `samples` come with their scales
+  (`sampleScales`), as the program's Text size preview reads them. Where the rows the model told are not its view's rows
+  (between a change and its telling), the feed shows nothing new and says so on its standard error.
+- A row's kind is numbered by `RowKind::index` (kit-core, `from_index`'s inverse), the pane's preview by
+  `Preview::number` (qt-models), and a row that is no slider reads `SliderRange::default()`'s fields, each for the
+  program's model and the theme's view alike.
 - `ThemeHost.qml` hands the feed each change its models tell; the feed (`qt-app/src/theme.rs`) queues one feed on the GUI
   thread (`qt_thread().queue`) until it runs, so a press that changes several members feeds once and never from inside a
   call of the model's, and it feeds only a host whose theme provides the role, so no view is made in an engine that draws
-  neither. A page B closes focuses its door's row again through the model's `refocus`, as the program's frame does.
+  neither. The page model tells a focus that moved by `focusMoved`, though the help may not change, so
+  `Page.focusedAction` and `focusedContent` follow every move. A queue the GUI thread refuses feeds at once.
+- What `Settings.qml` answers for its model, `Main.qml` answers while the theme's Settings is shown, and only then: B with
+  no page left (`left`), Start (`passed`), and a page B closed focusing its door's row again (`refocus`). The feed writes
+  nothing to either model itself, so under a theme that draws neither screen the program's own screens are their models'
+  only answerers.
 - Each settings and page call of `Actions` is one call of the model the program's own screen calls (`ScreenAction`, the
-  sink's `screen`): `settingsStep` is `SettingsModel.step`, `pageAct` is `GamePageModel.act`, and so on. A help entry's
+  sink's `screen`): `settingsStep` is `SettingsModel.step`, `pageAct` is `GamePageModel.act`, and so on. A call is taken
+  only where the theme draws that screen and the window shows it (the feed's `settingsShown` and `pageShown`); else it is
+  declined and nothing changes. Each answers what the model did: a step, choice, slide, action, row or help action whether
+  it did anything; a section or a focus whether it was in range (one out of range is declined); a shoulder or Resume's
+  step whether it stepped; an answer whether a question was asked; B true where the screen kept it (a page closed) and
+  false where it left the screen. A help entry's
   `action` on a page kind goes to `pageDeclared`, which answers Y, X and Reset itself and passes Start on, as the program's
   page does; B with no page left (`settingsBack`, `pageBack`) leaves the screen as the program's does.
 - Not reached through the views (the program draws them only on its own screens): Settings' bindings, keyboard keys and
@@ -1065,18 +1081,23 @@ supplies neither gets today's screens. As built:
   layout. A theme that draws either screen does not show these yet.
 
 Proof, measured 2026-11-16: `qt-app/tests/theme_pages.rs` runs the program with the test theme
-`theme-host/tests/themes/pages`, which draws both screens as plain text: every section's rows, the levers' pages and a
-console's page read whole against the model's rows, a switch turned, a choice stepped, a slider moved, a door opened and
-left, a console stepped by the shoulders and B leaving Settings; every tab of a game's page read against the model's
-items, the focus moving the help, Favourite turned by `pageAct` and back by `pageDeclared`, an Options row stepped, a
-Details door opened and left, a question answered No and B leaving the page. `tests/surface.rs` holds the two singletons
-and the calls to their lists; `tests/qml.rs` checks every help kind's lists; the built-in themes supply neither screen, so
-their tests run unchanged.
+`theme-host/tests/themes/pages`, which draws both screens as plain text: every section's rows, the shaders' and the
+levers' pages and a console's page read whole against the model's rows (each slider's fields against the view's), the
+pane against the model's (each sample's scale with it), a switch turned, a choice stepped, a slider moved, a door opened
+and left, a console stepped to the next by the shoulder and B leaving Settings; the page's calls from Settings and
+Settings' calls from the page declined with nothing changed; every tab of a game's page read against the model's items
+and words, the focus walked down each tab and read back, Favourite turned by `pageAct` and back by `pageDeclared`, an
+Options row stepped, a Details door opened and left, the question read and answered No, B leaving the page, and Resume
+stepped by `pageStepAction` and run, the game starting from the state stepped to. `theme_pages_play.rs` runs Play from
+the theme's page; `theme_pages_builtin.rs` holds that under Eclipse, which draws neither screen, a `refocus` told while
+Settings is closed leaves the model's row alone. `theme-qt/tests/surface.rs` holds the two singletons and their calls, and
+that every property of `Settings`, `Page` and their rows is read-only with no call beyond reading rows; `tests/qml.rs`
+checks every help kind's lists; the built-in themes' own tests run unchanged.
 
 
 ### 3.3 Versioning
 
-The API is the module's version, now `EmuSen.Theme 1.5` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.9` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked

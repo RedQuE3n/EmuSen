@@ -10,8 +10,9 @@ section of `EmuSen_Kit.md` that records it.
 - **`MeasuredWalk`**: kit-core's `MeasuredWalk` on Qt, the walk of `SettingsLayout` (Up and Down, Left and Right stepping
   or sliding, A choosing, the shoulders stepping sections) over a list model's rows, each row's height told by the screen
   that draws it (`measure`), in a window of a given height (`window`, `gap`), with no geometry of its own; `first` and
-  `offset` say where the window starts. For a theme's Settings, whose rows differ in height (decided 2026-11-16 by the
-  tester, R-20261116-19). Exported to themes in EmuSen.Theme 1.9. `EmuSen_Kit.md` §7.122.
+  `offset` say where the window starts. For a theme's Settings (a screen a theme can supply, decided 2026-11-16 by the
+  tester, R-20261116-19), whose rows may be of any height, which is this piece's technical choice. Exported to themes in
+  EmuSen.Theme 1.9. `EmuSen_Kit.md` §7.122.
 
 ## 1.9: groups as a column and the chosen group as a grid (2026-11-15)
 

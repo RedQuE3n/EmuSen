@@ -12,12 +12,14 @@ supply, each with a read-only view; a theme that supplies neither gets the progr
   and **`ThemeScreen.Game`** (added to `Kind`).
 - **`Settings`** (added): the sections, the section, the trail, the page's key, the rows (with `about`, a switch's
   `isSwitch` and `switchOn`, a slider's fields and a console row's tile), the focus and the count, the help kind and the
-  focused row's pane, read from the program's `SettingsModel` (EmuSen_Qt.md §3.2).
+  focused row's pane with each sample's scale (`sampleScales`), read from the program's `SettingsModel` (EmuSen_Qt.md
+  §3.2).
 - **`Page`** (added): a game's page, its words and pictures, the actions, the tabs, the rows or cards, the focus, the help
   kind and the question, read from the program's `GamePageModel`.
 - **`Actions`**: `settingsStep`, `settingsChoose`, `settingsSlide`, `settingsSection`, `settingsFocus`, `settingsShoulder`,
   `settingsBack`, `pageSection`, `pageAct`, `pageStepAction`, `pageChoose`, `pageStep`, `pageFocus`, `pageDeclared`,
-  `pageAnswer`, `pageBack` (added), each one call of the model the program's own screen calls.
+  `pageAnswer`, `pageBack` (added), each one call of the model the program's own screen calls, taken only while the theme
+  draws that screen and it is shown, and answering what the model did.
 - **`Help`**: the kinds `Settings`, `SettingsPage`, `SettingsConsole`, `SettingsChoices`, `Page`, `PageResume`,
   `PageResumeSlots`, `PageFavourite`, `PageLoad`, `PageView`, `PageValue`, `PageChange`, `PageChoose`, `PageNone`,
   `PageEdit`, `PageCoverArt` (added), `help.rs`'s bars for those screens.

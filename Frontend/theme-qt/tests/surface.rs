@@ -6,8 +6,8 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.7.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.7.qmldir");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.8.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.8.qmldir");
 const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.9.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
@@ -71,12 +71,12 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.7.qmltypes"
+        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.8.qmltypes"
     );
     assert_eq!(
         normalized(COMMITTED_QMLDIR),
         normalized(&built("qmldir")),
-        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.7.qmldir"
+        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.8.qmldir"
     );
 }
 
@@ -84,7 +84,7 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
     let api: [(&str, &[&str], &[&str]); 12] = [
-        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead"], &["gamesOf", "search", "firstOf", "artHues", "consolesBy"]),
+        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections", "artHuesRead", "sections", "section"], &["gamesOf", "search", "firstOf", "artHues", "consolesBy"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
         ("Device", &["controllers", "family", "clock", "shortTime", "battery", "charging", "network", "bigScreen", "form"], &[]),
         (
@@ -98,6 +98,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "openConsole",
                 "consoleOptions",
                 "openPlace",
+                "openSection",
                 "home",
                 "back",
                 "stepSection",
@@ -145,7 +146,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             ],
             &["games", "count", "line", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "percent", "shortTime", "gameArt"],
         ),
-        ("Help", &[], &["entries"]),
+        ("Help", &["sections"], &["entries"]),
         (
             "Browse",
             &["section", "heading", "world", "hue", "countLine", "previous", "next", "focusRow", "searching", "typing", "listOpen", "games", "searched",

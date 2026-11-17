@@ -42,6 +42,8 @@ pub mod qobject {
         #[qobject]
         #[qml_element = "Help"]
         #[qml_singleton]
+        /// The shoulders' Sections entry alone, for a nav's own help (1.8): the walk steps the sections, so it declares nothing.
+        #[qproperty(*mut ThemeHelpEntries, sections, READ, CONSTANT)]
         type ThemeHelp = super::ThemeHelpRust;
 
         #[qobject]
@@ -129,11 +131,12 @@ pub enum Names {
 /// A hundred and ninety-two lists for each kind, one for each of `FLAGS`, the singleton's children.
 pub struct ThemeHelpRust {
     lists: [[*mut qobject::ThemeHelpEntries; 192]; 7],
+    sections: *mut qobject::ThemeHelpEntries,
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [[std::ptr::null_mut(); 192]; 7] }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 192]; 7], sections: std::ptr::null_mut() }
     }
 }
 
@@ -149,6 +152,12 @@ impl cxx_qt::Initialize for qobject::ThemeHelp {
                 self.as_mut().rust_mut().lists[i][f] = list;
             }
         }
+        let sections = ffi::new_help_entries(self.as_mut().upcast_pin());
+        // Safety: as above.
+        if let Some(entries) = unsafe { sections.as_mut() } {
+            unsafe { Pin::new_unchecked(entries) }.show_entries(vec![help::SECTIONS]);
+        }
+        self.as_mut().rust_mut().sections = sections;
     }
 }
 
@@ -219,6 +228,12 @@ impl qobject::ThemeHelpEntries {
         };
         self.as_mut().rust_mut().list = help::with_letters(screen, list, letters);
         self.as_mut().rust_mut().action_lines = QString::from((lines + &help::letter_lines(screen, letters)).as_str());
+    }
+
+    /// A list of the entries given, declaring no action, set once when it is made.
+    fn show_entries(mut self: Pin<&mut Self>, list: Vec<Entry>) {
+        self.as_mut().rust_mut().list = list;
+        self.as_mut().rust_mut().action_lines = QString::default();
     }
 
     /// The help bar's screen, for the host's tests.

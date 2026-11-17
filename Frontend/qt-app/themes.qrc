@@ -25,7 +25,9 @@
         <file alias="parts/HelpLine.qml">../themes/eclipse/parts/HelpLine.qml</file>
         <file alias="parts/Ink.qml">../themes/eclipse/parts/Ink.qml</file>
         <file alias="parts/Line.qml">../themes/eclipse/parts/Line.qml</file>
+        <file alias="parts/Nav.qml">../themes/eclipse/parts/Nav.qml</file>
         <file alias="parts/Pill.qml">../themes/eclipse/parts/Pill.qml</file>
+        <file alias="parts/SectionsHelp.qml">../themes/eclipse/parts/SectionsHelp.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>
         <file alias="screens/Games.qml">../themes/eclipse/screens/Games.qml</file>

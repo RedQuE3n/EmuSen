@@ -58,52 +58,58 @@ Module {
             lineNumber: 31
             Parameter { name: "id"; type: "QString" }
         }
-        Method { name: "home"; type: "bool"; lineNumber: 32 }
-        Method { name: "back"; type: "bool"; lineNumber: 33 }
+        Method {
+            name: "openSection"
+            type: "bool"
+            lineNumber: 32
+            Parameter { name: "key"; type: "QString" }
+        }
+        Method { name: "home"; type: "bool"; lineNumber: 33 }
+        Method { name: "back"; type: "bool"; lineNumber: 34 }
         Method {
             name: "stepSection"
             type: "bool"
-            lineNumber: 34
+            lineNumber: 35
             Parameter { name: "by"; type: "int" }
         }
-        Method { name: "openHomeCard"; type: "bool"; lineNumber: 35 }
-        Method { name: "openListCard"; type: "bool"; lineNumber: 36 }
-        Method { name: "search"; type: "bool"; lineNumber: 37 }
+        Method { name: "openHomeCard"; type: "bool"; lineNumber: 36 }
+        Method { name: "openListCard"; type: "bool"; lineNumber: 37 }
+        Method { name: "search"; type: "bool"; lineNumber: 38 }
         Method {
             name: "act"
             type: "bool"
-            lineNumber: 38
+            lineNumber: 39
             Parameter { name: "key"; type: "QString" }
         }
         Method {
             name: "focus"
             type: "bool"
-            lineNumber: 39
+            lineNumber: 40
             Parameter { name: "game"; type: "QString" }
         }
         Method {
             name: "setFilter"
             type: "bool"
-            lineNumber: 40
+            lineNumber: 41
             Parameter { name: "key"; type: "QString" }
         }
         Method {
             name: "stepSort"
             type: "bool"
-            lineNumber: 41
+            lineNumber: 42
             Parameter { name: "by"; type: "int" }
         }
         Method {
             name: "stepLetter"
             type: "bool"
-            lineNumber: 42
+            lineNumber: 43
             Parameter { name: "by"; type: "int" }
         }
         Method {
             name: "enabled"
             type: "bool"
             isMethodConstant: true
-            lineNumber: 43
+            lineNumber: 44
             Parameter { name: "key"; type: "QString" }
         }
     }
@@ -553,7 +559,7 @@ Module {
             name: "HelpKind"
             isScoped: true
             type: "int"
-            lineNumber: 28
+            lineNumber: 29
             values: [
                 "Continue",
                 "Game",
@@ -564,12 +570,22 @@ Module {
                 "SectionSearched"
             ]
         }
+        Property {
+            name: "sections"
+            type: "ThemeHelpEntries"
+            isPointer: true
+            read: "getSections"
+            index: 0
+            lineNumber: 28
+            isReadonly: true
+            isPropertyConstant: true
+        }
         Method {
             name: "entries"
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 42
+            lineNumber: 44
             Parameter { name: "kind"; type: "HelpKind" }
         }
         Method {
@@ -577,14 +593,14 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 43
+            lineNumber: 45
             Parameter { name: "kind"; type: "HelpKind" }
             Parameter { name: "flags"; type: "QMap_QString_QVariant" }
         }
     }
     Component {
         file: "help.cxxqt.h"
-        lineNumber: 64
+        lineNumber: 66
         name: "ThemeHelpEntries"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -596,7 +612,7 @@ Module {
             type: "QString"
             read: "getActionLines"
             index: 0
-            lineNumber: 70
+            lineNumber: 72
             isReadonly: true
             isPropertyConstant: true
         }
@@ -604,7 +620,7 @@ Module {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 76
+            lineNumber: 78
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -612,19 +628,19 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 77
+            lineNumber: 79
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 78
+            lineNumber: 80
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }
     Component {
         file: "library.cxxqt.h"
-        lineNumber: 24
+        lineNumber: 33
         name: "ThemeLibrary"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -638,7 +654,7 @@ Module {
             isPointer: true
             read: "getConsoles"
             index: 0
-            lineNumber: 30
+            lineNumber: 39
             isReadonly: true
             isPropertyConstant: true
         }
@@ -648,7 +664,7 @@ Module {
             isPointer: true
             read: "getPlaces"
             index: 1
-            lineNumber: 31
+            lineNumber: 40
             isReadonly: true
             isPropertyConstant: true
         }
@@ -658,7 +674,7 @@ Module {
             isPointer: true
             read: "getShelves"
             index: 2
-            lineNumber: 32
+            lineNumber: 41
             isReadonly: true
             isPropertyConstant: true
         }
@@ -668,7 +684,7 @@ Module {
             isPointer: true
             read: "getRecent"
             index: 3
-            lineNumber: 33
+            lineNumber: 42
             isReadonly: true
             isPropertyConstant: true
         }
@@ -678,7 +694,7 @@ Module {
             isPointer: true
             read: "getFavourites"
             index: 4
-            lineNumber: 34
+            lineNumber: 43
             isReadonly: true
             isPropertyConstant: true
         }
@@ -688,7 +704,7 @@ Module {
             isPointer: true
             read: "getCollections"
             index: 5
-            lineNumber: 35
+            lineNumber: 44
             isReadonly: true
             isPropertyConstant: true
         }
@@ -698,39 +714,59 @@ Module {
             isPointer: true
             read: "getShelf"
             index: 6
-            lineNumber: 36
+            lineNumber: 45
             isReadonly: true
             isPropertyConstant: true
+        }
+        Property {
+            name: "sections"
+            type: "ThemeRows"
+            isPointer: true
+            read: "getSections"
+            index: 7
+            lineNumber: 46
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "section"
+            type: "QString"
+            read: "getSection"
+            notify: "sectionChanged"
+            index: 8
+            lineNumber: 47
+            isReadonly: true
         }
         Property {
             name: "artHuesRead"
             type: "int"
             read: "getArtHuesRead"
             notify: "artHuesReadChanged"
-            index: 7
-            lineNumber: 37
+            index: 9
+            lineNumber: 48
             isReadonly: true
         }
-        Signal { name: "artHuesReadChanged"; lineNumber: 50 }
+        Signal { name: "sectionChanged"; lineNumber: 63 }
+        Signal { name: "artHuesReadChanged"; lineNumber: 64 }
         Method {
             name: "gamesOf"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 51
+            lineNumber: 65
             Parameter { name: "id"; type: "QString" }
         }
         Method {
             name: "search"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 52
+            lineNumber: 66
             Parameter { name: "words"; type: "QString" }
         }
         Method {
             name: "firstOf"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 53
+            lineNumber: 67
             Parameter { name: "id"; type: "QString" }
             Parameter { name: "count"; type: "int" }
         }
@@ -738,7 +774,7 @@ Module {
             name: "consolesBy"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 54
+            lineNumber: 68
             Parameter { name: "show"; type: "int" }
             Parameter { name: "order"; type: "int" }
             Parameter { name: "shortened"; type: "QStringList" }
@@ -746,7 +782,7 @@ Module {
         Method {
             name: "artHues"
             type: "QList_f64"
-            lineNumber: 55
+            lineNumber: 69
             Parameter { name: "key"; type: "QString" }
             Parameter { name: "most"; type: "int" }
         }

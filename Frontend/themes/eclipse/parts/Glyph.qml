@@ -9,8 +9,10 @@ Item {
     property real unit: 1
     property int button
     property int family: Device.family
-    // The screen's main action, drawn filled.
+    // The first entry of a bar, which the kit's HelpBar marks; drawn filled where the bar leads with the screen's main action.
     property bool lead: false
+    property bool leads: true
+    readonly property bool filled: root.lead && root.leads
     // The side inside the ring, the letter's and the name's size, and the capsule's padding, in board pixels.
     property real side: 34
     property real letterSize: 16
@@ -32,7 +34,7 @@ Item {
     readonly property string letter: mark.letter
     readonly property bool named: root.letter.length > 1 || (root.letter.length === 0 && (root.button === PadGlyph.Menu || root.button === PadGlyph.Options))
     readonly property string word: root.letter.length > 1 ? root.letter : mark.name.toUpperCase()
-    readonly property real outer: (root.boxed ? root.boxSide : root.side) * root.unit + (root.lead ? 0 : 2 * root.line)
+    readonly property real outer: (root.boxed ? root.boxSide : root.side) * root.unit + (root.filled ? 0 : 2 * root.line)
     // The name's padding either side and the shape's corner as drawn, in canvas units.
     readonly property real inset: (root.boxed ? root.boxPadding : root.padding) * root.unit
     readonly property real corner: root.boxed ? root.boxRadius * root.unit : (root.named ? (root.side / 2) * root.unit : root.width / 2)
@@ -43,8 +45,8 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: root.corner
-        color: root.lead ? root.leadFill : "transparent"
-        border.width: root.lead ? 0 : root.line
+        color: root.filled ? root.leadFill : "transparent"
+        border.width: root.filled ? 0 : root.line
         border.color: root.ring
     }
     PadGlyph {
@@ -61,8 +63,8 @@ Item {
         id: metrics
         font.family: Tokens.faceText
         // The board's size in board pixels; the shape below is scaled by the board's measure, as a font's whole pixel size cannot hold it in canvas units.
-        font.pixelSize: root.named ? root.wordSize : (root.lead ? root.leadLetterSize : root.letterSize)
-        font.weight: root.lead ? root.leadWeight : Font.Normal
+        font.pixelSize: root.named ? root.wordSize : (root.filled ? root.leadLetterSize : root.letterSize)
+        font.weight: root.filled ? root.leadWeight : Font.Normal
         text: root.named ? root.word : root.letter
     }
     // The letter or the name drawn as the kit draws a glyph's letter, a path of the face's outline centred on the glyph.
@@ -74,7 +76,7 @@ Item {
         visible: root.named || root.letter.length > 0
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
-            fillColor: root.lead ? root.leadInk : root.ink
+            fillColor: root.filled ? root.leadInk : root.ink
             strokeColor: "transparent"
             fillRule: ShapePath.WindingFill
             PathText {

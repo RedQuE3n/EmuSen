@@ -92,6 +92,14 @@ pub fn letters(letters: &[String]) -> Vec<Row> {
 
 /// `Library.collections`: the player's collections.
 pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
+/// `Library.sections`: the program's top sections, in a nav's order (1.8).
+pub const SECTION_ROLES: [&str; 2] = ["key", "name"];
+
+/// The program's sections as rows, from their one owner (emusen_qt_models::sections).
+pub fn sections() -> Vec<Row> {
+    emusen_qt_models::sections::all().iter().map(|s| vec![Cell::Text(s.key.to_owned()), Cell::Text(s.name.to_owned())]).collect()
+}
+
 /// `Help.entries`: the help bar's entries, as the kit's `HelpBar` reads them.
 pub const HELP_ROLES: [&str; 5] = ["button", "label", "pair", "enabled", "action"];
 

@@ -336,6 +336,10 @@ pub fn letter_lines(screen: Screen, letters: bool) -> String {
     added.iter().filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
 }
 
+/// The shoulders' entry where a screen draws the program's sections (crate::sections): no action, since the walk steps
+/// them and the theme opens the one chosen.
+pub const SECTIONS: Entry = (UiButton::PageUp, "Sections", None);
+
 /// A game's page's shared entries: Y the heart, the shoulders the sections (the frame steps them), Start Home.
 const PAGE_HEART: Entry = (UiButton::Search, "Favourite", Some(FAVOURITE));
 const PAGE_SECTION: Entry = (UiButton::PageUp, "Section", None);

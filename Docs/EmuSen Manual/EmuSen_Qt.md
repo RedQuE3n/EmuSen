@@ -937,19 +937,19 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 `import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
 `Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.7.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.8.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
 |---|---|---|
-| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own; `played`, from 1.5, how many of its games were played; `glow`, from 1.5, its own colour, kit-core's `world::glow` for its hue); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts`, `consoleName` (the console's name alone, that `facts` begins with; 1.4) (cover and hero as file URLs); from 1.5, `consolesBy(show, order, shortened)`: the consoles `Words.consoleShows[show]` holds in `Words.consoleSorts[order]`'s order, each maker's together, by name the consoles keyed in `shortened` by their short `name`, with `consoles`' roles and `screen`, the console's screen in words ("CRT, television") |
+| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own; `played`, from 1.5, how many of its games were played; `glow`, from 1.5, its own colour, kit-core's `world::glow` for its hue); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `sections` (1.8), the program's top sections in a nav's order (`key`, `name`), and `section`, the key of the one shown, empty for a screen that is none; `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts`, `consoleName` (the console's name alone, that `facts` begins with; 1.4) (cover and hero as file URLs); from 1.5, `consolesBy(show, order, shortened)`: the consoles `Words.consoleShows[show]` holds in `Words.consoleSorts[order]`'s order, each maker's together, by name the consoles keyed in `shortened` by their short `name`, with `consoles`' roles and `screen`, the console's screen in words ("CRT, television") |
 | `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
 | `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (0 to 100, -1 none), `charging`, `network`, `bigScreen`, `form`; since interface 50 the program feeds `battery` and `charging` from the platform library's `emusen_galaxia_battery`, asked by `qt-models`' `Battery` on start and every 30 s (`EmuSen_RustPlatform.md` §58) |
-| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting; from 1.5, `consoleOptions(key)`, Settings at that console's page; from 1.7 `setFilter(key)`, `stepSort(by)`, `stepLetter(by)` |
+| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `openSection(key)` (1.8), `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting; from 1.5, `consoleOptions(key)`, Settings at that console's page; from 1.7 `setFilter(key)`, `stepSort(by)`, `stepLetter(by)` |
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
 | `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
 | `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations; since 1.4 `name`, the program's name in its own case, `playedFacts(at, seconds)`, `continueLine(console)` and `resumePoint(pausedSince)`; from 1.5 `played(n)`, `place(index, count)`, `line(parts)` (the parts joined as the facts join theirs), `count(n)` and `factLabels`: the curated face of `words.rs`; from 1.5, `consoleShows` and `consoleSorts` (the chips' and the orders' words), `noGamesLine`, `line(parts)`, `percent(charge)` (empty below 0) |
-| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept, triggers, actions, card, letters})` the same with LB RB Group (LT RT Maker with `triggers`, 1.5) B Back and (1.7) LT RT Letter added where the kind takes them, A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false, the screen's own actions left out with `actions` false (1.5), and the entries named as Eclipse's Home names them with `card` (1.4); the curated face of `help.rs`; from 1.5, `entries(kind, {options: true})` declares Y and X as a screen's own actions, each entry's `action` the key `Actions` hears |
+| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept, triggers, actions, card, letters})` the same with LB RB Group (LT RT Maker with `triggers`, 1.5) B Back and (1.7) LT RT Letter added where the kind takes them, A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false, the screen's own actions left out with `actions` false (1.5), and the entries named as Eclipse's Home names them with `card` (1.4); the curated face of `help.rs`; from 1.5, `entries(kind, {options: true})` declares Y and X as a screen's own actions, each entry's `action` the key `Actions` hears; `sections` (1.8), the shoulders' LB RB Sections entry alone, declaring nothing, for a nav's help |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only, the face tokens among them (1.3, `EmuSen_Kit.md` §7.117); `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown); from 1.7 `kind` (`all`, `favourites`, `recent`, `console`), `emptyWords`, `filters` (`key`, `name`, `count`) and `filter`, `sort`, `letters` (`letter`) and `letter`: the List card's listing, one state with it (§3.4.10); from 1.7 the focused game's facts, read off the GUI thread as the focus moves: `factsKey` (the game they are of, set last), `year`, `genre`, `players` (in words), `description`, `timePlayed` (in words) and `states`, each empty or 0 where the program holds none |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
@@ -1036,7 +1036,7 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, now `EmuSen.Theme 1.7` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.8` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
@@ -1790,8 +1790,7 @@ Home card (`qt-models/src/screens.rs`, Home's `home` action), with no Select sea
 status's own button. Their glyphs are `parts/Glyph.qml`, the board's: the kit's letter for the pad's family in Sora in a
 2 px ring, A filled, Start's name in a capsule.
 
-**Not drawn**: the section tabs (Home, Library, Consoles, Collections, Tools) and "LB RB Sections", a piece of their
-own (R-20261115-7). Also not drawn, because the program has nothing for it: "GAME ART". The battery (Main:45-47) is drawn
+**Not drawn**, because the program has nothing for it: "GAME ART". The battery (Main:45-47) is drawn
 by `parts/Status.qml` (`battery` and `batteryPicture` set) while `Device.battery` is 0 or more, between the search and
 the clock: the board's body, charge and terminal as rectangles in `Tokens.text`, the charge in whole board pixels of the
 body's inner 18 (15 for 82%, as the board draws it), and the level as `Words.percent` gives it; a machine with no battery of its own draws
@@ -1862,7 +1861,7 @@ art measured 3.06:1 to 4.46:1 on 2026-11-15), these words are accepted by R-2026
 Super Nintendo" in the font's capitals; the line under the title `Words.playedFacts`, when the game was last played and,
 where games.db holds any, its time played (`Session.played`, which the host now feeds). Where the board's words differ
 from the program's and no word exists ("1 of 24", the resume
-point, the section tabs), Home draws the program's or nothing, as listed in the table.
+point), Home draws the program's or nothing, as listed in the table.
 
 **What acts.** Home's `Frame` holds the help's entries, so the pad's X, Y, Select and Start reach their actions on Home as
 they do on the reference's; the help line draws the frame's list. A theme's `Actions.favourite`, or the help's Y on the game
@@ -1899,8 +1898,22 @@ is a run that records which item asked for the frame when it happens again. The 
 the tile draws the row's `consoleName` (EmuSen.Theme 1.4), the same name the row's `facts` begin with, from the one owner
 of both, `qt-models/src/library.rs`. The oracle holds the word and that no shown tile's title or line is cut.
 
-**Where the board shows "Sections", the theme has none.** The section tabs and their shoulders are a piece of their own
-(R-20261115-7); Home leaves their place empty. The theme's own `Type` is exported at 1.0, as every singleton made in Rust is.
+**The sections** (R-20261115-7, built 2026-11-16). `parts/Nav.qml` draws `Library.sections` 64 px after the brand, the
+five the boards draw in their order (Main:34-38, EclipseConsoles:29-33): each name in board pixels through `parts/Line.qml`
+at 24 px, 44 px apart, the one shown (`Library.section`) #FFFFFF and semi-bold 10 px over a 3 px underline in the accent,
+the others in `Tokens.muted`. Home and Choose a console draw it; the games view's board draws a path in its place and no
+nav. The sections and their order have one owner, `SECTIONS` in `qt-models/src/screens.rs`, read through
+`qt-models/src/sections.rs`, their names `words.rs`' `*_SECTION`. The nav gives the frame's walk the sections' keys, so LB
+and RB step to the section either side, wrapping at the ends (`EmuSen_Kit.md` §7.27); the walk's choice, or a tapped
+section, is `Actions.openSection`, and `Screens` opens the screen that section holds today: Home; Library, the games view
+at every game (`library::ALL`); Consoles, Choose a console; Collections, the List card at its Filter page, which lists the
+player's collections, over every game (`Screens.listPage`); Tools, the Home card at its Tools page. Only Home and Choose a
+console draw the nav, so only they move by section; B from the screen a section opened is that screen's own. At the help
+line's right Home draws `Help.sections`, LB RB Sections, on the glass of Main:99-103 (`parts/SectionsHelp.qml`), the
+shoulders in the lettered box Choose a console's LT RT draws (`parts/Glyph.qml`, not filled: `leads` false); Choose a
+console's board draws no such entry (EclipseConsoles:99-105), so its help line has none. Both tables hold the nav's rows
+and Home's the glass's; `qt-app`'s `eclipse_nav.rs` presses the shoulders of an in-process SDL pad and taps the nav on the
+real program, from Home and from Choose a console, and holds each screen, key and page a section opens. The theme's own `Type` is exported at 1.0, as every singleton made in Rust is.
 
 #### 3.4.9 Eclipse's Choose a console **[M 2026-11-15]**
 
@@ -1956,8 +1969,9 @@ from the last plate in a row goes to Open, and Down from a maker's last row goes
 and RT, from a plate or a maker, go to the previous or next maker's first console, and nothing past the first or the last
 (decided 2026-11-15 by the tester, R-20261115-17); the help line draws them as one entry, LT RT Maker, the `Help` list's
 `triggers` flag putting `help.rs`'s `MAKER` where its LB RB Group stands. The same ruling gives LB and RB the navigation
-sections, which are a piece of their own not built yet: until then LB and RB are bound to nothing on this screen and the
-help line draws no entry for them. This is open. The header
+sections (§3.4.8, "The sections"); the help line draws no entry for them, as the board draws none. Choose a console opens
+on the console last opened where the grid last shown was a console's, else on the first maker's first console: after
+Library or Favourites (the grid at `all` or `favourites`) no plate held the focus until 2026-11-16. The header
 is Eclipse's `Brand` and `Status`, the foot is its `HelpLine` with the place line at its right, the two colour fields are
 the kit's `Backdrop`, and Open is a filled `Pill` without its halo and glow. The fields take the focused console's
 `glow` hue at their own board colour's saturation, lightness and opacity (`FieldInk`; 140 px at 0.5, 150 px at 0.35, board
@@ -1993,8 +2007,7 @@ every other order reads no names, so its list is one whatever the plates show. A
 is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery's level
 is drawn as the board draws it, "82%" 22 before the clock with no picture (line 37), where the machine has one; `Status`
 makes it only where a board draws it (`battery` set, `batteryPicture` not), and the oracle writes an 82% battery,
-discharging, into its world's made-up power_supply tree and holds the row. The top navigation is a piece of its own
-(R-20261115-7), and its place is left empty. theme-audit's `eclipse_consoles.rs` reads the same table and holds its rows given in plain board pixels over its own
+discharging, into its world's made-up power_supply tree and holds the row. The top navigation is Eclipse's `Nav` (§3.4.8); theme-audit feeds the placed screen's `Library.section` as the program's screens name it, so the nav it records marks Consoles. theme-audit's `eclipse_consoles.rs` reads the same table and holds its rows given in plain board pixels over its own
 recording. The help line's row is 38 px tall, the ringed B's 34 and its ring (line 102), so its middle stands at 1141, 40
 px over the foot; Home's at 1137, its row the 46 px Sections pill (Main:99).
 

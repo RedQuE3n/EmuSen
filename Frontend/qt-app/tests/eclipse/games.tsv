@@ -25,9 +25,9 @@ clock	33	"9:41 PM"	Device.shortTime, Eclipse's Status part	Text	-	mid:80	inright
 gamesAside	37	the focused game's column, 440 px	-	Column	96	230	440	-	-	-	-	built	-
 gamesConsole	38	"SUPER NINTENDO · 1994"	the row's consoleName and year (library::GameRow), else Browse.year, the focused game's release year (library::facts_of); Words.line	Text	in:gamesAside:0	top:gamesAside:0	-	-	-	#FFF3C9D2	18	built	600 0.2 upper
 gamesTitle	39	"Aurora Drift"	the row's title	Text	in:gamesAside:0	below:gamesConsole:22	440	-	-	Tokens.text	62	built	600 -0.02 none
-genreChip	41	the genre chip, "Action"	Browse.genre, the scraper's genre (library::facts_of); left out for a game with none	Rectangle	in:gamesAside:0	below:gamesTitle:22	fit:genreChipWords:16	38	19	-	-	built	line 2 #FF4A5068
+genreChip	41	the genre chip, "Action"	Browse.genre, the scraper's genre (library::facts_of); left out for a game with none	Chip	in:gamesAside:0	below:gamesTitle:22	fit:genreChipWords:16	38	19	-	-	built	line 2 #FF4A5068
 genreChipWords	41	its words	Browse.genre	Text	in:genreChip:16	mid:genreChip	-	-	-	Tokens.text	18	built	400 0 none
-playersChip	42	the players chip, "1 to 2 players"	Browse.players, the scraper's players in words (words::players); left out for a game with none	Rectangle	after:genreChip:10	foot:genreChip	fit:playersChipWords:16	38	19	-	-	built	line 2 #FF4A5068
+playersChip	42	the players chip, "1 to 2 players"	Browse.players, the scraper's players in words (words::players); left out for a game with none	Chip	after:genreChip:10	foot:genreChip	fit:playersChipWords:16	38	19	-	-	built	line 2 #FF4A5068
 playersChipWords	42	its words	Browse.players	Text	in:playersChip:16	mid:playersChip	-	-	-	Tokens.text	18	built	400 0 none
 description	44	the game's description	Browse.description, the scraper's (library::facts_of); left out for a game with none	Text	in:gamesAside:0	below:genreChip:22	440	-	-	#FFC9CDDB	20	built	300 0 none
 gamesFact.0	46	"Last played", "Yesterday"	the row's lastPlayedWords (words::ago), drawn for a game played	Item	in:gamesAside:0	below:description:22	440	-	-	-	-	built	-

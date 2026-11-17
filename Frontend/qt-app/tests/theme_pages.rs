@@ -127,12 +127,14 @@ fn qt_3_2_a_theme_draws_settings_and_the_game_page_through_read_only_views() {
     let after = drawn(&mut scene, &format!("setRow{switch}"));
     assert_ne!(before.split('|').nth(6), after.split('|').nth(6), "the switch turned: {before} -> {after}");
     settings_read_whole(&mut scene, "Display, a switch turned");
-    let choice = row_where(&mut scene, |i, r| r.kind == RowKind::Steps && i != switch && !r.held).expect("a stepped row on Display");
+    let choice = row_where(&mut scene, |_, r| r.id == "textsize").expect("Text size, a choice of three on Display");
     let value = drawn(&mut scene, &format!("setRow{choice}"));
     ask(&mut scene, "pagesSettings", &format!("settingsStep {choice} 1"));
     scene.wait(200);
     assert_ne!(drawn(&mut scene, &format!("setRow{choice}")), value, "the choice stepped");
-    ask(&mut scene, "pagesSettings", &format!("settingsStep {choice} -1"));
+    assert_eq!(ask(&mut scene, "pagesSettings", &format!("settingsStep {choice} -1")), "true");
+    scene.wait(200);
+    assert_eq!(drawn(&mut scene, &format!("setRow{choice}")), value, "Left steps it back: of three choices, only a step by -1 returns");
 
     // A page of choices: Shaders, a console, the CRT chosen among its shaders and the mark moved to it.
     let shaders = row_where(&mut scene, |_, r| r.id == "shaders").expect("Display's Shaders");

@@ -12,7 +12,7 @@
 # A ringed glyph's box is its span's with the ring outside it (CSS's content-box): Y's 34 is 38, X's 40 is 44; a button's holds its line.
 # The state held is the board's with the program's eleven consoles: the first chip pressed, the first maker chosen, its first
 # console focused; the disc's colour, the fields' hue and the words are held by the test beside the table.
-# status: built, nothing (the program has nothing for it, so no element of it is made), or ruled (the section tabs, another piece's by R-20261115-7: nothing drawn here), or empty: drawn
+# status: built, nothing (the program has nothing for it, so no element of it is made), or empty: drawn
 # while the chip pressed holds no console, its line the first-run board's (EclipseEmpty.dc.html), held in that state alone (R-20261116-9).
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 backdropGround	17	the ground	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	#FF07080F	-	built	-
@@ -20,11 +20,18 @@ backdropField.0	19	a colour field: #5B3FD6, a circle, blurred 140 px at 0.5	the 
 backdropField.1	20	a colour field: #C0486F, a circle, blurred 150 px at 0.35	the kit's BackdropField: the board's saturation and lightness with the focused console's hue (its glow)	-	1500	520	620	620	-	opacity:0.35	blur:150	built	field 0 -1 #C0486F 0
 mark	25	the crescent mark	Marks.crescent, Home's Brand part	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
 wordmark	26	"EmuSen"	Words.title, Home's Brand part	Text	after:mark:14	mid:80	-	-	-	Tokens.text	24	built	600 0.02 none
-nav.home	29	"Home", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
-nav.library	30	"Library", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
-nav.consoles	31	"Consoles", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
-nav.collections	32	"Collections", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
-nav.tools	33	"Tools", a section	the sections are another piece's (R-20261115-7): nothing drawn here	-	-	-	-	-	-	-	-	ruled	-
+nav	28	the sections, 64 px after the brand, 44 px apart	Library.sections, the program's sections from their one owner (qt-models/src/screens.rs SECTIONS), Eclipse's Nav part	-	after:wordmark:64	mid:80	-	-	-	-	-	built	-
+nav.home	29	"Home", a section	Library.sections' row; LB, RB and a tap open it through Actions.openSection: Home (qt-models/src/screens.rs SECTIONS)	-	in:nav:0	mid:80	-	-	-	-	-	built	-
+navWords.home	29	"Home", muted	the row's name, words::HOME_SECTION	Text	in:nav.home:0	top:nav.home:0	-	-	-	Tokens.muted	24	built	400 0 none
+nav.library	30	"Library", a section	Library.sections' row; LB, RB and a tap open it through Actions.openSection: the games view at every game (Shown::Grid at library::ALL)	-	after:nav.home:44	mid:80	-	-	-	-	-	built	-
+navWords.library	30	"Library", muted	the row's name, words::LIBRARY_SECTION	Text	in:nav.library:0	top:nav.library:0	-	-	-	Tokens.muted	24	built	400 0 none
+nav.consoles	31	"Consoles", the section shown, its words 10 px over a 3 px underline	Library.sections' row; LB, RB and a tap open it through Actions.openSection: Choose a console (Shown::Consoles)	-	after:nav.library:44	mid:80	-	-	-	-	-	built	-
+navWords.consoles	31	"Consoles", white and semi-bold	the row's name, words::CONSOLES_SECTION	Text	in:nav.consoles:0	top:nav.consoles:0	-	-	-	#FFFFFFFF	24	built	600 0 none
+navUnderline.consoles	31	the 3 px underline in the corona's colour	none: the accent token	Rectangle	in:nav.consoles:0	foot:nav.consoles	fit:nav.consoles:0	3	-	Tokens.accent	-	built	-
+nav.collections	32	"Collections", a section	Library.sections' row; LB, RB and a tap open it through Actions.openSection: the List card's Filter page, which lists the collections, over every game (Shown::List)	-	after:nav.consoles:44	mid:80	-	-	-	-	-	built	-
+navWords.collections	32	"Collections", muted	the row's name, words::COLLECTIONS_SECTION	Text	in:nav.collections:0	top:nav.collections:0	-	-	-	Tokens.muted	24	built	400 0 none
+nav.tools	33	"Tools", a section	Library.sections' row; LB, RB and a tap open it through Actions.openSection: the Home card's Tools page (Shown::HomeCard at home_card::TOOLS)	-	after:nav.collections:44	mid:80	-	-	-	-	-	built	-
+navWords.tools	33	"Tools", muted	the row's name, words::TOOLS_SECTION	Text	in:nav.tools:0	top:nav.tools:0	-	-	-	Tokens.muted	24	built	400 0 none
 battery	37	"82%"	Device.battery as Words.percent gives it, fed from the platform library (EmuSen_RustPlatform.md §58); the level alone, no picture	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
 clock	38	"9:41 PM"	Device.shortTime, Home's Status part	Text	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
 chip.0	44	the chip pressed, "All · 124"	Words.consoleShows[0], Library.consolesBy(0, 0, []).count	Walkable	96	150	fit:chipWords.0:22	48	-	-	-	built	-

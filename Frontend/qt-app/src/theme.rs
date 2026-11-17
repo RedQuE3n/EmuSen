@@ -5,11 +5,11 @@
 
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QList, QString, QStringList};
 use emusen_qt_models::game_model::qobject::GameModel;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
-use emusen_qt_models::{help, screens, themes, words};
+use emusen_qt_models::{help, list_card, screens, themes, words};
 use emusen_theme_qt::actions::{Action, ActionSink};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
@@ -52,6 +52,8 @@ pub mod qobject {
         #[qproperty(bool, swap)]
         /// The program's clock's time, in seconds since 1970, 0 for the wall clock: the theme's `Words.now`.
         #[qproperty(i64, now)]
+        /// The key of the program's section shown (`Screens.section`): the theme's `Library.section`.
+        #[qproperty(QString, shown_section, cxx_name = "shownSection")]
         type ThemeFeed = super::ThemeFeedRust;
     }
 
@@ -104,12 +106,19 @@ pub mod qobject {
         /// A console's or a shelf's grid, by its key.
         #[qsignal]
         fn opened(self: Pin<&mut ThemeFeed>, key: QString);
+        /// One of the program's sections, by its key.
+        #[qsignal]
+        #[cxx_name = "sectionOpened"]
+        fn section_opened(self: Pin<&mut ThemeFeed>, key: QString);
         /// B that the theme's screen did not keep.
         #[qsignal]
         fn backed(self: Pin<&mut ThemeFeed>);
         /// A screen's declared action, by the help bar's key (`emusen_qt_models::help`).
         #[qsignal]
         fn acted(self: Pin<&mut ThemeFeed>, key: QString);
+        /// A step or a choice of the List card's, by its action's key (`emusen_qt_models::list_card`), for the grid to carry out.
+        #[qsignal]
+        fn listed(self: Pin<&mut ThemeFeed>, key: QString);
         /// The game the theme's focus is on, by its file.
         #[qsignal]
         fn focused(self: Pin<&mut ThemeFeed>, game: QString);
@@ -122,6 +131,7 @@ pub mod qobject {
     }
 
     impl cxx_qt::Initialize for ThemeFeed {}
+    impl cxx_qt::Threading for ThemeFeed {}
 }
 
 /// The built-in themes' places in the resources (`emusen_qt_models::themes::BUILT_IN`) and their manifests.
@@ -180,6 +190,9 @@ pub struct ThemeFeedRust {
     reduced_motion: bool,
     swap: bool,
     now: i64,
+    /// The game whose facts were last asked for, so a read that comes back for another is dropped.
+    facts_for: std::cell::RefCell<String>,
+    shown_section: QString,
     /// The feed as the sink sees it, emptied when the feed goes, so a sink that outlives it takes nothing.
     me: Rc<Cell<*mut qobject::ThemeFeed>>,
 }
@@ -200,6 +213,8 @@ impl Default for ThemeFeedRust {
             reduced_motion: false,
             swap: false,
             now: 0,
+            facts_for: std::cell::RefCell::new(String::new()),
+            shown_section: QString::default(),
             me: Rc::new(Cell::new(std::ptr::null_mut())),
         }
     }
@@ -226,12 +241,15 @@ pub enum Carried {
     Resumed,
     Place(i32),
     Opened(String),
+    Section(String),
     Backed,
     Acted(String),
     Focused(String),
     Selected(i32),
     /// A game's page: the game taken in hand, then its page opened (EmuSen_Qt.md §7.8).
     Page(String),
+    /// The List card's filter, sort or letter step, by its action's key (EmuSen_Qt.md §3.4.10).
+    Listed(String),
     /// A game's favourite turned, by its file; empty for the game in hand, as the help's Y names no game.
     Favourite(String),
 }
@@ -251,14 +269,19 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
             Some(i) => Carried::Place(i as i32),
             None => Carried::Opened(key.clone()),
         },
+        Action::OpenSection(key) => Carried::Section(key.clone()),
         Action::Home => Carried::Acted(help::HOME.into()),
         Action::Back => Carried::Backed,
         Action::StepSection(by) => Carried::Acted(if *by < 0 { help::PREVIOUS } else { help::NEXT }.into()),
         Action::OpenHomeCard => return None,
         Action::OpenListCard => Carried::Acted(screens::LIST.into()),
         Action::Search => Carried::Acted(screens::SEARCH.into()),
+        Action::Act(key) if key == list_card::JUMP_BACK || key == list_card::JUMP_ON => Carried::Listed(key.clone()),
         Action::Act(key) if key == help::FAVOURITE => Carried::Favourite(String::new()),
         Action::Act(key) => Carried::Acted(key.clone()),
+        Action::SetFilter(key) => Carried::Listed(key.clone()),
+        Action::StepSort(by) => Carried::Listed(format!("{}{by:+}", list_card::SORT)),
+        Action::StepLetter(by) => Carried::Listed(format!("{}{by:+}", list_card::JUMP)),
         Action::Focus(key) => match rows.iter().position(|r| r == key) {
             Some(i) => Carried::Selected(i as i32),
             None => Carried::Focused(key.clone()),
@@ -287,6 +310,7 @@ impl ActionSink for Sink {
             Carried::Resumed => feed.as_mut().resumed(),
             Carried::Place(index) => feed.as_mut().place_chosen(index),
             Carried::Opened(key) => feed.as_mut().opened(QString::from(key.as_str())),
+            Carried::Section(key) => feed.as_mut().section_opened(QString::from(key.as_str())),
             Carried::Backed => feed.as_mut().backed(),
             Carried::Acted(key) => feed.as_mut().acted(QString::from(key.as_str())),
             Carried::Focused(game) => {
@@ -294,6 +318,7 @@ impl ActionSink for Sink {
                 self.in_hand = game;
             }
             Carried::Selected(index) => feed.as_mut().selected(index),
+            Carried::Listed(key) => feed.as_mut().listed(QString::from(key.as_str())),
             Carried::Page(game) => {
                 feed.as_mut().focused(QString::from(game.as_str()));
                 feed.as_mut().acted(QString::from(help::GAME_PAGE));
@@ -329,6 +354,7 @@ impl cxx_qt::Initialize for qobject::ThemeFeed {
         self.as_mut().on_charging_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_reduced_motion_changed(|feed| feed.feed_motion()).release();
         self.as_mut().on_swap_changed(|feed| feed.feed_swap()).release();
+        self.as_mut().on_shown_section_changed(|feed| feed.feed_section()).release();
         self.as_mut().on_now_changed(|feed| {
             feed.feed_words();
             feed.feed_browse();
@@ -354,6 +380,8 @@ impl qobject::ThemeFeed {
     /// `library` is the window's `LibraryModel`, alive as long as the feed.
     pub unsafe fn show_library(mut self: Pin<&mut Self>, library: *mut cxx_qt::QObject) {
         self.as_mut().rust_mut().library = unsafe { model::<LibraryModel>(library) };
+        // The library read again: the focused game's facts may have changed with it.
+        self.facts_for.borrow_mut().clear();
         self.feed_library();
         // The session's console and the section's words are read from the library too.
         self.feed_session();
@@ -414,12 +442,57 @@ impl qobject::ThemeFeed {
         let (Some(games), Some(library)) = (unsafe { section.games.as_ref() }, self.library()) else { return };
         let open = (section.searching, section.typing, section.list_open);
         let searched = !games.search().is_empty();
-        let facts = facts_of(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
+        let mut facts = facts_of(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
+        let (letters, letter) = games.letters();
+        facts.empty_words = games.empty_words().to_owned();
+        facts.filter = games.filter_key();
+        facts.sort = games.sort_words().to_owned();
+        facts.letter = letter;
         let rows = view::games(library.view(), games.rows(), self.at());
+        let (filters, letters) = (view::filters(games.choices()), view::letters(&letters));
+        let focused = usize::try_from(*games.focused()).ok().and_then(|i| games.rows().get(i)).map(|g| g.path.clone()).unwrap_or_default();
+        self.ask_facts(library, focused);
         let Some(engine) = self.engine() else { return };
         if let Some(mut browse) = host::browse(engine) {
             browse.as_mut().show_games(rows);
+            browse.show_listing(filters, letters);
             browse.show(&facts);
+        }
+    }
+
+    /// Reads the focused game's facts off the GUI thread when the focus has moved to another game, and feeds them to
+    /// `Browse` when they come back for the game still focused (EmuSen_Qt.md §3.4.10).
+    fn ask_facts(&self, library: &LibraryModel, path: String) {
+        if *self.facts_for.borrow() == path {
+            return;
+        }
+        self.facts_for.replace(path.clone());
+        let game = library.view().catalog.games.iter().find(|g| g.path == path).cloned();
+        let (Some(game), Some(source)) = (game, library.source()) else {
+            self.show_facts(emusen_qt_models::library::GameFacts::default());
+            return;
+        };
+        let seconds = emusen_qt_models::library::seconds_played(&library.view().catalog, &path);
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let facts = emusen_qt_models::library::facts_of(source.as_ref(), &game, seconds).unwrap_or_else(|_| emusen_qt_models::library::GameFacts { path: game.path.clone(), ..Default::default() });
+            let _ = qt.queue(move |feed| {
+                if *feed.facts_for.borrow() == facts.path {
+                    feed.show_facts(facts);
+                }
+            });
+        });
+    }
+
+    fn show_facts(&self, facts: emusen_qt_models::library::GameFacts) {
+        if let Some(browse) = self.engine().and_then(host::browse) {
+            browse.show_facts(&facts);
+        }
+    }
+
+    fn feed_section(&self) {
+        if let Some(library) = self.engine().and_then(host::library) {
+            library.show_section(&self.shown_section.to_string());
         }
     }
 
@@ -476,6 +549,7 @@ impl qobject::ThemeFeed {
         self.feed_tokens();
         self.feed_device();
         self.feed_library();
+        self.feed_section();
         self.feed_session();
         self.feed_browse();
     }

@@ -51,8 +51,8 @@ Item {
             // The disc grown by the spread and blurred, as a box-shadow is: the kit's Glow, a Gaussian of half the blur radius on
             // the card (§7.113) and painted on the software backend.
             Kit.Glow {
-                anchors.centerIn: parent
-                anchors.alignWhenCentered: false
+                x: (parent.width - width) / 2
+                y: (parent.height - height) / 2
                 width: root.diameter
                 height: root.diameter
                 radius: root.diameter / 2
@@ -65,9 +65,9 @@ Item {
     }
     Rectangle {
         objectName: "coronaRim"
-        anchors.centerIn: parent
-        // At the disc's centre exactly, not snapped to a whole unit: a rim of 2 board pixels is no whole unit (EmuSen_Kit.md §7.116).
-        anchors.alignWhenCentered: false
+        x: (parent.width - width) / 2
+        // At the disc's centre exactly: centerIn rounds the parent's half width whatever alignWhenCentered says (EmuSen_Kit.md §7.116).
+        y: (parent.height - height) / 2
         width: root.diameter + 2 * root.rim
         height: root.diameter + 2 * root.rim
         radius: width / 2
@@ -76,8 +76,8 @@ Item {
     }
     Rectangle {
         objectName: "coronaDisc"
-        anchors.centerIn: parent
-        anchors.alignWhenCentered: false
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
         width: root.diameter
         height: root.diameter
         radius: width / 2

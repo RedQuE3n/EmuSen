@@ -237,7 +237,8 @@ impl LibrarySource for ClientSource {
 
     fn plays(&self, games: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
         let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
-        let number = |r: &Value, key: &str| r.get(key).and_then(Value::as_i64).unwrap_or(0);
+        // games.db keeps the seconds as a real (Platform/library/src/records.rs), so they are read as one.
+        let number = |r: &Value, key: &str| r.get(key).and_then(Value::as_f64).map_or(0, |n| n as i64);
         let of = |g: &GameFile| records.get(&g.path).map(|r| (g.path.clone(), Plays { count: number(r, "play_count"), seconds: number(r, "play_seconds") }));
         Ok(games.iter().filter_map(of).collect())
     }
@@ -267,6 +268,10 @@ impl LibrarySource for ClientSource {
     fn played_for(&self, path: &str, seconds: f64, max_hours: i32) -> Result<Option<f64>, String> {
         let kept = self.library.change(&json!({ "op": "played", "path": path, "seconds": seconds, "max_hours": max_hours })).map_err(words)?;
         Ok(kept.as_f64())
+    }
+
+    fn state_count(&self, game: &GameFile) -> Result<usize, String> {
+        Ok(self.states(game, &app_settings(&self.platform)?)?.len())
     }
 
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {

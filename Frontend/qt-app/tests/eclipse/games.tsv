@@ -1,0 +1,85 @@
+# Eclipse's games view against its board, EclipseLibrary.dc.html (design project, "Eclipse theme, a console's games", 1920 by 1200), one row an element (EmuSen_Qt.md §3.4.10).
+# board_height: 1200
+# Boxes are the board's pixels; tests/eclipse_games_oracle turns each into canvas units as value × canvas::DESIGN_HEIGHT / board_height.
+# The rules and types are eclipse_home.tsv's and consoles.tsv's, read by tests/eclipse_board/mod.rs.
+# The state held is the board's with the program's games: the first game by name played and focused, with every fact the board draws (its year, genre, players and description as games.db's edits, 3 h 20 min played, three states), the machine's battery at 82%, the chip Every game in force, the sort Name.
+# The disc's colour, the fields' hue, the line heights and the tiles' columns are held by the oracle beside the table.
+# status: built, nothing (the program has nothing for it, so no element of it is made: the reason in "program"), or ruled (another piece's, by the ruling named).
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground	Ink.ground, the board's own colour	Rectangle	0	0	right:0	1200	-	#FF0A1024	-	built	-
+backdropField.0	18	a colour field: #1FC9A8, an ellipse, blurred 120 px at 0.35	the kit's BackdropField: the board's saturation and lightness with the focused game's first art hue (Library.artHues, parts/ArtHues.qml)	-	700	-200	900	800	-	opacity:0.35	blur:120	built	field 0 -1 #1FC9A8 0
+backdropField.1	19	a colour field: #6A4CF0, a circle, blurred 130 px at 0.4	the kit's BackdropField: the board's saturation and lightness with the focused game's second art hue	-	1200	500	900	900	-	opacity:0.4	blur:130	built	field 0 -1 #6A4CF0 0
+gamesDisc	20	the disc, 1700 px	the kit's CoronaDisc	CoronaDisc	-1100	-250	1700	1700	-	-	-	built	-
+coronaDisc	20	its fill, #07080F	the kit's CoronaDisc's body, Tokens.surface	-	in:gamesDisc:0	top:gamesDisc:0	1700	1700	-	Tokens.surface	-	built	-
+coronaRim	20	its rim, 2 px	the focused game's first art hue at the rim's saturation and lightness (R-20261115-27)	-	in:gamesDisc:-2	top:gamesDisc:-2	1704	1704	-	-	-	built	-
+coronaGlow.0	20	its glow, 44 px blur, 8 px spread, 0.55	the rim's colour at the board's strength	-	in:gamesDisc:0	top:gamesDisc:0	1700	1700	-	-	-	built	corona 44 8 0.55
+coronaGlow.1	20	its halo, 170 px blur, 46 px spread, 0.25	the rim's colour at the board's strength	-	in:gamesDisc:0	top:gamesDisc:0	1700	1700	-	-	-	built	corona 170 46 0.25
+mark	24	the crescent mark	Marks.crescent, Eclipse's Brand part	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+gamesPath	25	the path, where you are	B's place and the section: a Walkable that goes back, as B does	Walkable	after:mark:28	mid:80	-	-	-	-	-	built	-
+gamesPathBack	26	"Consoles"	the help's B entry on the grid (help.rs Screen::Grid, "Consoles")	Text	in:gamesPath:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+gamesPathSlash	27	"/"	Words.crumb (words::CRUMB)	Text	after:gamesPathBack:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+gamesPathHere	28	"Super Nintendo"	Browse.heading, the section's name	Text	after:gamesPathSlash:14	mid:80	-	-	-	Tokens.text	24	built	600 0 none
+status	32	the status glass	the board's own colour, Ink.glass	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
+battery	33	"82%"	Device.battery as Words.percent gives it, fed from the platform library (EmuSen_RustPlatform.md §58), Eclipse's Status part	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	33	"9:41 PM"	Device.shortTime, Eclipse's Status part	Text	-	mid:80	inright:status:22	-	-	Tokens.text	22	built	600 0 none
+gamesAside	37	the focused game's column, 440 px	-	Column	96	230	440	-	-	-	-	built	-
+gamesConsole	38	"SUPER NINTENDO · 1994"	the row's consoleName and year (library::GameRow), else Browse.year, the focused game's release year (library::facts_of); Words.line	Text	in:gamesAside:0	top:gamesAside:0	-	-	-	#FFF3C9D2	18	built	600 0.2 upper
+gamesTitleLine	39	"Aurora Drift"'s line box, 62 px at the board's line height of 1.04	the title's line height, times its lines	Item	in:gamesAside:0	below:gamesConsole:22	440	64.48	-	-	-	built	-
+gamesTitle	39	"Aurora Drift", the face's own height about the line box's middle, as CSS spreads the leading	the row's title	Text	in:gamesAside:0	mid:gamesTitleLine	-	-	-	Tokens.text	62	built	600 -0.02 none
+genreChip	41	the genre chip, "Action"	Browse.genre, the scraper's genre (library::facts_of); left out for a game with none	Chip	in:gamesAside:0	below:gamesTitleLine:22	fit:genreChipWords:16	38	19	-	-	built	line 2 #FF4A5068
+genreChipWords	41	its words	Browse.genre	Text	in:genreChip:16	mid:genreChip	-	-	-	Tokens.text	18	built	400 0 none
+playersChip	42	the players chip, "1 to 2 players"	Browse.players, the scraper's players in words (words::players); left out for a game with none	Chip	after:genreChip:10	foot:genreChip	fit:playersChipWords:16	38	19	-	-	built	line 2 #FF4A5068
+playersChipWords	42	its words	Browse.players	Text	in:playersChip:16	mid:playersChip	-	-	-	Tokens.text	18	built	400 0 none
+descriptionLine	44	the description's line box, 20 px at the board's line height of 1.5	the description's line height, times its lines	Item	in:gamesAside:0	below:genreChip:22	440	-	-	-	-	built	-
+description	44	the game's description	Browse.description, the scraper's (library::facts_of); left out for a game with none	Text	in:gamesAside:0	top:descriptionLine:0	-	-	-	#FFC9CDDB	20	built	300 0 none
+gamesFact.0	46	"Last played", "Yesterday"	the row's lastPlayedWords (words::ago), drawn for a game played	Item	in:gamesAside:0	below:descriptionLine:22	440	-	-	-	-	built	-
+gamesFactLabel.0	46	its label	Words.gameFactLabels[0] (words::GAME_FACT_LABELS)	Text	in:gamesFact.0:0	mid:gamesFact.0	-	-	-	Tokens.muted	20	built	400 0 none
+gamesFactValue.0	46	its value, right aligned	the row's lastPlayedWords	Text	-	mid:gamesFact.0	inright:gamesFact.0:0	-	-	Tokens.text	20	built	400 0 none
+gamesFact.1	47	"Time played", "3 h 20 min"	Browse.timePlayed, games.db's seconds played in words (words::time_played); left out under a minute	Item	in:gamesAside:0	below:gamesFact.0:12	440	-	-	-	-	built	-
+gamesFactLabel.1	47	its label	Words.gameFactLabels[1]	Text	in:gamesFact.1:0	mid:gamesFact.1	-	-	-	Tokens.muted	20	built	400 0 none
+gamesFactValue.1	47	its value, right aligned	Browse.timePlayed	Text	-	mid:gamesFact.1	inright:gamesFact.1:0	-	-	Tokens.text	20	built	400 0 none
+gamesFact.2	48	"States", "3"	Browse.states, the game's saved states counted where Galaxia's save paths put them; left out for none	Item	in:gamesAside:0	below:gamesFact.1:12	440	-	-	-	-	built	-
+gamesFactLabel.2	48	its label	Words.gameFactLabels[2]	Text	in:gamesFact.2:0	mid:gamesFact.2	-	-	-	Tokens.muted	20	built	400 0 none
+gamesFactValue.2	48	its value, right aligned	Browse.states	Text	-	mid:gamesFact.2	inright:gamesFact.2:0	-	-	Tokens.text	20	built	400 0 none
+gamesStart	51	Start, A	the help's A, named Start (help::games_named, words::START), Eclipse's Pill; plays the focused game	Pill	in:gamesAside:0	below:gamesFact.2:28	fit:buttonLabel.0:28	64	32	Tokens.accent	-	built	-
+buttonGlyph.0	51	A, filled, 42 px	the kit's lettered glyph through Eclipse's Glyph part	Glyph	in:gamesStart:12	mid:gamesStart	42	42	-	-	-	built	glyph 19 600
+buttonLabel.0	51	"Start"	the help's A, named Start	Text	after:buttonGlyph.0:12	mid:gamesStart	-	-	-	Tokens.overAccent	23	built	600 0 none
+gamesPage	52	Game page, X	the help's X entry, Eclipse's Pill; opens the focused game's page	Pill	after:gamesStart:14	foot:gamesStart	fit:buttonLabel.1:28	64	32	#FF5A6076	-	built	-
+buttonGlyph.1	52	X, ringed	the kit's lettered glyph through Eclipse's Glyph part	Glyph	in:gamesPage:14	mid:gamesPage	44	44	-	-	-	built	glyph 18 400
+buttonLabel.1	52	"Game page"	the help's X entry	Text	after:buttonGlyph.1:12	mid:gamesPage	-	-	-	Tokens.text	23	built	400 0 none
+gamesFilter.0	55	the chip in force, "All · 214"	Browse.filters' chip (listing::chip_name, words::ALL) and count; sets the filter	Walkable	660	150	fit:gamesFilterWords.0:22	48	-	-	-	built	-
+gamesFilterFill.0	55	its fill, no line	Tokens.accent	Rectangle	in:gamesFilter.0:0	top:gamesFilter.0:0	fit:gamesFilter.0:0	48	24	Tokens.accent	-	built	line 0 -
+gamesFilterWords.0	55	its words	the chip's line	Text	in:gamesFilter.0:22	mid:gamesFilter.0	-	-	-	Tokens.overAccent	21	built	600 0 none
+gamesFilter.1	56	a chip, "Favourites · 12"	Browse.filters' Favourites	Walkable	after:gamesFilter.0:14	foot:gamesFilter.0	fit:gamesFilterWords.1:24	48	-	-	-	built	-
+gamesFilterFill.1	56	its line, 2 px #4A5068, over rgba(7, 8, 15, 0.6)	Ink.chipLine over GamesInk.chipGround	Rectangle	in:gamesFilter.1:0	top:gamesFilter.1:0	fit:gamesFilter.1:0	48	24	#9907080F	-	built	line 2 #FF4A5068
+gamesFilterWords.1	56	its words	the chip's line	Text	in:gamesFilter.1:24	mid:gamesFilter.1	-	-	-	#FFE3E6F0	21	built	400 0 none
+gamesFilter.2	57	a chip, "Not played · 153"	Browse.filters' Not played	Walkable	after:gamesFilter.1:14	foot:gamesFilter.0	fit:gamesFilterWords.2:24	48	-	-	-	built	-
+gamesFilterFill.2	57	its line, 2 px #4A5068, over rgba(7, 8, 15, 0.6)	Ink.chipLine over GamesInk.chipGround	Rectangle	in:gamesFilter.2:0	top:gamesFilter.2:0	fit:gamesFilter.2:0	48	24	#9907080F	-	built	line 2 #FF4A5068
+gamesFilterWords.2	57	its words	the chip's line	Text	in:gamesFilter.2:24	mid:gamesFilter.2	-	-	-	#FFE3E6F0	21	built	400 0 none
+gamesSort	59	the order in force on its glass	Browse.sortLine (listing::sort_line); pressed, View's action, the List card	Walkable	-	mid:gamesFilter.0	right:96	48	-	-	-	built	-
+gamesSortFill	59	its glass, rgba(7, 8, 15, 0.78)	Ink.glass	Rectangle	in:gamesSort:0	top:gamesSort:0	fit:gamesSort:0	48	24	#C707080F	-	built	-
+gamesSortGlyph	60	"VIEW" in a 2 px capsule, 30 inside, padding 10	the kit's name for View in the pad's family through Eclipse's Glyph part	Glyph	in:gamesSort:18	mid:gamesSort	-	34	-	-	-	built	word 14 400 15 10
+gamesSortWords	60	"Name, A to Z"	Browse.sortLine	Text	after:gamesSortGlyph:12	mid:gamesSort	-	-	-	#FFD8DBE6	21	built	400 0 none
+gamesTile.0	65	the focused tile	Browse.games' first row	Cell	660	236	206	170	-	-	-	built	-
+gamesTileCover.0	65	its art, cropped, corner 16	the row's cover, the kit's RoundPicture	-	in:gamesTile.0:0	top:gamesTile.0:0	206	170	16	-	-	built	-
+tileShade.0	66	its shade, 84 px, rgba(4, 5, 10, 0.94) to clear	Tokens.overArtScrim, Eclipse's TileWords part	Rectangle	in:gamesTile.0:0	up:gamesTile.0:0	206	84	16	Tokens.overArtScrim	-	built	-
+tileTitle.0	67	its name, 14 px in, 12 px over the foot	the row's title, wrapped whole	Text	in:gamesTile.0:14	up:gamesTile.0:12	-	-	-	#FFFFFFFF	18	built	600 0 none
+gamesRing.0	65	the focused tile's ring	the kit's FocusRing	FocusRing	in:gamesTile.0:0	top:gamesTile.0:0	206	170	-	-	-	built	ring 4 3 40 10 23 #80F0B4C4 #FF07080F #FFF6E7D8
+gamesTile.1	65	the next tile	Browse.games' second row	Cell	after:gamesTile.0:20	top:gamesTile.0:0	206	170	-	-	-	built	-
+gamesTileShadow.1	65	a resting tile's shadow, 0 8 px 24 px rgba(0, 0, 0, 0.4)	the kit's Glow	-	in:gamesTile.1:0	top:gamesTile.1:0	206	170	-	#66000000	-	built	glow 24 0 0 8
+gamesTile.4	65	the fifth tile, the row's last	Browse.games' fifth row	Cell	after:gamesTile.3:20	top:gamesTile.0:0	206	170	-	-	-	built	-
+gamesTile.5	65	the second row's first tile	Browse.games' sixth row	Cell	660	below:gamesTile.0:20	206	170	-	-	-	built	-
+gamesRail	75	the letter rail, 34 by 740	Browse.letters	Column	right:44	236	34	740	-	-	-	built	-
+gamesRailLetter	76	the focused game's letter on a disc	Browse.letter	Rectangle	in:gamesRail:0	top:gamesRail:0	34	34	17	Tokens.accent	-	built	-
+gamesRailLetterWords	76	"A"	Browse.letter	Text	-	mid:gamesRailLetter	-	-	-	Tokens.overAccent	17	built	700 0 none
+gamesRailTrack	77	the track, 4 px, #3A3F55; a press on it steps to the letter there	Actions.stepLetter	Rectangle	in:gamesRail:15	below:gamesRailLetter:10	4	above:gamesRailLast:10	2	#FF3A3F55	-	built	-
+gamesRailLast	78	"Z", the last letter	Browse.letters' last	Text	-	up:gamesRail:0	-	-	-	#FFD8DBE6	16	built	400 0 none
+help	83	the help line: A Start, B Back, Y Favourite	Help.entries(Help.Section, {games: true}) (help::games_named), Eclipse's HelpLine	HelpBar	96	mid:1137	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Start	84	A, filled, 34 px	the kit's lettered glyph through Eclipse's Glyph part	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Back	85	B in a 2 px ring, 34 px inside	the kit's lettered glyph through Eclipse's Glyph part	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Favourite	86	Y in a 2 px ring, 34 px inside	the kit's lettered glyph through Eclipse's Glyph part	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+gamesLetters	88	the letters' glass, 46 px	the help's LT RT Letter entry and the focused game's place	Item	-	mid:1137	right:96	46	-	-	-	built	-
+gamesLettersFill	88	its glass, rgba(7, 8, 15, 0.78)	Ink.glass	Rectangle	in:gamesLetters:0	top:gamesLetters:0	fit:gamesLetters:0	46	23	#C707080F	-	built	-
+gamesLetterBack	89	LT in a 2 px box, 30 inside, corner 8, padding 10; a press steps back a letter	the kit's named glyph through Eclipse's Glyph part, Actions.stepLetter(-1)	Glyph	in:gamesLetters:18	mid:gamesLetters	-	34	-	-	-	built	word 15 400 8 10
+gamesLetterOn	90	RT in the same box; a press steps on a letter	the kit's named glyph, Actions.stepLetter(1)	Glyph	after:gamesLetterBack:10	mid:gamesLetters	-	34	-	-	-	built	word 15 400 8 10
+gamesLetterWords	91	"Letter · 1 of 214"	the help's LT entry, Words.place of the focused game	Text	after:gamesLetterOn:10	mid:gamesLetters	inright:gamesLetters:18	-	-	#FFD8DBE6	21	built	400 0 none

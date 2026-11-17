@@ -38,21 +38,14 @@ ThemeScreen {
             Ink {
                 id: ink
             }
-            // The board's hues for the shown game (Main:19-23): its art's three most prominent, spread by the board's own offsets where
-            // the art has fewer, else its console's hue the same way, else none and the board's own colours (EmuSen_Qt.md §3.4.8).
-            readonly property var artHues: Library.artHuesRead >= 0 && root.currentTile ? Library.artHues(root.currentTile.key, 3) : []
-            readonly property var hues: {
-                const art = root.artHues.length > 0 ? root.artHues : (root.currentTile ? [root.currentTile.consoleHue] : [])
-                if (art.length === 0)
-                    return []
-                // The board's three hues, 168, 251 and 218 degrees: the second 83 past the first, the third 50 past it.
-                const spread = (from, to) => from + ((((to - from) % 360) + 540) % 360 - 180) * 50 / 83
-                if (art.length === 1)
-                    return [art[0], art[0] + 83, art[0] + 50]
-                if (art.length === 2)
-                    return [art[0], art[1], spread(art[0], art[1])]
-                return art
+            // The shown game's hues for the board's fields (parts/ArtHues.qml).
+            ArtHues {
+                id: shownHues
+                key: root.currentTile ? root.currentTile.key : ""
+                consoleHue: root.currentTile ? root.currentTile.consoleHue : NaN
             }
+            readonly property var artHues: shownHues.art
+            readonly property var hues: shownHues.hues
             // Each board field's colour with the shown game's hue; the streaks take the hues of the two fields they are pale tints of
             // (Main:22 of 19, Main:23 of 20).
             FieldInk { id: field0; board: ink.field0; hue: root.hues.length > 0 ? root.hues[0] : NaN }
@@ -104,8 +97,16 @@ ThemeScreen {
                     width: root.width
                     height: root.height
                     Brand {
+                        id: brand
                         unit: design.unit
                         x: 96 * design.unit
+                        y: 80 * design.unit - height / 2
+                    }
+                    // The sections after the brand, the board's 64 px gap between them (Main:27).
+                    Nav {
+                        unit: design.unit
+                        controller: frame.controller
+                        x: brand.x + brand.width + 64 * design.unit
                         y: 80 * design.unit - height / 2
                     }
                     Status {
@@ -429,6 +430,12 @@ ThemeScreen {
                         // The board's words for the frame's entries: X Options, Start the Home card, no Select search (Main:94-97).
                         model: Help.entries(root.helpKind, { card: true })
                         ink: ink.help
+                        SectionsHelp {
+                            unit: design.unit
+                            controller: frame.controller
+                            color: ink.glass
+                            wordsColor: ink.help
+                        }
                     }
                 }
             }

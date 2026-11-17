@@ -322,6 +322,11 @@ impl qobject::LibraryModel {
         &self.view
     }
 
+    /// The source the view was read from, for a host that reads one game's facts off the GUI thread; none before a read.
+    pub fn source(&self) -> Option<Arc<dyn LibrarySource>> {
+        self.source.clone()
+    }
+
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
         let Some(row) = self.view.rows.rows().get(index.row() as usize) else {
             return QVariant::default();

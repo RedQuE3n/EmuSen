@@ -4231,6 +4231,13 @@ log quiet; with one guard removed it logs "TypeError: Cannot read property 'blur
 own drop under `qt-app/tests/eclipse.rs` no longer logs it with the guard removed (seen 2026-11-15); which order of
 deletion changed is not known, so the case is held in the kit.
 
+**Centred by its own sums** (2026-11-16). The rim, the body and each glow were placed with `anchors.centerIn` and
+`alignWhenCentered: false`. Qt's anchors leave the item's own half size whole under that flag, but round the parent's
+half width and height (`qquickanchors.cpp`, `hcenter()` and `vcenter()`, read from Qt 6's source on 2026-11-16), so a disc
+whose box is no whole number of units across stood a part of a unit off: on Eclipse's games view, 1133.33 units across, the
+body and the rim a third of a unit right of and below the box (measured 2026-11-16 by qt-app's `eclipse_games`). Each is
+now placed at (parent − own) / 2 on both axes; Eclipse's games table's `coronaDisc` and `coronaRim` rows hold it.
+
 ### 7.117 The face tokens: Sora and JetBrains Mono bundled, a face for each role (2026-11-15)
 
 Decided 2026-11-14 by the tester (R-20261114-15): "Bundle both fonts and add the face token": Eclipse's typeface is Sora,

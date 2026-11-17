@@ -1,0 +1,24 @@
+# Eclipse's games view with no game, and its lists with none, element by element (EmuSen_Qt.md §3.4.10); read by tests/eclipse/table.rs for tests/eclipse_games_empty.rs and the lists test. The games board itself is games.tsv.
+# board: the design project's file and line (EclipseLibrary = "Eclipse theme, a console's games", EclipseEmpty = "first run with no games"), each 1920 x 1200.
+# status: built (drawn by Frontend/themes/eclipse/screens/Games.qml and held by the test); home (the part Home's board draws too, Home's to build);
+#   not-drawn (the program has nothing for it: the reason in "program"); open (waits on a ruling, named in "program").
+# checks: board pixels, converted by the test as value x canvas::DESIGN_HEIGHT / board_h. x, y, w, h: the item's box; right: the canvas's width less the
+#   box's right edge; cy: the box's vertical centre; below=item:gap: the top is that item's bottom plus gap; after=item:gap: the left is that
+#   item's right plus gap; font: the type's pixel size, Type.size of the board's (R-20261115-14); ink: the words' colour;
+#   fill: the item's colour as drawn; colour: the item's own colour where others draw over it. says=NAME: the item, or a shown item inside it, says the program's words of that name (table.rs reads each from its owner);
+#   state=NAME: the row is held only in the state the test of that name sets up. A built row with no check is refused by the reader.
+element	board	board_h	program	status	item	checks	words
+the empty ground	EclipseEmpty:17	1200	GamesInk.emptyGround (themes/eclipse/parts/GamesInk.qml), the empty state's own	built	backdropGround	colour=#05060B	
+the rose field	EclipseEmpty:19	1200	the blurred backdrop is a kit part Home builds first (R-20261115-6); its rose is of no game	open			
+the waiting disc	EclipseEmpty:20	1200	the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml) on Eclipse's corona tokens; the board's three glows are not the tokens'	built	emptyDisc	right=190 y=250 w=600 h=600	
+the header	EclipseEmpty:22	1200	Eclipse's Brand part with Words.name (words::NAME), "EmuSen" as the board writes it	built	wordmark	says=NAME	EmuSen
+the empty heading	EclipseEmpty:29	1200	Words.noGames (qt-models/src/words.rs:63)	built	emptyHeading	x=96 y=250 w=880 font=84 ink=#F4F1EC	No games yet
+the empty line	EclipseEmpty:30	1200	Words.addFolder (qt-models/src/words.rs:66), the program's words for it (R-20261113-17); the board's sentence is not the program's; ink GamesInk.words	built	emptyLine	x=96 below=emptyHeading:14 w=880 font=25 ink=#C9CDDB	Show EmuSen the folder your games are in. ...
+the steps	EclipseEmpty:35	1200	nothing: no words of the program's for the three steps	not-drawn			1 Choose your games folder  One folder, with a folder inside it for each console  2 EmuSen reads it  It finds each game's console and gets a core for it  3 Art and facts, if you like  Fetched for the games it recognises; skip it and nothing is missing
+the Choose the folder button	EclipseEmpty:46	1200	nothing: no action of Actions opens the folder chooser (theme-qt/src/actions.rs), no such words	not-drawn			A  Choose the folder
+the Look around first button	EclipseEmpty:47	1200	nothing: no such words or action	not-drawn			X  Look around first
+no game in the library	EclipseEmpty:29	1200	the places' counts 0 (qt-models/src/library.rs:369) and no console row (library.rs:389); reached by Choose a console's shelves (themes/emusen/screens/Consoles.qml:509)	built	emptyHeading	state=no-library says=NO_GAMES	
+Favourites with none	EclipseEmpty:29	1200	games_of_at's filter (qt-models/src/library.rs:278); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading	state=favourites says=NO_FAVOURITES	No favourites yet
+Recent with none	EclipseEmpty:29	1200	recent_of (qt-models/src/library.rs:271-272); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading	state=recent says=NO_RECENT	Nothing played yet
+a search with none	EclipseEmpty:29	1200	listing::shown's words (qt-models/src/listing.rs:73); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading	state=search says=NO_GAMES_FOUND	No games found
+a List card filter with none	EclipseEmpty:29	1200	listing::shown's favourites and collection (qt-models/src/listing.rs:71-73); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading	state=filter says=NO_GAMES_FOUND	No games found

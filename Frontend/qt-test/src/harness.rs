@@ -358,6 +358,12 @@ impl Scene<'_> {
         Tree::from_json(&json).expect("the tree")
     }
 
+    /// The focus's tree: the focus's ancestors, the subtree of its walkable, and every view, each node as `tree` writes it (EmuSen_Kit.md §7.9).
+    pub fn focus_tree(&mut self) -> Tree {
+        let json = ffi::harness_focus_tree(self.window()).to_string();
+        Tree::from_json(&json).expect("the focus's tree")
+    }
+
     pub fn click(&mut self, x: f64, y: f64) {
         ffi::harness_click(self.window(), x, y, 1);
         self.drain_queued();

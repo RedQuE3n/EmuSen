@@ -566,6 +566,12 @@ gallery and the program's window share one copy; `pad_chord_only` reads whether 
   item outside its nearest clipping ancestor (a row built out of view), the spoken name of a nameless operable item from
   the first words under it (as Avalonia's peers resolved it, InterfaceSpec §4.3), `Body`, `Sky` and `Moonrise` as
   scenes, and clear colours dropped. So every rule is kit-core's; the harness re-implements none.
+- **The focus's tree** (added 2026-11-16). `focus_tree` (`harness_focus_tree`) writes only the content item and the
+  focus's ancestors, the whole subtree of the nearest operable one (the item `Tree::walkable_of` finds), and every view
+  (an item that keeps `contentY` or `offset`), each node by `nodeOf`, the code `harness_tree` writes its nodes with; a focus
+  outside the content item gives the whole tree. A reading that needs only the focus, its words and the views to settle
+  takes it in place of `tree`: the theme audit's sweep, where the whole tree of 2525 items took 73 ms a press (man
+  theme-check, the crowd's sweep). Its test holds each node it writes to the whole tree's, the walkable's subtree and the views.
 - **Pad reach is measured, not declared.** `record_edges` focuses each operable item in turn and presses Up, Down, Left
   and Right through `PadRouter`'s queue on the harness's own clock (`clockRunning` off), reading where the focus lands;
   `audit` hands kit-core those edges with the panel, the form, the focus, the variant's eighteen colours and the slack.

@@ -476,9 +476,9 @@ struct Sweep {
 }
 
 impl Sweep {
-    /// Where the focus is, read from a fresh tree.
+    /// Where the focus is, read from a fresh focus's tree, which holds all the sweep reads (man theme-check).
     fn landed(&mut self, scene: &mut Scene<'_>) -> Option<Landed> {
-        let tree = scene.tree();
+        let tree = scene.focus_tree();
         self.landed_in(scene, &tree)
     }
 
@@ -509,7 +509,7 @@ impl Sweep {
     /// One press and where it landed, once the view brought it into sight.
     fn press(&mut self, scene: &mut Scene<'_>, button: UiButton) -> Option<Landed> {
         scene.key(key_of(button), 0);
-        let tree = scene.tree();
+        let tree = scene.focus_tree();
         if scene.settle(&tree) { self.landed(scene) } else { self.landed_in(scene, &tree) }
     }
 

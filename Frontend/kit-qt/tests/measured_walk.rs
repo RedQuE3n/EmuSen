@@ -2,7 +2,7 @@
 
 use emusen_qt_test::{Harness, Scene};
 
-const SCENE: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/tests/qml/MeasuredWalkScene.qml");
+const SCENE: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/../qt-test/qml/MeasuredWalkScene.qml");
 
 fn walk(scene: &mut Scene<'_>) -> (String, String, String, String) {
     let p = |scene: &mut Scene<'_>, name: &str| scene.property("walk", name);

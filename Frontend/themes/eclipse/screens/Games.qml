@@ -45,7 +45,7 @@ ThemeScreen {
             // Browse's facts, read off the GUI thread, once they are the focused game's (EmuSen_Qt.md §3.4.10).
             readonly property bool factsHere: root.focusedCell !== null && Browse.factsKey === root.focusedCell.key
             // The height the description may take: the foot less the column's other rows and the gaps between them.
-            readonly property real aboutRoom: root.foot - aside.y - eyebrow.height - titleWords.height - actions.height
+            readonly property real aboutRoom: root.foot - aside.y - eyebrow.height - titleLine.height - actions.height
                 - (chips.visible ? chips.height + 22 * root.px : 0) - (plays.visible ? plays.height + 22 * root.px : 0) - 3 * 22 * root.px
             readonly property string year: root.focusedCell && root.focusedCell.year > 0 ? String(root.focusedCell.year) : (root.factsHere ? Browse.year : "")
             // No console has a game (Choose a console's "With games", Words.consoleShows[1]), so the library has none: the first-run state.
@@ -310,10 +310,17 @@ ThemeScreen {
                             spacing: 0.2 * 18
                             capitalization: Font.AllUppercase
                         }
+                        // The title's line box, the board's line height of 1.04 (EclipseLibrary:39), its words about the box's middle as CSS spreads a line's leading.
+                        Item {
+                            id: titleLine
+                            objectName: "gamesTitleLine"
+                            width: parent.width
+                            height: titleWords.lineCount * titleWords.lineHeight * root.px
                         Line {
                             id: titleWords
                             objectName: "gamesTitle"
                             unit: root.px
+                            y: (titleLine.height - height) / 2
                             width: parent.width
                             text: root.focusedCell ? root.focusedCell.title : ""
                             wrapMode: Text.Wrap
@@ -323,6 +330,7 @@ ThemeScreen {
                             spacing: -0.02 * 62
                             lineHeightMode: Text.FixedHeight
                             lineHeight: 62 * 1.04
+                        }
                         }
                         Row {
                             id: chips
@@ -360,10 +368,16 @@ ThemeScreen {
                                 }
                             }
                         }
+                        // The description's line box, its lines at the board's line height of 1.5 (EclipseLibrary:44): the rows follow it, as the board's column does.
+                        Item {
+                            id: aboutLine
+                            objectName: "descriptionLine"
+                            visible: root.factsHere && Browse.description.length > 0
+                            width: parent.width
+                            height: about.lineCount * about.lineHeight * root.px
                         Line {
                             id: about
                             objectName: "description"
-                            visible: root.factsHere && Browse.description.length > 0
                             unit: root.px
                             width: parent.width
                             text: root.factsHere ? Browse.description : ""
@@ -376,6 +390,7 @@ ThemeScreen {
                             weight: Font.Light
                             lineHeightMode: Text.FixedHeight
                             lineHeight: 20 * 1.5
+                        }
                         }
                         Column {
                             id: plays

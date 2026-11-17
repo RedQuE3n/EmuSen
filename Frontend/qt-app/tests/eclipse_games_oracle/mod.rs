@@ -167,7 +167,7 @@ fn bare_flows(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad) {
     assert!(!words(scene, "gamesConsole").contains('·'), "no year for a game with none: {}", words(scene, "gamesConsole"));
     let unit: f64 = crate::eclipse_board::read(&tree, "gridCanvas", "unit").parse().unwrap();
     let px = DESIGN_HEIGHT / 1200.0 * unit;
-    let title = shown(&tree, "gamesTitle").unwrap();
+    let title = shown(&tree, "gamesTitleLine").unwrap();
     let start = shown(&tree, "gamesStart").unwrap();
     let want = title.y + title.h + 28.0 * px;
     assert!((start.y - want).abs() < 0.5, "Start {} under the title where the column flows to {want}", start.y);

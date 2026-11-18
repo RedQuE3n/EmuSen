@@ -53,16 +53,6 @@ question goes into a disputes log with what was read and what was measured to se
 and [`Diamond_Disputes.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sony/Diamond%20-%20PlayStation/Diamond_Disputes.md).
 The shared CPU crates under Beryl-HW (the Sega cores) and BlackMoon-HW (the Sony cores) follow the same rules.
 
-The older cores were held to a looser rule, and their pages say so. MarsRT, MercuryRT and MoonRT are ports of EmuSen's
-own C# cores, checked against them frame by frame. Those C# cores were written from documents and graded by test ROMs,
-but Mars's pages record where another implementation was read to understand a mechanism
-([`Mars_References.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_References.md)),
-and the Game Boy and NES cores were refereed against MiSTer FPGA cores whose RTL was read for single disputed rules.
-Venus, the first SNES core, took parts from Mesen early in its development. That is why it was replaced rather
-than repaired: VenusRT was written by people who do not read Venus, and Venus (C#) was removed from the source on
-2026-10-16 ([`VenusRT_Plan.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Plan.md) §1.1,
-[`VenusRT_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Native.md) §68).
-
 ### Firmware
 
 EmuSen never ships, downloads or asks for firmware. Where a console runs code its maker put inside the machine or the
@@ -212,6 +202,27 @@ Both are built on **LunaP**, a small Avalonia toolkit that lives in its own repo
 - **The platform library**, `emusen_platform`, under `Platform/`: the parts above the cores moving to Rust
   ([`EmuSen_RustPlatform.md`](Docs/EmuSen%20Manual/EmuSen_RustPlatform.md)).
 
+## Libretro cores
+
+EmuSen hosts libretro cores as cores of its own. `emusen-libretro-host` turns one libretro core into a core of the
+EmuSen ABI, so the library, saves, states, settings, cheats and every front end work on it with no code per front end.
+Each hosted core runs in a process of its own behind a broker, `emusen-core-broker`, so a crash in a core is reported
+and survived. A core that draws with Vulkan hands its picture to the host on a shared ring of images with no readback,
+and the console's own screen filters apply to it.
+
+Ten cores are hosted, named in one data file ([`libretro-cores.tsv`](Platform/systems/data/libretro-cores.tsv)): PCEE2
+(PlayStation 2), Flycast (Dreamcast), Snes9x, Nestopia, Genesis Plus GX, PicoDrive (32X), Mupen64Plus-Next, SameBoy,
+Beetle PSX HW and Beetle Saturn. The host refuses any core the list does not name. EmuSen's own core stays the default
+on every console that has one. The PlayStation 2 is the exception: PCEE2 is its default while Sapphire, EmuSen's
+PlayStation 2 core, is in development.
+
+EmuSen ships no libretro core and no firmware. A core is downloaded from the libretro buildbot only when the player
+asks, shown with its authors, licence and SHA-256, and runs only after the player approves it. The work began on
+2026-10-31 and is in the source; it is not in the 0.9.1 release. Design and record:
+[`EmuSen_LibretroHost.md`](Docs/EmuSen%20Manual/EmuSen_LibretroHost.md) and
+[`EmuSen_Cores.md`](Docs/EmuSen%20Manual/EmuSen_Cores.md). The other direction, EmuSen's cores offered to RetroArch as
+libretro cores, is specified in [`EmuSen_Libretro.md`](Docs/EmuSen%20Manual/EmuSen_Libretro.md) and not built.
+
 ## Debugging: DianaSh and Pharaoh
 
 DianaSh is a Unix-style shell inside the emulator. It has pipes, variables, redirection, loops and a small set of
@@ -319,10 +330,10 @@ No ROMs, disc images or firmware are included, and none will be. Games have to c
 
 ## Credits and references
 
-EmuSen's code is written for EmuSen, with the one exception described under
-[How the cores are written](#how-the-cores-are-written): parts of Venus (C#) came from Mesen. The projects below were
-read, run or measured against while writing it, and are credited here whether or not their licence asks for it. Each
-console's pages say which reference settled which question.
+EmuSen's code is written for EmuSen, with one exception: parts of Venus (C#), the first SNES core, came from Mesen.
+Venus (C#) was removed from the source on 2026-10-16 and replaced by VenusRT, a clean rewrite. The projects below were
+read, run or measured against while writing EmuSen, and are credited here whether or not their licence asks for it.
+Each console's pages say which reference settled which question.
 
 **Libraries shipped in EmuSen's builds** (Avalonia, SkiaSharp, SDL 3, SQLite, Silk.NET, Cranelift, the Rust crates of
 every core and the rest) are listed with their copyright holders and licences in

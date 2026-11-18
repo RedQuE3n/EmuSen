@@ -254,6 +254,40 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
     let moments = [1.0, 2.42, 3.3, 5.72, 7.0, 8.36, 9.68];
     let mut differences = Vec::new();
 
+    // A press skips to Home whole, the sound let go softly, and the press is the splash's alone: first, so the device's file holds no other sound.
+    {
+        let mut scene = started(&mut harness, (1920, 1200), true, false, &media);
+        scene.hold_clock(Some(3000));
+        // The sound heard a while first, the picture held: the second before the fade is the sound's own.
+        scene.wait(2000);
+        let shown = scene.property("screens", "shown");
+        scene.pad(UiButton::Accept);
+        assert_eq!(scene.property("themeSplash", "time"), scene.property("themeSplash", "length"), "skipped to its last frame");
+        assert_eq!(scene.property("splashSound", "ends"), "1", "the sound let go");
+        until(&mut scene, "the splash gone after the skip", 3000, |s| s.property("themeSplash", "done") == "true");
+        scene.wait(300);
+        assert_eq!(scene.property("screens", "shown"), shown, "the press that skipped is not Home's");
+        assert_eq!(scene.property("library", "lastPlayed"), eclipse_home_oracle::rom(&world, eclipse_home_oracle::GAMES[0].0, eclipse_home_oracle::GAMES[0].1), "no game started");
+        let tree = scene.tree();
+        assert!(node(&tree, "disc").is_some_and(|n| n.visible), "Home whole");
+        // What the device was handed: sound from the start, then a fall to silence within the fade, no step.
+        scene.hold_clock(None);
+        scene.wait(500);
+        let samples = heard_samples(&heard);
+        let loud = samples.iter().position(|s| s.abs() > 1e-4).expect("the sound was heard");
+        let last = samples.iter().rposition(|s| s.abs() > 1e-4).expect("and it ended");
+        assert!(last > loud, "it played");
+        // In the fade's 0.1 s no step past twice the sound's own largest the second before; a click is some twenty times it (seen 2026-11-17).
+        let steps = |from: usize, to: usize| samples[from..to].windows(3).step_by(2).map(|w| (w[2] - w[0]).abs()).fold(0.0f32, f32::max);
+        let fade = (last - last % 2).saturating_sub(9600);
+        let own = steps(fade.saturating_sub(96_000).max(loud - loud % 2), fade);
+        // The fade's span and the step from its last frame to the silence after it.
+        let end = steps(fade, (last - last % 2 + 4).min(samples.len()));
+        assert!(end <= 2.0 * own, "the end falls with no click: its largest step {end}, the sound's own {own}");
+        // Nothing heard past the fade: at least 0.2 s of the device's file after it, the sound let go and not ringing on.
+        assert!(samples.len() - last > 2 * 9600, "the sound rings on past its fade: {} samples, the last heard at {last}", samples.len());
+    }
+
     for size in [(1920, 1200), (1280, 800)] {
         let at = format!("{}x{}", size.0, size.1);
         let mut scene = started(&mut harness, size, true, false, &media);
@@ -296,37 +330,6 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
         assert_eq!(scene.property("splashSound", "ends"), "0", "{at}: the sound rings on into Home");
         assert_eq!(scene.property("program", "splashShown"), "false");
         scene.hold_clock(None);
-    }
-
-    // A press skips to Home whole, the sound let go softly, and the press is the splash's alone.
-    {
-        let mut scene = started(&mut harness, (1920, 1200), true, false, &media);
-        scene.hold_clock(Some(3000));
-        let shown = scene.property("screens", "shown");
-        scene.pad(UiButton::Accept);
-        assert_eq!(scene.property("themeSplash", "time"), scene.property("themeSplash", "length"), "skipped to its last frame");
-        assert_eq!(scene.property("splashSound", "ends"), "1", "the sound let go");
-        until(&mut scene, "the splash gone after the skip", 3000, |s| s.property("themeSplash", "done") == "true");
-        scene.wait(300);
-        assert_eq!(scene.property("screens", "shown"), shown, "the press that skipped is not Home's");
-        assert_eq!(scene.property("library", "lastPlayed"), eclipse_home_oracle::rom(&world, eclipse_home_oracle::GAMES[0].0, eclipse_home_oracle::GAMES[0].1), "no game started");
-        let tree = scene.tree();
-        assert!(node(&tree, "disc").is_some_and(|n| n.visible), "Home whole");
-        // What the device was handed: sound from the start, then a fall to silence within the fade, no step.
-        scene.hold_clock(None);
-        scene.wait(500);
-        let samples = heard_samples(&heard);
-        let loud = samples.iter().position(|s| s.abs() > 1e-4).expect("the sound was heard");
-        let last = samples.iter().rposition(|s| s.abs() > 1e-4).expect("and it ended");
-        assert!(last > loud, "it played");
-        // In the fade's 0.1 s no step past twice the sound's own largest the second before; a click is some twenty times it (seen 2026-11-17).
-        let steps = |from: usize, to: usize| samples[from..to].windows(3).step_by(2).map(|w| (w[2] - w[0]).abs()).fold(0.0f32, f32::max);
-        let fade = (last - last % 2).saturating_sub(9600);
-        let own = steps(fade.saturating_sub(96_000).max(loud - loud % 2), fade);
-        // The fade's span and the step from its last frame to the silence after it.
-        let end = steps(fade, (last - last % 2 + 4).min(samples.len()));
-        assert!(end <= 2.0 * own, "the end falls with no click: its largest step {end}, the sound's own {own}");
-        assert!(samples.len() - last > 2 * 9600 && samples[last + 1..].iter().all(|s| *s == 0.0), "0.2 s of silence after the end, the sound let go and not ringing on");
     }
 
     // The splash off: Home at once, whole, and no sound.

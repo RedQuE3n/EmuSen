@@ -24,8 +24,9 @@ DianaSh $ mem WRAM 0D80 20 | xxd
 
 ## DESCRIPTION
 
-**EmuSen** is a from-scratch emulator written in C# / .NET 10, built against published
-hardware documentation rather than ported from an existing project. It differs from
+**EmuSen** is a from-scratch emulator, built against published hardware documentation
+rather than ported from an existing project. Its cores are written in Rust; its front ends
+and tooling are written in C# / .NET 10. It differs from
 conventional emulators in one structural way: **the emulator is not a window with a debug
 menu attached — it is a machine you log into.**
 
@@ -167,8 +168,8 @@ The solution has shrunk as readily as it has grown: `EmuSen.Crystal` and
 `EmuSen.Nehellania` were folded back into the cores and into Endymion once it was clear
 neither boundary bought any consumer separability it was using.
 
-**The emulator is C#; two development tools beside it deliberately are not.** The reference
-probe is Rust — a policy layer plus a backend per emulator, including a libretro backend
+**The cores are Rust and the front ends are C#; two development tools beside them were
+chosen on their own merits.** The reference probe is Rust — a policy layer plus a backend per emulator, including a libretro backend
 that drives any core, so it names no emulator in its own vocabulary — and the dump
 comparator is Python, offline analysis rather than in-process test code. SQLite backs the
 two databases that were already relational. Config stays JSON and coverage maps stay

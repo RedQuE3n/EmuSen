@@ -53,16 +53,6 @@ question goes into a disputes log with what was read and what was measured to se
 and [`Diamond_Disputes.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sony/Diamond%20-%20PlayStation/Diamond_Disputes.md).
 The shared CPU crates under Beryl-HW (the Sega cores) and BlackMoon-HW (the Sony cores) follow the same rules.
 
-The older cores were held to a looser rule, and their pages say so. MarsRT, MercuryRT and MoonRT are ports of EmuSen's
-own C# cores, checked against them frame by frame. Those C# cores were written from documents and graded by test ROMs,
-but Mars's pages record where another implementation was read to understand a mechanism
-([`Mars_References.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_References.md)),
-and the Game Boy and NES cores were refereed against MiSTer FPGA cores whose RTL was read for single disputed rules.
-Venus, the first SNES core, took parts from Mesen early in its development. That is why it was replaced rather
-than repaired: VenusRT was written by people who do not read Venus, and Venus (C#) was removed from the source on
-2026-10-16 ([`VenusRT_Plan.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Plan.md) §1.1,
-[`VenusRT_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Native.md) §68).
-
 ### Firmware
 
 EmuSen never ships, downloads or asks for firmware. Where a console runs code its maker put inside the machine or the
@@ -340,10 +330,10 @@ No ROMs, disc images or firmware are included, and none will be. Games have to c
 
 ## Credits and references
 
-EmuSen's code is written for EmuSen, with the one exception described under
-[How the cores are written](#how-the-cores-are-written): parts of Venus (C#) came from Mesen. The projects below were
-read, run or measured against while writing it, and are credited here whether or not their licence asks for it. Each
-console's pages say which reference settled which question.
+EmuSen's code is written for EmuSen, with one exception: parts of Venus (C#), the first SNES core, came from Mesen.
+Venus (C#) was removed from the source on 2026-10-16 and replaced by VenusRT, a clean rewrite. The projects below were
+read, run or measured against while writing EmuSen, and are credited here whether or not their licence asks for it.
+Each console's pages say which reference settled which question.
 
 **Libraries shipped in EmuSen's builds** (Avalonia, SkiaSharp, SDL 3, SQLite, Silk.NET, Cranelift, the Rust crates of
 every core and the rest) are listed with their copyright holders and licences in

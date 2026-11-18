@@ -323,9 +323,10 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
         let steps = |from: usize, to: usize| samples[from..to].windows(3).step_by(2).map(|w| (w[2] - w[0]).abs()).fold(0.0f32, f32::max);
         let fade = (last - last % 2).saturating_sub(9600);
         let own = steps(fade.saturating_sub(96_000).max(loud - loud % 2), fade);
-        let end = steps(fade, last - last % 2);
+        // The fade's span and the step from its last frame to the silence after it.
+        let end = steps(fade, (last - last % 2 + 4).min(samples.len()));
         assert!(end <= 2.0 * own, "the end falls with no click: its largest step {end}, the sound's own {own}");
-        assert!(samples[last + 1..].iter().all(|s| *s == 0.0), "silence after the end");
+        assert!(samples.len() - last > 2 * 9600 && samples[last + 1..].iter().all(|s| *s == 0.0), "0.2 s of silence after the end, the sound let go and not ringing on");
     }
 
     // The splash off: Home at once, whole, and no sound.

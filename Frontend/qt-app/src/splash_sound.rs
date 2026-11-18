@@ -124,8 +124,11 @@ impl Default for SplashSoundRust {
 
 /// Whether a sound's URL is a file of the theme's own folder, as the host's policy keeps a theme to its folder.
 pub fn within(folder: &str, source: &str) -> bool {
+    if folder.trim_end_matches('/').is_empty() {
+        return false;
+    }
     let folder = emusen_theme_host::host::folder_url(folder);
-    !folder.is_empty() && source.strip_prefix(&folder).is_some_and(|rest| rest.starts_with('/') && !rest.split('/').any(|part| part == ".."))
+    source.strip_prefix(&folder).is_some_and(|rest| rest.starts_with('/') && !rest.split('/').any(|part| part == ".."))
 }
 
 /// The samples' last `fade` of a share from `at` bytes on, each frame scaled down a raised cosine to silence.

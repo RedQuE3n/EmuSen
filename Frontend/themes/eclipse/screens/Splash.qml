@@ -31,7 +31,7 @@ ThemeScreen {
                 id: ink
             }
             readonly property real u: design.unit
-            // The orbit, a 1200 by 300 ellipse about (960, 480) turned -9 degrees (EclipseSplashPlay:45, 161): constants of the design.
+            // The orbit, the board's ellipse of half axes 600 and 150 about (960, 480) turned -9 degrees (EclipseSplashPlay:45, 161): constants of the design.
             readonly property real orbitX: 960
             readonly property real orbitY: 480
             readonly property real orbitA: 600
@@ -66,8 +66,8 @@ ThemeScreen {
                     readonly property real d2: (Math.imul(star.d1, 1664525) + 1013904223) >>> 0
                     readonly property real last: (Math.imul(star.d2, 1664525) + 1013904223) >>> 0
                     objectName: "splashStar." + star.index
-                    x: Math.round(star.d1 / 4294967296 * 1920) * root.u
-                    y: Math.round(star.d2 / 4294967296 * 1200) * root.u
+                    x: Math.round(star.d1 / 4294967296 * design.width) * root.u
+                    y: Math.round(star.d2 / 4294967296 * design.height) * root.u
                     width: (star.d0 / 4294967296 < 0.85 ? 2 : 3.5) * root.u
                     height: width
                     radius: width / 2

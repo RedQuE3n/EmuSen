@@ -299,6 +299,7 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
         assert_eq!(scene.property("splashSound", "starts"), "1", "{at}: {said:?} {file:?}");
         assert!(scene.property("splashSoundFile", "source").ends_with("/eclipse/sounds/splash.wav"), "{at}: the theme's own file");
         assert_eq!(scene.property("splashSound", "frames").parse::<i64>().unwrap(), sound_frames(), "{at}: the file whole");
+        assert_eq!(scene.property("splashSound", "heldVolume"), scene.property("settingsModel", "navigationVolume"), "{at}: at the Sound volume");
         // The words: the library's six games and the cores.
         assert_eq!(read(&scene.tree(), "splashCounts", "text"), words::splash_counts(6, cores), "{at}");
         for moment in moments {

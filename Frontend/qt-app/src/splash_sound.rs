@@ -227,17 +227,18 @@ impl qobject::SplashSound {
         }
     }
 
-    /// The player set to the volume asked.
+    /// The player set to the Sound volume, which it then holds; none before it is made.
     fn hold_volume(mut self: Pin<&mut Self>) {
-        let volume = self.volume.clamp(0.0, 1.0);
-        let Some(set) = self.player.as_ref().map(|p| p.set_volume(volume as f32)) else { return };
-        match set {
-            Ok(()) if self.held_volume != volume => {
-                self.as_mut().rust_mut().held_volume = volume;
-                self.as_mut().held_volume_changed();
+        let asked = self.volume.clamp(0.0, 1.0);
+        match self.player.as_ref().map(|p| p.set_volume(asked as f32).map_err(|e| e.to_string())) {
+            Some(Err(words)) => self.publish(words),
+            Some(Ok(())) => {
+                if self.held_volume != asked {
+                    self.as_mut().rust_mut().held_volume = asked;
+                    self.held_volume_changed();
+                }
             }
-            Ok(()) => {}
-            Err(e) => self.publish(e.to_string()),
+            None => {}
         }
     }
 

@@ -30,6 +30,11 @@ pub fn splash_caption(planets: usize) -> String {
     counted(planets, "CONSOLE", "CONSOLES")
 }
 
+/// The counts under Eclipse's splash wordmark: "1,284 GAMES · 8 CORES" (EclipseSplashPlay.dc.html:71).
+pub fn splash_counts(games: usize, cores: usize) -> String {
+    format!("{} · {}", counted(games, "GAME", "GAMES"), counted(cores, "CORE", "CORES"))
+}
+
 /// Choose a console's title and line, as the courts canvas words them (EmuSen_Interface.md §24.1).
 pub const GAMES: &str = "GAMES";
 pub const CHOOSE_A_CONSOLE: &str = "Choose a console";

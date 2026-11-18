@@ -547,6 +547,17 @@ pub fn splash_worlds(systems: &[SystemRow]) -> Vec<String> {
     systems.iter().filter(|s| !s.engines.is_empty()).map(world_line_of).collect()
 }
 
+/// The installed cores as the systems name them, each once in the table's first order: Eclipse's splash's planets (EmuSen_Qt.md §3.4.8).
+pub fn installed_cores(systems: &[SystemRow]) -> Vec<String> {
+    let mut cores: Vec<String> = Vec::new();
+    for engine in systems.iter().flat_map(|s| s.engines.iter()) {
+        if !cores.contains(engine) {
+            cores.push(engine.clone());
+        }
+    }
+    cores
+}
+
 /// What one refresh read: the systems, the games and the rows made of them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Read {

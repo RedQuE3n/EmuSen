@@ -61,6 +61,9 @@ pub mod qobject {
         #[qproperty(bool, page_shown, cxx_name = "pageShown")]
         /// The key of the program's section shown (`Screens.section`): the theme's `Library.section`.
         #[qproperty(QString, shown_section, cxx_name = "shownSection")]
+        /// A splash that enters Home shown, and its time in ms: the theme's `Splash` (1.10).
+        #[qproperty(bool, splash_shown, cxx_name = "splashShown")]
+        #[qproperty(f64, splash_time, cxx_name = "splashTime")]
         type ThemeFeed = super::ThemeFeedRust;
     }
 
@@ -218,6 +221,10 @@ pub struct ThemeFeedRust {
     /// The game whose facts were last asked for, so a read that comes back for another is dropped.
     facts_for: std::cell::RefCell<String>,
     shown_section: QString,
+    splash_shown: bool,
+    splash_time: f64,
+    /// The engine's `Splash` and the generation it was found in, looked up again only in a new engine: fed every frame, a name's lookup allocates.
+    splash: Cell<(i32, *mut emusen_theme_qt::splash::qobject::ThemeSplash)>,
     /// The feed as the sink sees it, emptied when the feed goes, so a sink that outlives it takes nothing.
     me: Rc<Cell<*mut qobject::ThemeFeed>>,
 }
@@ -246,6 +253,9 @@ impl Default for ThemeFeedRust {
             now: 0,
             facts_for: std::cell::RefCell::new(String::new()),
             shown_section: QString::default(),
+            splash_shown: false,
+            splash_time: 0.0,
+            splash: Cell::new((-1, std::ptr::null_mut())),
             me: Rc::new(Cell::new(std::ptr::null_mut())),
         }
     }
@@ -438,6 +448,8 @@ impl cxx_qt::Initialize for qobject::ThemeFeed {
         self.as_mut().on_reduced_motion_changed(|feed| feed.feed_motion()).release();
         self.as_mut().on_swap_changed(|feed| feed.feed_swap()).release();
         self.as_mut().on_shown_section_changed(|feed| feed.feed_section()).release();
+        self.as_mut().on_splash_shown_changed(|feed| feed.feed_splash()).release();
+        self.as_mut().on_splash_time_changed(|feed| feed.feed_splash()).release();
         self.as_mut().on_now_changed(|feed| {
             feed.feed_words();
             feed.feed_browse();
@@ -689,6 +701,27 @@ impl qobject::ThemeFeed {
         }
     }
 
+    fn feed_splash(&self) {
+        // Safety: the host is the window's, alive as long as the feed it is handed to.
+        let Some(generation) = unsafe { self.host.as_ref() }.map(|h| *h.generation()) else { return };
+        if self.engine().is_none() {
+            return;
+        }
+        let (at, kept) = self.splash.get();
+        let splash = if at == generation && !kept.is_null() {
+            kept
+        } else {
+            // Safety: the engine keeps its singleton alive as long as itself, and a new engine moves the generation.
+            let found = self.engine().and_then(host::splash).map_or(std::ptr::null_mut(), |s| unsafe { s.get_unchecked_mut() } as *mut _);
+            self.splash.set((generation, found));
+            found
+        };
+        // Safety: as above.
+        if let Some(splash) = unsafe { splash.as_mut() } {
+            unsafe { Pin::new_unchecked(splash) }.show(self.splash_shown, self.splash_time);
+        }
+    }
+
     fn feed_device(&self) {
         let facts = DeviceFacts { controllers: self.controllers, family: self.family, clock: self.clock.to_string(),
             short_time: self.short_time.to_string(), battery: self.battery, charging: self.charging,
@@ -741,6 +774,7 @@ impl qobject::ThemeFeed {
         self.feed_swap();
         self.feed_tokens();
         self.feed_device();
+        self.feed_splash();
         self.feed_library();
         self.feed_section();
         self.feed_session();

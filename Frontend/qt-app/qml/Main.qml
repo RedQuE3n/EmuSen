@@ -63,8 +63,14 @@ Window {
     property string cheatsUrl
     // Whether a read the start makes is still out: the library's, the settings', or the pads' first (EmuSen_Qt.md §9.3.2).
     readonly property bool reading: library.loading || !settingsModel.ready || !pads.answered
-    // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
-    readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
+    // The splash keeps the focus, and every press, until it has faded (one that enters Home, until it has ended and the press that skipped it is let go), so that press is never a screen's.
+    readonly property bool splashShown: program.splash && (program.led ? !themeSplash.done : (!moonrise.done || moonrise.opacity > 0))
+    // The chosen theme's splash enters Home: it leads the start in Moonrise's place, held so once seen (EmuSen_Qt.md §3.5.2).
+    readonly property bool themeLeads: program.themeHost?.leads ?? false
+    property bool led: false
+    onThemeLeadsChanged: if (program.themeLeads) program.led = true
+    // Moonrise waits unseen while the chosen theme's splash is still to be placed, so a splash that enters Home is never under it.
+    readonly property bool moonriseHeld: program.led || (chosenTheme.active && (program.themeHost === null || !program.themeHost.host.ready || program.themeHost.splashComing))
     // The help bar's family: Controller type's, or with Automatic the pad last used; a generic pad's glyphs drawn as the Xbox pad's lettered ones, as Mistress does.
     readonly property int padFamily: {
         const family = settingsModel.controllerFamily >= 0 ? settingsModel.controllerFamily : pads.family
@@ -373,6 +379,8 @@ Window {
                 inputs: !program.splashShown
                 splashShown: program.splashShown
                 splashLayer: splashLayer
+                splashLeading: program.led && program.splashShown
+                splashTime: themeSplash.time
                 settingsModel: settingsModel
                 pageModel: pageScreen.page
                 onPlayed: (path) => program.play(path)
@@ -689,11 +697,11 @@ Window {
             objectName: "moonrise"
             readonly property bool done: moonrise.finished && !library.loading && program.lookSettled
             anchors.fill: parent
-            visible: program.splash && moonrise.opacity > 0
+            visible: program.splash && moonrise.opacity > 0 && !program.moonriseHeld
             opacity: moonrise.done ? 0 : 1
             // The clock runs from the window's first frame; the worlds, read in milliseconds, are in place long before the row appears.
-            running: program.splash
-            focus: program.splashShown
+            running: program.splash && !program.led
+            focus: program.splashShown && !program.led
             title: Words.title
             caption: library.splashCaption
             worlds: library.splashWorlds
@@ -704,7 +712,7 @@ Window {
             }
             Keys.onPressed: (event) => event.accepted = moonrise.model.takeKey(event.key, event.modifiers)
             TapHandler {
-                enabled: program.splashShown
+                enabled: program.splashShown && !program.led
                 acceptedButtons: Qt.AllButtons
                 onTapped: moonrise.model.tick(moonrise.model.length)
             }
@@ -727,6 +735,19 @@ Window {
             anchors.fill: parent
             visible: (program.themeHost?.splash ?? false) && program.splash && moonrise.opacity > 0
             opacity: moonrise.opacity
+        }
+        // A theme's splash that enters Home: the window's clock for it, its skip and its sound, over everything while it shows.
+        ThemeSplash {
+            id: themeSplash
+            objectName: "themeSplash"
+            anchors.fill: parent
+            host: program.themeHost
+            shown: program.splash && program.led
+            // What Home shows read: the library, the look, the theme's Home placed, and the settings the sound plays at.
+            reading: library.loading || !program.lookSettled || !(program.themeHost?.home ?? false) || !(settingsModel.ready || settingsModel.problem.length > 0)
+            platformLibrary: program.platformLibrary
+            sounds: program.navigationSounds
+            volume: settingsModel.ready ? settingsModel.navigationVolume : 1
         }
     }
 }

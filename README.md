@@ -204,11 +204,11 @@ Both are built on **LunaP**, a small Avalonia toolkit that lives in its own repo
 
 ## Libretro cores
 
-EmuSen hosts libretro cores as cores of its own. `emusen-libretro-host` turns one libretro core into a core of the
-EmuSen ABI, so the library, saves, states, settings, cheats and every front end work on it with no code per front end.
-Each hosted core runs in a process of its own behind a broker, `emusen-core-broker`, so a crash in a core is reported
-and survived. A core that draws with Vulkan hands its picture to the host on a shared ring of images with no readback,
-and the console's own screen filters apply to it.
+EmuSen has the ability to host libretro cores as its own. `emusen-libretro-host` turns one libretro core into a core
+of the EmuSen ABI, so the library, saves, states, settings, cheats and every front end work on it with no code per
+front end. Each hosted core runs in a process of its own behind a broker, `emusen-core-broker`, so a crash in a core
+is reported and survived. A core that draws with Vulkan hands its picture to the host on a shared ring of images with
+no readback, and the console's own screen filters apply to it.
 
 Ten cores are hosted, named in one data file ([`libretro-cores.tsv`](Platform/systems/data/libretro-cores.tsv)): PCEE2
 (PlayStation 2), Flycast (Dreamcast), Snes9x, Nestopia, Genesis Plus GX, PicoDrive (32X), Mupen64Plus-Next, SameBoy,

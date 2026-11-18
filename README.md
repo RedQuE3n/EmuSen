@@ -1,14 +1,16 @@
 # EmuSen
 
-EmuSen is an emulation framework in the spirit of RetroArch: emulator cores sit behind one stable, versioned
-interface, and frontends, tools and the shell talk to every core the same way. Accuracy comes first. A core is
-graded against the console's own test programs and against other implementations run side by side, and anything that
-trades accuracy for speed is a setting the player turns on, never the default.
+EmuSen is a multi-system emulation framework in the spirit of RetroArch. The emulator cores are written in Rust. The
+front ends and the tooling around them are written in C#. Every core sits behind one stable, versioned interface, so
+the front ends, the tools and the shell talk to every core the same way.
 
-EmuSen started as a personal project in C#. The cores have been moving to Rust one at a time since September 2026,
-and new cores are written in Rust from the start. Around them are our own frontends (Mistress, with a Big Picture
-mode that reads ES-DE themes, and the lighter Hotaru), a Unix-style shell called DianaSh, and a headless harness that
-nearly all of the testing runs through.
+Accuracy comes first. A core is graded against the console's own test programs and against other implementations run
+side by side. Anything that trades accuracy for speed is a setting the player turns on. It is never the default.
+
+I started EmuSen in C# as a single SNES emulator. The cores have moved to Rust one at a time since September 2026, and
+every new core starts in Rust. The front ends are Mistress, the main application, with a Big Picture mode that reads
+ES-DE themes, and the lighter Hotaru. Beside them are DianaSh, a Unix-style shell for debugging the emulated hardware,
+and a headless harness that nearly all of the testing runs through.
 
 **Licence:** GPL-3.0 · **Platforms:** Linux, Windows, macOS · **Consoles:** NES, SNES, Game Boy and Game Boy Color,
 Nintendo 64, Sega Genesis / Mega Drive, Sega CD, Sony PlayStation
@@ -51,8 +53,8 @@ question goes into a disputes log with what was read and what was measured to se
 and [`Diamond_Disputes.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sony/Diamond%20-%20PlayStation/Diamond_Disputes.md).
 The shared CPU crates under Beryl-HW (the Sega cores) and BlackMoon-HW (the Sony cores) follow the same rules.
 
-The older cores were held to a looser rule, and their pages say so. MarsRT, MercuryRT and MoonRT are ports of our own
-C# cores, checked against them frame by frame. Those C# cores were written from documents and graded by test ROMs,
+The older cores were held to a looser rule, and their pages say so. MarsRT, MercuryRT and MoonRT are ports of EmuSen's
+own C# cores, checked against them frame by frame. Those C# cores were written from documents and graded by test ROMs,
 but Mars's pages record where another implementation was read to understand a mechanism
 ([`Mars_References.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_References.md)),
 and the Game Boy and NES cores were refereed against MiSTer FPGA cores whose RTL was read for single disputed rules.
@@ -280,7 +282,7 @@ codesign --force --deep --sign - EmuSen.app
 
 ### Platforms and requirements
 
-We develop and test on Linux, on a desktop and on a Lenovo Legion Go S running SteamOS. Windows and macOS builds come
+Development and testing happen on Linux, on a desktop and on a Lenovo Legion Go S running SteamOS. Windows and macOS builds come
 from the same tree, but they get far less play: their CI jobs are paused, and the Rust cores' workflow is run by hand
 (`Docs/EmuSen Manual/EmuSen_RustPlatform.md` §31, §31.2).
 

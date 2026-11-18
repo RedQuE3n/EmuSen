@@ -212,6 +212,27 @@ Both are built on **LunaP**, a small Avalonia toolkit that lives in its own repo
 - **The platform library**, `emusen_platform`, under `Platform/`: the parts above the cores moving to Rust
   ([`EmuSen_RustPlatform.md`](Docs/EmuSen%20Manual/EmuSen_RustPlatform.md)).
 
+## Libretro cores
+
+EmuSen hosts libretro cores as cores of its own. `emusen-libretro-host` turns one libretro core into a core of the
+EmuSen ABI, so the library, saves, states, settings, cheats and every front end work on it with no code per front end.
+Each hosted core runs in a process of its own behind a broker, `emusen-core-broker`, so a crash in a core is reported
+and survived. A core that draws with Vulkan hands its picture to the host on a shared ring of images with no readback,
+and the console's own screen filters apply to it.
+
+Ten cores are hosted, named in one data file ([`libretro-cores.tsv`](Platform/systems/data/libretro-cores.tsv)): PCEE2
+(PlayStation 2), Flycast (Dreamcast), Snes9x, Nestopia, Genesis Plus GX, PicoDrive (32X), Mupen64Plus-Next, SameBoy,
+Beetle PSX HW and Beetle Saturn. The host refuses any core the list does not name. EmuSen's own core stays the default
+on every console that has one. The PlayStation 2 is the exception: PCEE2 is its default while Sapphire, EmuSen's
+PlayStation 2 core, is in development.
+
+EmuSen ships no libretro core and no firmware. A core is downloaded from the libretro buildbot only when the player
+asks, shown with its authors, licence and SHA-256, and runs only after the player approves it. The work began on
+2026-10-31 and is in the source; it is not in the 0.9.1 release. Design and record:
+[`EmuSen_LibretroHost.md`](Docs/EmuSen%20Manual/EmuSen_LibretroHost.md) and
+[`EmuSen_Cores.md`](Docs/EmuSen%20Manual/EmuSen_Cores.md). The other direction, EmuSen's cores offered to RetroArch as
+libretro cores, is specified in [`EmuSen_Libretro.md`](Docs/EmuSen%20Manual/EmuSen_Libretro.md) and not built.
+
 ## Debugging: DianaSh and Pharaoh
 
 DianaSh is a Unix-style shell inside the emulator. It has pipes, variables, redirection, loops and a small set of

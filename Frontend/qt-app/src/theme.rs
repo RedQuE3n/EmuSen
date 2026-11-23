@@ -17,7 +17,7 @@ use emusen_theme_qt::actions::{Action, ActionSink, ScreenAction};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::host;
-use emusen_theme_qt::page::{action_rows, content_rows, PageFacts};
+use emusen_theme_qt::page::{action_rows, card_rows, content_rows, pill_rows, PageFacts};
 use emusen_theme_qt::session::SessionFacts;
 use emusen_theme_qt::view;
 use std::cell::Cell;
@@ -432,6 +432,7 @@ impl ActionSink for Sink {
             (ScreenAction::PageDeclared(key), _, Some(p)) => p.declared(&QString::from(key.as_str())),
             (ScreenAction::PageAnswer(choice), _, Some(p)) => p.answer(*choice),
             (ScreenAction::PageBack, _, Some(p)) => p.back(),
+            (ScreenAction::PageTab(tab), _, Some(p)) => p.choose_tab(*tab),
             _ => false,
         }
     }
@@ -664,6 +665,17 @@ impl qobject::ThemeFeed {
             question_sentences: words(page.question_sentences()),
             question_choices: words(page.question_choices()),
             question_back: *page.question_back(),
+            tabs: page.tabs(),
+            tab: page.tab(),
+            kicker: page.kicker(),
+            line: page.line(),
+            pills: pill_rows(&page.pills()),
+            cards: card_rows(&page.cards()),
+            note: page.cards_note().to_owned(),
+            trail: page.trail(),
+            trail_section: emusen_qt_models::screens::CONSOLES_KEY.to_owned(),
+            console: page.console().to_owned(),
+            board_help: page.board_help_screen().and_then(emusen_theme_qt::help::kind_of).map_or(-1, |k| k.repr),
         };
         if let Some(view) = self.engine().and_then(host::page) {
             view.show(&facts);

@@ -280,6 +280,10 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageViewerCover => HelpScreen::GamePageViewerCover,
         Screen::GamePageViewerManualCover => HelpScreen::GamePageViewerManualCover,
         Screen::GamePageCoverArt => HelpScreen::GamePageCoverArt,
+        // Eclipse's own words, which the program's bar never shows: its nearest of the program's.
+        Screen::GamePageState => HelpScreen::GamePageLoad,
+        Screen::GamePageStart => HelpScreen::GamePage,
+        Screen::GamePageSections => HelpScreen::GamePageNone,
     };
     shown.repr
 }

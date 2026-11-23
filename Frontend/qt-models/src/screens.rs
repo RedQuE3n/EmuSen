@@ -85,10 +85,13 @@ pub struct Section {
 
 /// The program's sections in a nav's order (Main.dc.html:34-38, R-20261115-7), each opening the program's screen that holds
 /// it today (EmuSen_Qt.md §3.4.8).
+/// The Consoles section's key, which the game page's trail opens.
+pub const CONSOLES_KEY: &str = "consoles";
+
 pub const SECTIONS: [Section; 5] = [
     Section { key: HOME, name: crate::words::HOME_SECTION, screen: Shown::Home, at: None, page: None },
     Section { key: "library", name: crate::words::LIBRARY_SECTION, screen: Shown::Grid, at: Some(crate::library::ALL), page: None },
-    Section { key: "consoles", name: crate::words::CONSOLES_SECTION, screen: Shown::Consoles, at: None, page: None },
+    Section { key: CONSOLES_KEY, name: crate::words::CONSOLES_SECTION, screen: Shown::Consoles, at: None, page: None },
     Section {
         key: "collections",
         name: crate::words::COLLECTIONS_SECTION,

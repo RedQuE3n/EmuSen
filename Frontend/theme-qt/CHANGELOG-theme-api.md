@@ -3,6 +3,30 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.11, an addition: Eclipse's game page, its tabs and its States tab (2026-11-23)
+
+Decided 2026-11-16 by the tester (R-20261116-27, -29, -30, -36) and 2026-11-23 (R-20261123-33 to -36): Eclipse draws the
+game page as its board does, six tabs in the board's order and the States tab's cards, and the program draws every tab
+and deeper page the theme does not.
+
+- **`ThemeScreen.pageSections`**: on the game page, the keys of the tabs the screen draws (`overview`, `states`, `media`,
+  `details`, `options`, `cheats`); the program draws every other tab, every deeper page and every question. A screen
+  that names none draws them all, as in 1.9.
+- **`Page.tabs`** and **`Page.tab`**: the board's six tabs in its order, Cheats only for a game with cheats, and the one
+  shown; **`Actions.pageTab(i)`** chooses one (Cheats opens Options' Cheats, as its row does).
+- **`Page.kicker`** and **`Page.line`**: console · year · genre, and last played, time played and players, each part the
+  game has; **`Page.pills`** (`key`, `label`, `button`, `filled`, `heart`, `on`, `act`, `row`): Resume, Start from the
+  beginning and Favourite, or Start and Favourite where there is no resume point; `act` is the action `pageAct` takes,
+  `row` the resume point's card Resume loads (-1 none).
+- **`Page.cards`** (`key`, `label`, `line`, `picture`, `marked`, `badge`, `row`): the resume point, the slots in their
+  order and one empty slot while a slot is free, `row` the card's place among `rows` (-1 for the empty one, which is not
+  pressed); **`Page.note`**, the words beside the empty card where the game has no state.
+- **`Page.trail`**, **`Page.trailSection`** and **`Page.console`**: Consoles, the console and the title, the section the
+  first link opens and the console the second opens.
+- **`Page.boardHelp`** and the `Help` kinds **`PageState`**, **`PageStart`** and **`PageSections`**: the help in the
+  boards' words for a state's card and for Start, -1 where the boards draw none and `Page.help` is shown.
+- The module is 1.11 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.11.*`.
+
 ## 1.10, an addition: a splash that enters Home (2026-11-17)
 
 Decided 2026-11-17 by the tester (R-20261117-1, R-20261111-122): Eclipse's splash is the original board, with its sound,

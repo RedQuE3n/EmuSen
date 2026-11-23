@@ -626,7 +626,7 @@ impl GamePage {
         }
         parts.push(match r.last_played {
             Some(at) => format!("Last played {}", ago(at, self.now).to_lowercase()),
-            None => "Never played".into(),
+            None => NEVER_PLAYED.into(),
         });
         parts.join(&format!(" {BETWEEN} "))
     }
@@ -682,7 +682,7 @@ impl GamePage {
                 step_right: many && self.resume_at + 1 < states.len(),
             });
         }
-        let heart = if self.read.favourite { "♥" } else { "♡" };
+        let heart = if self.read.favourite { HEART_ON } else { HEART_OFF };
         out.push(Action { key: FAVOURITE, label: "Favourite", value: heart.into(), button: NORTH, filled: false, stepped: false, step_left: false, step_right: false });
         out
     }
@@ -831,7 +831,7 @@ impl GamePage {
         if !r.cheats.is_empty() {
             rows.push(Row {
                 key: CHEATS,
-                label: "Cheats".into(),
+                label: CHEATS_WORD.into(),
                 value: crate::cheats::count_words(&r.cheats),
                 steps: false,
                 opens: true,
@@ -1198,5 +1198,229 @@ impl GamePage {
             0 => "States".into(),
             n => format!("States, {n}"),
         }
+    }
+}
+
+/// Favourite's value, the heart full for a favourite, else empty.
+pub const HEART_ON: &str = "♥";
+pub const HEART_OFF: &str = "♡";
+/// Cheats' words, its row's on Options and its tab on Eclipse's page.
+pub const CHEATS_WORD: &str = "Cheats";
+/// A game with no last play, as the facts and Eclipse's line say it (EclipseGameNoState:45).
+pub const NEVER_PLAYED: &str = "Never played";
+/// Eclipse's empty card, the slot a state could be saved to (EclipseGame:82, R-20261116-36).
+pub const EMPTY_SLOT: &str = "Empty slot";
+/// The words beside the empty card where the game has no state (EclipseGameNoState:69).
+pub const NO_STATES: &str = "No states yet. A state is saved from the Pause Card while the game runs.";
+/// The badge on the card of the state Resume loads, drawn in capitals (EclipseGame:69).
+pub const RESUMES_HERE: &str = "Resumes here";
+/// The empty card's key: no state's file, and no content row behind it.
+pub const EMPTY_CARD: &str = "empty";
+
+/// The page's tabs as Eclipse's board draws them (EclipseGame:55-62, R-20261116-29).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tab {
+    Overview,
+    States,
+    Media,
+    Details,
+    Options,
+    Cheats,
+}
+
+/// The board's six, in its order.
+pub const TABS: [Tab; 6] = [Tab::Overview, Tab::States, Tab::Media, Tab::Details, Tab::Options, Tab::Cheats];
+
+impl Tab {
+    /// The tab's key, by which a theme's screen names the tabs it draws (EmuSen_Qt.md §3.2, `ThemeScreen.pageSections`).
+    pub fn key(self) -> &'static str {
+        match self {
+            Tab::Overview => "overview",
+            Tab::States => "states",
+            Tab::Media => "media",
+            Tab::Details => "details",
+            Tab::Options => "options",
+            Tab::Cheats => "cheats",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        if self == Tab::Cheats { CHEATS_WORD } else { self.section().name() }
+    }
+
+    /// The program's section the tab opens; Cheats is Options' deeper page.
+    pub fn section(self) -> Section {
+        match self {
+            Tab::Overview => Section::Overview,
+            Tab::States => Section::States,
+            Tab::Media => Section::Media,
+            Tab::Details => Section::Details,
+            Tab::Options | Tab::Cheats => Section::Options,
+        }
+    }
+}
+
+/// One of Eclipse's state cards (EclipseGame:64-83): a state, or the one empty slot, which is not pressed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Card {
+    pub key: String,
+    pub label: String,
+    pub line: String,
+    pub picture: String,
+    /// The state Resume would load, and the badge's words on it, `RESUMES_HERE`.
+    pub marked: bool,
+    pub badge: String,
+    /// The state's tile among the States section's content, which the page's calls take; none for the empty card.
+    pub row: Option<usize>,
+}
+
+/// A day of the calendar in the player's zone, as the when-lines count days: year, month (1 to 12) and day.
+pub type Day = (i32, u32, u32);
+
+/// The months as Eclipse's when-lines write them (EclipseGame:110, "8 November").
+const MONTHS_LONG: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+impl GamePage {
+    /// The tabs shown: the board's six, Cheats only for a game with cheats, as its row on Options is (R-20261116-29).
+    pub fn tabs(&self) -> Vec<Tab> {
+        TABS.into_iter().filter(|t| *t != Tab::Cheats || !self.read.cheats.is_empty()).collect()
+    }
+
+    /// The tab shown, by its place among `tabs`: Cheats while Options shows Cheats, else the section's.
+    pub fn tab(&self) -> usize {
+        let shown = if self.cheating { Tab::Cheats } else { TABS.into_iter().find(|t| t.section() == self.shown()).unwrap_or(Tab::Overview) };
+        self.tabs().iter().position(|t| *t == shown).unwrap_or(0)
+    }
+
+    /// The tab of that place chosen: its section, Cheats as Options' Cheats opened by its door (`open_at`); whether there was one.
+    pub fn choose_tab(&mut self, index: usize) -> bool {
+        let Some(tab) = self.tabs().get(index).copied() else { return false };
+        let section = SECTIONS.iter().position(|s| *s == tab.section()).unwrap_or(0);
+        self.choose_section(section);
+        if tab == Tab::Cheats {
+            self.open_at(CHEATS);
+        }
+        true
+    }
+
+    /// The key of the tab a theme would draw now; none for a deeper page, which stays the program's (EmuSen_Qt.md §3.2).
+    pub fn tab_key(&self) -> Option<&'static str> {
+        let deeper = self.editing || self.cropping || self.packaging || self.covering;
+        (!deeper).then(|| self.tabs()[self.tab()].key())
+    }
+
+    /// Whether a theme's game screen that names `drawn` draws the page as it stands: every tab where it names none, else the
+    /// tab shown where it is named, never a deeper page or a question (EmuSen_Qt.md §3.2, `ThemeScreen.pageSections`).
+    pub fn drawn_by(&self, drawn: &[String], asking: bool) -> bool {
+        drawn.is_empty() || (!asking && self.tab_key().is_some_and(|k| drawn.iter().any(|d| d == k)))
+    }
+
+    /// The board's line over the title (EclipseGame:43): console · year · genre, each the game has.
+    pub fn kicker(&self) -> String {
+        let r = &self.read;
+        let parts: Vec<&str> = [r.console.as_str(), r.year.as_str(), self.detail("genre")].into_iter().filter(|p| !p.is_empty()).collect();
+        parts.join(&format!(" {BETWEEN} "))
+    }
+
+    /// The board's line under the title (EclipseGame:45, EclipseGameNoState:45): when it was last played and the time played
+    /// as Eclipse's Home says them, or Never played, then its players.
+    pub fn line(&self) -> String {
+        let r = &self.read;
+        let played = match r.last_played {
+            Some(at) => crate::words::played_facts(at, self.now, r.played_seconds),
+            None => NEVER_PLAYED.to_owned(),
+        };
+        let players = crate::words::players(self.detail("players"));
+        [played, players].into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join(&format!(" {BETWEEN} "))
+    }
+
+    fn detail(&self, field: &str) -> &str {
+        self.read.details.iter().find(|d| d.field == field).map_or("", |d| d.value.as_str())
+    }
+
+    /// The board's buttons (EclipseGame:47-50, EclipseGameNoState:47-49; R-20261116-30): Resume, filled with A, Start from the
+    /// beginning and Favourite where the game has a resume point, else Start, filled, and Favourite (R-20261123-36); Resume
+    /// loads the resume point and is never stepped (R-20261123-35), the others act as the program's action of their key.
+    pub fn pills(&self) -> Vec<Action> {
+        let resumes = self.resume_point().is_some();
+        let pill = |key: &'static str, label: &'static str, button: i32, filled: bool| Action { key, label, value: String::new(), button, filled, stepped: false, step_left: false, step_right: false };
+        let mut out = if resumes {
+            vec![pill(RESUME, "Resume", SOUTH, true), pill(PLAY, "Start from the beginning", -1, false)]
+        } else {
+            vec![pill(PLAY, "Start", SOUTH, true)]
+        };
+        out.push(Action { value: if self.read.favourite { HEART_ON } else { HEART_OFF }.into(), ..pill(FAVOURITE, "Favourite", -1, false) });
+        out
+    }
+
+    /// The resume point, the state kept where the player left off, which Eclipse's Resume loads (R-20261123-35).
+    pub fn resume_point(&self) -> Option<&State> {
+        self.read.states.iter().find(|s| s.slot == Slot::Auto)
+    }
+
+    /// The resume point's tile among the States section's content, which Resume chooses.
+    pub fn resume_point_row(&self) -> Option<usize> {
+        let point = self.resume_point()?;
+        self.state_tiles().iter().position(|t| t.key == point.path)
+    }
+
+    /// The board's trail (EclipseGame:29-35): the Consoles section, the game's console and its title, a part it lacks left out.
+    pub fn trail(&self) -> Vec<String> {
+        [crate::words::CONSOLES_SECTION, self.read.console.as_str(), self.read.title.as_str()].into_iter().filter(|w| !w.is_empty()).map(str::to_owned).collect()
+    }
+
+    /// The state cards in the board's order and words (EclipseGame:64-83, R-20261116-36): the resume point, each slot saved in
+    /// its number's order, then one empty slot while a slot is free (R-20261123-33); the resume point alone carries the badge
+    /// (R-20261123-35); `when` writes a state's line from its moment.
+    pub fn state_cards(&self, when: &dyn Fn(i64) -> String) -> Vec<Card> {
+        let tiles = self.state_tiles();
+        let row = |s: &State| tiles.iter().position(|t| t.key == s.path);
+        let card = |s: &State, label: String| {
+            let marked = s.slot == Slot::Auto;
+            Card { key: s.path.clone(), label, line: when(s.when), picture: s.picture.clone(), marked, badge: if marked { RESUMES_HERE.into() } else { String::new() }, row: row(s) }
+        };
+        let mut out: Vec<Card> = self.read.states.iter().filter(|s| s.slot == Slot::Auto).map(|s| card(s, crate::words::RESUME_POINT.into())).collect();
+        let mut slots: Vec<&State> = self.read.states.iter().filter(|s| matches!(s.slot, Slot::Number(_))).collect();
+        slots.sort_by_key(|s| match s.slot {
+            Slot::Number(n) => n,
+            Slot::Auto => 0,
+        });
+        out.extend(slots.into_iter().map(|s| card(s, slot_name(s.slot))));
+        if (1..=crate::pause::SLOTS).any(|n| !self.read.states.iter().any(|s| s.slot == Slot::Number(n))) {
+            out.push(Card { key: EMPTY_CARD.into(), label: EMPTY_SLOT.into(), line: String::new(), picture: String::new(), marked: false, badge: String::new(), row: None });
+        }
+        out
+    }
+
+    /// The words beside the cards: the board's where the game has no state, else none.
+    pub fn cards_note(&self) -> &'static str {
+        if self.read.states.is_empty() { NO_STATES } else { "" }
+    }
+
+    /// The help as Eclipse's boards word it for the focus (R-20261116-30): a state's card, and Start where the game has no
+    /// resume point; Resume's without the step Eclipse does not offer (R-20261123-35); none where the boards draw no line, so
+    /// the program's own is shown.
+    pub fn board_help(&self, action: Option<usize>, content: usize) -> Option<Screen> {
+        let key = action.and_then(|i| self.actions().get(i).map(|a| a.key));
+        match (action, key) {
+            (Some(_), Some(PLAY)) if self.resume_point().is_none() => Some(Screen::GamePageStart),
+            (Some(_), Some(RESUME)) => Some(Screen::GamePageResume),
+            (Some(_), _) => None,
+            (None, _) if self.help(None, content) == Screen::GamePageLoad => Some(Screen::GamePageState),
+            (None, _) => None,
+        }
+    }
+}
+
+/// A state's when-line as Eclipse's board writes it (EclipseGame:108-111, R-20261123-34): "Today, 9:12 PM", "Yesterday,
+/// 9:12 PM", "8 November, 7:05 PM" for another day of the year, "8 November 2025, 7:05 PM" for another year, with `time`
+/// the moment's clock time in the player's form.
+pub fn state_when(day: Day, today: Day, yesterday: Day, time: &str) -> String {
+    let month = MONTHS_LONG[(day.1.clamp(1, 12) - 1) as usize];
+    match day {
+        d if d == today => format!("Today, {time}"),
+        d if d == yesterday => format!("Yesterday, {time}"),
+        d if d.0 == today.0 => format!("{} {month}, {time}", d.2),
+        d => format!("{} {month} {}, {time}", d.2, d.0),
     }
 }

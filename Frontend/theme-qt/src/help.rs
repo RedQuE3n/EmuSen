@@ -52,6 +52,10 @@ pub mod qobject {
         PageNone,
         PageEdit,
         PageCoverArt,
+        /// 1.11: Eclipse's page in its boards' words, a state's card, Start with no state, and the shoulders' Section.
+        PageState,
+        PageStart,
+        PageSections,
     }
 
     extern "RustQt" {
@@ -99,7 +103,7 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 23] = [
+pub const KINDS: [HelpKind; 26] = [
     HelpKind::Continue,
     HelpKind::Game,
     HelpKind::Console,
@@ -123,6 +127,9 @@ pub const KINDS: [HelpKind; 23] = [
     HelpKind::PageNone,
     HelpKind::PageEdit,
     HelpKind::PageCoverArt,
+    HelpKind::PageState,
+    HelpKind::PageStart,
+    HelpKind::PageSections,
 ];
 
 /// The help bar a kind shows (EmuSen_Qt.md §3.2, `Help`).
@@ -150,6 +157,9 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::PageNone => Screen::GamePageNone,
         HelpKind::PageEdit => Screen::GamePageEdit,
         HelpKind::PageCoverArt => Screen::GamePageCoverArt,
+        HelpKind::PageState => Screen::GamePageState,
+        HelpKind::PageStart => Screen::GamePageStart,
+        HelpKind::PageSections => Screen::GamePageSections,
         _ => Screen::Home,
     }
 }

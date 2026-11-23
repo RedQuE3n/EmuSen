@@ -617,3 +617,172 @@ fn qt_7_8_5_cover_art_whose_pictures_could_not_be_looked_for_says_why() {
     assert!(!rows[at].opens, "it opens nothing");
     assert_eq!(page.choose_row(at), Outcome::Said(format!("{COVER_UNREAD}: the scraper could not be opened")));
 }
+
+/// Eclipse's page as its boards word it (EclipseGame.dc.html; EmuSen_Qt.md §3.4.11).
+fn detailed(mut r: Read) -> Read {
+    r.details = vec![
+        Detail { field: "genre", value: "Action".into(), edited: false },
+        Detail { field: "players", value: "1-2".into(), edited: false },
+    ];
+    r
+}
+
+#[test]
+fn qt_3_4_11_the_tabs_are_the_boards_six_in_its_order_cheats_only_with_cheats() {
+    let mut page = GamePage::new(read(), NOW);
+    let names = |p: &GamePage| p.tabs().iter().map(|t| t.name()).collect::<Vec<_>>();
+    assert_eq!(names(&page), ["Overview", "States", "Media", "Details", "Options", "Cheats"]);
+    assert_eq!(page.tab(), 0);
+    assert!(page.choose_tab(1));
+    assert_eq!((page.shown(), page.tab(), page.tab_key()), (Section::States, 1, Some("states")));
+    assert!(page.choose_tab(2));
+    assert_eq!((page.shown(), page.tab()), (Section::Media, 2), "Media is the board's third, the program's fourth section");
+    assert!(page.choose_tab(5));
+    assert_eq!((page.shown(), page.cheating, page.tab(), page.tab_key()), (Section::Options, true, 5, Some("cheats")));
+    assert!(page.choose_tab(4));
+    assert_eq!((page.cheating, page.tab()), (false, 4), "Options leaves Cheats");
+    assert!(!page.choose_tab(6), "no seventh tab");
+    let mut none = read();
+    none.cheats.clear();
+    let page = GamePage::new(none, NOW);
+    assert_eq!(names(&page), ["Overview", "States", "Media", "Details", "Options"]);
+}
+
+#[test]
+fn qt_3_4_11_a_theme_draws_the_tabs_it_names_and_never_a_deeper_page_or_a_question() {
+    let mut page = GamePage::new(read(), NOW);
+    let states = vec!["states".to_owned()];
+    assert!(page.drawn_by(&[], false) && page.drawn_by(&[], true), "a screen that names none draws everything");
+    assert!(!page.drawn_by(&states, false), "the Overview is the program's");
+    page.choose_tab(1);
+    assert!(page.drawn_by(&states, false));
+    assert!(!page.drawn_by(&states, true), "a question is the program's");
+    page.choose_tab(3);
+    page.editing = true;
+    assert_eq!(page.tab_key(), None, "Edit Details is a deeper page");
+    assert!(!page.drawn_by(&["details".to_owned()], false));
+}
+
+#[test]
+fn qt_3_4_11_the_kicker_the_line_and_the_buttons_are_the_boards() {
+    let mut r = detailed(read());
+    r.console = "Super Nintendo".into();
+    r.played_seconds = 3 * 3600 + 20 * 60;
+    r.last_played = Some(NOW - 30 * 3600);
+    r.favourite = true;
+    let page = GamePage::new(r.clone(), NOW);
+    assert_eq!(page.kicker(), "Super Nintendo · 1994 · Action");
+    assert_eq!(page.line(), "Last played yesterday · 3 h 20 min played · 1 to 2 players");
+    let pills = page.pills();
+    let words: Vec<_> = pills.iter().map(|p| (p.key, p.label, p.button, p.filled)).collect();
+    assert_eq!(words, [(RESUME, "Resume", emusen_kit_core::input::UiButton::Accept as i32, true), (PLAY, "Start from the beginning", -1, false), (FAVOURITE, "Favourite", -1, false)]);
+    assert_eq!(pills[2].value, HEART_ON);
+    let mut never = detailed(read());
+    never.states.clear();
+    never.year.clear();
+    let page = GamePage::new(never, NOW);
+    assert_eq!(page.kicker(), "SNES · Action", "a part the game lacks is left out");
+    assert_eq!(page.line(), "Never played · 1 to 2 players");
+    let words: Vec<_> = page.pills().iter().map(|p| (p.key, p.label, p.filled)).collect();
+    assert_eq!(words, [(PLAY, "Start", true), (FAVOURITE, "Favourite", false)]);
+    assert_eq!(page.pills()[1].value, HEART_OFF);
+    assert_eq!(page.cards_note(), NO_STATES);
+}
+
+#[test]
+fn qt_3_4_11_the_cards_are_the_resume_point_the_slots_in_order_and_one_empty_slot() {
+    let mut page = GamePage::new(read(), NOW);
+    page.choose_tab(1);
+    let when = |at: i64| format!("at {}", NOW - at);
+    let cards = page.state_cards(&when);
+    let shown: Vec<_> = cards.iter().map(|c| (c.label.as_str(), c.line.as_str(), c.marked, c.badge.as_str(), c.row)).collect();
+    let Content::Tiles(tiles) = page.content() else { panic!("States shows tiles") };
+    let row = |key: &str| tiles.iter().position(|t| t.key == key);
+    assert_eq!(
+        shown,
+        [
+            ("Resume point", "at 720", true, RESUMES_HERE, row("auto")),
+            ("Slot 1", "at 7200", false, "", row("s1")),
+            ("Slot 2", "at 93600", false, "", row("s2")),
+            ("Slot 3", "at 259200", false, "", row("s3")),
+            (EMPTY_SLOT, "", false, "", None),
+        ]
+    );
+    assert!(cards[..4].iter().all(|c| c.row.is_some()), "every state's card is a tile the page's calls take");
+    assert_eq!(page.cards_note(), "");
+}
+
+#[test]
+fn qt_3_4_11_a_states_when_line_is_the_boards_and_the_testers_forms() {
+    let (today, yesterday) = ((2026, 11, 23), (2026, 11, 22));
+    let when = |day| state_when(day, today, yesterday, "9:12 PM");
+    assert_eq!(when(yesterday), "Yesterday, 9:12 PM");
+    assert_eq!(when((2026, 11, 8)), "8 November, 9:12 PM");
+    assert_eq!(when(today), "Today, 9:12 PM", "R-20261123-34");
+    assert_eq!(when((2025, 11, 8)), "8 November 2025, 9:12 PM", "R-20261123-34");
+    assert_eq!(state_when((2027, 1, 1), (2027, 1, 2), (2027, 1, 1), "0:05"), "Yesterday, 0:05", "yesterday across a year's turn");
+}
+
+#[test]
+fn qt_3_4_11_resume_loads_the_resume_point_and_is_never_stepped() {
+    let mut r = read();
+    r.states[0].when = NOW - 5 * 86_400;
+    let mut page = GamePage::new(r, NOW);
+    page.choose_tab(1);
+    let Content::Tiles(tiles) = page.content() else { panic!("tiles") };
+    let row = page.resume_point_row().expect("a resume point");
+    assert_eq!(tiles[row].key, "auto", "the resume point, not the most recent state");
+    assert!(page.pills().iter().all(|p| !p.stepped), "Eclipse offers no step (R-20261123-35)");
+    let cards = page.state_cards(&|_| String::new());
+    assert_eq!(cards.iter().filter(|c| c.marked).map(|c| c.key.as_str()).collect::<Vec<_>>(), ["auto"], "the badge on the resume point alone");
+}
+
+#[test]
+fn qt_3_4_11_the_states_no_board_draws_as_the_tester_ruled() {
+    let state = |slot, path: &str| State { path: path.into(), slot, picture: String::new(), when: NOW - 60 };
+    // Only a resume point: its card, then the empty slot (R-20261123-36, 1).
+    let mut only = read();
+    only.states = vec![state(Slot::Auto, "auto")];
+    let page = GamePage::new(only, NOW);
+    let labels = |p: &GamePage| p.state_cards(&|_| String::new()).iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+    assert_eq!(labels(&page), ["Resume point", EMPTY_SLOT]);
+    assert_eq!(page.pills()[0].label, "Resume");
+    // Slots but no resume point: no badge, and the never-played board's buttons (R-20261123-36, 2).
+    let mut slots = read();
+    slots.states = vec![state(Slot::Number(2), "s2"), state(Slot::Number(1), "s1")];
+    let page = GamePage::new(slots, NOW);
+    assert_eq!(labels(&page), ["Slot 1", "Slot 2", EMPTY_SLOT]);
+    assert!(page.state_cards(&|_| String::new()).iter().all(|c| !c.marked && c.badge.is_empty()));
+    assert_eq!(page.pills().iter().map(|p| p.label).collect::<Vec<_>>(), ["Start", "Favourite"]);
+    assert_eq!(page.resume_point_row(), None);
+    assert_eq!(page.cards_note(), "", "the words beside the cards are the never-played board's alone");
+    assert_eq!(page.board_help(Some(0), 0), Some(Screen::GamePageStart));
+    // More than fit: every slot and the resume point, no empty card (R-20261123-33).
+    let mut full = read();
+    full.states = (1..=8).map(|n| state(Slot::Number(n), &format!("s{n}"))).chain([state(Slot::Auto, "auto")]).collect();
+    let page = GamePage::new(full, NOW);
+    assert_eq!(labels(&page).len(), 9);
+    assert!(!labels(&page).iter().any(|l| l == EMPTY_SLOT));
+}
+
+#[test]
+fn qt_3_4_11_the_help_in_the_boards_words_on_a_state_and_on_start() {
+    let mut page = GamePage::new(read(), NOW);
+    page.choose_tab(1);
+    let Content::Tiles(tiles) = page.content() else { panic!("tiles") };
+    let s1 = tiles.iter().position(|t| t.key == "s1").unwrap();
+    let empty = tiles.iter().position(|t| t.key.starts_with("empty.")).unwrap();
+    assert_eq!(page.board_help(None, s1), Some(Screen::GamePageState));
+    assert_eq!(page.board_help(None, empty), None, "an empty slot has the program's");
+    assert_eq!(page.board_help(Some(0), 0), None, "Play with a resume point: the boards draw none");
+    assert_eq!(page.board_help(Some(1), 0), Some(Screen::GamePageResume), "Resume without its step");
+    let mut none = read();
+    none.states.clear();
+    let page = GamePage::new(none, NOW);
+    assert_eq!(page.board_help(Some(0), 0), Some(Screen::GamePageStart));
+    assert_eq!(page.board_help(Some(1), 0), None, "Favourite: the boards draw none");
+    let words = |s: Screen| emusen_qt_models::help::entries(s).iter().map(|e| e.1).collect::<Vec<_>>();
+    assert_eq!(words(Screen::GamePageState), ["Load this state", "Delete", "Back"]);
+    assert_eq!(words(Screen::GamePageStart), ["Start", "Favourite", "Back", "Home"]);
+    assert_eq!(words(Screen::GamePageSections), ["Section"]);
+}

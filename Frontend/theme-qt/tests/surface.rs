@@ -6,8 +6,8 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.10.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.10.qmldir");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.11.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.11.qmldir");
 const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.10.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
@@ -71,12 +71,12 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.10.qmltypes"
+        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.11.qmltypes"
     );
     assert_eq!(
         normalized(COMMITTED_QMLDIR),
         normalized(&built("qmldir")),
-        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.10.qmldir"
+        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.11.qmldir"
     );
 }
 
@@ -189,7 +189,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),
         (
             "Settings",
-            &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples", "sampleScales"],
+            &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples", "sampleScales", "sectionKeys"],
             &[],
         ),
         (

@@ -3,6 +3,16 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.11, an addition: what Eclipse's Settings boards draw (2026-11-23)
+
+Decided 2026-11-23 by the tester (R-20261123-30): "Add all four, one minor."
+
+- **`Settings.sectionKeys`**: each section's id in the description (`controllers`, `display`, …), in `sections`' order, by
+  which a theme picks the board's icon for a section (`SettingsView::section_keys`).
+- A row's `about` (no new member): the description's short line, else the Galaxia row's, else the row's hint (decided
+  2026-11-23, R-20261123-31), so a row no board draws still has a line under its name.
+- The module is 1.11 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.11.*`.
+
 ## 1.10, an addition: a splash that enters Home (2026-11-17)
 
 Decided 2026-11-17 by the tester (R-20261117-1, R-20261111-122): Eclipse's splash is the original board, with its sound,

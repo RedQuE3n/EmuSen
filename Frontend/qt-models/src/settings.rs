@@ -391,6 +391,11 @@ impl SettingsView {
         self.description["sections"].as_array().map(|s| s.iter().map(|s| text_of(&s["name"])).collect()).unwrap_or_default()
     }
 
+    /// Each section's id in the description, in the sections' order, by which a theme picks a section's picture.
+    pub fn section_keys(&self) -> Vec<String> {
+        self.description["sections"].as_array().map(|s| s.iter().map(|s| text_of(&s["id"])).collect()).unwrap_or_default()
+    }
+
     /// The pages' trail: empty on a section, else the section's name and each page's.
     pub fn trail(&self) -> Vec<String> {
         if self.pages.is_empty() {

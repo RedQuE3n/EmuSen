@@ -47,6 +47,8 @@ pub mod qobject {
         #[qproperty(f64, meter, READ, NOTIFY = shown)]
         #[qproperty(QStringList, samples, READ, NOTIFY = shown)]
         #[qproperty(QList_f64, sample_scales, cxx_name = "sampleScales", READ, NOTIFY = shown)]
+        /// From 1.11 (R-20261123-30): each section's key, in `sections`' order, by which a theme picks a section's picture.
+        #[qproperty(QStringList, section_keys, cxx_name = "sectionKeys", READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -69,6 +71,7 @@ pub const SETTINGS_ROW_ROLES: [&str; 18] = [
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SettingsFacts {
     pub sections: Vec<String>,
+    pub section_keys: Vec<String>,
     pub section: i32,
     pub trail: Vec<String>,
     pub page: String,
@@ -118,6 +121,7 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         .collect();
     Ok(SettingsFacts {
         sections: view.sections(),
+        section_keys: view.section_keys(),
         section: view.section as i32,
         trail: view.trail(),
         page: view.page_key(),
@@ -136,6 +140,7 @@ fn list(words: &[String]) -> QStringList {
 
 pub struct ThemeSettingsRust {
     sections: QStringList,
+    section_keys: QStringList,
     section: i32,
     trail: QStringList,
     page: QString,
@@ -159,6 +164,7 @@ impl Default for ThemeSettingsRust {
     fn default() -> Self {
         ThemeSettingsRust {
             sections: QStringList::default(),
+            section_keys: QStringList::default(),
             section: 0,
             trail: QStringList::default(),
             page: QString::default(),
@@ -206,6 +212,7 @@ impl qobject::ThemeSettings {
         pane.tones.iter().for_each(|t| tones.append(*t as i32));
         let mut me = self.as_mut().rust_mut();
         me.sections = list(&facts.sections);
+        me.section_keys = list(&facts.section_keys);
         me.section = facts.section;
         me.trail = list(&facts.trail);
         me.page = QString::from(facts.page.as_str());

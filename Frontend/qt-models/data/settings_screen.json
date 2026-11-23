@@ -68,7 +68,7 @@
       "name": "Display",
       "rows": [
         {"id": "shape", "row": "GraphicsConfig.Consoles PictureShape", "consoles": "every", "about": "The screen each console was made for, or each of the frame's pixels square."},
-        {"id": "crt", "label": "CRT shader", "hint": "The television's picture for every console that had one.", "about": "The television's picture for every console that had one.",
+        {"id": "crt", "label": "CRT shader", "hint": "The television's picture for every console that had one.",
          "filter": "CRT", "setting": "quality", "off": "effect.None.nearest", "consoles": "televisions",
          "pane": {"preview": "picture", "caption": "{running} · {value} CRT", "by_value": {
            "Performance": "Performance: a plain scanline and the mask, for a weak machine.",
@@ -77,9 +77,9 @@
            "Off": "Off: the console's pixels as they are, with no television.",
            "*": "Each console keeps its own; Left and Right set one for them all."},
          "muted": ["For every console that had a television. A console can choose its own in Consoles."]}},
-        {"id": "levers", "label": "Shader levers", "hint": "The CRT's own levers for one console: the mask, the bloom, the scanlines and the glass.", "about": "The CRT's own levers for one console: the mask, the bloom, the scanlines and the glass.",
+        {"id": "levers", "label": "Shader levers", "hint": "The CRT's own levers for one console: the mask, the bloom, the scanlines and the glass.",
          "door": "levers", "pane": {"preview": "picture", "caption": "{running} · live preview", "muted": ["A opens its levers; each one redraws the picture."]}},
-        {"id": "shaders", "label": "Shaders", "hint": "The shader each console draws with: the built-in filters, the recent ones and the slang pack's presets.", "about": "The shader each console draws with: the built-in filters, the recent ones and the slang pack's presets.", "door": "shaders"},
+        {"id": "shaders", "label": "Shaders", "hint": "The shader each console draws with: the built-in filters, the recent ones and the slang pack's presets.", "door": "shaders"},
         {"id": "crop", "row": "GraphicsConfig.Consoles Overscan", "consoles": "televisions", "about": "What is hidden at the picture's edges on a console that had a television."},
         {"id": "textsize", "row": "AppSettings TextSize", "about": "Every word on the big screen, and the desktop's, through the interface's type scale.",
          "pane": {"preview": "sizes", "sentence": "Text size scales every word on the big screen; nothing is cut off at any size."}},

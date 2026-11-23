@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Shapes
 import EmuSen.Theme
 
 // Settings' sections down the left, the one shown filled in the accent, a click opening another (G:101-108; EmuSen_Qt.md §3.4.11).
@@ -19,6 +20,9 @@ Column {
     Ink {
         id: ink
     }
+    SettingsInk {
+        id: own
+    }
     Repeater {
         model: Settings.sections
         delegate: Rectangle {
@@ -34,7 +38,36 @@ Column {
             Accessible.role: Accessible.PageTab
             Accessible.name: entry.modelData
             Accessible.selected: entry.current
+            // The section's icon, 28 px, stroked 1.7 in the words' colour with round ends (G:104).
+            Item {
+                objectName: "sectionIcon." + entry.index
+                x: root.inset * root.unit
+                y: (entry.height - height) / 2
+                width: root.icon * root.unit
+                height: width
+                // What is drawn, which the tests read: the stroke and the path.
+                readonly property color paint: stroke.strokeColor
+                readonly property string path: stroke.shape
+                Shape {
+                    width: 24
+                    height: 24
+                    scale: parent.width / 24
+                    transformOrigin: Item.TopLeft
+                    preferredRendererType: Shape.CurveRenderer
+                    ShapePath {
+                        id: stroke
+                        readonly property string shape: own.sectionIcons[Settings.sectionKeys[entry.index] ?? ""] ?? ""
+                        fillColor: "transparent"
+                        strokeColor: words.color
+                        strokeWidth: 1.7
+                        capStyle: ShapePath.RoundCap
+                        joinStyle: ShapePath.RoundJoin
+                        PathSvg { path: stroke.shape }
+                    }
+                }
+            }
             Line {
+                id: words
                 objectName: "sectionWords." + entry.index
                 unit: root.unit
                 x: (root.inset + root.icon + root.gap) * root.unit

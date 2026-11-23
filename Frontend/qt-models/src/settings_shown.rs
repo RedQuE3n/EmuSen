@@ -62,10 +62,12 @@ impl SettingsView {
         self.entries().iter().map(|entry| RowFacets { about: self.about_of(entry), switch: self.switch_of(entry), tile: self.tile_of(entry) }).collect()
     }
 
-    /// A row's short line under its name: the description's `about` for the row, else its Galaxia row's; empty for none.
+    /// A row's short line under its name: the description's `about`, else its Galaxia row's, else its hint (R-20261123-31).
     fn about_of(&self, entry: &Value) -> String {
-        let own = entry["about"].as_str().map(str::to_owned);
-        own.or_else(|| self.keyed(entry).and_then(|k| k.row["about"].as_str().map(str::to_owned))).unwrap_or_default()
+        let keyed = self.keyed(entry);
+        let own = entry["about"].as_str().or_else(|| keyed.as_ref().and_then(|k| k.row["about"].as_str()));
+        let hint = keyed.as_ref().map_or(&entry["hint"], |k| &k.row["hint"]).as_str().unwrap_or_default();
+        self.fill(own.unwrap_or(hint), "")
     }
 
     /// A Galaxia row or a console's setting of the kind `switch`: on where every place it is stored for holds it on.

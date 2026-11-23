@@ -326,7 +326,12 @@ fn qt_3_2_the_page_s_key_and_each_row_s_facets_a_theme_reads() {
     assert_eq!(facets[swap].switch, Some(false), "Swap A and B is a switch, off at its default");
     view.step(swap, 1);
     assert_eq!(view.facets()[swap].switch, Some(true), "turned on, its state follows the stored value, not its word");
-    assert!(view.rows().iter().zip(view.facets()).all(|(r, f)| f.about.is_empty() && f.tile.is_none() && (r.kind == RowKind::Steps || f.switch.is_none())), "no description writes an about line yet, no row here is a console's, only a stepped row is a switch");
+    assert!(view.rows().iter().zip(view.facets()).all(|(r, f)| f.tile.is_none() && (r.kind == RowKind::Steps || f.switch.is_none())), "no row here is a console's, only a stepped row is a switch");
+    // No board's line for Controllers yet: a row's short line is its hint (R-20261123-31).
+    let rows: Value = serde_json::from_str(ROWS).unwrap();
+    let hint = rows["AppSettings"].as_array().unwrap().iter().find(|r| r["key"] == "SwapPadButtons").unwrap()["hint"].as_str().unwrap();
+    assert!(!hint.is_empty());
+    assert_eq!(view.facets()[swap].about, hint, "Swap A and B's short line, its hint");
     section(&mut view, "Library");
     let scraping = index(&view, "scraping");
     assert_eq!(view.choose(scraping), Outcome::Opened);
@@ -337,7 +342,7 @@ fn qt_3_2_the_page_s_key_and_each_row_s_facets_a_theme_reads() {
 }
 
 #[test]
-fn qt_3_4_11_display_s_rows_carry_their_board_s_short_lines_and_the_others_none() {
+fn qt_3_4_11_display_s_rows_carry_their_board_s_short_lines_and_the_others_their_hints() {
     let source = fake(json!({}), json!({}));
     let mut view = view(&source);
     section(&mut view, "Display");
@@ -357,8 +362,16 @@ fn qt_3_4_11_display_s_rows_carry_their_board_s_short_lines_and_the_others_none(
     for (id, about) in board {
         assert_eq!(facets[index(&view, id)].about, about, "{id}'s short line, the board's");
     }
-    let drawn: Vec<usize> = board.iter().map(|(id, _)| index(&view, id)).collect();
-    assert!((0..facets.len()).filter(|i| !drawn.contains(i)).all(|i| facets[i].about.is_empty()), "a row no board draws has no short line until it is ruled on");
+    // A row no board draws shows the program's own hint as its short line (R-20261123-31): its Galaxia row's hint.
+    let rows: Value = serde_json::from_str(ROWS).unwrap();
+    let description: Value = serde_json::from_str(include_str!("../data/settings_screen.json")).unwrap();
+    let display = description["sections"].as_array().unwrap().iter().find(|s| s["id"] == "display").unwrap();
+    for entry in display["rows"].as_array().unwrap().iter().filter(|e| !board.iter().any(|(id, _)| e["id"] == *id)) {
+        let (model, key) = entry["row"].as_str().and_then(|r| r.split_once(' ')).expect("a program row is a Galaxia row");
+        let hint = rows[model].as_array().unwrap().iter().find(|r| r["key"] == key).unwrap()["hint"].as_str().unwrap();
+        assert!(!hint.is_empty());
+        assert_eq!(facets[index(&view, entry["id"].as_str().unwrap())].about, hint, "{}'s short line, its hint", entry["id"]);
+    }
     // The board's small line under CRT shader's paragraph (G:162), true of the row: it sets the televisions, and a console's page has its own CRT profile.
     assert_eq!(view.pane(index(&view, "crt")).muted, ["For every console that had a television. A console can choose its own in Consoles."]);
 }

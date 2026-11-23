@@ -34,6 +34,16 @@ const BOARD_ROWS: [(&str, &str); 9] = [
     ("Start-up splash", "The eclipse while big picture starts. Any button skips it."),
 ];
 
+/// The board's section icons in its order, each a path in a 24-unit box (gen_settings.py:7-14).
+const BOARD_ICONS: [&str; 6] = [
+    "M6.5 8h11a4.5 4.5 0 0 1 0 9c-1.6 0-2.4-1.5-3.5-1.5h-4c-1.1 0-1.9 1.5-3.5 1.5a4.5 4.5 0 0 1 0-9zM8 11v3M6.5 12.5h3M16 12.5h.01",
+    "M4 5h16v11H4zM9 20h6M12 16v4",
+    "M5 10v4h3l5 4V6L8 10zM16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11",
+    "M4 8h16v9H4zM8 17v3M16 17v3M8 12h3M15 12h.01",
+    "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+    "M17 4.5a8.5 8.5 0 1 0 0 15 6.5 6.5 0 1 1 0-15z",
+];
+
 /// The window's SettingsModel, as its own type.
 fn settings(scene: &mut Scene<'_>) -> &'static SettingsModel {
     let object = scene.object("settingsModel");
@@ -222,6 +232,7 @@ pub fn oracle(backend: &str) {
         }
         for (i, name) in sections.iter().enumerate() {
             words.push((format!("sectionWords.{i}"), name.clone()));
+            words.push((format!("sectionIcon.{i}"), BOARD_ICONS[i].to_owned()));
         }
         for (i, (name, about)) in BOARD_ROWS.iter().enumerate() {
             words.push((format!("rowName.{i}"), name.to_string()));
@@ -229,7 +240,7 @@ pub fn oracle(backend: &str) {
             words.push((format!("rowWords.{i}"), model_rows[i].value.clone()));
         }
         for (name, want) in words {
-            let have = read(&tree, &name, "text");
+            let have = read(&tree, &name, if name.starts_with("sectionIcon.") { "path" } else { "text" });
             if have != want {
                 differences.push(format!("{at_size}: {name} says {have:?} where {want:?}"));
             }
@@ -287,6 +298,15 @@ pub fn oracle(backend: &str) {
         }
         later.extend(table.iter().filter(|r| r.name == "rowRing").map(|r| renamed(r, 0, 0)));
         held(&tree, &later, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
+        // Each later row's short line, its hint (R-20261123-31), ends 24 px before the value at the latest, cut with an ellipsis there (G:30).
+        let got = crate::eclipse_board::boxes(&tree, unit);
+        for i in BOARD_ROWS.len()..count {
+            let (line, value) = (got[&format!("rowAbout.{i}")], got[&format!("rowValue.{i}")]);
+            let cut = read(&tree, &format!("rowAbout.{i}"), "truncated") == "true";
+            if line.right() > value.x - 24.0 * k + 1e-6 || (cut && line.right() < value.x - 24.0 * k - 1e-6) {
+                differences.push(format!("{at_size}: row {i}'s short line ends at {} with the value at {}, cut {cut}", line.right(), value.x));
+            }
+        }
     }
     scene.resize(1920, 1200);
     scene.wait(300);
@@ -416,6 +436,8 @@ fn like(table: &[Row], i: usize, kind: RowKind, switch: Option<bool>, about: boo
     };
     let suffix = format!(".{from}");
     let mut out: Vec<Row> = table.iter().filter(|r| r.name.ends_with(&suffix) && r.name.starts_with("row")).map(|r| renamed(r, from, i)).collect();
+    // A short line's width is its words', cut at the value as the oracle's own check holds; the board row's width is its words'.
+    out.iter_mut().filter(|r| r.name.starts_with("rowAbout.")).for_each(|r| r.w = "-".to_owned());
     if !about {
         out.retain(|r| !r.name.starts_with("rowAbout."));
         out.iter_mut().filter(|r| r.name.starts_with("rowName.")).for_each(|r| r.y = format!("mid:row.{i}"));

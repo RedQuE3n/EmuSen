@@ -15,16 +15,22 @@ battery	98	"82%"	Device.battery as Words.percent gives it, Eclipse's Status part
 clock	98	"9:41 PM"	Device.shortTime, Eclipse's Status part	Text	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
 section.0	103	section link 0, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	170	300	66	16	#00000000	-	built	-
 sectionWords.0	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.0:64	mid:section.0	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.0	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.0:20	mid:section.0	28	28	-	#FFD8DBE6	-	built	-
 section.1	103	section link 1, 300 by 66 at a corner of 16, filled: the section shown	Settings.sections, SettingsNav	Rectangle	72	below:section.0:6	300	66	16	Tokens.accent	-	built	-
 sectionWords.1	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.1:64	mid:section.1	-	-	-	Tokens.overAccent	23	built	600 0 none
+sectionIcon.1	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.1:20	mid:section.1	28	28	-	Tokens.overAccent	-	built	-
 section.2	103	section link 2, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.1:6	300	66	16	#00000000	-	built	-
 sectionWords.2	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.2:64	mid:section.2	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.2	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.2:20	mid:section.2	28	28	-	#FFD8DBE6	-	built	-
 section.3	103	section link 3, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.2:6	300	66	16	#00000000	-	built	-
 sectionWords.3	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.3:64	mid:section.3	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.3	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.3:20	mid:section.3	28	28	-	#FFD8DBE6	-	built	-
 section.4	103	section link 4, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.3:6	300	66	16	#00000000	-	built	-
 sectionWords.4	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.4:64	mid:section.4	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.4	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.4:20	mid:section.4	28	28	-	#FFD8DBE6	-	built	-
 section.5	103	section link 5, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.4:6	300	66	16	#00000000	-	built	-
 sectionWords.5	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.5:64	mid:section.5	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.5	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.5:20	mid:section.5	28	28	-	#FFD8DBE6	-	built	-
 settingsHeading	68	"Display", the page's heading	Settings.trail's last	Text	500	150	-	-	-	Tokens.text	44	built	600 0 none
 settingsRows	67	the rows, 22 px under the heading (its 12 px margin and the 10 px gap)	MeasuredWalk's window, to the ninth row's foot	FocusScope	500	below:settingsHeading:22	820	-	-	-	-	built	-
 row.0	27	row 0, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	top:settingsRows:0	820	84	20	-	-	built	-

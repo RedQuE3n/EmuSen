@@ -1514,7 +1514,16 @@ Module {
             lineNumber: 45
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 67 }
+        Property {
+            name: "sectionKeys"
+            type: "QStringList"
+            read: "getSectionKeys"
+            notify: "shown"
+            index: 17
+            lineNumber: 46
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 69 }
     }
     Component {
         file: "splash.cxxqt.h"

@@ -359,14 +359,14 @@ pub fn ring(scene: &mut Scene<'_>, row: usize, caption: &str, differences: &mut 
     if read(&tree, "asideMeterCaption", "text") != caption || shown(scene, "asideMeterCaption") == caption.is_empty() {
         differences.push(format!("row {row}: the ring's caption {:?}, drawn {}, where {caption:?}", read(&tree, "asideMeterCaption", "text"), shown(scene, "asideMeterCaption")));
     }
-    let end: f64 = read(&tree, "asideRingFill", "end").parse().unwrap_or(f64::NAN);
-    // The gradient's stops in order at any share, a full one too, as an unordered stop drew a wedge outside the ring on the card.
-    let [start, last] = ["trackStart", "trackEnd"].map(|p| read(&tree, "asideRingFill", p).parse::<f64>().unwrap_or(f64::NAN));
-    if !(end < start && start <= last && last + 0.0001 <= 1.0) {
-        differences.push(format!("row {row}: the ring's stops out of order: fill to {end}, track {start} to {last}"));
+    // The fill begins one less its share of the turn round from the gap's end, as Qt's gradient turns the other way; its stops in order at any share.
+    let begin: f64 = read(&tree, "asideRingFill", "begin").parse().unwrap_or(f64::NAN);
+    let want = (1.0 - 0.75 * meter).clamp(0.2502, 0.9999);
+    if !(0.25 <= begin - 0.0001 && begin <= 1.0) {
+        differences.push(format!("row {row}: the ring's stops out of order: the fill begins at {begin}"));
     }
-    if !same(end, 0.75 * meter) {
-        differences.push(format!("row {row}: the ring filled to {end} of the turn where the share {meter} is {}", 0.75 * meter));
+    if !same(begin, want) {
+        differences.push(format!("row {row}: the ring's fill begins at {begin} of the turn where the share {meter} puts it at {want}"));
     }
     // The value and the caption centred in the ring (G:167).
     let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");

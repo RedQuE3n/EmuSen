@@ -37,7 +37,7 @@ Item {
             spread: 12 * root.unit
             pixelScale: root.pixelScale
         }
-        // The conic fill drawn at the board's pixels and scaled; mirrored, since Qt's conical gradient turns counter-clockwise (EmuSen_Qt.md §3.4.11).
+        // The conic fill drawn at the board's pixels and scaled; Qt's conical gradient turns counter-clockwise, so the board's clockwise stops stand at one less their share (EmuSen_Qt.md §3.4.11).
         Shape {
             id: fill
             objectName: "asideRingFill"
@@ -46,24 +46,22 @@ Item {
             scale: root.unit
             transformOrigin: Item.TopLeft
             preferredRendererType: Shape.CurveRenderer
-            transform: Scale { xScale: -1; origin.x: root.side / 2 }
-            readonly property real end: 0.75 * Math.max(0, Math.min(1, root.share))
-            // The stops in order at every share: the track starts a hair after the fill and ends at 270°, or a hair after a full fill.
-            readonly property real trackStart: Math.max(0.0001, fill.end) + 0.0001
-            readonly property real trackEnd: Math.max(0.75, fill.trackStart)
+            // Where the fill begins, counter-clockwise from the gap's end at a quarter: a full share leaves no track, an empty one no fill.
+            readonly property real begin: Math.max(0.2502, Math.min(0.9999, 1 - 0.75 * Math.max(0, Math.min(1, root.share))))
+            readonly property bool full: fill.begin <= 0.2502
             ShapePath {
                 strokeColor: "transparent"
                 fillGradient: ConicalGradient {
                     centerX: root.side / 2
                     centerY: root.side / 2
-                    angle: 315
+                    angle: 225
                     // A hard stop is two stops a hair apart: QGradient keeps one stop at a position.
-                    GradientStop { position: 0; color: Tokens.accent }
-                    GradientStop { position: Math.max(0.0001, fill.end); color: own.ringEnd }
-                    GradientStop { position: fill.trackStart; color: own.ringTrack }
-                    GradientStop { position: fill.trackEnd; color: own.ringTrack }
-                    GradientStop { position: fill.trackEnd + 0.0001; color: "transparent" }
-                    GradientStop { position: 1; color: "transparent" }
+                    GradientStop { position: 0; color: "transparent" }
+                    GradientStop { position: 0.2499; color: "transparent" }
+                    GradientStop { position: 0.25; color: fill.full ? own.ringEnd : own.ringTrack }
+                    GradientStop { position: fill.begin - 0.0001; color: fill.full ? own.ringEnd : own.ringTrack }
+                    GradientStop { position: fill.begin; color: own.ringEnd }
+                    GradientStop { position: 1; color: Tokens.accent }
                 }
                 PathAngleArc { centerX: root.side / 2; centerY: root.side / 2; radiusX: root.side / 2; radiusY: root.side / 2; startAngle: 0; sweepAngle: 360 }
             }

@@ -2,8 +2,8 @@ import QtQuick
 
 // The colours only the Settings boards draw that no kit token or Ink holds, constants of the design with their gen_settings.py lines (EmuSen_Qt.md §3.4.11).
 QtObject {
-    // The glow behind a section's page, by its page key, as the boards give each section its own (G:163, 178, 195, 299, 329).
-    readonly property var pageGlows: ({ "display": "#3B4AA8", "sound": "#7A3FA8", "controllers": "#2A6FD6", "library": "#1FA890", "emusen": "#B0487A" })
+    // The glow behind a section's page, by its page key, as the boards give each section its own (G:163, 178, 195, 299, 329), a page under one its own (G:341, 347).
+    readonly property var pageGlows: ({ "display": "#3B4AA8", "sound": "#7A3FA8", "controllers": "#2A6FD6", "library": "#1FA890", "emusen": "#B0487A", "group:Collections": "#1FA890", "group:Saves and states": "#B0487A" })
     // The limb's fill, its 2 px rim at rgba(246, 231, 216, 0.75) and its glow at rgba(246, 214, 200, 0.35) (G:91).
     readonly property color limb: "#0B0D16"
     readonly property color limbRim: "#BFF6E7D8"
@@ -23,4 +23,11 @@ QtObject {
     })
     // The picture's glow, rgba(120, 140, 255, 0.25) (G:146).
     readonly property color pictureGlow: "#40788CFF"
+    // Sound's ring: the fill's end, the track and its glow, rgba(240, 180, 196, 0.22) (G:166).
+    readonly property color ringEnd: "#F3C9D2"
+    readonly property color ringTrack: "#262A3A"
+    readonly property color ringGlow: "#38F0B4C4"
+    // Controllers' picture's panel and its 1 px inset line (G:183).
+    readonly property color facesGround: "#11131C"
+    readonly property color facesLine: "#262A3A"
 }

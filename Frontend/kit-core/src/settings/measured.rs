@@ -123,6 +123,11 @@ impl MeasuredWalk {
         (from..=to).map(|i| self.height(i)).sum::<f64>() + self.gap * (to - from) as f64
     }
 
+    /// Whether rows `from` to `to` fit the window, within a millionth of it: heights and gaps in canvas units are sums of floats (EmuSen_Kit.md §7.122).
+    fn fits(&self, from: usize, to: usize) -> bool {
+        self.span(from, to) <= self.window * (1.0 + 1e-6)
+    }
+
     /// The last first row that leaves no empty space under the last row.
     fn last_first(&self) -> usize {
         let count = self.walk.rows().len();
@@ -130,7 +135,7 @@ impl MeasuredWalk {
             return 0;
         }
         let mut first = count - 1;
-        while first > 0 && self.span(first - 1, count - 1) <= self.window {
+        while first > 0 && self.fits(first - 1, count - 1) {
             first -= 1;
         }
         first
@@ -145,7 +150,7 @@ impl MeasuredWalk {
         if current < self.first {
             self.first = current;
         }
-        while self.first < current && self.span(self.first, current) > self.window {
+        while self.first < current && !self.fits(self.first, current) {
             self.first += 1;
         }
         self.first = self.first.min(self.last_first());

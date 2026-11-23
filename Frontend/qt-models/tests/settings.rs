@@ -194,8 +194,8 @@ fn qt_7_7_emusens_panes_and_values_name_other_keys_and_the_version() {
     let mut view = view(&source);
     section(&mut view, "EmuSen");
     let pane = view.pane(0);
-    assert_eq!(pane.sentence, "States and saves live beside the games, with one resume point kept per game.");
-    assert_eq!(pane.muted, ["Resume · Always start again"]);
+    assert_eq!(pane.sentence, "States and saves are kept in EmuSen's own Saves folder, with one resume point per game.");
+    assert_eq!(pane.muted, ["Resume · Always restart"]);
     // Big Picture is the program on every machine (the tester decided, 2026-11-13): no Big picture row, whatever the base holds.
     let labels: Vec<String> = shown(&view).into_iter().map(|(label, _)| label).collect();
     assert_eq!(labels, ["Saves and states", "Pause in the background", "About"]);
@@ -327,11 +327,11 @@ fn qt_3_2_the_page_s_key_and_each_row_s_facets_a_theme_reads() {
     view.step(swap, 1);
     assert_eq!(view.facets()[swap].switch, Some(true), "turned on, its state follows the stored value, not its word");
     assert!(view.rows().iter().zip(view.facets()).all(|(r, f)| f.tile.is_none() && (r.kind == RowKind::Steps || f.switch.is_none())), "no row here is a console's, only a stepped row is a switch");
-    // No board's line for Controllers yet: a row's short line is its hint (R-20261123-31).
+    // A row the Controllers board does not draw has its hint as its short line (R-20261123-31); Swap A and B has the board's since its page was built.
     let rows: Value = serde_json::from_str(ROWS).unwrap();
-    let hint = rows["AppSettings"].as_array().unwrap().iter().find(|r| r["key"] == "SwapPadButtons").unwrap()["hint"].as_str().unwrap();
+    let hint = rows["AppSettings"].as_array().unwrap().iter().find(|r| r["key"] == "MirrorPlayer1ToPlayer2").unwrap()["hint"].as_str().unwrap();
     assert!(!hint.is_empty());
-    assert_eq!(view.facets()[swap].about, hint, "Swap A and B's short line, its hint");
+    assert_eq!(view.facets()[index(&view, "mirror")].about, hint, "Mirror player 1's short line, its hint");
     section(&mut view, "Library");
     let scraping = index(&view, "scraping");
     assert_eq!(view.choose(scraping), Outcome::Opened);
@@ -457,4 +457,62 @@ fn qt_3_4_11_the_picture_preview_names_the_newest_screenshot() {
     assert_eq!(view.pane(index(&view, "crt")).shot, newer.to_string_lossy());
     assert_eq!(view.pane(index(&view, "art")).shot, "", "only a picture preview names it");
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn qt_3_4_11_sound_controllers_collections_and_saves_carry_their_boards_words() {
+    let source = fake(json!({"Volume": 0.7}), json!({}));
+    let mut view = view(&source);
+    // EclipseSettingsSound.dc.html (gen_settings.py:172-177): Navigation sounds' short line, the ring's words and R-20261123-12's small line.
+    section(&mut view, "Sound");
+    assert_eq!(view.facets()[index(&view, "navsounds")].about, "The sounds for moving, choosing and going back, on a stream of their own beside the game's.");
+    let pane = view.pane(index(&view, "volume"));
+    assert_eq!((pane.preview, pane.preview.number(), pane.meter, pane.caption.as_str()), (Preview::Meter, 2, 0.7, "the game's volume"));
+    assert_eq!(pane.muted, ["The ring fills as the volume rises; the next sound plays at the level you chose."]);
+    // EclipseSettingsControllers.dc.html (gen_settings.py:184-194): the board's short lines, the face buttons and the type's choices from its own row.
+    section(&mut view, "Controllers");
+    let board = [
+        ("rumble", "The motors in your controller, where the console's games drive them."),
+        ("swap", "A and B trade what they do in the library, the menus and every sheet, and so do X and Y."),
+        ("chords", "Guide held with Up saves, with Down loads, with R1 takes a screenshot."),
+        ("type", "Which buttons the help bar draws."),
+        ("firstonly", "Only the first controller connected steers the menus."),
+        ("notices", "A notice at the top of the screen when a controller is connected or disconnected."),
+        ("stickdpad", "In games whose console has no stick, the left stick also presses the D-pad."),
+        ("deadzone", "How far a stick must travel before it counts as a direction."),
+    ];
+    let facets = view.facets();
+    let description: Value = serde_json::from_str(include_str!("../data/settings_screen.json")).unwrap();
+    for (id, about) in board {
+        // Rumble is shown only where a console shakes, which the fake has none of: its line is read from the description.
+        match view.rows().iter().position(|r| r.id == id) {
+            Some(at) => assert_eq!(facets[at].about, about, "{id}'s short line, the board's"),
+            None => assert_eq!(description["sections"][0]["rows"].as_array().unwrap().iter().find(|e| e["id"] == id).unwrap()["about"], about, "{id}'s short line"),
+        }
+    }
+    let pane = view.pane(index(&view, "type"));
+    assert_eq!((pane.preview, pane.preview.number()), (Preview::Buttons, 6));
+    assert_eq!(pane.muted, ["Automatic · Xbox · PlayStation · Nintendo · Generic"]);
+    // EclipseSettingsCollections.dc.html (gen_settings.py:333-341): the orders listed from the row's own choices (R-20261123-18).
+    section(&mut view, "Library");
+    view.choose(index(&view, "collections"));
+    assert_eq!(view.trail(), ["Library", "Collections"]);
+    let pane = view.pane(index(&view, "bigpicturecollections.defaultsortorder"));
+    assert_eq!(pane.muted, ["Name · Rating · Release date · Developer · Publisher · Genre · Players · Last played · Times played · Play time, each ascending or descending."]);
+    assert_eq!(pane.sentence, "A list's own choice in its options lasts until EmuSen closes.");
+    // EclipseSettingsSaves.dc.html (gen_settings.py:344-347): Play time's short line, the board's, and Continue's choices (R-20261123-37).
+    section(&mut view, "EmuSen");
+    view.choose(index(&view, "saves"));
+    assert_eq!(view.trail(), ["EmuSen", "Saves and states"]);
+    assert_eq!(view.facets()[index(&view, "maxplaytimetracking")].about, "A launch longer than this adds nothing to the game's play time.");
+    assert_eq!(view.facets()[index(&view, "resumeonlaunch")].about, "Every game is saved when it is closed; this is what happens the next time it starts.");
+    assert_eq!(view.pane(index(&view, "resumeonlaunch")).muted, ["Ask each time · Always resume · Always restart"]);
+}
+
+#[test]
+fn qt_3_4_11_a_pane_s_choices_are_each_choice_s_words_to_a_comma_each_once() {
+    let pairs = |w: &[&str]| w.iter().map(|w| (String::new(), w.to_string())).collect::<Vec<_>>();
+    assert_eq!(settings::choice_heads(&pairs(&["On", "Off"])), "On · Off");
+    assert_eq!(settings::choice_heads(&pairs(&["Name, ascending", "Name, descending", "Rating, ascending"])), "Name · Rating");
+    assert_eq!(settings::choice_heads(&pairs(&[])), "");
 }

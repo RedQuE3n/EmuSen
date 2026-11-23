@@ -12,7 +12,7 @@ Column {
     property string heading
     // Scene pixels to a canvas unit, so the picture's glows blur at the pixels drawn.
     property real pixelScale: 1
-    // Settings.preview's numbers, the theme API's (EmuSen_Qt.md §3.2): 1 the picture, 3 the variants, 4 the text sizes.
+    // Settings.preview's numbers, the theme API's (EmuSen_Qt.md §3.2): 1 the picture, 2 the meter, 3 the variants, 4 the text sizes, 6 the face buttons.
     readonly property bool pictured: Settings.preview === 1
     readonly property bool sampled: Settings.preview === 3 || Settings.preview === 4
     objectName: "settingsAside"
@@ -77,6 +77,37 @@ Column {
                 }
             }
         }
+    }
+    // The focused row's value words, which the ring shows inside it.
+    Item {
+        visible: false
+        Repeater {
+            model: Settings.rows
+            delegate: Item {
+                id: shown
+                required property int index
+                required property string value
+                Binding {
+                    target: meter
+                    property: "value"
+                    value: shown.value
+                    when: shown.index === Settings.focused
+                    restoreMode: Binding.RestoreNone
+                }
+            }
+        }
+    }
+    SettingsMeter {
+        id: meter
+        unit: root.unit
+        pixelScale: root.pixelScale
+        visible: Settings.preview === 2
+        share: Settings.meter
+        caption: Settings.caption
+    }
+    SettingsFaces {
+        unit: root.unit
+        visible: Settings.preview === 6
     }
     Line {
         objectName: "asideCaption"

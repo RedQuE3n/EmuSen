@@ -38,7 +38,9 @@
         <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>
         <file alias="parts/Limb.qml">../themes/eclipse/parts/Limb.qml</file>
         <file alias="parts/SettingsAside.qml">../themes/eclipse/parts/SettingsAside.qml</file>
+        <file alias="parts/SettingsFaces.qml">../themes/eclipse/parts/SettingsFaces.qml</file>
         <file alias="parts/SettingsInk.qml">../themes/eclipse/parts/SettingsInk.qml</file>
+        <file alias="parts/SettingsMeter.qml">../themes/eclipse/parts/SettingsMeter.qml</file>
         <file alias="parts/SettingsNav.qml">../themes/eclipse/parts/SettingsNav.qml</file>
         <file alias="parts/SettingsRow.qml">../themes/eclipse/parts/SettingsRow.qml</file>
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>

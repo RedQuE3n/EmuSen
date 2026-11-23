@@ -119,12 +119,33 @@ ThemeScreen {
                         x: 72 * design.unit
                         y: 170 * design.unit
                     }
+                    // A page's trail over its heading, every level above the page (G:66, R-20261123-39).
+                    Line {
+                        id: crumb
+                        objectName: "settingsCrumb"
+                        unit: design.unit
+                        boardLine: true
+                        visible: Settings.trail.length > 1
+                        x: 500 * design.unit
+                        y: 150 * design.unit
+                        text: Settings.trail.slice(0, -1).join("  ›  ")
+                        color: Tokens.muted
+                        size: 20
+                    }
+                    LineBox {
+                        id: headingBox
+                        size: 44
+                        weight: Tokens.weightTitle
+                    }
                     Line {
                         id: heading
                         objectName: "settingsHeading"
                         unit: design.unit
                         x: 500 * design.unit
-                        y: 150 * design.unit
+                        // Under the trail by its 6 px margin and the column's 10 px gap (G:66-68).
+                        y: crumb.visible ? crumb.y + crumb.height + (6 + 10) * design.unit : 150 * design.unit
+                        // Its box CSS's normal line height, as the board's h2 has it (G:68).
+                        height: headingBox.box * design.unit
                         text: Settings.heading
                         color: Tokens.text
                         size: 44

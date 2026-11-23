@@ -390,8 +390,8 @@ THE LOADED STEP
     A difference is a line of kind mockup:
         .../screens/Home.qml:1 mockup 1280x800 dark: ring: Y 451.1, the
             mockup's 447.1
-    The built-in themes are held to Testing/themes by theme-audit's tests
-    (EmuSen_Kit.md 7.104); a mockup is never written to the program's
+    A theme's mockups in Testing/themes are held by theme-audit's tests
+    (EmuSen_Kit.md 7.104; none are kept since 2026-11-23); a mockup is never written to the program's
     numbers.
 
     --focus NAME (theme-audit alone, with --catalogue) gives the focus to
@@ -450,8 +450,7 @@ PARTS
 
     The two options let one package's audit run as six processes side
     by side, one a size without the crowd and one for the crowd at
-    every size: theme-audit's tests of Horizon, Meridian and Orrery
-    against their mockups, and of Eclipse in every state, are a test a
+    every size: theme-audit's test of Eclipse in every state is a test a
     part (tests/audit.rs). The crowd is not cut by size, for the pass
     is history: one placing is judged at each size in turn, and the
     sweep at one size leaves the focus, the views' positions and their
@@ -465,6 +464,8 @@ PARTS
     Every other pass places its screen afresh and puts the focus back
     after its walk; its lines at each size alone were those of the whole
     run (Orrery, all five sizes, 2026-11-16).
+
+    Retired 2026-11-23 (decided 2026-11-23): the recorded accounts of Horizon, Meridian and Orrery, and the tests that held them, are removed with those themes; the next paragraph is kept as the record of how they were held.
 
     A recorded account (Testing/themes/audit/<theme>.findings) is held
     whole by its parts. Each part's test compares its run with the
@@ -569,13 +570,13 @@ ENVIRONMENT
 EXAMPLES
     theme-check Frontend/themes/emusen
     theme-check --static Frontend/themes/emusen
-    theme-check --state /tmp/horizon Frontend/themes/horizon
-    theme-audit --gpu --state /tmp/horizon-gpu Frontend/themes/horizon
+    theme-check --state /tmp/eclipse Frontend/themes/eclipse
+    theme-audit --gpu --state /tmp/eclipse-gpu Frontend/themes/eclipse
     theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
-    theme-audit --states all --state /tmp/states Frontend/themes/meridian
-    theme-audit --states nogame,splash-3s Frontend/themes/meridian
-    theme-audit --mockups Testing/themes --sizes 1920x1080 --crowd without Frontend/themes/orrery
-    theme-audit --mockups Testing/themes Frontend/themes/horizon
+    theme-audit --states all --state /tmp/states Frontend/themes/eclipse
+    theme-audit --states nogame,splash-3s Frontend/themes/eclipse
+    theme-audit --mockups Testing/themes --sizes 1920x1080 --crowd without Frontend/themes/eclipse
+    theme-audit --mockups Testing/themes Frontend/themes/eclipse
     theme-audit --catalogue Testing/themes/catalogues/eleven.tsv --focus "Super Nintendo" --mockups /tmp/m Frontend/themes/emusen
     theme-audit Frontend/theme-check/tests/themes/dim-picture
 

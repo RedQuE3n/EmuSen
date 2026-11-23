@@ -29,10 +29,18 @@
         <file alias="parts/Pill.qml">../themes/eclipse/parts/Pill.qml</file>
         <file alias="parts/SectionsHelp.qml">../themes/eclipse/parts/SectionsHelp.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
+        <file alias="parts/Chevron.qml">../themes/eclipse/parts/Chevron.qml</file>
+        <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>
+        <file alias="parts/Limb.qml">../themes/eclipse/parts/Limb.qml</file>
+        <file alias="parts/SettingsAside.qml">../themes/eclipse/parts/SettingsAside.qml</file>
+        <file alias="parts/SettingsInk.qml">../themes/eclipse/parts/SettingsInk.qml</file>
+        <file alias="parts/SettingsNav.qml">../themes/eclipse/parts/SettingsNav.qml</file>
+        <file alias="parts/SettingsRow.qml">../themes/eclipse/parts/SettingsRow.qml</file>
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>
         <file alias="screens/Games.qml">../themes/eclipse/screens/Games.qml</file>
         <file alias="screens/Consoles.qml">../themes/eclipse/screens/Consoles.qml</file>
         <file alias="screens/Home.qml">../themes/eclipse/screens/Home.qml</file>
+        <file alias="screens/Settings.qml">../themes/eclipse/screens/Settings.qml</file>
         <file alias="theme.json">../themes/eclipse/theme.json</file>
     </qresource>
 </RCC>

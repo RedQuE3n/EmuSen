@@ -40,7 +40,7 @@ Item {
     // The kit's glyph for the button, which names it and draws a mark with no letter.
     readonly property string letter: mark.letter
     readonly property bool named: root.keyed || root.letter.length > 1 || (root.letter.length === 0 && (root.button === PadGlyph.Menu || root.button === PadGlyph.Options))
-    readonly property string word: root.keyed ? "◀ ▶" : root.letter.length > 1 ? root.letter : mark.name.toUpperCase()
+    readonly property string word: root.keyed ? Words.keyPair : root.letter.length > 1 ? root.letter : mark.name.toUpperCase()
     readonly property real outer: (root.boxed ? root.boxSide : root.side) * root.unit + (root.filled ? 0 : 2 * root.line)
     // The name's padding either side and the shape's corner as drawn, in canvas units.
     readonly property real inset: (root.boxed ? root.boxPadding : root.padding) * root.unit

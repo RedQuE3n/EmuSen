@@ -43,7 +43,7 @@ ThemeScreen {
                 ground: Tokens.surface
                 pixelScale: canvas.unit
                 fields: [
-                    BackdropField { x: (root.wide - 620) * design.unit; y: 60 * design.unit; width: 900 * design.unit; height: 900 * design.unit; color: own.pageGlows[Settings.page] ?? "transparent"; blur: 150 * design.unit; opacity: 0.4 },
+                    BackdropField { x: (root.wide - 620) * design.unit; y: 60 * design.unit; width: 900 * design.unit; height: 900 * design.unit; color: own.pageGlow; blur: 150 * design.unit; opacity: 0.4 },
                     BackdropField { x: (-1560 - 6) * design.unit; y: (-700 - 6) * design.unit; width: (2000 + 12) * design.unit; height: (2600 + 12) * design.unit; color: own.limbGlow; blur: 20 * design.unit; opacity: own.limbGlowOpacity }
                 ]
             }
@@ -144,8 +144,8 @@ ThemeScreen {
                         MeasuredWalk {
                             id: walk
                             objectName: "settingsWalk"
-                            // The walk's own moves go to the model; the moves it makes to follow the model's do not come back.
-                            property bool following: false
+                            // The model's focus is the one that stands: the walk follows it, and tells only the moves it makes itself.
+                            follows: Settings.focused
                             model: Settings.rows
                             window: rowsScope.height
                             gap: 10 * design.unit
@@ -157,26 +157,14 @@ ThemeScreen {
                             onChosen: (row) => Actions.settingsChoose(row)
                             onSectionChosen: (section) => Actions.settingsSection(section)
                             onWalked: {
-                                if (!walk.following && walk.current >= 0 && walk.current !== Settings.focused)
+                                if (walk.current >= 0 && walk.current !== Settings.focused)
                                     Actions.settingsFocus(walk.current)
                             }
                         }
-                        // The program's rows changed: the walk reads them again and takes the model's focus.
+                        // The program's rows changed: the walk reads them again, on the model's focus.
                         Connections {
                             target: Settings
-                            function onShown() {
-                                walk.following = true
-                                walk.read()
-                                if (Settings.focused >= 0 && walk.current !== Settings.focused)
-                                    walk.focusRow(Settings.focused)
-                                walk.following = false
-                            }
-                        }
-                        Component.onCompleted: {
-                            walk.following = true
-                            walk.read()
-                            walk.focusRow(Settings.focused)
-                            walk.following = false
+                            function onShown() { walk.read() }
                         }
                         WheelHandler {
                             onWheel: (event) => walk.scrollTo(walk.first + (event.angleDelta.y < 0 ? 1 : -1))
@@ -201,7 +189,7 @@ ThemeScreen {
                                     required property bool isSwitch
                                     required property bool switchOn
                                     required property bool code
-                                    required property string form
+                                    required property int form
                                     width: list.width
                                     height: row.height
                                     focus: slot.index === Settings.focused

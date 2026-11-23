@@ -11,9 +11,24 @@ Shape {
     ShapePath {
         fillColor: root.fill
         strokeColor: "transparent"
-        PathSvg {
-            path: "M 0 " + root.height / 2 + " A " + root.width / 2 + " " + root.height / 2 + " 0 1 0 " + root.width + " " + root.height / 2
-                + " A " + root.width / 2 + " " + root.height / 2 + " 0 1 0 0 " + root.height / 2 + " Z"
+        // SVG's "M 0 h/2 A w/2 h/2 0 1 0 w h/2 A w/2 h/2 0 1 0 0 h/2 Z": two large half arcs, the sweep flag 0 counter-clockwise.
+        startX: 0
+        startY: root.height / 2
+        PathArc {
+            x: root.width
+            y: root.height / 2
+            radiusX: root.width / 2
+            radiusY: root.height / 2
+            useLargeArc: true
+            direction: PathArc.Counterclockwise
+        }
+        PathArc {
+            x: 0
+            y: root.height / 2
+            radiusX: root.width / 2
+            radiusY: root.height / 2
+            useLargeArc: true
+            direction: PathArc.Counterclockwise
         }
     }
 }

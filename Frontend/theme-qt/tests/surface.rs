@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.11.qmltypes");
 const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.11.qmldir");
-const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.10.qmltypes");
+const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.11.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
@@ -175,6 +175,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "noGamesLine",
                 "now",
                 "name",
+                "keyPair",
             ],
             &["games", "count", "line", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "splashCounts", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "percent", "shortTime", "gameArt"],
         ),

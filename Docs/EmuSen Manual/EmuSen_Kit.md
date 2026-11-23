@@ -4478,17 +4478,24 @@ between rows. It holds no geometry: the rows' heights are told by the screen tha
 screen's. The window moves only when the focus leaves it: up to the focused row when the focus goes above it, and down a
 row at a time until the rows from the first shown to the focused one fit; a row taller than the window is shown from its
 top, and the window never starts so late that space shows below the last row. A window of 0 shows every row from the
-first. `SettingsLayout`'s walk (§7.40) counts whole rows of one height in a fixed geometry and is unchanged beside it.
+first. Rows fit the window when their span is within a millionth of it (measured 2026-11-23): a screen gives the
+heights, the gap and the window in canvas units, each a board's pixels times the canvas's unit (Eclipse's Settings: rows
+of 84 × unit, gaps of 10 × unit, a window of 1064 × unit less the rows' top), so the span is a sum of nine products and
+eight more where the window is one difference; their rounding left the nine rows that end exactly at the window's foot a
+hair over it, and the window dropped the first row when the ninth was focused. A millionth is the allowance the tests'
+`same` takes for Qt's geometry, far above that rounding and far below a pixel. `SettingsLayout`'s walk (§7.40) counts whole rows of one height in a fixed geometry and is unchanged beside it.
 
 `kit-qt/src/measured_walk.rs` puts it on Qt as `MeasuredWalk`: it reads a list model's `kind`, `held`, `marked` and a
 slider's `minimum`, `maximum`, `step` and `amount` as `SettingsLayout` reads them (one function, `settings::walk_rows`, for
 both), takes `window` and `gap`, a row's height by `measure(row, height)`, and the pad and the keys by `press` and `key`;
-it gives `current`, `first`, `offset` (the scroll to the first row shown), `marked` and `count`, and raises `stepped`,
+from 1.11 `follows`, a row it keeps focused whenever that changes and whenever the rows are read, the window kept
+around it (-1, the default, none; kit-core's `follow`); it gives `current`, `first`, `offset` (the scroll to the first row shown), `marked` and `count`, and raises `stepped`,
 `slid`, `chosen` and `sectionChosen` as `SettingsLayout` does. Settings became a screen a theme can supply (decided
 2026-11-16 by the tester, R-20261116-19); a walk that takes each row's height from the screen that draws it, rather than
 one height for every row, is this piece's own technical choice, so a theme's rows may be of any height. Exported to themes
-in EmuSen.Theme 1.9. Tests: kit-core's `measured.rs`, four tests: rows of 84, 120, 84, 160 and 84 with a gap of 10 in a
+in EmuSen.Theme 1.9. Tests: kit-core's `measured.rs`, five tests: rows of 84, 120, 84, 160 and 84 with a gap of 10 in a
 window of 300, the window following the focus a row at a time and holding while the focus moves inside it; a row taller
-than the window; a window and a height given late; and the grammar shared with `RowWalk`. kit-qt's `measured_walk.rs`
+than the window; a window and a height given late; the grammar shared with `RowWalk`; and nine rows of 84 × ⅔ with gaps of 10 × ⅔ in a
+window a hair under their sum, all shown with the ninth focused, and a tenth moving the window by one. kit-qt's `measured_walk.rs`
 walks the same rows drawn in a scene (`qt-test/qml/MeasuredWalkScene.qml`), each delegate telling its height by `measure`,
 and holds that the window moves further down when a row above it is drawn taller.

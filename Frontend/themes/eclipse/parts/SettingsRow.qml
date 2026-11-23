@@ -15,15 +15,15 @@ Walkable {
     required property bool isSwitch
     required property bool switchOn
     required property bool code
-    // The value's form, the model's (Settings.rows' form, 1.11): choice, switch, door or fact.
-    required property string form
+    // The value's form, the model's (Settings.rows' form, 1.11): Settings.Choice, Switch, Door or Fact.
+    required property int form
     // Scene pixels to a canvas unit, so the ring's glow blurs at the pixels drawn.
     property real pixelScale: 1
     // Left or Right on a chevron, which steps the value.
     signal stepped(int by)
-    readonly property bool choice: root.form === "choice"
-    readonly property bool door: root.form === "door"
-    readonly property bool fact: root.form === "fact"
+    readonly property bool choice: root.form === Settings.Choice
+    readonly property bool door: root.form === Settings.Door
+    readonly property bool fact: root.form === Settings.Fact
     readonly property bool lit: root.activeFocus
     readonly property real radius: 20 * root.unit
     // The boards' row: 84 high at least, 12 by 24 inside, its two lines 4 apart (G:27-28).

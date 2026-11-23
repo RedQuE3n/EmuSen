@@ -27,7 +27,10 @@ Item {
             strokeWidth: 2.4
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
-            PathSvg { path: root.back ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7" }
+            // The boards' "M9 5l7 7-7 7", or "M15 5l-7 7 7 7" pointing back.
+            PathMove { x: root.back ? 15 : 9; y: 5 }
+            PathLine { x: root.back ? 8 : 16; y: 12 }
+            PathLine { x: root.back ? 15 : 9; y: 19 }
         }
     }
 }

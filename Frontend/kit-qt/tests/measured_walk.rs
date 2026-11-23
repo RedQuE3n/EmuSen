@@ -31,5 +31,14 @@ fn kit_7_122_the_walk_follows_rows_of_their_own_heights_in_a_scene() {
     assert!(scene.set_property("scene", "grown", "true"));
     scene.wait(20);
     assert_eq!(walk(&mut scene), at("3", "2", "340"), "200 + 10 + 120 + 10 above the window");
+    // A walk that follows a row (1.11): focused on it with the window kept around it, and still on it when the rows are read again.
+    let follower = |scene: &mut Scene<'_>| ["current", "first", "offset"].map(|p| scene.property("follower", p));
+    assert_eq!(follower(&mut scene), ["0", "0", "0"], "following none, the walk is on its first row");
+    assert!(scene.set_property("scene", "followed", "4"));
+    scene.wait(20);
+    assert_eq!(follower(&mut scene), ["4", "3", "434"], "rows 3 and 4 take 254 of 300, rows 2 to 4 348: 200 + 10 + 120 + 10 + 84 + 10 above");
+    assert!(scene.set_property("scene", "reads", "1"));
+    scene.wait(20);
+    assert_eq!(follower(&mut scene)[0], "4", "the rows read again keep the followed row");
     scene.assert_quiet();
 }

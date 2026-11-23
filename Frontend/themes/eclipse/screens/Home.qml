@@ -69,8 +69,8 @@ ThemeScreen {
                     BackdropField { x: 1060 * design.unit; y: -140 * design.unit; width: 900 * design.unit; height: 760 * design.unit; color: field0.color; blur: 90 * design.unit; opacity: 0.85 },
                     BackdropField { x: 1380 * design.unit; y: 420 * design.unit; width: 760 * design.unit; height: 760 * design.unit; color: field1.color; blur: 110 * design.unit; opacity: 0.9 },
                     BackdropField { x: 900 * design.unit; y: -260 * design.unit; width: 700 * design.unit; height: 520 * design.unit; color: field2.color; blur: 100 * design.unit; opacity: 0.8 },
-                    BackdropField { x: 1240 * design.unit; y: 250 * design.unit; width: 620 * design.unit; height: 46 * design.unit; corner: 40 * design.unit; color: field3.color; blur: 22 * design.unit; opacity: encore.splashing ? 0 : 0.55; rotation: -18 },
-                    BackdropField { x: 1330 * design.unit; y: 380 * design.unit; width: 520 * design.unit; height: 30 * design.unit; corner: 40 * design.unit; color: field4.color; blur: 18 * design.unit; opacity: encore.splashing ? 0 : 0.5; rotation: -14 }
+                    BackdropField { x: 1240 * design.unit; y: 250 * design.unit; width: 620 * design.unit; height: 46 * design.unit; corner: 40 * design.unit; color: field3.color; blur: 22 * design.unit; opacity: 0.55 * encore.handed; rotation: -18 },
+                    BackdropField { x: 1330 * design.unit; y: 380 * design.unit; width: 520 * design.unit; height: 30 * design.unit; corner: 40 * design.unit; color: field4.color; blur: 18 * design.unit; opacity: 0.5 * encore.handed; rotation: -14 }
                 ]
             }
             // The splash, while it enters Home: its ground, stars, planets and the disc that becomes Home's (EclipseSplashPlay.dc.html).
@@ -80,9 +80,10 @@ ThemeScreen {
                 anchors.fill: parent
             }
             CoronaDisc {
+                id: disc
                 objectName: "disc"
-                // The splash's own disc stands for it until the splash has gone.
-                visible: !encore.splashing
+                // The splash's own disc stands for it until the splash has gone, and the hand-over's until Home is whole.
+                visible: !encore.splashing && !encore.easing
                 // The shown game's first hue at the look's rim's own saturation and lightness; its glows take it at their own strengths (R-20261114-38, R-20261115-27).
                 corona: root.hues.length > 0 ? Qt.hsla((((root.hues[0] % 360) + 360) % 360) / 360, Tokens.coronaColor.hslSaturation, Tokens.coronaColor.hslLightness, 1) : "transparent"
                 pixelScale: canvas.unit
@@ -90,6 +91,44 @@ ThemeScreen {
                 y: -450 * design.unit
                 width: 2100 * design.unit
                 height: width
+            }
+            // The hand-over (R-20261123-9): the splash's opened disc, its rim, three glows and ground, eased into Home's disc, which it gives way to once equal.
+            SplashCorona {
+                id: splashCorona
+            }
+            Blend { id: rimInk; from: Tokens.coronaColor; to: disc.rimColor; t: encore.handed }
+            Blend { id: fillInk; from: ink.splashGround; to: disc.fill; t: encore.handed }
+            Blend { id: nearInk; from: ink.coronaNear; to: disc.glowColor; t: encore.handed }
+            Blend { id: middleInk; from: ink.coronaMiddle; to: disc.haloColor; t: encore.handed }
+            Blend { id: farInk; from: ink.coronaFar; to: Qt.rgba(ink.coronaFar.r, ink.coronaFar.g, ink.coronaFar.b, 0); t: encore.handed }
+            CoronaDisc {
+                objectName: "handoverDisc"
+                visible: encore.easing
+                fill: fillInk.value
+                corona: rimInk.value
+                rim: splashCorona.rim * splashCorona.opened * design.unit * (1 - encore.handed) + disc.rim * encore.handed
+                pixelScale: canvas.unit
+                x: disc.x
+                y: disc.y
+                width: disc.width
+                height: disc.height
+                glows: [
+                    CoronaGlow {
+                        blur: splashCorona.nearBlur * splashCorona.opened * design.unit * (1 - encore.handed) + disc.glows[0].blur * encore.handed
+                        spread: splashCorona.nearSpread * splashCorona.opened * design.unit * (1 - encore.handed) + disc.glows[0].spread * encore.handed
+                        color: nearInk.value
+                    },
+                    CoronaGlow {
+                        blur: splashCorona.middleBlur * splashCorona.opened * design.unit * (1 - encore.handed) + disc.glows[1].blur * encore.handed
+                        spread: splashCorona.middleSpread * splashCorona.opened * design.unit * (1 - encore.handed) + disc.glows[1].spread * encore.handed
+                        color: middleInk.value
+                    },
+                    CoronaGlow {
+                        blur: splashCorona.farBlur * splashCorona.opened * design.unit * (1 - encore.handed)
+                        spread: splashCorona.farSpread * splashCorona.opened * design.unit * (1 - encore.handed)
+                        color: farInk.value
+                    }
+                ]
             }
             Frame {
                 id: frame
@@ -147,6 +186,7 @@ ThemeScreen {
                             objectName: "artLabel"
                             // The splash's board draws no label, so none while the splash shows.
                             visible: root.artHues.length > 0 && !encore.splashing
+                            opacity: encore.handed
                             x: parent.width - 96 * design.unit - width
                             y: 150 * design.unit
                             width: artWords.width + 2 * 16 * design.unit
@@ -455,6 +495,7 @@ ThemeScreen {
                                         bandRadius: tile.radius + 7 * design.unit
                                         pixelScale: canvas.unit
                                         visible: tile.activeFocus
+                                        opacity: encore.handed
                                     }
                                 }
                             }

@@ -13,6 +13,8 @@ pub mod qobject {
         #[qproperty(bool, shown, READ, NOTIFY)]
         /// The splash's time in ms, the moment its screen and Home draw (EmuSen_Qt.md §3.5.3).
         #[qproperty(f64, time, READ, NOTIFY)]
+        /// From 1.10 (decided 2026-11-23): the hand-over's length in ms, from Home whole to the sound's last sample; 0 without a sound.
+        #[qproperty(f64, ease, READ, NOTIFY)]
         type ThemeSplash = super::ThemeSplashRust;
     }
 }
@@ -21,11 +23,16 @@ pub mod qobject {
 pub struct ThemeSplashRust {
     shown: bool,
     time: f64,
+    ease: f64,
 }
 
 impl qobject::ThemeSplash {
     /// The host's feed; each property notifies only when it changed.
-    pub fn show(mut self: Pin<&mut Self>, shown: bool, time: f64) {
+    pub fn show(mut self: Pin<&mut Self>, shown: bool, time: f64, ease: f64) {
+        if self.ease != ease {
+            self.as_mut().rust_mut().ease = ease;
+            self.as_mut().ease_changed();
+        }
         if self.shown != shown {
             self.as_mut().rust_mut().shown = shown;
             self.as_mut().shown_changed();

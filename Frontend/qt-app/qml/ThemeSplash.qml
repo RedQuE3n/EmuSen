@@ -26,8 +26,10 @@ Item {
     property real clock: 0
     property bool skipped: false
     readonly property bool ended: lead.length > 0 && lead.clock >= lead.length
-    // The moment drawn: the clock's, the last frame under reduced motion (the screen's `still`).
-    readonly property real time: lead.still ? lead.length : lead.clock
+    // The hand-over after the splash, from Home whole to the sound's last sample, in ms; 0 without a sound or once given up (R-20261123-24).
+    readonly property real ease: lead.length > 0 && sound.rate > 0 ? Math.max(0, sound.frames * 1000 / sound.rate - lead.length) : 0
+    // The moment drawn: the clock's, under reduced motion (the screen's `still`) the last frame, then Home whole at once.
+    readonly property real time: lead.still ? (lead.done ? lead.length + lead.ease : lead.length) : lead.clock
     // Ended, and the press that skipped it let go, so it is no press of Home's; once so, it stays so.
     readonly property bool finished: lead.ended && lead.set && !Kit.PadRouter.pending
     property bool done: false
@@ -39,7 +41,7 @@ Item {
     onSkipAsked: {
         lead.skipped = true
         if (lead.set && !lead.ended) {
-            lead.clock = lead.length
+            lead.clock = lead.length + lead.ease
             sound.end(Kit.Tokens.fade)
         }
     }
@@ -47,7 +49,7 @@ Item {
         if (!lead.set)
             return
         if (lead.skipped)
-            lead.clock = lead.length
+            lead.clock = lead.length + lead.ease
         else
             sound.start()
     }
@@ -75,13 +77,13 @@ Item {
         when: lead.screen !== null
         restoreMode: Binding.RestoreNone
     }
-    // The clock on Qt's animation clock, which a test's harness holds and steps (EmuSen_Kit.md §7.36).
+    // The clock on Qt's animation clock, which a test's harness holds and steps (EmuSen_Kit.md §7.36), through the hand-over.
     NumberAnimation {
         target: lead
         property: "clock"
         from: 0
-        to: lead.length
-        duration: lead.length
+        to: lead.length + lead.ease
+        duration: lead.length + lead.ease
         running: lead.set && !lead.skipped
     }
     // The sound waited for from the first frame for the splash's own length at most, then given up: the splash plays silent (EmuSen_Qt.md §3.5.3).

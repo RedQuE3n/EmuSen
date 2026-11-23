@@ -39,6 +39,8 @@ Item {
     // A splash that enters Home on the window's clock: whether it is shown, and its time in ms, which the theme's `Splash` reads (EmuSen_Qt.md §3.5.3).
     property bool splashLeading: false
     property real splashTime: 0
+    // From 1.10: the hand-over's length in ms after Home whole, the theme's `Splash.ease`.
+    property real splashEase: 0
     readonly property bool searching: themed.screens.shown === Screens.Search || themed.screens.shown === Screens.SearchGrid
     readonly property bool typing: themed.screens.shown === Screens.Search
     readonly property bool listOpen: themed.screens.shown === Screens.List
@@ -125,6 +127,7 @@ Item {
         shownSection: themed.screens.section
         splashShown: themed.splashLeading
         splashTime: themed.splashTime
+        splashEase: themed.splashEase
         onPlayed: (game) => themed.played(game)
         onResumed: themed.resumed()
         onPlaceChosen: (index) => themed.screens.place(index)

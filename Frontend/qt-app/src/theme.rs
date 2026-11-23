@@ -64,6 +64,8 @@ pub mod qobject {
         /// A splash that enters Home shown, and its time in ms: the theme's `Splash` (1.10).
         #[qproperty(bool, splash_shown, cxx_name = "splashShown")]
         #[qproperty(f64, splash_time, cxx_name = "splashTime")]
+        /// The hand-over's length in ms after Home whole, the theme's `Splash.ease` (1.10).
+        #[qproperty(f64, splash_ease, cxx_name = "splashEase")]
         type ThemeFeed = super::ThemeFeedRust;
     }
 
@@ -223,6 +225,7 @@ pub struct ThemeFeedRust {
     shown_section: QString,
     splash_shown: bool,
     splash_time: f64,
+    splash_ease: f64,
     /// The engine's `Splash` and the generation it was found in, looked up again only in a new engine: fed every frame, a name's lookup allocates.
     splash: Cell<(i32, *mut emusen_theme_qt::splash::qobject::ThemeSplash)>,
     /// The feed as the sink sees it, emptied when the feed goes, so a sink that outlives it takes nothing.
@@ -255,6 +258,7 @@ impl Default for ThemeFeedRust {
             shown_section: QString::default(),
             splash_shown: false,
             splash_time: 0.0,
+            splash_ease: 0.0,
             splash: Cell::new((-1, std::ptr::null_mut())),
             me: Rc::new(Cell::new(std::ptr::null_mut())),
         }
@@ -450,6 +454,7 @@ impl cxx_qt::Initialize for qobject::ThemeFeed {
         self.as_mut().on_shown_section_changed(|feed| feed.feed_section()).release();
         self.as_mut().on_splash_shown_changed(|feed| feed.feed_splash()).release();
         self.as_mut().on_splash_time_changed(|feed| feed.feed_splash()).release();
+        self.as_mut().on_splash_ease_changed(|feed| feed.feed_splash()).release();
         self.as_mut().on_now_changed(|feed| {
             feed.feed_words();
             feed.feed_browse();
@@ -718,7 +723,7 @@ impl qobject::ThemeFeed {
         };
         // Safety: as above.
         if let Some(splash) = unsafe { splash.as_mut() } {
-            unsafe { Pin::new_unchecked(splash) }.show(self.splash_shown, self.splash_time);
+            unsafe { Pin::new_unchecked(splash) }.show(self.splash_shown, self.splash_time, self.splash_ease);
         }
     }
 

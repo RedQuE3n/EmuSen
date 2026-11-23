@@ -27,6 +27,11 @@ fn length(scene: &mut Scene<'_>) -> f64 {
     scene.property("themeSplash", "length").parse().unwrap()
 }
 
+/// The splash's time once its hand-over has ended, where a skip takes it (R-20261123-24).
+fn handed(scene: &mut Scene<'_>) -> f64 {
+    length(scene) + number(scene, "themeSplash", "ease")
+}
+
 fn number(scene: &mut Scene<'_>, object: &str, property: &str) -> f64 {
     scene.property(object, property).parse().unwrap()
 }
@@ -86,7 +91,7 @@ fn qt_3_5_3_a_splash_that_enters_home_starts_as_its_settings_and_its_theme_say()
         scene.hold_clock(Some(1000));
         assert_eq!(scene.property("splashSound", "starts"), "1", "the sound plays");
         scene.key(qt_key(Key::Return).unwrap(), 0);
-        assert_eq!(number(&mut scene, "themeSplash", "time"), length(&mut scene), "a key skipped to the last frame");
+        assert_eq!(number(&mut scene, "themeSplash", "time"), handed(&mut scene), "a key skipped past the hand-over");
         assert_eq!(scene.property("splashSound", "ends"), "1", "the sound let go");
         // The key waits in the router for the splash's pump, a QML Timer, "synchronized with the animation timer" the test holds (Qt 6, "Timer").
         scene.hold_clock(Some(1100));
@@ -99,7 +104,7 @@ fn qt_3_5_3_a_splash_that_enters_home_starts_as_its_settings_and_its_theme_say()
         let mut scene = started(&mut harness, SIZE, &PLAIN, &media);
         scene.hold_clock(Some(1000));
         scene.click(f64::from(SIZE.0) / 2.0, f64::from(SIZE.1) / 2.0);
-        assert_eq!(number(&mut scene, "themeSplash", "time"), length(&mut scene), "a tap skipped to the last frame");
+        assert_eq!(number(&mut scene, "themeSplash", "time"), handed(&mut scene), "a tap skipped past the hand-over");
         assert_eq!(scene.property("splashSound", "ends"), "1", "the sound let go");
         until(&mut scene, "the splash gone after the tap", 3000, |s| s.property("themeSplash", "done") == "true");
         scene.hold_clock(None);

@@ -30,6 +30,14 @@ ThemeScreen {
             Ink {
                 id: ink
             }
+            SplashCorona {
+                id: splashCorona
+            }
+            // The places the planets may take; past them the cores are counted, not drawn.
+            PlanetInk {
+                id: planetPlaces
+                place: 0
+            }
             readonly property real u: design.unit
             // The orbit, the board's ellipse of half axes 600 and 150 about (960, 480) turned -9 degrees (EclipseSplashPlay:45, 161): constants of the design.
             readonly property real orbitX: 960
@@ -194,7 +202,7 @@ ThemeScreen {
                 }
             }
             Repeater {
-                model: Library.cores
+                model: Math.min(Library.cores.count, planetPlaces.places)
                 Planet {
                     front: false
                 }
@@ -242,8 +250,8 @@ ThemeScreen {
                     Scale {
                         origin.x: group.width / 2
                         origin.y: group.height / 2
-                        xScale: 1 + 4 * opening.value
-                        yScale: 1 + 4 * opening.value
+                        xScale: 1 + (splashCorona.opened - 1) * opening.value
+                        yScale: 1 + (splashCorona.opened - 1) * opening.value
                     },
                     Translate {
                         x: -810 * opening.value * root.u
@@ -255,24 +263,24 @@ ThemeScreen {
                     objectName: "splashCorona"
                     anchors.fill: parent
                     fill: "transparent"
-                    rim: 2 * root.u
+                    rim: splashCorona.rim * root.u
                     pixelScale: canvas.unit
                     opacity: root.p < 17 ? 0 : root.p < 26 ? (root.p - 17) / 9 : root.p < 97 ? 1 : (100 - root.p) / 3
                     visible: opacity > 0
                     glows: [
                         CoronaGlow {
-                            blur: 26 * root.u
-                            spread: 6 * root.u
+                            blur: splashCorona.nearBlur * root.u
+                            spread: splashCorona.nearSpread * root.u
                             color: ink.coronaNear
                         },
                         CoronaGlow {
-                            blur: 90 * root.u
-                            spread: 22 * root.u
+                            blur: splashCorona.middleBlur * root.u
+                            spread: splashCorona.middleSpread * root.u
                             color: ink.coronaMiddle
                         },
                         CoronaGlow {
-                            blur: 240 * root.u
-                            spread: 80 * root.u
+                            blur: splashCorona.farBlur * root.u
+                            spread: splashCorona.farSpread * root.u
                             color: ink.coronaFar
                         }
                     ]
@@ -385,7 +393,7 @@ ThemeScreen {
                 }
             }
             Repeater {
-                model: Library.cores
+                model: Math.min(Library.cores.count, planetPlaces.places)
                 Planet {
                     front: true
                 }

@@ -31,6 +31,8 @@
         <file alias="parts/Ease.qml">../themes/eclipse/parts/Ease.qml</file>
         <file alias="parts/Encore.qml">../themes/eclipse/parts/Encore.qml</file>
         <file alias="parts/PlanetInk.qml">../themes/eclipse/parts/PlanetInk.qml</file>
+        <file alias="parts/SplashCorona.qml">../themes/eclipse/parts/SplashCorona.qml</file>
+        <file alias="parts/Blend.qml">../themes/eclipse/parts/Blend.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>
         <file alias="screens/Games.qml">../themes/eclipse/screens/Games.qml</file>

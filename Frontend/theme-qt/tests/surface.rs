@@ -179,7 +179,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             &["games", "count", "line", "place", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "splashCounts", "pausedAgo", "playedFacts", "continueLine", "resumePoint", "percent", "shortTime", "gameArt"],
         ),
         ("Help", &["sections"], &["entries"]),
-        ("Splash", &["shown", "time"], &[]),
+        ("Splash", &["shown", "time", "ease"], &[]),
         (
             "Browse",
             &["section", "heading", "world", "hue", "countLine", "previous", "next", "focusRow", "searching", "typing", "listOpen", "games", "searched",

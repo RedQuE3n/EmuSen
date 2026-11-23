@@ -1518,7 +1518,7 @@ Module {
     }
     Component {
         file: "splash.cxxqt.h"
-        lineNumber: 32
+        lineNumber: 41
         name: "ThemeSplash"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -1532,7 +1532,7 @@ Module {
             read: "getShown"
             notify: "shownChanged"
             index: 0
-            lineNumber: 38
+            lineNumber: 47
             isReadonly: true
         }
         Property {
@@ -1541,11 +1541,21 @@ Module {
             read: "getTime"
             notify: "timeChanged"
             index: 1
-            lineNumber: 39
+            lineNumber: 48
             isReadonly: true
         }
-        Signal { name: "shownChanged"; lineNumber: 46 }
-        Signal { name: "timeChanged"; lineNumber: 47 }
+        Property {
+            name: "ease"
+            type: "double"
+            read: "getEase"
+            notify: "easeChanged"
+            index: 2
+            lineNumber: 49
+            isReadonly: true
+        }
+        Signal { name: "shownChanged"; lineNumber: 57 }
+        Signal { name: "timeChanged"; lineNumber: 58 }
+        Signal { name: "easeChanged"; lineNumber: 59 }
     }
     Component {
         file: "words.cxxqt.h"

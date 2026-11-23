@@ -381,6 +381,7 @@ Window {
                 splashLayer: splashLayer
                 splashLeading: program.led && program.splashShown
                 splashTime: themeSplash.time
+                splashEase: themeSplash.ease
                 settingsModel: settingsModel
                 pageModel: pageScreen.page
                 onPlayed: (path) => program.play(path)

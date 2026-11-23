@@ -8,7 +8,8 @@ mod eclipse_board;
 mod eclipse_home_oracle;
 mod start_held;
 
-use eclipse_board::read;
+use cxx_qt_lib::QString;
+use eclipse_board::{object, read};
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
 use emusen_kit_core::input::UiButton;
@@ -63,6 +64,108 @@ fn sound_frames() -> i64 {
     assert_eq!(&bytes[..4], b"fLaC", "the theme's sound is FLAC");
     let info = &bytes[8..];
     (i64::from(info[13] & 0x0F) << 32) | i64::from(u32::from_be_bytes(info[14..18].try_into().unwrap()))
+}
+
+/// The theme's sound's rate: STREAMINFO's 20-bit sample rate (RFC 9639, 8.2).
+fn sound_rate() -> i64 {
+    let bytes = std::fs::read(SOUND).unwrap();
+    let info = &bytes[8..];
+    (i64::from(info[10]) << 12) | (i64::from(info[11]) << 4) | i64::from(info[12] >> 4)
+}
+
+/// The splash's time once the hand-over has ended: its length and the ease.
+fn ended(scene: &mut Scene<'_>) -> f64 {
+    scene.property("themeSplash", "length").parse::<f64>().unwrap() + scene.property("themeSplash", "ease").parse::<f64>().unwrap()
+}
+
+/// Home as it is once whole: no hand-over disc, the art label, the streaks and the focus ring at their own opacity.
+fn whole(tree: &Tree) -> bool {
+    let full = |name: &str| node(tree, name).is_none_or(|n| !n.visible || (n.opacity - 1.0).abs() < 1e-9);
+    node(tree, "handoverDisc").is_none_or(|n| !n.visible) && full("artLabel") && full("tileRing")
+}
+
+/// CSS's ease-out, cubic-bezier(0, 0, 0.58, 1), at a progress: the curve's parameter found by bisection, its y the eased value (CSS Easing 1 §3.2).
+fn ease_out(progress: f64) -> f64 {
+    let x = progress.clamp(0.0, 1.0);
+    let curve = |s: f64, p2: f64| 3.0 * (1.0 - s) * s * s * p2 + s * s * s;
+    let (mut lo, mut hi) = (0.0, 1.0);
+    for _ in 0..64 {
+        let mid = (lo + hi) / 2.0;
+        if curve(mid, 0.58) < x { lo = mid } else { hi = mid }
+    }
+    curve((lo + hi) / 2.0, 1.0)
+}
+
+/// A node's descendant of a name, the last of it.
+fn under<'a>(tree: &'a Tree, root: &Node, name: &str) -> Option<&'a Node> {
+    let index: std::collections::HashMap<&str, &Node> = tree.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+    tree.nodes.iter().rev().filter(|n| n.name == name).find(|n| {
+        let mut at = index.get(n.parent.as_str()).copied();
+        while let Some(p) = at {
+            if p.id == root.id {
+                return true;
+            }
+            at = index.get(p.parent.as_str()).copied();
+        }
+        false
+    })
+}
+
+/// What the hand-over moves, in scene pixels and drawn opacity: the shown disc's box, rim and three glows, the art label, the two streaks and the focus ring.
+fn measures(tree: &Tree) -> Vec<(String, f64, bool)> {
+    let mut out = Vec::new();
+    let disc = ["splashCorona", "handoverDisc", "disc"].iter().find_map(|n| tree.nodes.iter().rev().find(|d| d.name == *n && d.visible)).expect("a disc shown");
+    let body = under(tree, disc, "coronaDisc").expect("the disc's body");
+    let rim = under(tree, disc, "coronaRim").expect("the disc's rim");
+    out.extend([("disc x", body.x, true), ("disc y", body.y, true), ("disc w", body.w, true), ("disc h", body.h, true), ("rim", (rim.w - body.w) / 2.0, true), ("rim opacity", rim.opacity, false)].map(|(k, v, size)| (k.to_owned(), v, size)));
+    for i in 0..3 {
+        let glow = under(tree, disc, &format!("coronaGlow.{i}"));
+        for property in ["blur", "spread"] {
+            let v = glow.map_or(0.0, |g| {
+                let id: u64 = g.id.parse().unwrap();
+                emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(g.name.as_str()), &QString::from(property)).to_string().parse::<f64>().unwrap() * g.scale
+            });
+            out.push((format!("glow {i} {property}"), v, true));
+        }
+    }
+    let shown = |n: Option<&Node>| n.filter(|n| n.visible).map_or(0.0, |n| n.opacity);
+    let backdrop = node(tree, "backdrop").expect("Home's backdrop");
+    out.push(("art label".to_owned(), shown(node(tree, "artLabel")), false));
+    out.push(("streak 3".to_owned(), shown(under(tree, backdrop, "backdropField.3")), false));
+    out.push(("streak 4".to_owned(), shown(under(tree, backdrop, "backdropField.4")), false));
+    out.push(("focus ring".to_owned(), tree.nodes.iter().filter(|n| n.name == "tileRing" && n.visible).map(|n| n.opacity).fold(0.0, f64::max), false));
+    out
+}
+
+/// The hand-over frame by frame, 1/60 s apart from 9.5 s to the sound's end: no measure moves between two frames by more than its whole change times the ease-out's own step there, none before Home whole (R-20261123-9).
+fn handover(scene: &mut Scene<'_>, length: f64, ease: f64, unit: f64, differences: &mut Vec<String>) {
+    const RATE: i64 = 60;
+    let (first, last) = ((9.5 * RATE as f64) as i64, ((length + ease) * RATE as f64 / 1000.0).ceil() as i64 + 1);
+    let mut frames: Vec<(f64, Vec<(String, f64, bool)>)> = Vec::new();
+    for f in first..=last {
+        scene.hold_clock(Some(f * 1000 / RATE));
+        let time: f64 = scene.property("themeSplash", "time").parse().unwrap();
+        let tree = scene.tree();
+        if time > length && time < length + ease && frames.last().is_some_and(|(t, _)| *t <= length) {
+            assert_eq!(read(&tree, "tile.0", "activeFocus"), "true", "Home has the focus as the hand-over begins, at {time} ms");
+        }
+        frames.push((time, measures(&tree)));
+    }
+    let eased = |t: f64| if t <= length { 0.0 } else { ease_out((t - length) / ease) };
+    let before = frames.iter().rev().find(|(t, _)| *t < length).expect("a frame of the splash").1.clone();
+    let after = frames.last().unwrap().1.clone();
+    assert!(frames.last().unwrap().0 >= length + ease, "the frames reach the hand-over's end");
+    for pair in frames.windows(2) {
+        let ((t0, m0), (t1, m1)) = (&pair[0], &pair[1]);
+        let step = eased(*t1) - eased(*t0);
+        for (i, (name, v1, size)) in m1.iter().enumerate() {
+            let (whole_change, v0) = ((after[i].1 - before[i].1).abs(), m0[i].1);
+            let slack = if *size { PLACE * unit } else { OPACITY };
+            if (v1 - v0).abs() > whole_change * step + slack {
+                differences.push(format!("hand-over: {name} moves {:.4} from {t0} to {t1} ms, where the ease allows {:.4}", (v1 - v0).abs(), whole_change * step));
+            }
+        }
+    }
 }
 
 /// The last shown node of a name, else the last of it.
@@ -229,7 +332,7 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
         scene.wait(2000);
         let shown = scene.property("screens", "shown");
         scene.pad(UiButton::Accept);
-        assert_eq!(scene.property("themeSplash", "time"), scene.property("themeSplash", "length"), "skipped to its last frame");
+        assert_eq!(ended(&mut scene), scene.property("themeSplash", "time").parse::<f64>().unwrap(), "skipped past the hand-over");
         assert_eq!(scene.property("splashSound", "ends"), "1", "the sound let go");
         until(&mut scene, "the splash gone after the skip", 3000, |s| s.property("themeSplash", "done") == "true");
         scene.wait(300);
@@ -237,6 +340,7 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
         assert_eq!(scene.property("library", "lastPlayed"), eclipse_home_oracle::rom(&world, eclipse_home_oracle::GAMES[0].0, eclipse_home_oracle::GAMES[0].1), "no game started");
         let tree = scene.tree();
         assert!(node(&tree, "disc").is_some_and(|n| n.visible), "Home whole");
+        assert!(whole(&tree), "Home whole at once after a skip, no hand-over");
         // What the device was handed: sound from the start, then a fall to silence within the fade, no step.
         scene.hold_clock(None);
         scene.wait(500);
@@ -285,13 +389,23 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
             held_at(&mut scene, &rows, moment, cores, &at, &mut differences);
         }
         colours(&mut scene, cores, &mut differences);
-        // On to its end: the splash goes, Home whole and its own disc drawn.
-        scene.hold_clock(Some(10_200));
+        // The hand-over runs from Home whole to the sound's last sample (R-20261123-9, R-20261123-24).
+        let length: f64 = scene.property("themeSplash", "length").parse().unwrap();
+        let ease: f64 = scene.property("themeSplash", "ease").parse().unwrap();
+        let (frames, rate) = (sound_frames() as f64, sound_rate() as f64);
+        assert!((length + ease - frames * 1000.0 / rate).abs() < 1e-6, "{at}: the hand-over ends with the sound, {length} + {ease} ms");
+        if size == (1920, 1200) {
+            handover(&mut scene, length, ease, f64::from(size.1) / BOARD_HEIGHT, &mut differences);
+        }
+        // On to its end: the splash and the hand-over gone, Home whole and its own disc drawn.
+        let end = ended(&mut scene);
+        scene.hold_clock(Some(end as i64 + 17));
         until(&mut scene, "the splash gone", 3000, |s| s.property("themeSplash", "done") == "true");
         scene.wait(200);
         let tree = scene.tree();
         assert!(node(&tree, "splashScreen").is_none_or(|n| !n.visible), "{at}: the splash is gone");
         assert!(node(&tree, "disc").is_some_and(|n| n.visible), "{at}: Home's disc stands in the splash's");
+        assert!(whole(&tree), "{at}: Home whole after the hand-over");
         for part in ["arrivalHeader", "arrivalMain", "arrivalRecent", "help"] {
             assert!(node(&tree, part).is_some_and(|n| n.visible && (n.opacity - 1.0).abs() < 1e-9), "{at}: {part} whole");
         }
@@ -326,6 +440,10 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
         assert_eq!(scene.property("themeSplash", "done"), "false", "held for the splash's length");
         scene.hold_clock(Some(10_200));
         until(&mut scene, "Home after the held frame", 3000, |s| s.property("themeSplash", "done") == "true");
+        // Still, Home is whole the moment the splash has gone: no hand-over is drawn.
+        assert_eq!(scene.property("themeSplash", "time").parse::<f64>().unwrap(), ended(&mut scene), "the time past the hand-over at once");
+        let tree = scene.tree();
+        assert!(node(&tree, "disc").is_some_and(|n| n.visible) && whole(&tree), "Home whole at once under reduced motion");
         scene.hold_clock(None);
     }
     assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));

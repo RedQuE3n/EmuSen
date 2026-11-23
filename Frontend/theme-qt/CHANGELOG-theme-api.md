@@ -17,6 +17,9 @@ Moonrise's, Home cannot time its arrival, and the board draws Home's words over 
 - **`ThemeScreen.splashPlace`**: on Home, the item a splash that enters Home is placed in, so Home draws under it and over
   it.
 - **`Splash`** (added): `shown` and `time`, the splash's moment in ms, which the splash and Home both read.
+- **`Splash.ease`** (added to 1.10, decided 2026-11-23, R-20261123-24): the hand-over's length in ms, from Home whole to
+  the splash sound's last sample, 0 where there is no sound or it was given up; the program keeps `time` running through
+  `length` + `ease` while `shown` is false, so Home eases its own arrival in the time the sound's tail has.
 - **`Library.cores`** (rows of `key`) and **`Library.gameCount`**: the installed cores each once in the systems table's
   order (`library::installed_cores`) and the library's games as the All shelf counts them; **`Words.splashCounts(games,
   cores)`**, "1,284 GAMES · 8 CORES" (`words::splash_counts`).

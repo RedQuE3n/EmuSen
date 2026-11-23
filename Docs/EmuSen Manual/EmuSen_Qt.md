@@ -957,7 +957,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30); `FocusRing`, `PlanetMark`, `CoronaDisc`, `CoronaGlow`, `Backdrop`, `BackdropField`, `Glow`, `GroupGridLayout` and `MeasuredWalk` (1.9, the walk over rows of their own heights, `EmuSen_Kit.md` §7.122) are the later minors' (`CHANGELOG-theme-api.md`) |
 | `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`, and from 1.9 `Settings` and `Game`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()`; from 1.10 the splash's `entersHome` and `sound.source` (a WAV file of the theme's own, as its screen's file names it), and Home's `splashPlace` (§3.5.3) |
-| `Splash` | singleton | from 1.10, a splash that enters Home: `shown`, and `time`, its moment in ms on the window's clock, which the splash and Home both draw from (§3.5.3) |
+| `Splash` | singleton | from 1.10, a splash that enters Home: `shown`, and `time`, its moment in ms on the window's clock, which the splash and Home both draw from, and `ease`, the hand-over's length in ms from Home whole to the sound's last sample (decided 2026-11-23, R-20261123-24; §3.5.3) |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
 `screens/Splash.qml`; a theme that omits one gets the reference theme's (Moonrise for the splash). From 1.9 it may also
@@ -2003,8 +2003,15 @@ header, words, Recent and help line over it. `parts/Encore.qml` gives Home's par
 from 16 above, 30 to the left, 36 below, the help line fading), whole once the splash has gone; while it shows, Home's own
 disc, the art label and the two streak fields, which the playing board does not draw, are not drawn. The sound is the
 board's own sound, `sounds/splash.flac` (splash-sound-chosen.wav's samples, every one; §3.5.3). Past eight cores a planet stands halfway
-between two of the board's angles, its colours the board's eight in turn. Held to by `qt-app/tests/eclipse_splash.rs`
-(the board read by headless Chrome into `eclipse_splash.tsv`; §3.5.3).
+between two of the board's angles, its colours the board's eight in turn; past sixteen no more are drawn, so none is
+stacked, and the line under the name still counts every core (decided 2026-11-23, R-20261123-25; `parts/PlanetInk.qml`'s
+`places` is the one owner of the limit). The hand-over (decided 2026-11-23, R-20261123-9): from Home whole, over
+`Splash.ease` (§3.5.3), ease-out as Home's arrival, a disc of Home's (`handoverDisc`) eases the opened splash disc's rim,
+three glows and ground (`parts/SplashCorona.qml`, the one owner of the splash's corona) into Home's disc, and the art
+label, the two streaks and the focus ring fade in; once whole, Home's own disc stands and Home is as before. Held to by
+`qt-app/tests/eclipse_splash.rs` (the board read by headless Chrome into `eclipse_splash.tsv`, and the hand-over frame by
+frame from 9.5 s to the sound's end, no measure moving by more than its whole change times the ease's step; §3.5.3) and
+`qt-app/tests/eclipse_splash_planets.rs` (30 and 120 cores: sixteen planets at sixteen places, the true count).
 
 #### 3.4.9 Eclipse's Choose a console **[M 2026-11-15]**
 
@@ -2449,10 +2456,19 @@ render loop) holds every element of the board's table at 1.0, 2.42, 3.3, 5.72, 7
 800 within a hundredth of a board pixel and half a level of opacity, Moonrise unseen from the first frame, the sound
 started once from the theme's file whole, Home whole and focused after; a press skipping with the sound let go (SDL's disk
 driver's file: no step at the end past twice the sound's own) and Home not acting on it; the splash off; reduced motion.
-`eclipse_splash_capture.rs` (`#[ignore]`d) writes the frames the tester's video is made from.
+`eclipse_splash_capture.rs` (`#[ignore]`d) writes the frames the tester's video is made from; `EMUSEN_CAPTURE_CORES` gives it a library of that many installed cores (the test core approved in the world's /Cores, its sidecar copied under other ids and names, since copies of one sidecar count as one core) and `EMUSEN_CAPTURE_AT` writes only the frames at the seconds it lists.
 `qt-app/tests/splash_start.rs` (software backend, the clock held) holds what that oracle sets by hand: three held seconds move the splash's clock three
-seconds; a key the kit's map makes a press, and a tap, each skip to the last frame with the sound let go; navigation
+seconds; a key the kit's map makes a press, and a tap, each skip past the hand-over (`length` + `ease`) with the sound let go; navigation
 sounds off, the splash runs and no sound starts. The oracle's fade is the Fade token's, read from the program's tokens.
+
+**The hand-over** (decided 2026-11-23, R-20261123-9, R-20261123-24). The splash ends at Home whole, but its sound runs on:
+`Splash.ease` is the time from the splash's `length` to the sound's last sample (`SplashSound`'s frames over its rate,
+less the length; 0 where there is no sound or it was given up), and `ThemeSplash`'s clock runs on to `length` + `ease`
+on the same animation clock while `shown` is false, so a theme eases Home's arrival over the sound's tail. Home is the
+player's from Home whole: the pad, the keys and the focus are Home's during the ease. A press that skips the splash sets
+the clock to `length` + `ease`, Home whole at once; under reduced motion the time holds at the length while the splash
+shows and is `length` + `ease` once it has gone, so Home is whole at once. The wait for a sound that never answers stays one
+splash length (R-20261123-10).
 
 **The sound's file, FLAC** (measured 2026-11-23). The chosen sound as a WAV is 2,549,804 bytes, over the merge check's
 1 MiB for a committed file. Qt's documentation names no list of formats for `QAudioDecoder`; it says FFmpeg is the media

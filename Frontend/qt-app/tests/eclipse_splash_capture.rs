@@ -8,8 +8,11 @@ mod eclipse_board;
 mod eclipse_home_oracle;
 
 use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
-use emusen_client_fixture::{library, World};
+use emusen_client_fixture::{cores, library, World};
+use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_qt::MAIN_URL;
+use emusen_qt_models::clients::ClientSource;
+use emusen_qt_models::library::{installed_cores, LibrarySource};
 use emusen_qt_models::themes;
 use emusen_qt_test::compositor::Compositor;
 
@@ -20,10 +23,42 @@ const TAIL: f64 = 4.0;
 const RIGHT: i32 = 0x0100_0014;
 const LEFT: i32 = 0x0100_0012;
 
+/// The cores the program lists in this world, read as its library reads them, on the runtime's default folders.
+fn listed() -> Vec<String> {
+    let source = ClientSource::open(library().to_str().unwrap(), &Config::default()).unwrap();
+    installed_cores(&source.systems().unwrap())
+}
+
+/// The test core approved in the world's /Cores as the Cores window approves one, then copies of its sidecar under other ids and names until the program lists `want` cores.
+fn install(world: &World, want: usize) {
+    let player = world.dir("Home/Cores");
+    let core = world.player_core(&player);
+    let rt = Runtime::new(&Api::load(library()).unwrap(), &Config::default()).unwrap();
+    rt.core_approve(&cores::sha256(&core)).unwrap();
+    drop(rt);
+    let have = listed();
+    assert!(have.len() <= want, "the world lists {} cores before any copy: {have:?}", have.len());
+    eprintln!("listed before the copies: {have:?}");
+    let sidecar = std::path::PathBuf::from(format!("{}.core.json", core.display()));
+    let read: serde_json::Value = serde_json::from_slice(&std::fs::read(&sidecar).expect("the approval wrote the core's sidecar")).unwrap();
+    let (id, name) = (read["info"]["id"].as_str().unwrap(), read["info"]["display_name"].as_str().or(read["info"]["name"].as_str()).unwrap());
+    for i in 1..=want - have.len() {
+        let mut copy = read.clone();
+        copy["info"]["id"] = serde_json::json!(format!("{id}-{i}"));
+        copy["info"]["display_name"] = serde_json::json!(format!("{name} {i}"));
+        std::fs::write(player.join(format!("copy-{i}.core.json")), copy.to_string()).unwrap();
+    }
+    let now = listed();
+    assert_eq!(now.len(), want, "the program lists {now:?}");
+}
+
+/// `EMUSEN_CAPTURE_CORES` = N gives the library N installed cores; `EMUSEN_CAPTURE_AT` = a second writes only that frame, `splash-<N>-cores.png`.
 #[test]
 #[ignore = "makes the tester's video's frames; run by hand with EMUSEN_CAPTURE_OUT"]
 fn eclipse_splash_capture() {
     let out = std::path::PathBuf::from(std::env::var_os("EMUSEN_CAPTURE_OUT").expect("EMUSEN_CAPTURE_OUT names the frames' folder"));
+    let want: Option<usize> = std::env::var("EMUSEN_CAPTURE_CORES").ok().map(|n| n.parse().expect("EMUSEN_CAPTURE_CORES is a count"));
+    let at: Option<f64> = std::env::var("EMUSEN_CAPTURE_AT").ok().map(|s| s.parse().expect("EMUSEN_CAPTURE_AT is a second"));
     std::fs::create_dir_all(&out).unwrap();
     // A compositor larger than the window, so its decoration leaves the window 1920 by 1200 whole.
     let kwin = Compositor::start(3840, 2160);
@@ -40,6 +75,9 @@ fn eclipse_splash_capture() {
     std::env::set_var("SDL_AUDIO_DISK_OUTPUT_FILE", world.root.join("heard.raw"));
     let mut harness = emusen_qt_test::Harness::new();
     let (_, media) = eclipse_home_oracle::synthetic(&world, &mut harness);
+    if let Some(want) = want {
+        install(&world, want);
+    }
     let mut initial = QMap::<QMapPair_QString_QVariant>::default();
     initial.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(library().to_str().unwrap())));
     initial.insert(QString::from("theme"), QVariant::from(&QString::from(&themes::built_in_folder("eclipse"))));
@@ -59,6 +97,22 @@ fn eclipse_splash_capture() {
         waited += 25;
     }
     assert_eq!(scene.property("themeSplash", "set"), "true", "the start read and the sound ready");
+    if let Some(at) = at {
+        // The one frame, the clock set to it exactly as the splash's test sets its moments.
+        let at_ms = (at * 1000.0).round() as i64;
+        scene.hold_clock(Some(at_ms - 1000 / RATE));
+        assert!(scene.set_property("themeSplash", "clock", &at_ms.to_string()));
+        scene.wait(100);
+        let time: f64 = scene.property("themeSplash", "time").parse().unwrap();
+        assert!((time - at_ms as f64).abs() < 1.0, "the splash drawn at {time} ms, not {at_ms}");
+        let count = want.unwrap_or_else(|| listed().len());
+        let path = out.join(format!("splash-{count}-cores.png"));
+        assert!(scene.grab(&path.display().to_string()), "the frame at {at_ms} ms grabbed");
+        scene.hold_clock(None);
+        drop(scene);
+        drop(kwin);
+        return;
+    }
     let length: f64 = scene.property("themeSplash", "length").parse().unwrap();
     let frames = ((length / 1000.0 + TAIL) * RATE as f64).round() as i64;
     // The tail's presses on Home: three right and one left, a second apart from 1.2 s after Home whole.

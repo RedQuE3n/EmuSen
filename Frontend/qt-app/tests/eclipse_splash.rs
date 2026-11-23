@@ -84,6 +84,8 @@ fn program_name(row: &str) -> Option<String> {
         "wordmark" => Some("splashWordmark".into()),
         "rule" => Some("splashRule".into()),
         "counts" => Some("splashCounts".into()),
+        "wordmarkBase" => Some("splashWordmark".into()),
+        "countsBase" => Some("splashCounts".into()),
         "header" => Some("arrivalHeader".into()),
         "main" => Some("arrivalMain".into()),
         "recent" => Some("arrivalRecent".into()),
@@ -134,11 +136,19 @@ fn held_at(scene: &mut Scene<'_>, rows: &[Board], moment: f64, cores: usize, at:
                     differences.push(format!("{at} {moment}: {name} is {x} across where the board's main is {}", row.x - 96.0));
                 }
             }
-            // Words by the board's rule for their box, as eclipse_home.tsv holds Home's: the name about its line's middle, the counts from its top.
+            // A Line's box is the board's line box, its words centred across the window as the board's column centres them.
             "wordmark" | "counts" => {
-                let down = if row.name == "wordmark" { (y + h / 2.0, row.y + row.h / 2.0) } else { (y, row.y) };
-                if off(x + w / 2.0, centre) || off(down.0, down.1) {
-                    differences.push(format!("{at} {moment}: {name} at ({}, {}) where the board's column puts it at ({centre}, {})", x + w / 2.0, down.0, down.1));
+                let line = tree.nodes.iter().find(|m| m.name == name && m.visible).unwrap();
+                let (ly, lh) = (line.y / s, line.h / s);
+                if off(x + w / 2.0, centre) || off(ly, row.y) || off(lh, row.h) {
+                    differences.push(format!("{at} {moment}: {name}'s line box {ly:.3} down, {lh:.3} high, its words centred at {} where the board's is {} down, {} high, at {centre}", x + w / 2.0, row.y, row.h));
+                }
+            }
+            // The words' baseline: the Text's top and its baselineOffset in its own units, where the board's CSS puts it.
+            "wordmarkBase" | "countsBase" => {
+                let base = y + read(&tree, &name, "baselineOffset").parse::<f64>().unwrap() * n.scale / s;
+                if off(base, row.y) {
+                    differences.push(format!("{at} {moment}: {name}'s baseline {base:.3} down where the board's is {}", row.y));
                 }
             }
             // Centred across the window as the board's column is across its page (left: 0; right: 0).

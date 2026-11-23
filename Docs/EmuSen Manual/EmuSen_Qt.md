@@ -2460,6 +2460,53 @@ the one lossless form both in Qt's own decode list and an open standard (RFC 963
 for its size. `SoundFile.digest`, the decoded samples' SHA-256 (`QCryptographicHash`, worked out only when asked), is
 held by `splash_start.rs` to the chosen sound's; the handheld's Qt was not asked.
 
+**The words' baselines** (measured 2026-11-23; the board is law, R-20261115-20). Until now the name's glyphs stood 5.1
+and the counts' 3.1 board pixels above Chrome's at 5.72 s. What each source says:
+
+1. The face. `kit-qt/fonts/Sora-Regular.ttf` and `Sora-SemiBold.ttf` (read with a table parser of our own, 2026-11-23):
+   1000 units to the em; hhea ascender 970, descender -290, line gap 0; OS/2 version 4, `fsSelection` 0x00C0, so
+   USE_TYPO_METRICS (bit 7) is set; sTypoAscender 970, sTypoDescender -290, sTypoLineGap 0; usWinAscent 1220,
+   usWinDescent 320. The board's own face, Google Fonts' Sora v17 (the woff2 the board links), gives Chrome the same
+   ascent and descent at 104 and 24 px as the bundled files (`measureText`'s `fontBoundingBoxAscent` and `Descent`).
+2. Qt. `QFontEngine::initializeHeightMetrics` reads hhea, then lets OS/2 override it: the typo metrics when
+   USE_TYPO_METRICS is set or `QFont::PreferTypoLineMetrics` is asked, else usWin with no leading; it rounds ascent and
+   descent only for an engine without subpixel positions (qtbase 6.11, `src/gui/text/qfontengine.cpp`, `processHheaTable`,
+   `processOS2Table`). Qt's documentation says only that `height()` is always `ascent() + descent()` (Qt 6, "QFontMetricsF")
+   and gives `Text`'s `lineHeight` as a multiplier or fixed pixels and `topPadding` as space beside the content (Qt 6,
+   "Text"). Measured (Qt 6.11.2, a `FontMetrics` and a `Text` in `qml`, offscreen and on Wayland alike): at 104 px semi-bold
+   ascent 100.875, descent 30.15625, `Text.baselineOffset` 100.875, `implicitHeight` 132; at 24 px ascent 23.265625,
+   descent 6.953125, `baselineOffset` 23.265625, `implicitHeight` 31. So Qt reads Sora's typo metrics unrounded.
+3. Chrome. Blink rounds the face's ascent and descent to whole pixels (`SkScalarRoundToScalar`, `FontMetrics::AscentDescentWithHacks`,
+   `third_party/blink/renderer/platform/fonts/font_metrics.cc`), and puts half the leading, floored, above the line
+   (`CalculateLeadingSpace`, `core/layout/inline/line_utils.cc`: `((line_height - current_height.LineHeight()) / 2).Floor()`).
+   Read 2026-11-23 from Chromium's main branch.
+4. The board's CSS (EclipseSplashPlay:68-71): a flex column from 800 down, gap 22; the name 104 px, `line-height: 1`,
+   weight 600; the rule 2 px; the counts 24 px with `line-height` normal. So the name's line box is 104 high, ascent 101
+   and descent 30 leave a leading of -27, -14 of it above: its baseline 87 under the box's top; the counts' box is 30 high
+   (23 + 7), its baseline 23 under its top. Chrome gives exactly these (an empty inline-block on each baseline).
+
+The cause was the board's table, not Qt's metrics: `eclipse_splash.tsv` was read on 2026-11-17 by a script that ran as the
+page parsed, before the board's web font had loaded, so the words' boxes were Noto Sans's, `system-ui` here (the name 446.06
+wide with its baseline 92 under its top, the counts 33 high with theirs 26 under; with Sora 469.56 and 87, 30 and 23). Read
+again once `document.fonts.ready` resolves, only the words' and Home's text boxes changed (28 rows). Against those, the
+program's name stood 0.125 above the board's baseline and the counts 0.27 below it.
+
+**The rule.** `parts/Line.qml` places a Line as the board's CSS places a line when `boardLine` is set: its box the line box
+(`boardLineHeight` in board pixels, or 0 for normal: the rounded ascent and descent, which is CSS's normal for a face with no
+line gap, as Sora has), and its words' baseline at the rounded ascent plus the floored half-leading under the box's top, read
+from a `FontMetrics` of the Line's own font, so a Line at any size, face or weight follows. The words' `Text` keeps its own
+height. The splash's name (104) and counts (normal) use it, the rule 22 under the name's box and the counts 22 under the
+rule, as the column's gap gives. Home's and the games view's Lines keep their placing until their own pieces move them.
+`eclipse_splash.rs` holds at each moment the words' line boxes to the board's (top and height) and at 5.72 s their baselines
+(the Text's top plus its `baselineOffset`), within a hundredth of a board pixel.
+
+**Home holds such offsets too** (measured 2026-11-23, Home's oracle at 1920 by 1200 and 1280 by 800, against Main.dc.html in
+Chrome with Sora loaded; program minus board, in board pixels, positive lower): the name -0.23, the sections -0.23, the
+battery and clock -0.17, the eyebrow +0.39, the title +1.125, the facts +1.22, the resume point +0.83, the Resume pill's
+word +1.22, Options' and Favourite's +0.77, the art label -0.48, Recent and its count +0.16, the shown tile's title +0.36
+and its console +0.55, the sections' help -0.14. None is the splash's 5 px; each is the rounding and leading above, the
+title's line box (1.02 of 112) carrying its +1 to the column under it. Home is not changed in this piece.
+
 **When the sound does not answer** (seen 2026-11-23). The splash waits for its sound (`set`), so a sound that never
 settles would hold its first frame for ever. Each path it waits on can fail to answer:
 

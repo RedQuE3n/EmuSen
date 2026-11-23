@@ -411,18 +411,15 @@ ThemeScreen {
                 transform: Translate {
                     y: (root.p < 40 ? 18 * (1 - arriving.value) : -10 * leaving.value) * root.u
                 }
-                // The name's line box, line-height 1 at 104 px, its words centred in it as CSS spreads the leading.
-                Item {
-                    id: nameLine
-                    y: 800 * root.u
-                    width: parent.width
-                    height: 104 * root.u
-                }
+                // The column's top, 800, and the name's line box, line-height 1 at 104 px, its baseline where the board's CSS puts it.
                 Line {
+                    id: wordmark
                     objectName: "splashWordmark"
                     unit: root.u
+                    boardLine: true
+                    boardLineHeight: 104
                     x: (parent.width - width) / 2
-                    y: nameLine.y + (nameLine.height - height) / 2
+                    y: 800 * root.u
                     text: Words.name
                     color: Tokens.text
                     size: 104
@@ -433,7 +430,7 @@ ThemeScreen {
                     id: rule
                     objectName: "splashRule"
                     x: (parent.width - width) / 2
-                    y: nameLine.y + nameLine.height + 22 * root.u
+                    y: wordmark.y + wordmark.height + 22 * root.u
                     width: 360 * root.u
                     height: 2 * root.u
                     gradient: Gradient {
@@ -443,10 +440,11 @@ ThemeScreen {
                         GradientStop { position: 1; color: ink.ruleClear }
                     }
                 }
-                // Its line's top 22 under the rule, the face's own height under it, as Home's lines follow one another (Main:56).
+                // Its line box 22 under the rule, line-height normal, its baseline where the board's CSS puts it.
                 Line {
                     objectName: "splashCounts"
                     unit: root.u
+                    boardLine: true
                     x: (parent.width - width) / 2
                     y: rule.y + rule.height + 22 * root.u
                     text: Words.splashCounts(Library.gameCount, Library.cores.count)

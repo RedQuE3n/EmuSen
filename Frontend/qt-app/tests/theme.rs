@@ -125,7 +125,7 @@ fn qt_3_4_2_the_program_s_reference_theme_is_the_package_theme_audit_holds_to_it
 
 #[test]
 fn qt_3_4_5_the_program_carries_the_built_in_themes_but_the_retired_ones() {
-    // Constellation, Horizon and Orrery were retired 2026-11-23 (EmuSen_Qt.md §3.4.5).
+    // Constellation, Horizon, Meridian and Orrery were retired 2026-11-23 (EmuSen_Qt.md §3.4.5).
     let qrc = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/themes.qrc")).unwrap();
     let carried: Vec<&str> =
         qrc.split("<qresource prefix=\"/emusen/themes/").skip(1).map(|b| &b[..b.find('"').unwrap()]).collect();

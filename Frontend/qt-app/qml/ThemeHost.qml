@@ -36,7 +36,7 @@ Item {
     property bool splashShown: false
     // Where the splash's slot is drawn: over Moonrise, which keeps the splash's clock, its skip and its fade (EmuSen_Interface.md §22).
     property Item splashLayer: themed
-    // A splash that enters Home on the window's clock: whether it is shown, and its time in ms, which the theme's `Splash` reads (EmuSen_Qt.md §3.5.2).
+    // A splash that enters Home on the window's clock: whether it is shown, and its time in ms, which the theme's `Splash` reads (EmuSen_Qt.md §3.5.3).
     property bool splashLeading: false
     property real splashTime: 0
     readonly property bool searching: themed.screens.shown === Screens.Search || themed.screens.shown === Screens.SearchGrid

@@ -956,8 +956,8 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Page` | singleton | from 1.9, a game's page as the program's `GamePageModel` holds it, read-only: `ready`, `key` (the game's file), `title`, `facts`, `cover`, `hero`, `clip`, `actions` (`label`, `value`, `button`, `filled`, `stepped`, `stepLeft`, `stepRight`), `sections` (the tabs), `section`, `shows` (0 words, 1 cards, 2 rows), `words`, `picture`, `rows` (`key`, `label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`: a row, a state's card or a cover), `coverArt`, `focusedAction`, `focusedContent`, `help`, and the question: `asking`, `questionTitle`, `questionSentences`, `questionChoices`, `questionBack` |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30); `FocusRing`, `PlanetMark`, `CoronaDisc`, `CoronaGlow`, `Backdrop`, `BackdropField`, `Glow`, `GroupGridLayout` and `MeasuredWalk` (1.9, the walk over rows of their own heights, `EmuSen_Kit.md` §7.122) are the later minors' (`CHANGELOG-theme-api.md`) |
-| `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`, and from 1.9 `Settings` and `Game`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()`; from 1.10 the splash's `entersHome` and `sound.source` (a WAV file of the theme's own, as its screen's file names it), and Home's `splashPlace` (§3.5.2, A splash that enters Home) |
-| `Splash` | singleton | from 1.10, a splash that enters Home: `shown`, and `time`, its moment in ms on the window's clock, which the splash and Home both draw from (§3.5.2) |
+| `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`, and from 1.9 `Settings` and `Game`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()`; from 1.10 the splash's `entersHome` and `sound.source` (a WAV file of the theme's own, as its screen's file names it), and Home's `splashPlace` (§3.5.3) |
+| `Splash` | singleton | from 1.10, a splash that enters Home: `shown`, and `time`, its moment in ms on the window's clock, which the splash and Home both draw from (§3.5.3) |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
 `screens/Splash.qml`; a theme that omits one gets the reference theme's (Moonrise for the splash). From 1.9 it may also
@@ -1988,7 +1988,7 @@ bindings on the board's per cent of its 11 s loop, the theme's rules allowing no
 spans as ratios, and each eased span through `parts/Ease.qml`, CSS's cubic Bézier solved by eight Newton steps unrolled as
 bindings; a planet's delay is its index times 0.09 s, its angle and colours `parts/PlanetInk.qml`'s by its place, and each
 star's four draws of the board's generator follow the star before's (`Math.imul`, as the board's 32-bit arithmetic). The splash's length is Home whole, 9.68 s; it enters Home (`entersHome`,
-§3.5.2) and Home places it in its `splashPlace`, over its backdrop and under its disc and everything on it, so the board's
+§3.5.3) and Home places it in its `splashPlace`, over its backdrop and under its disc and everything on it, so the board's
 order holds: Home's backdrop under the splash's ground, which fades as ec-home brings Home's in (the same blend: a ground at
 1 − α over the backdrop is the board's backdrop at α over its ground), the stars and planets under the disc, Home's
 header, words, Recent and help line over it. `parts/Encore.qml` gives Home's parts the board's arrival (ec-h1 to ec-h4,
@@ -1996,7 +1996,7 @@ from 16 above, 30 to the left, 36 below, the help line fading), whole once the s
 disc, the art label and the two streak fields, which the playing board does not draw, are not drawn. The sound is the
 board's own file, `sounds/splash.wav` (splash-sound-chosen.wav, as it is). Past eight cores a planet stands halfway
 between two of the board's angles, its colours the board's eight in turn. Held to by `qt-app/tests/eclipse_splash.rs`
-(the board read by headless Chrome into `eclipse_splash.tsv`; §3.5.2).
+(the board read by headless Chrome into `eclipse_splash.tsv`; §3.5.3).
 
 #### 3.4.9 Eclipse's Choose a console **[M 2026-11-15]**
 
@@ -2402,7 +2402,13 @@ drive the window's frames, so the harness's `running` (which `rest` and `assert_
 item holds out of the window's: without that, `acceptance.rs` failed `assert_still` under the List card in two runs of two,
 11 frames in 2 s with nothing dirty, and passed with it (measured 2026-11-13).
 
-**A splash that enters Home** (EmuSen.Theme 1.10, R-20261117-1, built 2026-11-17). Until 1.10 a theme's splash was
+**Where covers come from.** A theme reads pictures only inside its folder and the cover stores (§3.5.1); the reference
+is held to that too, so the window's `coverStores` (the start's media store, `ArtworkDirectory` and
+`EsdeMediaDirectory`) must name every folder a cover is read from, and the tests that draw covers name theirs.
+
+#### 3.5.3 A splash that enters Home **[M 2026-11-17]**
+
+EmuSen.Theme 1.10, R-20261117-1, built 2026-11-17. Until 1.10 a theme's splash was
 drawn over Moonrise and faded with it, Moonrise keeping its clock, its skip and its fade, and `ThemeScreen.length`,
 `still` and `finished` were not read; that stays so for every theme whose splash does not say `entersHome` (the reference,
 Horizon, Meridian, Orrery). One that does leads the start in Moonrise's place, and the program gives it what Moonrise
@@ -2435,11 +2441,50 @@ render loop) holds every element of the board's table at 1.0, 2.42, 3.3, 5.72, 7
 800 within a hundredth of a board pixel and half a level of opacity, Moonrise unseen from the first frame, the sound
 started once from the theme's file whole, Home whole and focused after; a press skipping with the sound let go (SDL's disk
 driver's file: no step at the end past twice the sound's own) and Home not acting on it; the splash off; reduced motion.
-`eclipse_splash_capture.rs` (`#[ignore]`d) writes the frames the tester's video is made from.
+`eclipse_splash_capture.rs` (`#[ignore]`d) writes the frames the tester's video is made from. `qt-app/tests/splash_start.rs`
+(software backend, the clock held) holds what that oracle sets by hand: three held seconds move the splash's clock three
+seconds; a key the kit's map makes a press, and a tap, each skip to the last frame with the sound let go; navigation
+sounds off, the splash runs and no sound starts. The oracle's fade is the Fade token's, read from the program's tokens.
 
-**Where covers come from.** A theme reads pictures only inside its folder and the cover stores (§3.5.1); the reference
-is held to that too, so the window's `coverStores` (the start's media store, `ArtworkDirectory` and
-`EsdeMediaDirectory`) must name every folder a cover is read from, and the tests that draw covers name theirs.
+**When the sound does not answer** (seen 2026-11-23). The splash waits for its sound (`set`), so a sound that never
+settles would hold its first frame for ever. Each path it waits on can fail to answer:
+
+1. Qt's decoder. `QAudioDecoder::start` returns at once, emitting nothing, where no platform decoder was made
+   (qtmultimedia 6.11, `src/multimedia/audio/qaudiodecoder.cpp`, `start`: `if (!d->decoder) return;`; the constructor
+   only logs "Failed to initialize QAudioDecoder"), and with no backend plugin loaded Qt falls back to
+   `QFallbackIntegration` (`src/multimedia/platform/qplatformmediaintegration.cpp`, `InstanceHolder::init`). Qt's
+   documentation promises `finished()` on success and `error()` on failure (Qt 6, "QAudioDecoder") and gives no time
+   within which either comes. `SoundFile` asks `isSupported()` first and reports the decoder's `errorString()`.
+2. The player. Its first `play` opens SDL 3's audio (`UiSounds::open`, `Platform/endymion/src/audio.rs`, from the thread
+   `SplashSound` starts). SDL 3.4's PipeWire driver waits on the server with `pw_thread_loop_wait` and no timeout, for
+   the registry's first sync in `PIPEWIRE_PREFERRED_Init` and `PIPEWIRE_DetectDevices`, and for the stream's state in
+   `PIPEWIRE_OpenDevice` (`src/audio/pipewire/SDL_pipewire.c`, branch release-3.4.x, read 2026-11-23). Seen 2026-11-23
+   (SDL 3.4.20, Fedora 44): with `SDL_AUDIO_DRIVER=pipewire` and `PIPEWIRE_REMOTE` naming a socket that takes the
+   connection and never answers, `SDL_InitSubSystem(SDL_INIT_AUDIO)` had not returned after 5 s; the dummy driver
+   returned at once.
+3. The hand-back. cxx-qt 0.10's `queue` fails when the object is gone or Qt's `invokeMethod` fails
+   (`ThreadingQueueError`, `cxx-qt-0.10.0/src/threading.rs`); the sound then never hears the player's answer, and
+   there is nothing to tell, since the queue to it is what failed.
+
+So the wait is bounded in one place, a `PauseAnimation` in `ThemeSplash.qml`: from the splash's first frame, for the
+splash's own `length`, on the window's animation clock (so a test's held clock steps it). Neither Qt nor SDL gives a
+time to take; the splash's length is the one duration the start owns for its splash, and the sound is that length's
+(argued, not decided). A sound not ready by then is given up (`SplashSound.giveUp`): its `problem` says so, the splash
+plays silent from its first frame, and a player made after is let go unplayed (`opening`), so the sound never starts out
+of step with its picture. Proof: `qt-app/tests/splash_silent_device.rs`, the silent PipeWire socket above in a process
+of its own: the first frame holds until the length on the held clock, then the splash runs silent and Home follows. The
+decoder's case has no test yet: it needs Qt started with none of the media backends the system installs.
+
+Every error the sound could drop is reported in its `problem`, where its other problems are: a failed `queued()` (the
+bytes still to play, which the soft end starts from) and a missing `file`. Two cannot fail: `faded` takes nothing for a
+start past the samples' end, which `end` never asks (it starts at the samples' length less what is queued); the queue's
+refusal is case 3.
+
+**A chosen theme that fails.** A theme whose package cannot be read leaves its host `ready` false and `failed` true
+(`theme-host/src/host.rs`, `reload`). `moonriseHeld` held Moonrise unseen while the host was not ready, so such a theme
+started with no splash seen, Moonrise running unseen until Home (seen 2026-11-23: `splash_start.rs` failed at "Moonrise
+is seen when the chosen theme fails"). It holds now only while the host is neither ready nor failed: a theme that fails
+starts with Moonrise and reaches the reference's Home, as `splash_start.rs` holds.
 
 ### 3.6 Console-style designs as themes: the test that the API is sufficient
 

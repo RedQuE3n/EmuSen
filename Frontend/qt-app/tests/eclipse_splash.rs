@@ -1,4 +1,4 @@
-//! Eclipse's splash on the real program, on the card, held to its board and entering Home, a GPU job (EmuSen_Qt.md §3.5.2, A splash that enters Home).
+//! Eclipse's splash on the real program, on the card, held to its board and entering Home, a GPU job (EmuSen_Qt.md §3.5.3).
 
 // The modules the scene imports register through the program's crate, which a test must link.
 extern crate emusen_qt;
@@ -6,21 +6,21 @@ extern crate emusen_qt;
 mod eclipse_board;
 #[allow(dead_code)]
 mod eclipse_home_oracle;
+mod start_held;
 
-use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
 use eclipse_board::read;
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
 use emusen_kit_core::input::UiButton;
 use emusen_kit_core::tokens::Colour;
-use emusen_qt::MAIN_URL;
 use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::library::{installed_cores, LibrarySource};
-use emusen_qt_models::{themes, words};
+use emusen_qt_models::words;
 use emusen_qt_test::compositor::Compositor;
 use emusen_qt_test::tree::{Node, Tree};
 use emusen_qt_test::Scene;
-use std::path::{Path, PathBuf};
+use start_held::{started, until, Start, PLAIN};
+use std::path::PathBuf;
 
 const TABLE: &str = include_str!("eclipse_splash.tsv");
 const SOUND: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes/eclipse/sounds/splash.wav");
@@ -62,28 +62,6 @@ fn sound_frames() -> i64 {
     let bytes = std::fs::read(SOUND).unwrap();
     let at = bytes.windows(4).position(|w| w == b"data").expect("the WAV's data chunk");
     i64::from(u32::from_le_bytes(bytes[at + 4..at + 8].try_into().unwrap())) / 4
-}
-
-/// The window's initial properties as the program's start gives them, under Eclipse.
-fn initial(splash: bool, reduced: bool, media: &Path) -> QMap<QMapPair_QString_QVariant> {
-    let mut map = QMap::<QMapPair_QString_QVariant>::default();
-    map.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(library().to_str().unwrap())));
-    map.insert(QString::from("theme"), QVariant::from(&QString::from(&themes::built_in_folder("eclipse"))));
-    map.insert(QString::from("splash"), QVariant::from(&splash));
-    map.insert(QString::from("reducedMotion"), QVariant::from(&reduced));
-    let mut stores = QStringList::default();
-    stores.append(QString::from(media.to_str().unwrap()));
-    map.insert(QString::from("coverStores"), QVariant::from(&stores));
-    map
-}
-
-fn until(scene: &mut Scene<'_>, what: &str, ms: i32, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
-    let mut waited = 0;
-    while !done(scene) && waited < ms {
-        scene.wait(25);
-        waited += 25;
-    }
-    assert!(done(scene), "{what} within {ms} ms");
 }
 
 /// The last shown node of a name, else the last of it.
@@ -204,28 +182,6 @@ fn colours(scene: &mut Scene<'_>, cores: usize, differences: &mut Vec<String>) {
     }
 }
 
-/// The program under Eclipse with the clock held from its first frame: Moonrise never seen while the start is read, and
-/// the splash's clock at 0 until its sound is ready.
-fn started<'a>(harness: &'a mut emusen_qt_test::Harness, size: (i32, i32), splash: bool, reduced: bool, media: &Path) -> Scene<'a> {
-    // The clock held from 0 before the program's window is made, on a still window of its own.
-    let still = media.parent().unwrap().join("Still.qml");
-    std::fs::write(&still, "import QtQuick\nWindow { visible: false }\n").unwrap();
-    {
-        let mut held = harness.load(&format!("file://{}", still.display()), 64, 64);
-        held.hold_clock(None);
-        held.hold_clock(Some(0));
-    }
-    let mut scene = harness.load_initial(MAIN_URL, size.0, size.1, &initial(splash, reduced, media), |_| {});
-    let mut waited = 0;
-    while scene.property("themeSplash", "set") != "true" && waited < 10_000 && splash {
-        assert_eq!(scene.property("moonrise", "visible"), "false", "Moonrise is never seen under Eclipse");
-        assert_eq!(scene.property("themeSplash", "clock"), "0", "the splash's clock waits at its first frame");
-        scene.wait(25);
-        waited += 25;
-    }
-    scene
-}
-
 #[test]
 fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
     // A compositor larger than the window, so its decoration leaves the window 1920 by 1200 whole.
@@ -256,7 +212,7 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
 
     // A press skips to Home whole, the sound let go softly, and the press is the splash's alone: first, so the device's file holds no other sound.
     {
-        let mut scene = started(&mut harness, (1920, 1200), true, false, &media);
+        let mut scene = started(&mut harness, (1920, 1200), &PLAIN, &media);
         scene.hold_clock(Some(3000));
         // The sound heard a while first, the picture held: the second before the fade is the sound's own.
         scene.wait(2000);
@@ -274,23 +230,27 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
         scene.hold_clock(None);
         scene.wait(500);
         let samples = heard_samples(&heard);
+        // The device's file holds interleaved stereo at the interface player's rate: a second's samples, and the Fade token's.
+        let second = (emusen_platform_client::sounds::RATE * emusen_platform_client::sounds::CHANNELS) as usize;
+        let fading = *scene.kit_tokens().expect("the program's tokens").fade() as usize * second / 1000;
         let loud = samples.iter().position(|s| s.abs() > 1e-4).expect("the sound was heard");
         let last = samples.iter().rposition(|s| s.abs() > 1e-4).expect("and it ended");
         assert!(last > loud, "it played");
-        // In the fade's 0.1 s no step past twice the sound's own largest the second before; a click is some twenty times it (seen 2026-11-17).
+        // In the fade no step past twice the sound's own largest the second before; a click is some twenty times it (seen 2026-11-17).
         let steps = |from: usize, to: usize| samples[from..to].windows(3).step_by(2).map(|w| (w[2] - w[0]).abs()).fold(0.0f32, f32::max);
-        let fade = (last - last % 2).saturating_sub(9600);
-        let own = steps(fade.saturating_sub(96_000).max(loud - loud % 2), fade);
+        let fade = (last - last % 2).saturating_sub(fading);
+        let own = steps(fade.saturating_sub(second).max(loud - loud % 2), fade);
         // The fade's span and the step from its last frame to the silence after it.
         let end = steps(fade, (last - last % 2 + 4).min(samples.len()));
         assert!(end <= 2.0 * own, "the end falls with no click: its largest step {end}, the sound's own {own}");
-        // Nothing heard past the fade: at least 0.2 s of the device's file after it, the sound let go and not ringing on.
-        assert!(samples.len() - last > 2 * 9600, "the sound rings on past its fade: {} samples, the last heard at {last}", samples.len());
+        // Nothing heard past the fade: at least twice the fade's length of the device's file after it, the sound let go and not ringing on.
+        assert!(samples.len() - last > 2 * fading, "the sound rings on past its fade: {} samples, the last heard at {last}", samples.len());
     }
 
+    // The board's own size and the gate's smaller one of the same 16:10 shape, the pair the Home oracle holds.
     for size in [(1920, 1200), (1280, 800)] {
         let at = format!("{}x{}", size.0, size.1);
-        let mut scene = started(&mut harness, size, true, false, &media);
+        let mut scene = started(&mut harness, size, &PLAIN, &media);
         assert_eq!(scene.property("themeSplash", "set"), "true", "{at}: the start read and the sound ready");
         assert_eq!(scene.property("theme", "leads"), "true", "{at}: Eclipse's splash leads the start");
         // The sound: started once, from the theme's file, whole.
@@ -335,7 +295,7 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
 
     // The splash off: Home at once, whole, and no sound.
     {
-        let mut scene = started(&mut harness, (1920, 1200), false, false, &media);
+        let mut scene = started(&mut harness, (1920, 1200), &Start { splash: false, ..PLAIN }, &media);
         scene.wait(500);
         assert_eq!(scene.property("themeSplash", "visible"), "false");
         assert_eq!(scene.property("moonrise", "visible"), "false");
@@ -348,7 +308,7 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
 
     // Reduced motion: the last frame from the first, held for the splash's length, the sound played.
     {
-        let mut scene = started(&mut harness, (1920, 1200), true, true, &media);
+        let mut scene = started(&mut harness, (1920, 1200), &Start { reduced: true, ..PLAIN }, &media);
         assert_eq!(scene.property("themeSplash", "time"), scene.property("themeSplash", "length"), "the last frame from the start");
         assert_eq!(scene.property("splashSound", "starts"), "1", "the sound still played");
         scene.hold_clock(Some(4000));

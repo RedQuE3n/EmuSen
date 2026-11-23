@@ -11,7 +11,7 @@ pub mod qobject {
         #[qml_singleton]
         /// A splash whose screen says `entersHome` is drawn, from its first frame until it has ended or been skipped.
         #[qproperty(bool, shown, READ, NOTIFY)]
-        /// The splash's time in ms, the moment its screen and Home draw (EmuSen_Qt.md §3.5.2).
+        /// The splash's time in ms, the moment its screen and Home draw (EmuSen_Qt.md §3.5.3).
         #[qproperty(f64, time, READ, NOTIFY)]
         type ThemeSplash = super::ThemeSplashRust;
     }

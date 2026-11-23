@@ -65,12 +65,12 @@ Window {
     readonly property bool reading: library.loading || !settingsModel.ready || !pads.answered
     // The splash keeps the focus, and every press, until it has faded (one that enters Home, until it has ended and the press that skipped it is let go), so that press is never a screen's.
     readonly property bool splashShown: program.splash && (program.led ? !themeSplash.done : (!moonrise.done || moonrise.opacity > 0))
-    // The chosen theme's splash enters Home: it leads the start in Moonrise's place, held so once seen (EmuSen_Qt.md §3.5.2).
+    // The chosen theme's splash enters Home: it leads the start in Moonrise's place, held so once seen (EmuSen_Qt.md §3.5.3).
     readonly property bool themeLeads: program.themeHost?.leads ?? false
     property bool led: false
     onThemeLeadsChanged: if (program.themeLeads) program.led = true
-    // Moonrise waits unseen while the chosen theme's splash is still to be placed, so a splash that enters Home is never under it.
-    readonly property bool moonriseHeld: program.led || (chosenTheme.active && (program.themeHost === null || !program.themeHost.host.ready || program.themeHost.splashComing))
+    // Moonrise waits unseen while the chosen theme's splash is still to be placed, so a splash that enters Home is never under it; a theme that failed places none.
+    readonly property bool moonriseHeld: program.led || (chosenTheme.active && (program.themeHost === null || !(program.themeHost.host.ready || program.themeHost.failed) || program.themeHost.splashComing))
     // The help bar's family: Controller type's, or with Automatic the pad last used; a generic pad's glyphs drawn as the Xbox pad's lettered ones, as Mistress does.
     readonly property int padFamily: {
         const family = settingsModel.controllerFamily >= 0 ? settingsModel.controllerFamily : pads.family

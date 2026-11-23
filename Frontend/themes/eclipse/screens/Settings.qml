@@ -55,14 +55,14 @@ ThemeScreen {
             SettingsInk {
                 id: own
             }
-            // The ground, the page's glow and the limb's glow (G:88-91): blurred fields, the page's colour the section's own.
+            // The ground, the page's glow 620 px short of the board's right edge, and the limb's glow (G:88-91): blurred fields, the page's colour the section's own.
             Backdrop {
                 objectName: "settingsBackdrop"
                 anchors.fill: parent
                 ground: Tokens.surface
                 pixelScale: canvas.unit
                 fields: [
-                    BackdropField { x: (root.wide - 1920 + 1300) * design.unit; y: 60 * design.unit; width: 900 * design.unit; height: 900 * design.unit; color: own.pageGlows[Settings.page] ?? "transparent"; blur: 150 * design.unit; opacity: 0.4 },
+                    BackdropField { x: (root.wide - 620) * design.unit; y: 60 * design.unit; width: 900 * design.unit; height: 900 * design.unit; color: own.pageGlows[Settings.page] ?? "transparent"; blur: 150 * design.unit; opacity: 0.4 },
                     BackdropField { x: (-1560 - 6) * design.unit; y: (-700 - 6) * design.unit; width: (2000 + 12) * design.unit; height: (2600 + 12) * design.unit; color: own.limbGlow; blur: 20 * design.unit; opacity: own.limbGlowOpacity }
                 ]
             }
@@ -159,15 +159,8 @@ ThemeScreen {
                         width: 820 * design.unit
                         height: root.rowsFoot * design.unit - y
                         focus: true
-                        Keys.onPressed: (event) => {
-                            if (walk.key(event.key, event.modifiers)) {
-                                event.accepted = true
-                                return
-                            }
-                            // On a page under a section the shoulders are the page's: the next console, as the program's are.
-                            const by = event.key === Qt.Key_PageUp ? -1 : event.key === Qt.Key_PageDown ? 1 : 0
-                            event.accepted = by !== 0 && Actions.settingsShoulder(by)
-                        }
+                        // The rows' grammar first; on a page under a section the shoulders are the page's, the next console, as the program's are.
+                        Keys.onPressed: (event) => event.accepted = walk.key(event.key, event.modifiers) || (event.key === Qt.Key_PageUp && Actions.settingsShoulder(-1)) || (event.key === Qt.Key_PageDown && Actions.settingsShoulder(1))
                         MeasuredWalk {
                             id: walk
                             objectName: "settingsWalk"

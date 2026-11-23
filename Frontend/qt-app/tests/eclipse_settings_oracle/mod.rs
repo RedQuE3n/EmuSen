@@ -1,0 +1,370 @@
+//! The oracle of Eclipse's Settings on its Display page in the running program, driven by an SDL pad in this process and by the pointer (EmuSen_Qt.md §3.4.11).
+
+use crate::common::wait_for;
+use crate::eclipse_board::{held, read, rows};
+use crate::eclipse_pad::{focused, press};
+use cxx_qt::casting::Upcast;
+use emusen_client_fixture::{library, World};
+use emusen_kit_core::canvas::DESIGN_HEIGHT;
+use emusen_kit_core::input::PadControl;
+use emusen_kit_core::settings::RowKind;
+use emusen_kit_core::tokens::Colour;
+use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
+use emusen_platform_client::Platform;
+use emusen_qt::MAIN_URL;
+use emusen_qt_models::library_model::qobject::QAbstractListModel;
+use emusen_qt_models::settings_model::qobject::SettingsModel;
+use emusen_qt_models::themes;
+use emusen_qt_test::harness::SIZES;
+use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
+use emusen_qt_test::Scene;
+
+const BOARD: &str = include_str!("../eclipse/settings_display.tsv");
+
+/// The board's nine rows: name and short line; the values are the program's, which the board's samples show (EclipseSettings.dc.html's renderVals, gen_settings.py:153-161).
+const BOARD_ROWS: [(&str, &str); 9] = [
+    ("Picture shape", "The screen each console was made for, or each of the frame's pixels square."),
+    ("CRT shader", "The television's picture for every console that had one."),
+    ("Shader levers", "The CRT's own levers for one console: the mask, the bloom, the scanlines and the glass."),
+    ("Shaders", "The shader each console draws with: the built-in filters, the recent ones and the slang pack's presets."),
+    ("Crop overscan", "What is hidden at the picture's edges on a console that had a television."),
+    ("Text size", "Every word on the big screen, and the desktop's, through the interface's type scale."),
+    ("Background art on Home", "The focused game's art behind Home, dimmed and blurred."),
+    ("Reduced motion", "No movement, shorter fades. System follows the desktop's own setting."),
+    ("Start-up splash", "The eclipse while big picture starts. Any button skips it."),
+];
+
+/// The window's SettingsModel, as its own type.
+fn settings(scene: &mut Scene<'_>) -> &'static SettingsModel {
+    let object = scene.object("settingsModel");
+    assert!(!object.is_null(), "the window's settings model");
+    // Safety: the window's model of that name is a SettingsModel, its list model's QObject at its address, alive while the window is.
+    unsafe { &*<SettingsModel as Upcast<QAbstractListModel>>::from_base_ptr(object as *const QAbstractListModel) }
+}
+
+/// The focused row and the page as the model holds them.
+fn at(scene: &mut Scene<'_>) -> (i32, String) {
+    let s = settings(scene);
+    (*s.focused(), s.view().page_key())
+}
+
+/// The row's values as the model holds them: its value and, for a switch, whether it is on.
+fn state(scene: &mut Scene<'_>, row: usize) -> (String, Option<bool>) {
+    let s = settings(scene);
+    (s.shown_rows()[row].value.clone(), s.view().facets()[row].switch)
+}
+
+/// The centre of a drawn element by name, in the window's pixels.
+fn centre(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
+    let tree = scene.tree();
+    let n = tree.nodes.iter().rev().find(|n| n.name == name && n.visible).unwrap_or_else(|| panic!("{name} is drawn"));
+    (n.x + n.w / 2.0, n.y + n.h / 2.0)
+}
+
+/// Whether a row is drawn: inside the rows' window.
+fn shown(scene: &mut Scene<'_>, name: &str) -> bool {
+    scene.tree().nodes.iter().any(|n| n.name == name && n.visible)
+}
+
+/// Waits a moment for the model to answer a press or a click.
+fn settle(scene: &mut Scene<'_>) {
+    scene.wait(120);
+}
+
+/// What a row's own action does to it, undone again, by `act` (a press or a click); the differences pushed.
+fn acted(scene: &mut Scene<'_>, i: usize, how: &str, differences: &mut Vec<String>, mut act: impl FnMut(&mut Scene<'_>, i32), back: &mut dyn FnMut(&mut Scene<'_>)) {
+    let kind = settings(scene).shown_rows()[i].kind;
+    let before = state(scene, i);
+    match kind {
+        RowKind::Opens | RowKind::Asks => {
+            act(scene, 0);
+            settle(scene);
+            let page = at(scene).1;
+            if page == "display" {
+                differences.push(format!("{how}: row {i}'s door opened nothing"));
+            }
+            back(scene);
+            settle(scene);
+            if at(scene) != (i as i32, "display".to_owned()) {
+                differences.push(format!("{how}: B from row {i}'s page left {:?}", at(scene)));
+            }
+        }
+        _ if before.1.is_some() => {
+            act(scene, 0);
+            settle(scene);
+            let turned = state(scene, i);
+            act(scene, 0);
+            settle(scene);
+            if turned.1 == before.1 || state(scene, i) != before {
+                differences.push(format!("{how}: row {i}'s switch went {before:?} → {turned:?} → {:?}", state(scene, i)));
+            }
+        }
+        RowKind::Steps | RowKind::Slider => {
+            act(scene, 1);
+            settle(scene);
+            let stepped = state(scene, i);
+            act(scene, -1);
+            settle(scene);
+            if stepped == before || state(scene, i) != before {
+                differences.push(format!("{how}: row {i} stepped {before:?} → {stepped:?} → {:?}", state(scene, i)));
+            }
+        }
+        _ => differences.push(format!("{how}: row {i} is a {kind:?}, which Display has none of")),
+    }
+}
+
+/// Eclipse's Settings on Display in the program: the board's table at every gate size, the words, every row by pad and pointer, the sections, B (EmuSen_Qt.md §3.4.11).
+pub fn oracle(backend: &str) {
+    std::env::set_var("LC_ALL", "en_US.UTF-8");
+    let world = World::new("qt-app-eclipse-settings");
+    let roms = world.dir("Roms/NES");
+    let mut image = b"NES\x1a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
+    image.resize(16 + 16384, 0);
+    std::fs::write(roms.join("One.nes"), image).unwrap();
+    let platform = Platform::load(library()).unwrap();
+    let mut stored = platform.model_new(MODEL_APP_SETTINGS).unwrap();
+    stored["RomDirectory"] = serde_json::json!(world.root.join("Roms").to_str().unwrap());
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &stored).unwrap();
+    // The machine's battery at the board's 82%, discharging, in the world's made-up power_supply tree (G:98).
+    let power = world.power_supply().join("BAT0");
+    std::fs::create_dir_all(&power).unwrap();
+    for (key, value) in [("type", "Battery"), ("capacity", "82"), ("status", "Discharging")] {
+        std::fs::write(power.join(key), format!("{value}\n")).unwrap();
+    }
+    let sdl = Sdl::open();
+    let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
+    let mut harness = emusen_qt_test::Harness::new();
+    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    assert!(scene.set_property("program", "splash", "false"));
+    assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
+    assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
+    wait_for(&mut scene, "library", "loading", "false", 10000);
+    wait_for(&mut scene, "settingsModel", "ready", "true", 5000);
+    wait_for(&mut scene, "pads", "connected", "1", 5000);
+    scene.run_pad_clock();
+
+    // Home's Settings place by the pad, then Eclipse chosen over it, which places its own Settings.
+    for _ in 0..40 {
+        if focused(&mut scene) == "place.0" {
+            break;
+        }
+        scene.wait(50);
+    }
+    for _ in 0..5 {
+        press(&mut scene, &sdl, &pad, PadControl::Right);
+    }
+    press(&mut scene, &sdl, &pad, PadControl::South);
+    wait_for(&mut scene, "screens", "shown", "Settings", 2000);
+    assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
+    wait_for(&mut scene, "host.theme", "ready", "true", 5000);
+    for _ in 0..40 {
+        if scene.property("theme", "settings") == "true" {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert_eq!(scene.property("theme", "settings"), "true", "Eclipse draws Settings: {} {}", scene.property("theme", "warnings"), scene.property("host.theme", "warnings"));
+    assert_eq!(scene.property("settingsSlot", "active"), "false", "the program's Settings is not made under Eclipse's");
+    for _ in 0..40 {
+        if focused(&mut scene).starts_with("row.") {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert_eq!(focused(&mut scene), "row.0", "Settings opens on its first section's first row");
+    assert_eq!(at(&mut scene), (0, "controllers".to_owned()));
+
+    // RB to Display, Down to CRT shader: the board's state.
+    press(&mut scene, &sdl, &pad, PadControl::RightShoulder);
+    settle(&mut scene);
+    assert_eq!(at(&mut scene), (0, "display".to_owned()), "RB steps to Display");
+    press(&mut scene, &sdl, &pad, PadControl::Down);
+    settle(&mut scene);
+    assert_eq!(at(&mut scene), (1, "display".to_owned()), "Down focuses CRT shader");
+    assert_eq!(focused(&mut scene), "row.1");
+    let count = settings(&mut scene).shown_rows().len();
+    let mut differences = Vec::new();
+
+    // The board's table at every gate size.
+    let (board_height, table) = rows(BOARD);
+    let k = DESIGN_HEIGHT / board_height;
+    for (width, height) in SIZES {
+        scene.resize(width, height);
+        scene.wait(300);
+        let tree = scene.tree();
+        let at_size = format!("{width}x{height}");
+        let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
+        let screen: u64 = tree.nodes[tree.find_named("settingsScreen").expect("Eclipse's Settings") as usize].id.parse().unwrap();
+        let tokens = crate::eclipse_board::tokens(screen);
+        held(&tree, &table, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
+        // The page's glow in Display's colour (G:163).
+        if Colour::parse(&read(&tree, "backdropField.0", "paint")) != Colour::parse("#3B4AA8") {
+            differences.push(format!("{at_size}: the page's glow is {} where the board gives #3B4AA8", read(&tree, "backdropField.0", "paint")));
+        }
+        // The words: the board's, where the program's are the board's; the rows' the model's.
+        let s = settings(&mut scene);
+        let model_rows = s.shown_rows().to_vec();
+        let facets = s.view().facets();
+        let sections: Vec<String> = s.sections().iter().map(|t| t.to_string()).collect();
+        let mut words = vec![
+            ("settingsTitle".to_owned(), "Settings".to_owned()),
+            ("settingsHeading".to_owned(), "Display".to_owned()),
+            ("clock".to_owned(), read(&tree, "clock", "text")),
+            ("battery".to_owned(), "82%".to_owned()),
+            ("settingsPlace".to_owned(), format!("2 of {count}")),
+            ("asideHeading".to_owned(), "CRT shader".to_owned()),
+            ("asideSentence".to_owned(), s.sentence().to_string()),
+            ("asideCaption".to_owned(), s.caption().to_string()),
+        ];
+        if sections != ["Controllers", "Display", "Sound", "Consoles", "Library", "EmuSen"] {
+            differences.push(format!("{at_size}: the sections are {sections:?} where the board names Controllers, Display, Sound, Consoles, Library, EmuSen"));
+        }
+        for (i, name) in sections.iter().enumerate() {
+            words.push((format!("sectionWords.{i}"), name.clone()));
+        }
+        for (i, (name, about)) in BOARD_ROWS.iter().enumerate() {
+            words.push((format!("rowName.{i}"), name.to_string()));
+            words.push((format!("rowAbout.{i}"), about.to_string()));
+            words.push((format!("rowWords.{i}"), model_rows[i].value.clone()));
+        }
+        for (name, want) in words {
+            let have = read(&tree, &name, "text");
+            if have != want {
+                differences.push(format!("{at_size}: {name} says {have:?} where {want:?}"));
+            }
+        }
+        for (i, row) in model_rows.iter().enumerate() {
+            if row.label != read(&tree, &format!("rowName.{i}"), "text") || facets[i].about != read(&tree, &format!("rowAbout.{i}"), "text") {
+                differences.push(format!("{at_size}: row {i} is drawn {:?} where the model has {:?}", read(&tree, &format!("rowName.{i}"), "text"), row.label));
+            }
+        }
+        // The board's rows are drawn, the program's six past them wait below the window; nothing drawn is cut but the board's short lines.
+        for i in 0..count {
+            if shown(&mut scene, &format!("row.{i}")) != (i < BOARD_ROWS.len()) {
+                differences.push(format!("{at_size}: row {i} drawn {}", !(i < BOARD_ROWS.len())));
+            }
+        }
+    }
+    scene.resize(1920, 1200);
+    scene.wait(300);
+    pictures(&mut scene, backend, "crt");
+
+    // The pad: Up to the first row, Down through every row to the last, each focused and in the window, then back up.
+    press(&mut scene, &sdl, &pad, PadControl::Up);
+    for i in 0..count {
+        if i > 0 {
+            press(&mut scene, &sdl, &pad, PadControl::Down);
+        }
+        settle(&mut scene);
+        if at(&mut scene).0 != i as i32 || focused(&mut scene) != format!("row.{i}") || !shown(&mut scene, &format!("row.{i}")) {
+            differences.push(format!("Down to row {i}: the model at {:?}, the focus on {:?}, drawn {}", at(&mut scene), focused(&mut scene), shown(&mut scene, &format!("row.{i}"))));
+        }
+        if read(&scene.tree(), "settingsPlace", "text") != format!("{} of {count}", i + 1) {
+            differences.push(format!("row {i}: the place reads {:?}", read(&scene.tree(), "settingsPlace", "text")));
+        }
+    }
+    press(&mut scene, &sdl, &pad, PadControl::Down);
+    settle(&mut scene);
+    if at(&mut scene).0 != count as i32 - 1 {
+        differences.push("Down past the last row moved the focus".to_owned());
+    }
+    pictures(&mut scene, backend, "last");
+    // Each row acted on by the pad: Right then Left, A twice, or A and B.
+    for i in (0..count).rev() {
+        if i + 1 < count {
+            press(&mut scene, &sdl, &pad, PadControl::Up);
+            settle(&mut scene);
+        }
+        if at(&mut scene).0 != i as i32 {
+            let walk = (scene.property("settingsWalk", "current"), scene.property("settingsWalk", "count"));
+            differences.push(format!("Up to row {i}: the model at {:?}, the focus on {:?}, the walk at {walk:?}", at(&mut scene), focused(&mut scene)));
+            break;
+        }
+        let (sdl_ref, pad_ref): (&Sdl, &VirtualPad) = (&sdl, &pad);
+        acted(
+            &mut scene,
+            i,
+            "the pad",
+            &mut differences,
+            |scene, by| press(scene, sdl_ref, pad_ref, if by > 0 { PadControl::Right } else if by < 0 { PadControl::Left } else { PadControl::South }),
+            &mut |scene| press(scene, sdl_ref, pad_ref, PadControl::East),
+        );
+    }
+
+    assert!(differences.is_empty(), "{} differences by the pad:\n{}", differences.len(), differences.join("\n"));
+    // The pointer: each row focused where it is drawn, the wheel bringing later rows in; chevrons step, a click turns a switch or opens a door.
+    for i in 0..count {
+        for _ in 0..count {
+            if shown(&mut scene, &format!("row.{i}")) {
+                break;
+            }
+            let (x, y) = centre(&mut scene, "settingsRows");
+            scene.wheel(x, y, -1);
+            settle(&mut scene);
+        }
+        // The pointer moved onto the row focuses it; a click is A.
+        let (x, y) = centre(&mut scene, &format!("rowName.{i}"));
+        scene.hover(x + 1.0, y);
+        scene.hover(x, y);
+        settle(&mut scene);
+        if at(&mut scene).0 != i as i32 {
+            differences.push(format!("the pointer on row {i} focused {:?}", at(&mut scene)));
+            continue;
+        }
+        let (sdl_ref, pad_ref): (&Sdl, &VirtualPad) = (&sdl, &pad);
+        acted(
+            &mut scene,
+            i,
+            "the pointer",
+            &mut differences,
+            |scene, by| {
+                let name = match by {
+                    1 => format!("rowMore.{i}"),
+                    -1 => format!("rowLess.{i}"),
+                    _ => format!("rowName.{i}"),
+                };
+                let (x, y) = centre(scene, &name);
+                scene.click(x, y);
+            },
+            &mut |scene| press(scene, sdl_ref, pad_ref, PadControl::East),
+        );
+    }
+
+    // The sections: RB and LB, and a click on Sound and on Display.
+    press(&mut scene, &sdl, &pad, PadControl::RightShoulder);
+    settle(&mut scene);
+    let sound = at(&mut scene).1;
+    press(&mut scene, &sdl, &pad, PadControl::LeftShoulder);
+    settle(&mut scene);
+    let display = at(&mut scene).1;
+    let (x, y) = centre(&mut scene, "section.2");
+    scene.click(x, y);
+    settle(&mut scene);
+    let clicked = at(&mut scene).1;
+    let (x, y) = centre(&mut scene, "section.1");
+    scene.click(x, y);
+    settle(&mut scene);
+    if (sound.as_str(), display.as_str(), clicked.as_str(), at(&mut scene).1.as_str()) != ("sound", "display", "sound", "display") {
+        differences.push(format!("the sections went {sound}, {display}, {clicked}, {:?}", at(&mut scene)));
+    }
+    let tree = scene.tree();
+    if read(&tree, "settingsHeading", "text") != "Display" || Colour::parse(&read(&tree, "section.1", "color")) != Colour::parse("#F6E7D8") {
+        differences.push("Display's heading and its filled link after the clicks".to_owned());
+    }
+
+    assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));
+    // B on a section's page leaves Settings for the screen it came from.
+    press(&mut scene, &sdl, &pad, PadControl::East);
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
+    scene.assert_quiet();
+}
+
+/// With `EMUSEN_ECLIPSE_PICTURES` naming a folder, the screen grabbed at the board's size into it.
+fn pictures(scene: &mut Scene<'_>, backend: &str, what: &str) {
+    let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") else { return };
+    std::fs::create_dir_all(&folder).unwrap();
+    scene.resize(1920, 1200);
+    scene.wait(500);
+    let path = std::path::Path::new(&folder).join(format!("settings-display-{what}-1920x1200-{backend}.png"));
+    assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
+}

@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{sandbox, wait_for};
+use common::{eclipse_reference, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::audit::Fault;
 use emusen_kit_core::input::{UiButton, WalkForm};
@@ -72,10 +72,15 @@ fn kit_7_121_under_eclipse_no_word_of_the_program_s_settings_is_under_the_floor(
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);
     wait_for(&mut scene, "themesModel", "findings", "In use.", 2000);
 
-    // The Themes tab, then each of Settings' six sections, at every gate size.
+    // The Themes tab, then each of the program's own Settings' six sections, at every gate size: Eclipse draws its own Settings
+    // (EmuSen_Qt.md §3.4.11), so the program's is shown under a package of the reference's screens with Eclipse's tokens.
     let mut found = too_small(&mut scene, "Themes");
+    let folder = eclipse_reference();
+    assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));
+    wait_for(&mut scene, "theme", "home", "true", 5000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Settings", 2000);
+    wait_for(&mut scene, "settingsSlot", "active", "true", 2000);
     for _ in 0..4 {
         scene.pad(UiButton::PageUp);
     }
@@ -85,5 +90,6 @@ fn kit_7_121_under_eclipse_no_word_of_the_program_s_settings_is_under_the_floor(
         found.extend(too_small(&mut scene, &format!("Settings.{section}")));
         scene.pad(UiButton::PageDown);
     }
+    let _ = std::fs::remove_dir_all(&folder);
     assert!(found.is_empty(), "{} words under the floor under Eclipse:\n{}", found.len(), found.join("\n"));
 }

@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{sandbox, wait_for};
+use common::{eclipse_reference, sandbox, wait_for};
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
@@ -13,8 +13,6 @@ use emusen_qt::MAIN_URL;
 use emusen_qt_test::Scene;
 use emusen_theme_host::host::qobject::ThemeHost;
 use std::collections::BTreeMap;
-
-const ECLIPSE: &str = include_str!("../../themes/eclipse/theme.json");
 
 /// The kit's tokens of a theme host's engine, by the host's objectName, as Qt writes each as text.
 fn engine_tokens(scene: &mut Scene<'_>, host: &str) -> BTreeMap<String, String> {
@@ -116,6 +114,19 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
 
     // Eclipse: every role in Sora but the codes, in JetBrains Mono; the families drawn, not only those asked for.
     use_eclipse(&mut scene);
+    // Eclipse's own Settings (EmuSen_Qt.md §3.4.11): the Library's first row, the ROM folder, in Sora, its path in JetBrains Mono.
+    wait_for(&mut scene, "theme", "settings", "true", 2000);
+    scene.wait(300);
+    let own = scene.tree();
+    let rom = own.nodes.iter().find(|n| n.name.starts_with("rowName.") && n.visible && n.text.as_deref() == Some("ROM folder")).expect("Eclipse's ROM folder row").name.replace("rowName.", "");
+    assert_eq!(drawn(&own, &format!("rowName.{rom}"), None), ("Sora".into(), "Sora".into()), "Eclipse's own settings row");
+    assert_eq!(drawn(&own, &format!("rowWords.{rom}"), None), ("JetBrains Mono".into(), "JetBrains Mono".into()), "Eclipse's own path, a code");
+    // The program's own Settings under Eclipse's faces: a package of the reference's screens, which draws no Settings, with Eclipse's tokens.
+    let folder = eclipse_reference();
+    assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));
+    wait_for(&mut scene, "theme", "home", "true", 5000);
+    wait_for(&mut scene, "settingsSlot", "active", "true", 2000);
+    scene.wait(300);
     let rows = scene.tree();
     assert_eq!(drawn(&rows, "label", Some("ROM folder")), ("Sora".into(), "Sora".into()), "Eclipse's settings row");
     assert_eq!(drawn(&rows, "value", Some("ROM folder")), ("JetBrains Mono".into(), "JetBrains Mono".into()), "Eclipse's path, a code");
@@ -129,9 +140,6 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
 
     // A theme's own text under Eclipse's faces: the reference's screens in a package that takes Eclipse's tokens, made from
     // the two built-ins' files, so the reference's Home is drawn on an engine holding Eclipse's overrides.
-    let folder = eclipse_reference();
-    assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));
-    wait_for(&mut scene, "theme", "home", "true", 5000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
     scene.wait(200);
@@ -149,22 +157,4 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
     assert_eq!(drawn(&home, "homeStatus", None), ("Barlow".into(), "Barlow".into()), "the reference's status line again");
     assert_eq!(weight_of(&home, "wordmark"), 300.0, "the reference's wordmark light again");
     let _ = std::fs::remove_dir_all(&folder);
-}
-
-/// A package of the reference's screens and parts with Eclipse's token overrides, in a folder of the test's own.
-fn eclipse_reference() -> std::path::PathBuf {
-    let themes = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes");
-    let folder = std::env::temp_dir().join(format!("eclipse-reference-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&folder);
-    for part in ["screens", "parts"] {
-        std::fs::create_dir_all(folder.join(part)).unwrap();
-        for file in std::fs::read_dir(themes.join("emusen").join(part)).unwrap().flatten() {
-            std::fs::copy(file.path(), folder.join(part).join(file.file_name())).unwrap();
-        }
-    }
-    let reference: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(themes.join("emusen/theme.json")).unwrap()).unwrap();
-    let mut manifest: serde_json::Value = serde_json::from_str(ECLIPSE).unwrap();
-    manifest["screens"] = reference["screens"].clone();
-    std::fs::write(folder.join("theme.json"), manifest.to_string()).unwrap();
-    folder
 }

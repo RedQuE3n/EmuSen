@@ -18,12 +18,12 @@ fn qt_3_2_a_built_in_theme_leaves_settings_to_the_program() {
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
-    assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
+    assert!(scene.set_property("program", "theme", &themes::built_in_folder("emusen")));
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);
     wait_for(&mut scene, "library", "loading", "false", 10000);
     wait_for(&mut scene, "settingsModel", "ready", "true", 5000);
     scene.wait(300);
-    assert_eq!(scene.property("theme", "settings"), "false", "Eclipse draws no Settings");
+    assert_eq!(scene.property("theme", "settings"), "false", "the EmuSen theme draws no Settings");
     assert_eq!(scene.property("theme", "game"), "false", "nor a game's page");
     assert_eq!(scene.property("screens", "shown"), "Home");
 

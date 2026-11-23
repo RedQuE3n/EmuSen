@@ -242,3 +242,22 @@ pub fn assert_still_saying(scene: &mut Scene<'_>, what: &str) {
         panic!("{said}\nat the failure: {}", state(scene));
     }
 }
+
+/// A package of the reference's screens and parts with Eclipse's token overrides, in a folder of the test's own.
+#[allow(dead_code)]
+pub fn eclipse_reference() -> std::path::PathBuf {
+    let themes = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes");
+    let folder = std::env::temp_dir().join(format!("eclipse-reference-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    for part in ["screens", "parts"] {
+        std::fs::create_dir_all(folder.join(part)).unwrap();
+        for file in std::fs::read_dir(themes.join("emusen").join(part)).unwrap().flatten() {
+            std::fs::copy(file.path(), folder.join(part).join(file.file_name())).unwrap();
+        }
+    }
+    let reference: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(themes.join("emusen/theme.json")).unwrap()).unwrap();
+    let mut manifest: serde_json::Value = serde_json::from_str(include_str!("../../../themes/eclipse/theme.json")).unwrap();
+    manifest["screens"] = reference["screens"].clone();
+    std::fs::write(folder.join("theme.json"), manifest.to_string()).unwrap();
+    folder
+}

@@ -71,3 +71,21 @@ fn the_grammar_is_the_row_walk_s() {
     assert!(w.focus(1));
     assert_eq!(w.current(), 1);
 }
+
+#[test]
+fn rows_that_fill_the_window_exactly_all_show_though_their_float_sum_runs_a_hair_over() {
+    // Eclipse's Settings: nine 84 px rows 10 apart in a window to the ninth's foot, in canvas units of 2/3 (EmuSen_Qt.md §3.4.11).
+    let unit = 2.0 / 3.0;
+    let heights = [84.0 * unit; 9];
+    let span = heights.iter().sum::<f64>() + 8.0 * 10.0 * unit;
+    let mut w = walk(&heights, span * (1.0 - 1e-12), 10.0 * unit);
+    for _ in 0..8 {
+        w.press(UiButton::Down);
+    }
+    assert_eq!((w.current(), w.first()), (8, 0), "the ninth focused, the first still shown");
+    let mut w = walk(&[84.0 * unit; 10], span * (1.0 - 1e-12), 10.0 * unit);
+    for _ in 0..9 {
+        w.press(UiButton::Down);
+    }
+    assert_eq!((w.current(), w.first()), (9, 1), "a tenth row moves the window by one");
+}

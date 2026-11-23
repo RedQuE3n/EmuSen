@@ -2996,6 +2996,11 @@ A theme that draws its own glyphs (`glyph`) gets the pair's second as its own gl
 Maker is two of the theme's boxes as Eclipse's Choose a console board draws it (added 2026-11-16; before, only the first
 was drawn).
 
+A theme's glyph that declares `drawsPair` true is given the entry's `pair` (a `PadGlyph.Button`, -1 for none) and draws
+both buttons itself; the bar then makes no second glyph for that entry (added 2026-11-23, R-20261123-30 (c)). Eclipse's
+Settings boards draw Left with Right as one key, "◀ ▶" in a box (gen_settings.py:19, 24), which no glyph of the kit's
+draws. A glyph that declares nothing, every theme's glyph before, draws as it did; no property of `HelpBar` changed.
+
 **Held to**: kit-core's `tests/glyph.rs` `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
 sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
 glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry
@@ -4456,8 +4461,12 @@ where the floor there is 11.60. Eclipse's tokens were read off its boards (`font
 program's own screens drew Settings rows and pane lines under the floor; they are now raised. The kit's own big-screen
 sizes (20 and above) pass the floor, so the reference's sizes do not move. Tests: kit-core's `legible_text.rs`
 (`kit_7_121_a_theme_s_size_tokens_are_never_under_the_floor_on_the_big_screen`), kit-qt's `column.rs`, qt-app's `eclipse`,
-and qt-app's `eclipse_floor`, which uses Eclipse and runs the kit's gate's legibility rule over the Themes tab and Settings'
-six sections at every gate size: 85 words under the floor at 1280 × 720 before, none after.
+and qt-app's `eclipse_floor`, which runs the kit's gate's legibility rule at every gate size over the Themes tab with
+Eclipse in use and over the program's own Settings' six sections under Eclipse's tokens: 85 words under the floor at
+1280 × 720 before, none after. Since Eclipse draws its own Settings (EmuSen_Qt.md §3.4.11), the program's Settings is
+shown there under a package of the reference's screens with Eclipse's tokens, as under any theme with those tokens that
+supplies no Settings; Eclipse's own Settings is drawn at its board's sizes, which the legibility gate does not judge
+(R-20261115-29).
 
 
 ### 7.122 MeasuredWalk: the rows' walk over rows of their own heights (2026-11-16)
@@ -4469,17 +4478,24 @@ between rows. It holds no geometry: the rows' heights are told by the screen tha
 screen's. The window moves only when the focus leaves it: up to the focused row when the focus goes above it, and down a
 row at a time until the rows from the first shown to the focused one fit; a row taller than the window is shown from its
 top, and the window never starts so late that space shows below the last row. A window of 0 shows every row from the
-first. `SettingsLayout`'s walk (§7.40) counts whole rows of one height in a fixed geometry and is unchanged beside it.
+first. Rows fit the window when their span is within a millionth of it (measured 2026-11-23): a screen gives the
+heights, the gap and the window in canvas units, each a board's pixels times the canvas's unit (Eclipse's Settings: rows
+of 84 × unit, gaps of 10 × unit, a window of 1064 × unit less the rows' top), so the span is a sum of nine products and
+eight more where the window is one difference; their rounding left the nine rows that end exactly at the window's foot a
+hair over it, and the window dropped the first row when the ninth was focused. A millionth is the allowance the tests'
+`same` takes for Qt's geometry, far above that rounding and far below a pixel. `SettingsLayout`'s walk (§7.40) counts whole rows of one height in a fixed geometry and is unchanged beside it.
 
 `kit-qt/src/measured_walk.rs` puts it on Qt as `MeasuredWalk`: it reads a list model's `kind`, `held`, `marked` and a
 slider's `minimum`, `maximum`, `step` and `amount` as `SettingsLayout` reads them (one function, `settings::walk_rows`, for
 both), takes `window` and `gap`, a row's height by `measure(row, height)`, and the pad and the keys by `press` and `key`;
-it gives `current`, `first`, `offset` (the scroll to the first row shown), `marked` and `count`, and raises `stepped`,
+from 1.11 `follows`, a row it keeps focused whenever that changes and whenever the rows are read, the window kept
+around it (-1, the default, none; kit-core's `follow`); it gives `current`, `first`, `offset` (the scroll to the first row shown), `marked` and `count`, and raises `stepped`,
 `slid`, `chosen` and `sectionChosen` as `SettingsLayout` does. Settings became a screen a theme can supply (decided
 2026-11-16 by the tester, R-20261116-19); a walk that takes each row's height from the screen that draws it, rather than
 one height for every row, is this piece's own technical choice, so a theme's rows may be of any height. Exported to themes
-in EmuSen.Theme 1.9. Tests: kit-core's `measured.rs`, four tests: rows of 84, 120, 84, 160 and 84 with a gap of 10 in a
+in EmuSen.Theme 1.9. Tests: kit-core's `measured.rs`, five tests: rows of 84, 120, 84, 160 and 84 with a gap of 10 in a
 window of 300, the window following the focus a row at a time and holding while the focus moves inside it; a row taller
-than the window; a window and a height given late; and the grammar shared with `RowWalk`. kit-qt's `measured_walk.rs`
+than the window; a window and a height given late; the grammar shared with `RowWalk`; and nine rows of 84 × ⅔ with gaps of 10 × ⅔ in a
+window a hair under their sum, all shown with the ninth focused, and a tenth moving the window by one. kit-qt's `measured_walk.rs`
 walks the same rows drawn in a scene (`qt-test/qml/MeasuredWalkScene.qml`), each delegate telling its height by `measure`,
 and holds that the window moves further down when a row above it is drawn taller.

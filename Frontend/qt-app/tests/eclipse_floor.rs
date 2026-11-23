@@ -1,9 +1,8 @@
-//! EmuSen_Kit.md §7.121: under Eclipse, whose size tokens were read off its boards, no word of the program's own Settings
-//! or Themes tab is under the legibility floor at any gate size, by the kit's gate's own rule.
+//! EmuSen_Kit.md §7.121: under Eclipse's tokens no word of the program's Themes tab or of its own Settings (under a theme with those tokens that supplies none) is under the floor.
 
 mod common;
 
-use common::{sandbox, wait_for};
+use common::{eclipse_reference, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::audit::Fault;
 use emusen_kit_core::input::{UiButton, WalkForm};
@@ -35,7 +34,7 @@ fn too_small(scene: &mut Scene<'_>, at: &str) -> Vec<String> {
 }
 
 #[test]
-fn kit_7_121_under_eclipse_no_word_of_the_program_s_settings_is_under_the_floor() {
+fn kit_7_121_under_eclipse_s_tokens_no_word_of_the_program_s_themes_tab_or_settings_is_under_the_floor() {
     let _world = sandbox("qt-app-eclipse-floor", &[("NES", "One.nes")]);
     let mut harness = emusen_qt_test::Harness::new();
     let (w, h) = emusen_qt_test::harness::SIZES[0];
@@ -72,10 +71,14 @@ fn kit_7_121_under_eclipse_no_word_of_the_program_s_settings_is_under_the_floor(
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);
     wait_for(&mut scene, "themesModel", "findings", "In use.", 2000);
 
-    // The Themes tab, then each of Settings' six sections, at every gate size.
+    // The Themes tab under Eclipse, then the program's Settings under the reference's screens with Eclipse's tokens, as Eclipse draws its own (EmuSen_Kit.md §7.121).
     let mut found = too_small(&mut scene, "Themes");
+    let folder = eclipse_reference();
+    assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));
+    wait_for(&mut scene, "theme", "home", "true", 5000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Settings", 2000);
+    wait_for(&mut scene, "settingsSlot", "active", "true", 2000);
     for _ in 0..4 {
         scene.pad(UiButton::PageUp);
     }
@@ -85,5 +88,6 @@ fn kit_7_121_under_eclipse_no_word_of_the_program_s_settings_is_under_the_floor(
         found.extend(too_small(&mut scene, &format!("Settings.{section}")));
         scene.pad(UiButton::PageDown);
     }
-    assert!(found.is_empty(), "{} words under the floor under Eclipse:\n{}", found.len(), found.join("\n"));
+    let _ = std::fs::remove_dir_all(&folder);
+    assert!(found.is_empty(), "{} words under the floor under Eclipse's tokens:\n{}", found.len(), found.join("\n"));
 }

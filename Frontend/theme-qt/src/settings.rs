@@ -7,9 +7,10 @@ use crate::view::{Cell, Row};
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QList, QString, QStringList};
+use cxx_qt_lib::{QList, QString, QStringList, QUrl};
 use emusen_kit_core::settings::{Row as WalkRow, RowKind, SliderRange};
 use emusen_qt_models::settings::{Pane, SettingsView};
+use emusen_qt_models::settings_shown::Form;
 use emusen_qt_models::settings;
 
 #[cxx_qt::bridge]
@@ -24,6 +25,15 @@ pub mod qobject {
         type QList_f64 = cxx_qt_lib::QList<f64>;
         include!("emusen-theme-qt/src/rows.cxxqt.h");
         type ThemeRows = crate::rows::qobject::ThemeRows;
+    }
+
+    /// From 1.11: how the boards draw a row's value, `Settings.rows`' `form` (`settings_shown::Form`).
+    #[qenum(ThemeSettings)]
+    enum SettingsForm {
+        Choice,
+        Switch,
+        Door,
+        Fact,
     }
 
     extern "RustQt" {
@@ -47,6 +57,14 @@ pub mod qobject {
         #[qproperty(f64, meter, READ, NOTIFY = shown)]
         #[qproperty(QStringList, samples, READ, NOTIFY = shown)]
         #[qproperty(QList_f64, sample_scales, cxx_name = "sampleScales", READ, NOTIFY = shown)]
+        /// From 1.11 (R-20261123-30): each section's key, in `sections`' order, by which a theme picks a section's picture.
+        #[qproperty(QStringList, section_keys, cxx_name = "sectionKeys", READ, NOTIFY = shown)]
+        /// From 1.11: the screen's title, the page's heading and the About panel's (the focused row's name), the newest screenshot as a file URL for a picture preview, and whether X takes the focused row back to a default.
+        #[qproperty(QString, title, READ, NOTIFY = shown)]
+        #[qproperty(QString, heading, READ, NOTIFY = shown)]
+        #[qproperty(QString, about_heading, cxx_name = "aboutHeading", READ, NOTIFY = shown)]
+        #[qproperty(QString, shot, READ, NOTIFY = shown)]
+        #[qproperty(bool, defaultable, READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -60,15 +78,20 @@ pub mod qobject {
 }
 
 /// `Settings.rows`' roles (EmuSen_Qt.md §3.2, `Settings`).
-pub const SETTINGS_ROW_ROLES: [&str; 18] = [
+pub const SETTINGS_ROW_ROLES: [&str; 19] = [
     "key", "label", "about", "value", "kind", "isSwitch", "switchOn", "held", "marked", "code", "minimum", "maximum", "step", "amount", "consoleName",
-    "system", "games", "engine",
+    "system", "games", "engine", "form",
 ];
 
 /// Everything the singleton shows, as the host reads it from the program's model.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SettingsFacts {
     pub sections: Vec<String>,
+    pub section_keys: Vec<String>,
+    pub title: String,
+    pub heading: String,
+    pub about_heading: String,
+    pub defaultable: bool,
     pub section: i32,
     pub trail: Vec<String>,
     pub page: String,
@@ -113,11 +136,17 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
                 Cell::Text(tile.system),
                 Cell::Whole(tile.games as i32),
                 Cell::Text(tile.engine),
+                Cell::Whole(form_of(Form::of(r, facet.switch)).repr),
             ]
         })
         .collect();
     Ok(SettingsFacts {
         sections: view.sections(),
+        section_keys: view.section_keys(),
+        title: view.title(),
+        heading: view.heading(),
+        about_heading: usize::try_from(focused).ok().and_then(|f| rows.get(f)).map(|r| r.label.clone()).unwrap_or_default(),
+        defaultable: usize::try_from(focused).is_ok_and(|f| view.defaultable(f)),
         section: view.section as i32,
         trail: view.trail(),
         page: view.page_key(),
@@ -128,6 +157,16 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
     })
 }
 
+/// A form as the theme's enum gives it.
+fn form_of(form: Form) -> qobject::SettingsForm {
+    match form {
+        Form::Choice => qobject::SettingsForm::Choice,
+        Form::Switch => qobject::SettingsForm::Switch,
+        Form::Door => qobject::SettingsForm::Door,
+        Form::Fact => qobject::SettingsForm::Fact,
+    }
+}
+
 fn list(words: &[String]) -> QStringList {
     let mut out = QList::<QString>::default();
     words.iter().for_each(|w| out.append(QString::from(w.as_str())));
@@ -136,6 +175,12 @@ fn list(words: &[String]) -> QStringList {
 
 pub struct ThemeSettingsRust {
     sections: QStringList,
+    section_keys: QStringList,
+    title: QString,
+    heading: QString,
+    about_heading: QString,
+    shot: QString,
+    defaultable: bool,
     section: i32,
     trail: QStringList,
     page: QString,
@@ -159,6 +204,12 @@ impl Default for ThemeSettingsRust {
     fn default() -> Self {
         ThemeSettingsRust {
             sections: QStringList::default(),
+            section_keys: QStringList::default(),
+            title: QString::default(),
+            heading: QString::default(),
+            about_heading: QString::default(),
+            shot: QString::default(),
+            defaultable: false,
             section: 0,
             trail: QStringList::default(),
             page: QString::default(),
@@ -206,6 +257,12 @@ impl qobject::ThemeSettings {
         pane.tones.iter().for_each(|t| tones.append(*t as i32));
         let mut me = self.as_mut().rust_mut();
         me.sections = list(&facts.sections);
+        me.section_keys = list(&facts.section_keys);
+        me.title = QString::from(facts.title.as_str());
+        me.heading = QString::from(facts.heading.as_str());
+        me.about_heading = QString::from(facts.about_heading.as_str());
+        me.shot = if pane.shot.is_empty() { QString::default() } else { QUrl::from_local_file(&QString::from(pane.shot.as_str())).to_qstring() };
+        me.defaultable = facts.defaultable;
         me.section = facts.section;
         me.trail = list(&facts.trail);
         me.page = QString::from(facts.page.as_str());

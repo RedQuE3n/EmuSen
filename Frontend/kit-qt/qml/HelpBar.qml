@@ -133,6 +133,9 @@ Item {
                         active: root.glyph !== null && entry.picture.length === 0
                         visible: active
                         sourceComponent: root.glyph
+                        // The theme's glyph, untyped: a glyph that declares `drawsPair` true draws the pair itself (EmuSen_Kit.md §7.54).
+                        readonly property var drawn: ownGlyph.item
+                        readonly property bool drawsPair: ownGlyph.drawn?.drawsPair === true
                         Binding {
                             target: ownGlyph.item
                             property: "button"
@@ -151,13 +154,19 @@ Item {
                             value: entry.index === 0
                             when: ownGlyph.item !== null
                         }
+                        Binding {
+                            target: ownGlyph.item
+                            property: "pair"
+                            value: entry.pair
+                            when: ownGlyph.drawsPair
+                        }
                     }
                     // The pair's second glyph in the theme's own form, as glyph2 draws it in the kit's (EmuSen_Kit.md §7.54).
                     Loader {
                         id: ownGlyph2
                         objectName: "ownGlyph2-" + entry.label
                         y: (root.snapped ? Math.round(content.height / 2) - Math.round(height / 2) : (content.height - height) / 2)
-                        active: root.glyph !== null && entry.picture.length === 0 && entry.pair >= 0
+                        active: root.glyph !== null && entry.picture.length === 0 && entry.pair >= 0 && !ownGlyph.drawsPair
                         visible: active
                         sourceComponent: root.glyph
                         Binding {

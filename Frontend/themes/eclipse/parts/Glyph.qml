@@ -12,7 +12,14 @@ Item {
     // The first entry of a bar, which the kit's HelpBar marks; drawn filled where the bar leads with the screen's main action.
     property bool lead: false
     property bool leads: true
-    readonly property bool filled: root.lead && root.leads
+    // Left with Right drawn as the Settings boards' one key "◀ ▶" where the help line asks for it (G:24, EmuSen_Kit.md §7.54).
+    property bool keyPairs: false
+    property int pair: -1
+    // Qualified by Button: a bare PadGlyph.Left or Right is Item's TransformOrigin value, which the type inherits.
+    readonly property bool drawsPair: root.keyPairs && root.button === PadGlyph.Button.Left
+    readonly property bool keyed: root.drawsPair && root.pair === PadGlyph.Button.Right
+    // On a line of keyed pairs, the Settings boards', A is the one filled wherever it stands (G:17, 24).
+    readonly property bool filled: root.keyPairs ? root.button === PadGlyph.Accept : root.lead && root.leads
     // The side inside the ring, the letter's and the name's size, and the capsule's padding, in board pixels.
     property real side: 34
     property real letterSize: 16
@@ -24,7 +31,7 @@ Item {
     property real boxSide: 30
     property real boxRadius: 8
     property real boxPadding: 10
-    readonly property bool boxed: ([PadGlyph.PageUp, PadGlyph.PageDown, PadGlyph.First, PadGlyph.Last].indexOf(root.button) >= 0)
+    readonly property bool boxed: root.keyed || ([PadGlyph.PageUp, PadGlyph.PageDown, PadGlyph.First, PadGlyph.Last].indexOf(root.button) >= 0)
     property color ring: Tokens.muted
     property color ink: Tokens.text
     property color leadFill: Tokens.accent
@@ -32,8 +39,8 @@ Item {
     readonly property real line: 2 * root.unit
     // The kit's glyph for the button, which names it and draws a mark with no letter.
     readonly property string letter: mark.letter
-    readonly property bool named: root.letter.length > 1 || (root.letter.length === 0 && (root.button === PadGlyph.Menu || root.button === PadGlyph.Options))
-    readonly property string word: root.letter.length > 1 ? root.letter : mark.name.toUpperCase()
+    readonly property bool named: root.keyed || root.letter.length > 1 || (root.letter.length === 0 && (root.button === PadGlyph.Menu || root.button === PadGlyph.Options))
+    readonly property string word: root.keyed ? Words.keyPair : root.letter.length > 1 ? root.letter : mark.name.toUpperCase()
     readonly property real outer: (root.boxed ? root.boxSide : root.side) * root.unit + (root.filled ? 0 : 2 * root.line)
     // The name's padding either side and the shape's corner as drawn, in canvas units.
     readonly property real inset: (root.boxed ? root.boxPadding : root.padding) * root.unit

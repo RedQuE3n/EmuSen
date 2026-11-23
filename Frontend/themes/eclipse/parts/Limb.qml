@@ -7,6 +7,8 @@ Shape {
     property color fill: "transparent"
     // The fill, which the tests read.
     readonly property color paint: root.fill
+    // Drawn behind the screen, as the kit's sky is: a panel to the audit's rules (qt-test's tree, backdrop).
+    readonly property bool backdrop: true
     preferredRendererType: Shape.CurveRenderer
     ShapePath {
         fillColor: root.fill

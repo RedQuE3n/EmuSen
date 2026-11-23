@@ -21,6 +21,7 @@ use emusen_qt_test::Scene;
 use emusen_theme_qt::host;
 
 const BOARD: &str = include_str!("../eclipse/settings_display.tsv");
+const LINES: &str = include_str!("../eclipse/settings_display_lines.tsv");
 
 /// The board's nine rows: name and short line; the values are the program's, which the board's samples show (EclipseSettings.dc.html's renderVals, gen_settings.py:153-161).
 const BOARD_ROWS: [(&str, &str); 9] = [
@@ -57,6 +58,30 @@ fn icon(tree: &emusen_qt_test::tree::Tree, i: usize) -> (String, String) {
     let line = SPRITE.lines().find(|l| l.contains(&id)).unwrap_or_else(|| panic!("the sprite has {id}"));
     let attribute = |a: &str| line.split(&format!(" {a}=\"")).nth(1).and_then(|r| r.split('"').next()).unwrap_or_default().to_owned();
     (attribute("d"), attribute("stroke"))
+}
+
+/// Each row's words held to the board's lines (a lines table): the Line's box under its row's top and its height, and the words' baseline, in canvas units within a millionth.
+pub fn lines_held(tree: &emusen_qt_test::tree::Tree, lines: &str, k: f64, at: &str, differences: &mut Vec<String>) {
+    let unit: f64 = read(tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
+    let got = crate::eclipse_board::boxes(tree, unit);
+    for line in lines.lines().filter(|l| !l.starts_with('#') && !l.starts_with("element\t") && !l.trim().is_empty()) {
+        let c: Vec<&str> = line.split('\t').collect();
+        let (name, top, high, base) = (c[0], c[1].parse::<f64>().unwrap() * k, c[2].parse::<f64>().unwrap() * k, c[3].parse::<f64>().unwrap() * k);
+        let row = got[&format!("row.{}", name.rsplit('.').next().unwrap())];
+        // The Line comes before its words in the tree, the words are the last of the name.
+        let (Some(boxed), Some(words)) = (tree.nodes.iter().find(|n| n.name == name && n.visible), tree.nodes.iter().rev().find(|n| n.name == name && n.visible)) else {
+            differences.push(format!("{at}: {name} is not drawn"));
+            continue;
+        };
+        let (y, h) = (boxed.y / unit - row.y, boxed.h / unit);
+        let drawn = words.y / unit + read(tree, name, "baselineOffset").parse::<f64>().unwrap_or(f64::NAN) * words.scale / unit - row.y;
+        if name.ends_with(".0") && (at == "1920x1200" || at == "3840x2160") {
+            println!("{at}: {name} drawn {:.4} under its row, {:.4} high, baseline {:.4}; the board's {:.4}, {:.4}, {:.4} (board pixels)", y / k, h / k, drawn / k, top / k, high / k, base / k);
+        }
+        if !crate::eclipse_board::same(y, top) || !crate::eclipse_board::same(h, high) || !crate::eclipse_board::same(drawn, base) {
+            differences.push(format!("{at}: {name}'s line {y} under its row, {h} high, its baseline {drawn}, where the board's is {top}, {high}, {base}"));
+        }
+    }
 }
 
 /// The window's SettingsModel, as its own type.
@@ -248,6 +273,7 @@ pub fn oracle(backend: &str) {
         let screen: u64 = tree.nodes[tree.find_named("settingsScreen").expect("Eclipse's Settings") as usize].id.parse().unwrap();
         let tokens = crate::eclipse_board::tokens(screen);
         held(&tree, &table, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
+        lines_held(&tree, LINES, k, &at_size, &mut differences);
         // The page's glow in Display's colour (G:163).
         if Colour::parse(&read(&tree, "backdropField.0", "paint")) != Colour::parse("#3B4AA8") {
             differences.push(format!("{at_size}: the page's glow is {} where the board gives #3B4AA8", read(&tree, "backdropField.0", "paint")));

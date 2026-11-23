@@ -628,6 +628,13 @@ fn detailed(mut r: Read) -> Read {
 }
 
 #[test]
+fn qt_3_4_11_a_themes_trail_opens_choose_a_console_and_the_consoles_games() {
+    assert_eq!(page_step(false, Shown::Home, &Ask::Section(emusen_qt_models::screens::CONSOLES_KEY.into())), Some(Shown::Consoles));
+    assert_eq!(page_step(false, Shown::Home, &Ask::Open("snes".into())), Some(Shown::Grid));
+    assert_eq!(page_step(false, Shown::Home, &Ask::Section("library".into())), None, "a section that opens at a key is not a trail's");
+}
+
+#[test]
 fn qt_3_4_11_the_tabs_are_the_boards_six_in_its_order_cheats_only_with_cheats() {
     let mut page = GamePage::new(read(), NOW);
     let names = |p: &GamePage| p.tabs().iter().map(|t| t.name()).collect::<Vec<_>>();

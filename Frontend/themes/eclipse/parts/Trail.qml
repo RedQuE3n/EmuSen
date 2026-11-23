@@ -14,11 +14,13 @@ Item {
     // The words' size and the gap either side of a slash, in board pixels (EclipseGame:27, 29).
     property real size: 24
     property real gap: 14
+    // A link by its place, looked up as a key is pressed, since the words are made again at each feed; the page's own name is none.
+    function linkAt(i: int): Item { return i >= 0 && i < links.count - 1 ? (links.itemAt(i) as Row)?.children[0] ?? null : null }
     // The last link, which the walk reaches from below.
-    readonly property Item last: links.count > 1 ? (links.itemAt(links.count - 2) as Row)?.children[0] ?? null : null
-    // Where Down goes from a link.
-    property Item below: null
+    function lastLink(): Item { return root.linkAt(links.count - 2) }
     signal chosen(int index)
+    // Down from a link, which the screen sends where it goes.
+    signal downward()
     objectName: "trail"
     width: row.width
     height: row.height
@@ -45,9 +47,19 @@ Item {
                     Accessible.role: crumb.here ? Accessible.StaticText : Accessible.Link
                     Accessible.name: crumb.modelData
                     onActivated: root.chosen(crumb.index)
-                    KeyNavigation.down: root.below
-                    KeyNavigation.left: crumb.index > 0 ? (links.itemAt(crumb.index - 1) as Row)?.children[0] ?? null : null
-                    KeyNavigation.right: crumb.index + 2 < links.count ? (links.itemAt(crumb.index + 1) as Row)?.children[0] ?? null : null
+                    Keys.onDownPressed: (event) => {
+                        root.downward()
+                        event.accepted = true
+                    }
+                    Keys.onLeftPressed: (event) => {
+                        root.linkAt(crumb.index - 1)?.forceActiveFocus(Qt.TabFocusReason)
+                        event.accepted = true
+                    }
+                    Keys.onRightPressed: (event) => {
+                        root.linkAt(crumb.index + 1)?.forceActiveFocus(Qt.TabFocusReason)
+                        event.accepted = true
+                    }
+                    Keys.onUpPressed: (event) => event.accepted = true
                     Line {
                         id: words
                         objectName: "trailWords." + crumb.index

@@ -253,12 +253,16 @@ pub fn page_origin(themed: bool, opened_over: Shown) -> Shown {
     }
 }
 
-/// A game's page's way out: B to where it was opened, Start to the library's screen, a game started to the game.
+/// A game's page's way out: B to where it was opened, Start to the library's screen, a game started to the game, and a
+/// theme's trail to Choose a console or a console's games.
 pub fn page_step(themed: bool, origin: Shown, ask: &Ask) -> Option<Shown> {
     match ask {
         Ask::Back => Some(origin),
         Ask::Act(key) if key == HOME => Some(library_of(themed)),
         Ask::Play => Some(Shown::Game),
+        // A theme's trail (Eclipse's game page, EclipseGame:30-32): a section that opens at no key, and a console's games.
+        Ask::Section(key) => crate::sections::by_key(key).filter(|s| s.at.is_none() && s.page.is_none()).map(|s| s.screen),
+        Ask::Open(_) => Some(Shown::Grid),
         _ => None,
     }
 }
@@ -608,7 +612,7 @@ impl qobject::Screens {
     fn apply(mut self: Pin<&mut Self>, ask: Ask) {
         let was = shown_of(self.shown);
         let stepped = match was {
-            Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| (s, None)),
+            Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| (s, if let Ask::Open(key) = &ask { Some(key.clone()) } else { None })),
             Shown::Settings if self.over_card && ask == Ask::Back => Some((Shown::Pause, None)),
             Shown::Settings if self.over_consoles && ask == Ask::Back => Some((Shown::Consoles, None)),
             _ => tool_back(self.themed, self.tool_origin, was, &ask).map(|s| (s, None)).or_else(|| step_in(self.themed, was, &ask)),

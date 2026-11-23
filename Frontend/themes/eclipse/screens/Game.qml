@@ -12,7 +12,7 @@ ThemeScreen {
     pageSections: ["states"]
     // Where the focus starts: the first state's card, else the first button.
     focusItems: [
-        root.firstCard ?? root.firstPill
+        root.cardAt(0) ?? root.pillAt(0)
     ]
     NormalizedCanvas {
         id: canvas
@@ -26,9 +26,40 @@ ThemeScreen {
             readonly property real px: design.unit
             // The board's left margin, a constant of the design (EclipseGame:26, 42, 55, 64, 86).
             readonly property real margin: 96 * root.px
-            readonly property Item firstPill: pills.count > 0 ? (pills.itemAt(0) as PillSlot)?.walk ?? null : null
-            // The cards lead with the states; with none the first card is the empty one, which is never reached.
-            readonly property Item firstCard: cards.count > 0 && (cards.itemAtIndex(0) as CardSlot)?.row >= 0 ? (cards.itemAtIndex(0) as CardSlot).walk : null
+            // The button and the card at a place, looked up as a key is pressed, since the rows are made again at each feed; the empty card is never reached.
+            function pillAt(i: int): Item { return (pills.itemAt(i) as PillSlot)?.walk ?? null }
+            function cardAt(i: int): Item { return (cards.itemAtIndex(i) as CardSlot)?.walk ?? null }
+            // A move of the pad to `target`, taken whether or not there is one, so a press at an edge leaves the focus where it is.
+            function go(target: Item, event: KeyEvent) {
+                target?.forceActiveFocus(Qt.TabFocusReason)
+                event.accepted = true
+            }
+            // The focus starts on the first state's card, else on the first button; shown again after the program's question, on the card it was on.
+            property string startedFor
+            property bool asked: false
+            function start() {
+                const again = root.asked && Page.key === root.startedFor
+                root.asked = false
+                root.startedFor = Page.key
+                const at = again ? Math.min(cards.currentIndex, cards.count - 1) : 0
+                cards.currentIndex = at
+                cards.positionViewAtIndex(at, ListView.Contain)
+                const first = root.cardAt(at) ?? root.cardAt(0) ?? root.pillAt(0)
+                first?.forceActiveFocus(Qt.OtherFocusReason)
+            }
+            onVisibleChanged: {
+                if (root.visible)
+                    Qt.callLater(root.start)
+                else
+                    root.asked = Page.asking
+            }
+            Connections {
+                target: Page
+                function onShown() {
+                    if (root.visible && Page.key !== root.startedFor)
+                        Qt.callLater(root.start)
+                }
+            }
             // The help in the boards' words where they draw it, else the program's for the focus.
             readonly property int helpKind: Page.boardHelp >= 0 ? Page.boardHelp : Page.help
             Board {
@@ -133,7 +164,7 @@ ThemeScreen {
                         x: brand.x + brand.width + 28 * root.px
                         y: 80 * root.px - height / 2
                         onChosen: (index) => index === 0 ? Actions.openSection(Page.trailSection) : Actions.openConsole(Page.console)
-                        below: root.firstPill
+                        onDownward: root.pillAt(0)?.forceActiveFocus(Qt.TabFocusReason)
                     }
                     Status {
                         objectName: "gameStatus"
@@ -225,24 +256,18 @@ ThemeScreen {
                         y: 656 * root.px
                         onChosen: (index) => Actions.pageTab(index)
                     }
-                    // The cards at the board's size, the row following the focus sideways as far as the right margin; a card the row has carried past either end is not drawn (R-20261123-33).
+                    // The cards at the board's size between the margins, the row following the focus sideways; a card the row has carried past either end is not drawn (R-20261123-33).
                     ListView {
                         id: cards
                         objectName: "gameCards"
                         x: root.margin
                         y: 748 * root.px
-                        width: root.width - root.margin
+                        width: root.width - 2 * root.margin
                         height: 265 * root.px
                         orientation: ListView.Horizontal
                         spacing: 24 * root.px
                         interactive: false
                         keyNavigationEnabled: false
-                        highlightRangeMode: ListView.ApplyRange
-                        preferredHighlightBegin: 0
-                        preferredHighlightEnd: cards.width - root.margin
-                        highlightMoveDuration: 0
-                        // The focus starts on the first state's card, else on the first button.
-                        focus: Page.cards.count > 0 && Page.note.length === 0
                         model: Page.cards
                         delegate: CardSlot {}
                     }
@@ -311,7 +336,6 @@ ThemeScreen {
                     label: slot.label
                     filled: true
                     glows: false
-                    focus: slot.index === 0 && !cards.focus && slot.filled
                     glyphSide: 46
                     leadLetterSize: 22
                     labelSize: 26
@@ -321,9 +345,10 @@ ThemeScreen {
                     // Resume chooses the resume point's card; the others are their actions (R-20261123-35).
                     onActivated: slot.row >= 0 ? Actions.pageChoose(slot.row) : Actions.pageAct(slot.act)
                     onActiveFocusChanged: if (lead.activeFocus) Actions.pageFocus(slot.act, 0)
-                    KeyNavigation.right: (pills.itemAt(slot.index + 1) as PillSlot)?.walk ?? null
-                    KeyNavigation.up: trail.last
-                    KeyNavigation.down: root.firstCard
+                    Keys.onLeftPressed: (event) => root.go(root.pillAt(slot.index - 1), event)
+                    Keys.onRightPressed: (event) => root.go(root.pillAt(slot.index + 1), event)
+                    Keys.onUpPressed: (event) => root.go(trail.lastLink(), event)
+                    Keys.onDownPressed: (event) => root.go(root.cardAt(0), event)
                 }
                 WordPill {
                     id: word
@@ -339,13 +364,12 @@ ThemeScreen {
                     on: slot.on
                     outline: ink.pillLine
                     onColour: ink.rose
-                    focus: slot.index === 0 && !cards.focus && !slot.filled
                     onActivated: slot.row >= 0 ? Actions.pageChoose(slot.row) : Actions.pageAct(slot.act)
                     onActiveFocusChanged: if (word.activeFocus) Actions.pageFocus(slot.act, 0)
-                    KeyNavigation.left: (pills.itemAt(slot.index - 1) as PillSlot)?.walk ?? null
-                    KeyNavigation.right: (pills.itemAt(slot.index + 1) as PillSlot)?.walk ?? null
-                    KeyNavigation.up: trail.last
-                    KeyNavigation.down: root.firstCard
+                    Keys.onLeftPressed: (event) => root.go(root.pillAt(slot.index - 1), event)
+                    Keys.onRightPressed: (event) => root.go(root.pillAt(slot.index + 1), event)
+                    Keys.onUpPressed: (event) => root.go(trail.lastLink(), event)
+                    Keys.onDownPressed: (event) => root.go(root.cardAt(0), event)
                 }
             }
             // A card of the States tab: a state's (parts/StateCard.qml), reached and loaded, or the empty slot's, shown only (parts/EmptyCard.qml).
@@ -360,12 +384,10 @@ ThemeScreen {
                 required property int row
                 readonly property Item walk: card.row >= 0 ? state : null
                 readonly property bool resting: Page.note.length > 0
-                // The first card holds the row's focus whatever the view's current index after the cards are told again.
-                focus: card.index === 0
                 width: card.row >= 0 ? state.width : empty.width
                 height: card.row >= 0 ? state.height : empty.height
                 // Whole inside the row's window, or not drawn, as Home's Recent row leaves a tile out.
-                visible: card.x - cards.contentX >= -0.5 && card.x - cards.contentX + card.width <= cards.width - root.margin + 0.5
+                visible: card.x - cards.contentX >= -0.5 && card.x - cards.contentX + card.width <= cards.width + 0.5
                 StateCard {
                     id: state
                     objectName: card.row >= 0 ? "card." + card.index : ""
@@ -387,12 +409,14 @@ ThemeScreen {
                         if (!state.activeFocus)
                             return
                         cards.currentIndex = card.index
+                        cards.positionViewAtIndex(card.index, ListView.Contain)
                         Actions.pageFocus(-1, card.row)
                     }
                     focus: true
-                    KeyNavigation.left: (cards.itemAtIndex(card.index - 1) as CardSlot)?.walk ?? null
-                    KeyNavigation.right: (cards.itemAtIndex(card.index + 1) as CardSlot)?.walk ?? null
-                    KeyNavigation.up: root.firstPill
+                    Keys.onLeftPressed: (event) => root.go(root.cardAt(card.index - 1), event)
+                    Keys.onRightPressed: (event) => root.go(root.cardAt(card.index + 1), event)
+                    Keys.onUpPressed: (event) => root.go(root.pillAt(0), event)
+                    Keys.onDownPressed: (event) => event.accepted = true
                 }
                 EmptyCard {
                     id: empty

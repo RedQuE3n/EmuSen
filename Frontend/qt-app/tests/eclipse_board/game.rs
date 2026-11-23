@@ -115,17 +115,59 @@ pub fn world(name: &str, states: &[Saved], played: bool, cheats: bool) -> emusen
         drop(rt);
         let list = platform.cheat_game_list(Some(&console), &path).unwrap().expect("a list for the game");
         let cheat = |description: &str| json!({ "Kind": "RamPoke", "Description": description, "Enabled": false, "Writes": [{ "Space": "WRAM", "Address": "7E0DBE", "Value": "09" }] });
-        platform.model_save(MODEL_CHEAT_FILE, Some(&list.1), &format!("{}.json", list.0), &json!({ "Cheats": [cheat("Infinite lives"), cheat("Moon jump")] })).unwrap();
+        platform
+            .model_save(MODEL_CHEAT_FILE, Some(&list.1), &format!("{}.json", list.0), &json!({ "Cheats": [cheat("Infinite lives"), cheat("Moon jump")] }))
+            .unwrap();
     }
-    for (slot, at) in states {
-        let (kind, n) = if *slot == RESUME { (SAVE_RESUME_STATE, 0) } else { (SAVE_STATE, *slot) };
-        let file = platform.save_path(kind, &path, None, n).unwrap();
-        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-        std::fs::write(&file, b"state").unwrap();
-        let f = std::fs::File::options().write(true).open(&file).unwrap();
-        f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(*at as u64)).unwrap();
+    for saved in states {
+        save_state(&world, *saved);
     }
     world
+}
+
+/// A state's file: the resume point's, or a slot's.
+pub fn state_file(world: &emusen_client_fixture::World, slot: i32) -> PathBuf {
+    let platform = Platform::load(library()).unwrap();
+    let (kind, n) = if slot == RESUME { (SAVE_RESUME_STATE, 0) } else { (SAVE_STATE, slot) };
+    platform.save_path(kind, &rom(world).to_string_lossy(), None, n).unwrap()
+}
+
+/// A state written at its moment, as the Pause Card saves one.
+pub fn save_state(world: &emusen_client_fixture::World, (slot, at): Saved) {
+    let file = state_file(world, slot);
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, b"state").unwrap();
+    let f = std::fs::File::options().write(true).open(&file).unwrap();
+    f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(at as u64)).unwrap();
+}
+
+/// Every state of the game's gone, the resume point's and the slots'.
+pub fn clear_states(world: &emusen_client_fixture::World) {
+    for slot in std::iter::once(RESUME).chain(1..=emusen_qt_models::pause::SLOTS as i32) {
+        let _ = std::fs::remove_file(state_file(world, slot));
+    }
+}
+
+/// The game's page shown afresh: the page left by B and opened again through Eclipse's Home, so the page reads the states
+/// as they stand, then its States tab.
+pub fn reopen(scene: &mut Scene<'_>, world: &emusen_client_fixture::World) {
+    scene.pad(UiButton::Back);
+    wait_for(scene, "screens", "shown", "Home", 3000);
+    open_page(scene, world);
+    states_tab(scene);
+}
+
+/// The centre of the drawn item of `name`, in the window's pixels.
+pub fn centre(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
+    let tree = scene.tree();
+    let n = tree.nodes.iter().rev().find(|n| n.name == name && n.visible).unwrap_or_else(|| panic!("{name} is drawn"));
+    (n.x + n.w / 2.0, n.y + n.h / 2.0)
+}
+
+/// The game started by the page, and the state it was asked to start from, the resume point's or a slot's file, or none.
+pub fn started(scene: &mut Scene<'_>) -> String {
+    wait_for(scene, "screens", "shown", "Game", 3000);
+    scene.property("session", "startState")
 }
 
 /// The program under Eclipse at 1280 by 800, its library read, Home placed, the clock held at today's 9:41 PM, one pad of
@@ -220,8 +262,14 @@ pub fn glyphs(tree: &emusen_qt_test::tree::Tree, names: &[&str]) -> Vec<String> 
             child
                 .map(|c| {
                     let id: u64 = tree.nodes[c].id.parse().unwrap();
-                    let p = |q: &str| emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(tree.nodes[c].name.as_str()), &QString::from(q)).to_string();
-                    if p("named") == "true" { p("word") } else { p("letter") }
+                    let p = |q: &str| {
+                        emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(tree.nodes[c].name.as_str()), &QString::from(q)).to_string()
+                    };
+                    if p("named") == "true" {
+                        p("word")
+                    } else {
+                        p("letter")
+                    }
                 })
                 .unwrap_or_default()
         })
@@ -292,4 +340,11 @@ pub fn picture(scene: &mut Scene<'_>, name: &str) {
     assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
     scene.resize(1280, 800);
     scene.wait(300);
+}
+
+/// Whether games.db holds the game as a favourite.
+pub fn favourite(world: &emusen_client_fixture::World) -> bool {
+    let platform = Platform::load(library()).unwrap();
+    let all = records(&platform).get(&json!({ "what": "records" })).unwrap();
+    all.get(rom(world).to_string_lossy().as_ref()).and_then(|r| r.get("favourite")).and_then(serde_json::Value::as_bool).unwrap_or(false)
 }

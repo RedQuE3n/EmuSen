@@ -1090,7 +1090,7 @@ Settings' calls from the page declined with nothing changed; every tab of a game
 and words, the focus walked down each tab and read back, Favourite turned by `pageAct` and back by `pageDeclared`, an
 Options row stepped, a Details door opened and left, the question read and answered No, B leaving the page, and Resume
 stepped by `pageStepAction` and run, the game starting from the state stepped to. `theme_pages_play.rs` runs Play from
-the theme's page; `theme_pages_builtin.rs` holds that under Eclipse, which draws neither screen, a `refocus` told while
+the theme's page; `theme_pages_builtin.rs` holds that under Eclipse, which draws no Settings, a `refocus` told while
 Settings is closed leaves the model's row alone. `theme-qt/tests/surface.rs` holds the two singletons and their calls, and
 that every property of `Settings`, `Page` and their rows is read-only with no call beyond reading rows; `tests/qml.rs`
 checks every help kind's lists; the built-in themes' own tests run unchanged.
@@ -2245,6 +2245,57 @@ game reached by the pad, the wheel and the pointer, each whole inside the grid, 
 the path by the pointer goes back. `eclipse_games_gpu.rs` runs the same oracle on the graphics card (a GPU job, through
 `gpu.sh`), and saves the pictures to the folder `EMUSEN_ECLIPSE_PICTURES` names. `eclipse_games_lists.rs` (the chips, the
 List card and the games view agreeing) and `eclipse_games_empty.rs` (the empty board by `eclipse/empty.tsv`).
+
+#### 3.4.11 Eclipse's game page **[M 2026-11-23]**
+
+Eclipse's `screens/Game.qml` draws the game page's frame and its States tab as two boards draw them: `EclipseGame.dc.html`
+(a game with states, slot 1 focused) and `EclipseGameNoState.dc.html` (a game never played). Decided by the tester
+2026-11-16 (R-20261116-27, -29, -30, -36) and 2026-11-23 (R-20261123-33 to -36). The screen names `pageSections:
+["states"]` (§3.2, 1.11): every other tab, every deeper page and every question is the program's own page until its piece
+lands, the page's model and its answers the program's whichever draws.
+
+As built:
+- The ground (#0A1024, `Ink.ground`), the three fields on the game's art hues and the disc whose corona takes the game's
+  first hue are Home's (`FieldInk`, `ArtHues`, R-20261115-27); under the horizon at 620 the surface token, and the
+  horizon's line, clear at both ends, is `parts/Horizon.qml` with `GameInk.horizon`.
+- The header: the mark, `parts/Trail.qml` (`Page.trail`: Consoles and the console are links, `Actions.openSection` and
+  `Actions.openConsole`, the title is not; from the page the program opens Choose a console and the console's games,
+  `screens::page_step`), and the status glass with the level alone.
+- The column: `Page.kicker` (console · year · genre), the title, `Page.line` (last played and time played as Home says
+  them, or Never played, then the players), and `Page.pills`: Resume (filled, A), Start from the beginning and Favourite;
+  with no resume point Start and Favourite (R-20261123-36). Resume loads the resume point and is never stepped
+  (R-20261123-35); the others are `pageAct` of their action. The outlined pills are `parts/WordPill.qml`.
+- `parts/Tabs.qml`: `Page.tabs`, the shown one white and underlined; the shoulders step them through the frame's sections
+  and a tap chooses one (`Actions.pageTab`). On a tab the program draws, its own page steps its own order (Overview,
+  States, Options, Media, Details).
+- The cards (`parts/StateCard.qml`, `parts/EmptyCard.qml`): `Page.cards`, the resume point with its badge, the slots in
+  their order, then one empty slot while a slot is free, shown and never pressed (R-20261116-36); every card at the board's
+  316 by 198, the row following the focus sideways, a card carried past either end not drawn (R-20261123-33). A card's
+  when-line is `game_page::state_when` (R-20261123-34). With no state the empty card rests in the board's dimmer colours
+  and `Page.note` stands beside it. A on a card is `pageChoose`; X asks the program's Delete question, which the program's
+  page opens only while it is shown (`GamePage.qml`), so one asked from Eclipse's card opens as the page appears and B
+  brings the focus back to the card; a state that fails to load is the program's notice (`session_model.rs`
+  `start_from`).
+- The help line: `Page.boardHelp` where the boards draw one (a state's card: Load this state, Delete, Back; Start with no
+  resume point: Start, Favourite, Back, Home), else `Page.help`; the shoulders' Section at the right with no glass.
+- Words whose boxes stack (the kicker, the line, the tabs, the cards' words) are Eclipse's `Line` with `boardLine`, the box
+  the board's CSS gives the line; their table rows name the part `Line`, which `tests/eclipse_board/mod.rs` holds by that
+  box.
+- A next tab costs its body only: its key added to `pageSections`, and an item shown for it beside the cards' row; the
+  frame, the tabs, the header, the column and the help are this screen's already.
+
+Not as the boards draw them, each for the tester: the states' pictures (a state's picture lies in the saves folder, which
+the host does not let a theme read, so the cards draw none); the mark (the board's crescent is not `Marks.crescent`); the
+never-played help line's Start (the board's START in a box of corner 8, drawn as Home's MENU capsule).
+
+Proof, measured 2026-11-23 on the software backend: `qt-app/tests/eclipse_game.rs` holds every row of
+`tests/eclipse/game.tsv` at each of the gate's sizes in the program, with the board's words, help line and glyphs;
+`eclipse_game_never.rs` the same of `eclipse/game_never.tsv`; `eclipse_game_pad.rs` reaches and acts on every pill, tab,
+link and card by the pad and by the pointer; `eclipse_game_states.rs` holds the states no board draws as ruled, Delete,
+a state gone since the page read it handed to the program as its own page hands it (the notice itself is the session's,
+told only once a core runs the game, which none does on the tests' synthetic image), and every tab Eclipse does not name
+opening the program's page. `qt-models/tests/game_page.rs`'
+`qt_3_4_11_*` hold the model's side.
 
 ### 3.5 Loading and the sandbox
 

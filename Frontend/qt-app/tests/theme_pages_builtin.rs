@@ -1,4 +1,4 @@
-//! Under a theme that draws neither screen, the feed never answers Settings' model (EmuSen_Qt.md §3.2, the proof paragraph).
+//! Under a theme that draws no Settings, the feed never answers Settings' model (EmuSen_Qt.md §3.2, the proof paragraph).
 
 mod common;
 
@@ -24,7 +24,8 @@ fn qt_3_2_a_built_in_theme_leaves_settings_to_the_program() {
     wait_for(&mut scene, "settingsModel", "ready", "true", 5000);
     scene.wait(300);
     assert_eq!(scene.property("theme", "settings"), "false", "Eclipse draws no Settings");
-    assert_eq!(scene.property("theme", "game"), "false", "nor a game's page");
+    // Eclipse supplies the game page from EmuSen.Theme 1.11 (R-20261116-27, EmuSen_Qt.md §3.4.11).
+    assert_eq!(scene.property("theme", "game"), "true", "a game's page is Eclipse's");
     assert_eq!(scene.property("screens", "shown"), "Home");
 
     // A refocus told while Settings is not made, as a read landing tells one: no one writes the model's row.

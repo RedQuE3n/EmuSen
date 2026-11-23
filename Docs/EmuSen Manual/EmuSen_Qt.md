@@ -2441,8 +2441,8 @@ render loop) holds every element of the board's table at 1.0, 2.42, 3.3, 5.72, 7
 800 within a hundredth of a board pixel and half a level of opacity, Moonrise unseen from the first frame, the sound
 started once from the theme's file whole, Home whole and focused after; a press skipping with the sound let go (SDL's disk
 driver's file: no step at the end past twice the sound's own) and Home not acting on it; the splash off; reduced motion.
-`eclipse_splash_capture.rs` (`#[ignore]`d) writes the frames the tester's video is made from. `qt-app/tests/splash_start.rs`
-(software backend, the clock held) holds what that oracle sets by hand: three held seconds move the splash's clock three
+`eclipse_splash_capture.rs` (`#[ignore]`d) writes the frames the tester's video is made from.
+`qt-app/tests/splash_start.rs` (software backend, the clock held) holds what that oracle sets by hand: three held seconds move the splash's clock three
 seconds; a key the kit's map makes a press, and a tap, each skip to the last frame with the sound let go; navigation
 sounds off, the splash runs and no sound starts. The oracle's fade is the Fade token's, read from the program's tokens.
 

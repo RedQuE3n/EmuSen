@@ -2,13 +2,12 @@
 
 mod common;
 
-use common::{sandbox, wait_for};
+use common::{eclipse_reference, sandbox, wait_for};
 use cxx_qt::casting::Upcast;
 use emusen_client_fixture::library;
 use emusen_qt::MAIN_URL;
 use emusen_qt_models::library_model::qobject::QAbstractListModel;
 use emusen_qt_models::settings_model::qobject::SettingsModel;
-use emusen_qt_models::themes;
 use std::pin::Pin;
 
 #[test]
@@ -18,12 +17,14 @@ fn qt_3_2_a_built_in_theme_leaves_settings_to_the_program() {
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
-    assert!(scene.set_property("program", "theme", &themes::built_in_folder("emusen")));
+    // A package of the reference's screens with Eclipse's tokens, which draws neither Settings nor a game's page.
+    let folder = eclipse_reference();
+    assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);
     wait_for(&mut scene, "library", "loading", "false", 10000);
     wait_for(&mut scene, "settingsModel", "ready", "true", 5000);
     scene.wait(300);
-    assert_eq!(scene.property("theme", "settings"), "false", "the EmuSen theme draws no Settings");
+    assert_eq!(scene.property("theme", "settings"), "false", "the package draws no Settings");
     assert_eq!(scene.property("theme", "game"), "false", "nor a game's page");
     assert_eq!(scene.property("screens", "shown"), "Home");
 
@@ -38,4 +39,5 @@ fn qt_3_2_a_built_in_theme_leaves_settings_to_the_program() {
     scene.wait(100);
     assert_eq!(scene.property("settingsModel", "focused"), before, "the row Settings reopens on is the one it was left on");
     scene.assert_quiet();
+    let _ = std::fs::remove_dir_all(&folder);
 }

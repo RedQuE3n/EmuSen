@@ -1089,7 +1089,7 @@ Settings' calls from the page declined with nothing changed; every tab of a game
 and words, the focus walked down each tab and read back, Favourite turned by `pageAct` and back by `pageDeclared`, an
 Options row stepped, a Details door opened and left, the question read and answered No, B leaving the page, and Resume
 stepped by `pageStepAction` and run, the game starting from the state stepped to. `theme_pages_play.rs` runs Play from
-the theme's page; `theme_pages_builtin.rs` holds that under the EmuSen theme, which draws neither screen, a `refocus` told while
+the theme's page; `theme_pages_builtin.rs` holds that under a package of the reference's screens with Eclipse's tokens, which draws neither screen, a `refocus` told while
 Settings is closed leaves the model's row alone. `theme-qt/tests/surface.rs` holds the two singletons and their calls, and
 that every property of `Settings`, `Page` and their rows is read-only with no call beyond reading rows; `tests/qml.rs`
 checks every help kind's lists; the built-in themes' own tests run unchanged.

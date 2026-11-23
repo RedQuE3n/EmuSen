@@ -185,8 +185,8 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
     if help_line(scene).0 != line {
         differences.push(format!("the help line is {:?} where the board's is {:?}", help_line(scene).0, page.help));
     }
-    extra(scene, sdl, pad, &mut differences);
     pictures(scene, backend, page.name);
+    extra(scene, sdl, pad, &mut differences);
 
     // The pad: Up to the first row, Down through every row to the last, each focused, drawn and counted, then past the last.
     for _ in 0..count {
@@ -360,6 +360,11 @@ pub fn ring(scene: &mut Scene<'_>, row: usize, caption: &str, differences: &mut 
         differences.push(format!("row {row}: the ring's caption {:?}, drawn {}, where {caption:?}", read(&tree, "asideMeterCaption", "text"), shown(scene, "asideMeterCaption")));
     }
     let end: f64 = read(&tree, "asideRingFill", "end").parse().unwrap_or(f64::NAN);
+    // The gradient's stops in order at any share, a full one too, as an unordered stop drew a wedge outside the ring on the card.
+    let [start, last] = ["trackStart", "trackEnd"].map(|p| read(&tree, "asideRingFill", p).parse::<f64>().unwrap_or(f64::NAN));
+    if !(end < start && start <= last && last + 0.0001 <= 1.0) {
+        differences.push(format!("row {row}: the ring's stops out of order: fill to {end}, track {start} to {last}"));
+    }
     if !same(end, 0.75 * meter) {
         differences.push(format!("row {row}: the ring filled to {end} of the turn where the share {meter} is {}", 0.75 * meter));
     }

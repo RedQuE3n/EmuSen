@@ -62,6 +62,11 @@ void SoundFile::start()
     format.setChannelCount(m_channels);
     format.setSampleFormat(QAudioFormat::Float);
     m_decoder = std::make_unique<QAudioDecoder>();
+    // With no media backend `start` does nothing and neither signal comes (EmuSen_Qt.md §3.5.3).
+    if (!m_decoder->isSupported()) {
+        finish(QStringLiteral("The theme's sound %1 could not be read: %2").arg(m_source.toString(), m_decoder->errorString()));
+        return;
+    }
     m_decoder->setAudioFormat(format);
     m_decoder->setSourceDevice(m_file.get());
     connect(m_decoder.get(), &QAudioDecoder::bufferReady, this, &SoundFile::take);

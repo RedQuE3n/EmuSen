@@ -1,4 +1,4 @@
-//! `SplashSound`: a splash's sound through Endymion's interface player, as an ES-DE theme's sounds are (EmuSen_Qt.md §3.5.2, A splash that enters Home).
+//! `SplashSound`: a splash's sound through Endymion's interface player, as an ES-DE theme's sounds are (EmuSen_Qt.md §3.5.3).
 
 use core::pin::Pin;
 
@@ -64,6 +64,10 @@ pub mod qobject {
         /// The sound let go over `fade` ms from where it plays, falling to silence, so it ends with no click.
         #[qinvokable]
         fn end(self: Pin<&mut SplashSound>, fade: i32);
+        /// Not ready by the splash's bound: settled silent with the words why, and a player made after it let go.
+        #[qinvokable]
+        #[cxx_name = "giveUp"]
+        fn give_up(self: Pin<&mut SplashSound>);
     }
 
     impl cxx_qt::Threading for SplashSound {}
@@ -96,6 +100,7 @@ pub struct SplashSoundRust {
     player: Option<InterfacePlayer>,
     samples: Vec<u8>,
     opening: u64,
+    given_up: bool,
 }
 
 impl Default for SplashSoundRust {
@@ -118,6 +123,7 @@ impl Default for SplashSoundRust {
             player: None,
             samples: Vec::new(),
             opening: 0,
+            given_up: false,
         }
     }
 }
@@ -154,10 +160,16 @@ impl cxx_qt::Initialize for qobject::SplashSound {
 
 impl qobject::SplashSound {
     pub fn keep(mut self: Pin<&mut Self>) {
+        if self.given_up {
+            return;
+        }
         // Safety: the file is the window's, alive as long as this sound, which reads it on the GUI thread.
-        let file = unsafe { self.file.as_ref() };
-        let samples = file.map(|f| qobject::sound_file_samples(f).as_slice().to_vec()).unwrap_or_default();
-        let unread = file.map(|f| qobject::sound_file_problem(f).to_string()).unwrap_or_default();
+        let Some(file) = (unsafe { self.file.as_ref() }) else {
+            self.settle(0, "The splash's sound has no file to read it from.".to_owned());
+            return;
+        };
+        let samples = qobject::sound_file_samples(file).as_slice().to_vec();
+        let unread = qobject::sound_file_problem(file).to_string();
         let (library, source, folder) = (self.platform_library.to_string(), self.source.to_string(), self.folder.to_string());
         if samples.is_empty() || library.is_empty() || !self.on {
             self.as_mut().settle(0, unread);
@@ -175,6 +187,7 @@ impl qobject::SplashSound {
             let opened = bell_player::open_player(&library).and_then(|player| {
                 player.remember(SOUND, &samples).and_then(|()| player.remember(SILENCE, &[0u8; FRAME])).and_then(|()| player.play(SILENCE)).map(|()| player).map_err(|e| e.to_string())
             });
+            // A queue refused leaves the sound unsettled, which the splash's bound ends (EmuSen_Qt.md §3.5.3).
             let _ = qt.queue(move |mut sound: Pin<&mut qobject::SplashSound>| {
                 if sound.opening != opening {
                     return;
@@ -210,7 +223,10 @@ impl qobject::SplashSound {
 
     pub fn end(mut self: Pin<&mut Self>, fade: i32) {
         let Some(player) = self.player.as_ref() else { return };
-        let queued = player.queued().unwrap_or(0).max(0) as usize;
+        let queued = match player.queued() {
+            Ok(queued) => queued.max(0) as usize,
+            Err(e) => return self.publish(e.to_string()),
+        };
         if self.starts == 0 || queued == 0 {
             return;
         }
@@ -225,6 +241,16 @@ impl qobject::SplashSound {
             }
             Err(e) => self.publish(e.to_string()),
         }
+    }
+
+    pub fn give_up(mut self: Pin<&mut Self>) {
+        if self.settled {
+            return;
+        }
+        let opening = self.opening + 1;
+        self.as_mut().rust_mut().opening = opening;
+        self.as_mut().rust_mut().given_up = true;
+        self.settle(0, "The splash's sound was not ready within the splash's length, so the splash played silent.".to_owned());
     }
 
     /// The player set to the Sound volume, which it then holds; none before it is made.

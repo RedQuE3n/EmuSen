@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.App
 
-// A theme's splash that enters Home (EmuSen_Qt.md §3.5.2): the window's clock for it, held at its first frame until the start has read what Home shows and the sound is ready, the skip, and the sound.
+// A theme's splash that enters Home (EmuSen_Qt.md §3.5.3): the window's clock for it, held at its first frame until the start has read what Home shows and the sound is ready, the skip, and the sound.
 Item {
     id: lead
     // The chosen theme's host, whose splash leads the start.
@@ -83,6 +83,12 @@ Item {
         to: lead.length
         duration: lead.length
         running: lead.set && !lead.skipped
+    }
+    // The sound waited for from the first frame for the splash's own length at most, then given up: the splash plays silent (EmuSen_Qt.md §3.5.3).
+    PauseAnimation {
+        duration: lead.length
+        running: lead.shown && lead.length > 0 && lead.source.toString() !== "" && !sound.settled
+        onFinished: sound.giveUp()
     }
     SoundFile {
         id: file

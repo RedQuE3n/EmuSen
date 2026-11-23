@@ -1,4 +1,4 @@
-// EmuSen.App.SoundFile: a theme's sound read whole through Qt Multimedia's decoder, from a file or the resources, in the format a player asks (EmuSen_Qt.md §3.5.2).
+// EmuSen.App.SoundFile: a theme's sound read whole through Qt Multimedia's decoder, from a file or the resources, in the format a player asks (EmuSen_Qt.md §3.5.3).
 #pragma once
 
 #include <QtCore/QByteArray>

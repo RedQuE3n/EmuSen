@@ -127,7 +127,7 @@ fn r_20261115_24_words_of_the_built_in_eclipse_s_line_under_the_floor_are_accept
     assert_eq!(accepted_in(&checkout.replace("/themes/", "/themes/../themes/")), None, "the path as written, not resolved");
     assert_eq!(accepted_in("file:///home/a/.local/share/EmuSen/themes/eclipse/parts/Line.qml"), None, "a theme of the player's named eclipse is held");
     assert_eq!(accepted_in("qrc:/emusen/themes/eclipse/screens/Home.qml"), None, "another file of Eclipse's is held");
-    assert_eq!(accepted_in("qrc:/emusen/themes/horizon/parts/Line.qml"), None, "another built-in theme is held");
+    assert_eq!(accepted_in("qrc:/emusen/themes/emusen/parts/Line.qml"), None, "another built-in theme is held");
     // R-20261115-29: their contrast as the board draws it is accepted too, and printed as accepted; anyone else's is a finding.
     let (faint, white) = (Colour::hex("#949494"), Colour::hex("#FFFFFF"));
     let over = |source: &str| Item::new(1, Kind::Panel, PANEL).child(words(2, 10.0, faint, vec![white; 20]).written_in(source));

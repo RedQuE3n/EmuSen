@@ -82,3 +82,15 @@ fn the_settings_theme_id_resolves_through_the_store_and_a_missing_one_falls_back
     assert!(words.contains("“gone”") && words.contains("EmuSen's own theme is shown"), "{words}");
     std::fs::remove_dir_all(store).unwrap();
 }
+
+#[test]
+fn a_stored_choice_of_a_retired_theme_shows_the_reference_with_words() {
+    let store = std::env::temp_dir().join(format!("emusen-start-retired-{}", std::process::id()));
+    std::fs::create_dir_all(&store).unwrap();
+    for id in ["constellation", "horizon", "meridian", "orrery"] {
+        let (folder, words) = chosen_theme(&json!({ "EmuSenTheme": id }), Some(&store));
+        assert_eq!(folder, "", "{id}: the reference");
+        assert!(words.contains(id) && words.contains("EmuSen's own theme is shown"), "{id}: {words}");
+    }
+    std::fs::remove_dir_all(store).unwrap();
+}

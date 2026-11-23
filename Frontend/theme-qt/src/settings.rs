@@ -27,6 +27,15 @@ pub mod qobject {
         type ThemeRows = crate::rows::qobject::ThemeRows;
     }
 
+    /// From 1.11: how the boards draw a row's value, `Settings.rows`' `form` (`settings_shown::Form`).
+    #[qenum(ThemeSettings)]
+    enum SettingsForm {
+        Choice,
+        Switch,
+        Door,
+        Fact,
+    }
+
     extern "RustQt" {
         #[qobject]
         #[qml_element = "Settings"]
@@ -127,7 +136,7 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
                 Cell::Text(tile.system),
                 Cell::Whole(tile.games as i32),
                 Cell::Text(tile.engine),
-                Cell::Text(Form::of(r, facet.switch).word().to_owned()),
+                Cell::Whole(form_of(Form::of(r, facet.switch)).repr),
             ]
         })
         .collect();
@@ -146,6 +155,16 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         help: kind_of(view.help()).map_or(-1, |k| k.repr),
         pane: view.pane(focused.max(0) as usize),
     })
+}
+
+/// A form as the theme's enum gives it.
+fn form_of(form: Form) -> qobject::SettingsForm {
+    match form {
+        Form::Choice => qobject::SettingsForm::Choice,
+        Form::Switch => qobject::SettingsForm::Switch,
+        Form::Door => qobject::SettingsForm::Door,
+        Form::Fact => qobject::SettingsForm::Fact,
+    }
 }
 
 fn list(words: &[String]) -> QStringList {

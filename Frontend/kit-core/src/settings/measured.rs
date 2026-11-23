@@ -97,6 +97,13 @@ impl MeasuredWalk {
         self.walk.focus(row)
     }
 
+    /// The host's focus followed: the row focused and the window kept around it, as a press moves them.
+    pub fn follow(&mut self, row: usize) -> bool {
+        let moved = self.walk.focus(row);
+        self.keep_shown();
+        moved
+    }
+
     /// The wheel moved the window to start at this row, held so that no empty space shows past the last; the focus stays.
     pub fn scroll_to(&mut self, first: usize) -> bool {
         let first = first.min(self.last_first());

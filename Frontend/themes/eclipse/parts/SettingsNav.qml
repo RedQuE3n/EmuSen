@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Shapes
 import EmuSen.Theme
 
 // Settings' sections down the left, the one shown filled in the accent, a click opening another (G:101-108; EmuSen_Qt.md §3.4.11).
@@ -45,25 +44,19 @@ Column {
                 y: (entry.height - height) / 2
                 width: root.icon * root.unit
                 height: width
-                // What is drawn, which the tests read: the stroke and the path.
-                readonly property color paint: stroke.strokeColor
-                readonly property string path: stroke.shape
-                Shape {
-                    width: 24
-                    height: 24
-                    scale: parent.width / 24
-                    transformOrigin: Item.TopLeft
-                    preferredRendererType: Shape.CurveRenderer
-                    ShapePath {
-                        id: stroke
-                        readonly property string shape: own.sectionIcons[Settings.sectionKeys[entry.index] ?? ""] ?? ""
-                        fillColor: "transparent"
-                        strokeColor: words.color
-                        strokeWidth: 1.7
-                        capStyle: ShapePath.RoundCap
-                        joinStyle: ShapePath.RoundJoin
-                        PathSvg { path: stroke.shape }
-                    }
+                // What is drawn, which the tests read: the stroke's colour, the words'.
+                readonly property color paint: words.color
+                // The icon's cell of the sprite (assets/sections.svg): its column the section's, its row the rest or the filled link's, drawn at four times its 24 units.
+                Image {
+                    objectName: "sectionPicture." + entry.index
+                    anchors.fill: parent
+                    source: "../assets/sections.svg"
+                    // The sprite's column and row drawn, which the tests read.
+                    readonly property int column: entry.index
+                    readonly property int row: entry.current ? 1 : 0
+                    sourceSize: Qt.size(6 * 96, 2 * 96)
+                    sourceClipRect: Qt.rect(column * 96, row * 96, 96, 96)
+                    smooth: true
                 }
             }
             Line {

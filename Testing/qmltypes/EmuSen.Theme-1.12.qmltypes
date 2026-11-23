@@ -1352,7 +1352,7 @@ Module {
     }
     Component {
         file: "settings.cxxqt.h"
-        lineNumber: 23
+        lineNumber: 25
         name: "ThemeSettings"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -1360,13 +1360,20 @@ Module {
         isCreatable: false
         isSingleton: true
         exportMetaObjectRevisions: [256]
+        Enum {
+            name: "SettingsForm"
+            isScoped: true
+            type: "int"
+            lineNumber: 54
+            values: ["Choice", "Switch", "Door", "Fact"]
+        }
         Property {
             name: "sections"
             type: "QStringList"
             read: "getSections"
             notify: "shown"
             index: 0
-            lineNumber: 29
+            lineNumber: 31
             isReadonly: true
         }
         Property {
@@ -1375,7 +1382,7 @@ Module {
             read: "getSection"
             notify: "shown"
             index: 1
-            lineNumber: 30
+            lineNumber: 32
             isReadonly: true
         }
         Property {
@@ -1384,7 +1391,7 @@ Module {
             read: "getTrail"
             notify: "shown"
             index: 2
-            lineNumber: 31
+            lineNumber: 33
             isReadonly: true
         }
         Property {
@@ -1393,7 +1400,7 @@ Module {
             read: "getPage"
             notify: "shown"
             index: 3
-            lineNumber: 32
+            lineNumber: 34
             isReadonly: true
         }
         Property {
@@ -1402,7 +1409,7 @@ Module {
             isPointer: true
             read: "getRows"
             index: 4
-            lineNumber: 33
+            lineNumber: 35
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1412,7 +1419,7 @@ Module {
             read: "getFocused"
             notify: "shown"
             index: 5
-            lineNumber: 34
+            lineNumber: 36
             isReadonly: true
         }
         Property {
@@ -1421,7 +1428,7 @@ Module {
             read: "getCount"
             notify: "shown"
             index: 6
-            lineNumber: 35
+            lineNumber: 37
             isReadonly: true
         }
         Property {
@@ -1430,7 +1437,7 @@ Module {
             read: "getHelp"
             notify: "shown"
             index: 7
-            lineNumber: 36
+            lineNumber: 38
             isReadonly: true
         }
         Property {
@@ -1439,7 +1446,7 @@ Module {
             read: "getSentence"
             notify: "shown"
             index: 8
-            lineNumber: 37
+            lineNumber: 39
             isReadonly: true
         }
         Property {
@@ -1448,7 +1455,7 @@ Module {
             read: "getLines"
             notify: "shown"
             index: 9
-            lineNumber: 38
+            lineNumber: 40
             isReadonly: true
         }
         Property {
@@ -1457,7 +1464,7 @@ Module {
             read: "getMuted"
             notify: "shown"
             index: 10
-            lineNumber: 39
+            lineNumber: 41
             isReadonly: true
         }
         Property {
@@ -1466,7 +1473,7 @@ Module {
             read: "getTones"
             notify: "shown"
             index: 11
-            lineNumber: 40
+            lineNumber: 42
             isReadonly: true
         }
         Property {
@@ -1475,7 +1482,7 @@ Module {
             read: "getPreview"
             notify: "shown"
             index: 12
-            lineNumber: 41
+            lineNumber: 43
             isReadonly: true
         }
         Property {
@@ -1484,7 +1491,7 @@ Module {
             read: "getCaption"
             notify: "shown"
             index: 13
-            lineNumber: 42
+            lineNumber: 44
             isReadonly: true
         }
         Property {
@@ -1493,7 +1500,7 @@ Module {
             read: "getMeter"
             notify: "shown"
             index: 14
-            lineNumber: 43
+            lineNumber: 45
             isReadonly: true
         }
         Property {
@@ -1502,7 +1509,7 @@ Module {
             read: "getSamples"
             notify: "shown"
             index: 15
-            lineNumber: 44
+            lineNumber: 46
             isReadonly: true
         }
         Property {
@@ -1511,7 +1518,7 @@ Module {
             read: "getSampleScales"
             notify: "shown"
             index: 16
-            lineNumber: 45
+            lineNumber: 47
             isReadonly: true
         }
         Property {
@@ -1520,7 +1527,7 @@ Module {
             read: "getSectionKeys"
             notify: "shown"
             index: 17
-            lineNumber: 46
+            lineNumber: 48
             isReadonly: true
         }
         Property {
@@ -1529,7 +1536,7 @@ Module {
             read: "getTitle"
             notify: "shown"
             index: 18
-            lineNumber: 47
+            lineNumber: 49
             isReadonly: true
         }
         Property {
@@ -1538,7 +1545,7 @@ Module {
             read: "getHeading"
             notify: "shown"
             index: 19
-            lineNumber: 48
+            lineNumber: 50
             isReadonly: true
         }
         Property {
@@ -1547,7 +1554,7 @@ Module {
             read: "getAboutHeading"
             notify: "shown"
             index: 20
-            lineNumber: 49
+            lineNumber: 51
             isReadonly: true
         }
         Property {
@@ -1556,7 +1563,7 @@ Module {
             read: "getShot"
             notify: "shown"
             index: 21
-            lineNumber: 50
+            lineNumber: 52
             isReadonly: true
         }
         Property {
@@ -1565,10 +1572,10 @@ Module {
             read: "getDefaultable"
             notify: "shown"
             index: 22
-            lineNumber: 51
+            lineNumber: 53
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 79 }
+        Signal { name: "shown"; lineNumber: 88 }
     }
     Component {
         file: "splash.cxxqt.h"
@@ -1846,40 +1853,49 @@ Module {
             isReadonly: true
             isPropertyConstant: true
         }
-        Signal { name: "nowChanged"; lineNumber: 83 }
+        Property {
+            name: "keyPair"
+            type: "QString"
+            read: "getKeyPair"
+            index: 25
+            lineNumber: 54
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Signal { name: "nowChanged"; lineNumber: 85 }
         Method {
             name: "games"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 84
+            lineNumber: 86
             Parameter { name: "count"; type: "int" }
         }
         Method {
             name: "count"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 85
+            lineNumber: 87
             Parameter { name: "count"; type: "int" }
         }
         Method {
             name: "line"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 86
+            lineNumber: 88
             Parameter { name: "parts"; type: "QStringList" }
         }
         Method {
             name: "percent"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 87
+            lineNumber: 89
             Parameter { name: "charge"; type: "int" }
         }
         Method {
             name: "place"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 88
+            lineNumber: 90
             Parameter { name: "index"; type: "int" }
             Parameter { name: "count"; type: "int" }
         }
@@ -1887,14 +1903,14 @@ Module {
             name: "ago"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 89
+            lineNumber: 91
             Parameter { name: "at"; type: "double" }
         }
         Method {
             name: "pausedFacts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 90
+            lineNumber: 92
             Parameter { name: "console"; type: "QString" }
             Parameter { name: "paused_since"; type: "double" }
         }
@@ -1902,7 +1918,7 @@ Module {
             name: "facts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 91
+            lineNumber: 93
             Parameter { name: "maker"; type: "QString" }
             Parameter { name: "year"; type: "int" }
             Parameter { name: "count"; type: "int" }
@@ -1912,7 +1928,7 @@ Module {
             name: "runsOn"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 92
+            lineNumber: 94
             Parameter { name: "engine_name"; type: "QString" }
             Parameter { name: "engine_kind"; type: "QString" }
         }
@@ -1920,7 +1936,7 @@ Module {
             name: "statusLine"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 93
+            lineNumber: 95
             Parameter { name: "controllers"; type: "int" }
             Parameter { name: "clock"; type: "QString" }
         }
@@ -1928,14 +1944,14 @@ Module {
             name: "splashCaption"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 94
+            lineNumber: 96
             Parameter { name: "consoles"; type: "int" }
         }
         Method {
             name: "splashCounts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 95
+            lineNumber: 97
             Parameter { name: "games"; type: "int" }
             Parameter { name: "cores"; type: "int" }
         }
@@ -1943,7 +1959,7 @@ Module {
             name: "summary"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 96
+            lineNumber: 98
             Parameter { name: "consoles"; type: "int" }
             Parameter { name: "games"; type: "int" }
         }
@@ -1951,14 +1967,14 @@ Module {
             name: "pausedAgo"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 97
+            lineNumber: 99
             Parameter { name: "paused_since"; type: "double" }
         }
         Method {
             name: "playedFacts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 98
+            lineNumber: 100
             Parameter { name: "at"; type: "double" }
             Parameter { name: "seconds"; type: "double" }
         }
@@ -1966,28 +1982,28 @@ Module {
             name: "continueLine"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 99
+            lineNumber: 101
             Parameter { name: "console"; type: "QString" }
         }
         Method {
             name: "resumePoint"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 100
+            lineNumber: 102
             Parameter { name: "paused_since"; type: "double" }
         }
         Method {
             name: "gameArt"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 101
+            lineNumber: 103
             Parameter { name: "title"; type: "QString" }
         }
         Method {
             name: "shortTime"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 102
+            lineNumber: 104
             Parameter { name: "at"; type: "double" }
         }
     }

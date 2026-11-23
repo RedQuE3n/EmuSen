@@ -46,6 +46,20 @@ const BOARD_ICONS: [&str; 6] = [
     "M17 4.5a8.5 8.5 0 1 0 0 15 6.5 6.5 0 1 1 0-15z",
 ];
 
+/// The sprite Eclipse draws the sections' icons from (themes/eclipse/assets/sections.svg).
+const SPRITE: &str = include_str!("../../../themes/eclipse/assets/sections.svg");
+
+/// Section `i`'s icon as drawn: the sprite file its picture shows, the cell its clip names, and that cell's path and stroke.
+fn icon(tree: &emusen_qt_test::tree::Tree, i: usize) -> (String, String) {
+    let name = format!("sectionPicture.{i}");
+    assert!(read(tree, &name, "source").ends_with("/assets/sections.svg"), "section {i}'s picture is the sprite: {}", read(tree, &name, "source"));
+    let cell = |p: &str| read(tree, &name, p).parse::<u32>().unwrap_or_else(|_| panic!("section {i}'s picture's {p}"));
+    let id = format!("id=\"icon-{}-{}\"", cell("column"), cell("row"));
+    let line = SPRITE.lines().find(|l| l.contains(&id)).unwrap_or_else(|| panic!("the sprite has {id}"));
+    let attribute = |a: &str| line.split(&format!(" {a}=\"")).nth(1).and_then(|r| r.split('"').next()).unwrap_or_default().to_owned();
+    (attribute("d"), attribute("stroke"))
+}
+
 /// The window's SettingsModel, as its own type.
 pub fn settings(scene: &mut Scene<'_>) -> &'static SettingsModel {
     let object = scene.object("settingsModel");
@@ -269,7 +283,20 @@ fn display(mut scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, backend: &str
         }
         for (i, name) in sections.iter().enumerate() {
             words.push((format!("sectionWords.{i}"), name.clone()));
-            words.push((format!("sectionIcon.{i}"), BOARD_ICONS[i].to_owned()));
+        }
+        // Each icon the sprite's cell of its section and state: the board's path, in the words' colour at rest and the accent's ink on the filled link, filling the icon's box.
+        for i in 0..sections.len() {
+            let (path, stroke) = icon(&tree, i);
+            let ink = if i == 1 { "Tokens.overAccent" } else { "#FFD8DBE6" };
+            let want = ink.strip_prefix("Tokens.").map_or_else(|| Colour::parse(ink), |t| crate::eclipse_board::tokens(screen).get(t).and_then(|v| Colour::parse(v)));
+            if path != BOARD_ICONS[i] || Colour::parse(&stroke) != want {
+                differences.push(format!("{at_size}: section {i}'s icon is {path:?} in {stroke} where the board draws {:?} in {ink}", BOARD_ICONS[i]));
+            }
+            let got = crate::eclipse_board::boxes(&tree, unit);
+            let (picture, own) = (got[&format!("sectionPicture.{i}")], got[&format!("sectionIcon.{i}")]);
+            if !(crate::eclipse_board::same(picture.x, own.x) && crate::eclipse_board::same(picture.y, own.y) && crate::eclipse_board::same(picture.w, own.w) && crate::eclipse_board::same(picture.h, own.h)) {
+                differences.push(format!("{at_size}: section {i}'s picture at {picture:?} where its icon's box is {own:?}"));
+            }
         }
         for (i, (name, about)) in BOARD_ROWS.iter().enumerate() {
             words.push((format!("rowName.{i}"), name.to_string()));
@@ -277,7 +304,7 @@ fn display(mut scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, backend: &str
             words.push((format!("rowWords.{i}"), model_rows[i].value.clone()));
         }
         for (name, want) in words {
-            let have = read(&tree, &name, if name.starts_with("sectionIcon.") { "path" } else { "text" });
+            let have = read(&tree, &name, "text");
             if have != want {
                 differences.push(format!("{at_size}: {name} says {have:?} where {want:?}"));
             }
@@ -423,8 +450,10 @@ fn display(mut scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, backend: &str
             scene.wheel(x, y, -1);
             settle(&mut scene);
         }
-        // The pointer moved onto the row focuses it; a click is A.
+        // The pointer moved onto the row from the heading focuses it, as a row the wheel brought under a pointer at rest takes nothing (EmuSen_Kit.md §7.108); a click is A.
         let (x, y) = centre(&mut scene, &format!("rowName.{i}"));
+        let (hx, hy) = centre(&mut scene, "settingsHeading");
+        scene.hover(hx, hy);
         scene.hover(x + 1.0, y);
         scene.hover(x, y);
         settle(&mut scene);

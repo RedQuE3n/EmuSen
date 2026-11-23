@@ -195,11 +195,25 @@ fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, ove
     }
     host::session(object(screen)).ok_or("no Session")?.show(fed.session);
     host::device(object(screen)).ok_or("no Device")?.show(&library.device);
+    if fed.screen == Screen::Settings {
+        host::settings(object(screen)).ok_or("no Settings")?.show(&display_settings()?);
+    }
     let mut kit = tokens(screen).ok_or("the kit's Tokens are not in the theme's engine")?;
     kit.as_mut().set_form(kinds::form_of(WalkForm::BigScreen));
     kit.as_mut().set_reduced_motion(fed.reduced);
     host::set_token_overrides(object(screen), overrides);
     Ok(())
+}
+
+/// Settings as the program's model gives it on its Display page, its first row focused, the settings read from the world's Galaxia as the program reads them (qt-app/src/theme.rs, feed_settings).
+fn display_settings() -> Result<emusen_theme_qt::settings::SettingsFacts, String> {
+    let source = emusen_qt_models::settings_source::ClientSettings::open(&emusen_client_fixture::library().to_string_lossy())?;
+    let mut view = emusen_qt_models::settings::SettingsView::new();
+    view.read = emusen_qt_models::settings::read(&source)?;
+    let display = view.section_keys().iter().position(|k| k == "display").ok_or("Settings has no Display section")?;
+    view.choose_section(display);
+    let rows = view.rows();
+    emusen_theme_qt::settings::facts_of(&view, &rows, 0)
 }
 
 /// The section the program names while a screen is shown (qt-models/src/sections.rs), empty for a screen that is none.

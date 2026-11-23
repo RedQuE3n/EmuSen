@@ -5,6 +5,13 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.11: the walk follows the host's row (2026-11-23)
+
+- **`MeasuredWalk.follows`**: a row the walk keeps focused, focused when it changes and whenever the rows are read, the
+  window kept around it, so a screen that takes the focus from its model never sees the walk tell a focus of its own in
+  between; -1, the default, follows none and the walk behaves as in 1.10. Eclipse's Settings binds it to the model's focus,
+  as the theme rules forbid the handler it replaces (qml-rules' function and onCompleted). `EmuSen_Kit.md` §7.122.
+
 ## 1.10: the rows' walk over rows of their own heights (2026-11-16)
 
 - **`MeasuredWalk`**: kit-core's `MeasuredWalk` on Qt, the walk of `SettingsLayout` (Up and Down, Left and Right stepping

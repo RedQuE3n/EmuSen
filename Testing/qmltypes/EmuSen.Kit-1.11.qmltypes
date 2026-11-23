@@ -1907,7 +1907,7 @@ Module {
     }
     Component {
         file: "measured_walk.cxxqt.h"
-        lineNumber: 113
+        lineNumber: 122
         name: "MeasuredWalk"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -1921,7 +1921,7 @@ Module {
             write: "setModel"
             notify: "modelChanged"
             index: 0
-            lineNumber: 118
+            lineNumber: 127
         }
         Property {
             name: "window"
@@ -1930,7 +1930,7 @@ Module {
             write: "setWindow"
             notify: "windowChanged"
             index: 1
-            lineNumber: 119
+            lineNumber: 128
         }
         Property {
             name: "gap"
@@ -1939,7 +1939,7 @@ Module {
             write: "setGap"
             notify: "gapChanged"
             index: 2
-            lineNumber: 120
+            lineNumber: 129
         }
         Property {
             name: "sections"
@@ -1948,7 +1948,7 @@ Module {
             write: "setSections"
             notify: "sectionsChanged"
             index: 3
-            lineNumber: 121
+            lineNumber: 130
         }
         Property {
             name: "section"
@@ -1957,7 +1957,7 @@ Module {
             write: "setSection"
             notify: "sectionChanged"
             index: 4
-            lineNumber: 122
+            lineNumber: 131
         }
         Property {
             name: "trailShown"
@@ -1966,15 +1966,24 @@ Module {
             write: "setTrailShown"
             notify: "trailShownChanged"
             index: 5
-            lineNumber: 123
+            lineNumber: 132
+        }
+        Property {
+            name: "follows"
+            type: "int"
+            read: "getFollows"
+            write: "setFollows"
+            notify: "followsChanged"
+            index: 6
+            lineNumber: 133
         }
         Property {
             name: "count"
             type: "int"
             read: "getCount"
             notify: "walked"
-            index: 6
-            lineNumber: 124
+            index: 7
+            lineNumber: 134
             isReadonly: true
         }
         Property {
@@ -1982,8 +1991,8 @@ Module {
             type: "int"
             read: "getCurrent"
             notify: "walked"
-            index: 7
-            lineNumber: 125
+            index: 8
+            lineNumber: 135
             isReadonly: true
         }
         Property {
@@ -1991,8 +2000,8 @@ Module {
             type: "int"
             read: "getFirst"
             notify: "walked"
-            index: 8
-            lineNumber: 126
+            index: 9
+            lineNumber: 136
             isReadonly: true
         }
         Property {
@@ -2000,8 +2009,8 @@ Module {
             type: "double"
             read: "getOffset"
             notify: "walked"
-            index: 9
-            lineNumber: 127
+            index: 10
+            lineNumber: 137
             isReadonly: true
         }
         Property {
@@ -2009,97 +2018,103 @@ Module {
             type: "int"
             read: "getMarked"
             notify: "walked"
-            index: 10
-            lineNumber: 128
+            index: 11
+            lineNumber: 138
             isReadonly: true
         }
-        Signal { name: "modelChanged"; lineNumber: 150 }
-        Signal { name: "windowChanged"; lineNumber: 151 }
-        Signal { name: "gapChanged"; lineNumber: 152 }
-        Signal { name: "sectionsChanged"; lineNumber: 153 }
-        Signal { name: "sectionChanged"; lineNumber: 154 }
-        Signal { name: "trailShownChanged"; lineNumber: 155 }
-        Signal { name: "walked"; lineNumber: 162 }
+        Signal { name: "modelChanged"; lineNumber: 162 }
+        Signal { name: "windowChanged"; lineNumber: 163 }
+        Signal { name: "gapChanged"; lineNumber: 164 }
+        Signal { name: "sectionsChanged"; lineNumber: 165 }
+        Signal { name: "sectionChanged"; lineNumber: 166 }
+        Signal { name: "trailShownChanged"; lineNumber: 167 }
+        Signal { name: "followsChanged"; lineNumber: 168 }
+        Signal { name: "walked"; lineNumber: 175 }
         Signal {
             name: "stepped"
-            lineNumber: 163
+            lineNumber: 176
             Parameter { name: "row"; type: "int" }
             Parameter { name: "by"; type: "int" }
         }
         Signal {
             name: "sectionChosen"
-            lineNumber: 164
+            lineNumber: 177
             Parameter { name: "section"; type: "int" }
         }
         Signal {
             name: "slid"
-            lineNumber: 165
+            lineNumber: 178
             Parameter { name: "row"; type: "int" }
             Parameter { name: "amount"; type: "double" }
         }
         Signal {
             name: "chosen"
-            lineNumber: 166
+            lineNumber: 179
             Parameter { name: "row"; type: "int" }
         }
         Method {
             name: "setModel"
-            lineNumber: 134
+            lineNumber: 144
             Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
         }
         Method {
             name: "setWindow"
-            lineNumber: 136
+            lineNumber: 146
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setGap"
-            lineNumber: 138
+            lineNumber: 148
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setSections"
-            lineNumber: 140
+            lineNumber: 150
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setSection"
-            lineNumber: 142
+            lineNumber: 152
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setTrailShown"
-            lineNumber: 144
+            lineNumber: 154
             Parameter { name: "value"; type: "bool" }
         }
-        Method { name: "read"; lineNumber: 156 }
+        Method {
+            name: "setFollows"
+            lineNumber: 156
+            Parameter { name: "value"; type: "int" }
+        }
+        Method { name: "read"; lineNumber: 169 }
         Method {
             name: "measure"
-            lineNumber: 157
+            lineNumber: 170
             Parameter { name: "row"; type: "int" }
             Parameter { name: "height"; type: "double" }
         }
         Method {
             name: "press"
             type: "bool"
-            lineNumber: 158
+            lineNumber: 171
             Parameter { name: "button"; type: "Pad::PadButton" }
         }
         Method {
             name: "key"
             type: "bool"
-            lineNumber: 159
+            lineNumber: 172
             Parameter { name: "key"; type: "int" }
             Parameter { name: "modifiers"; type: "int" }
         }
         Method {
             name: "focusRow"
-            lineNumber: 160
+            lineNumber: 173
             Parameter { name: "row"; type: "int" }
         }
         Method {
             name: "scrollTo"
-            lineNumber: 161
+            lineNumber: 174
             Parameter { name: "first"; type: "int" }
         }
     }

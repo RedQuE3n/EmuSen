@@ -20,8 +20,11 @@ Decided 2026-11-23 by the tester (R-20261123-30): "Add all four, one minor."
 - **`Settings.title`**, **`heading`** and **`aboutHeading`**: the screen's name (Home's place that opens it), the page's
   heading (the innermost page's name, else the section's) and the About panel's (the focused row's name), the words a
   theme drew by its own reasoning before (`SettingsView::title`, `heading`).
-- **`Settings.rows`' `form`**: `choice`, `switch`, `door` or `fact`, how the boards draw a row's value
-  (`settings_shown::Form`), so a theme no longer works it out from `kind` and `value`.
+- **`Settings.rows`' `form`**: a `SettingsForm` (`Settings.Choice`, `Switch`, `Door` or `Fact`), how the boards draw a
+  row's value (`settings_shown::Form`), so a theme no longer works it out from `kind` and `value`; a number, since the
+  theme rules read a word compared in QML as words the player would read.
+- **`Words.keyPair`**: Left with Right named as one key, "◀ ▶", the word the Settings boards' help line draws
+  (`words::KEY_PAIR`).
 - **X, back to the default** (R-20261123-30 (b), R-20261116-22): `Settings.defaultable` says whether the focused row has a
   default X restores; `Actions.act("default")` restores it (`SettingsView::to_default`: Galaxia's default, or on a row
   set per console each console's own); `Help.entries(kind, {settings: true, defaultable})` is a Settings kind's list as

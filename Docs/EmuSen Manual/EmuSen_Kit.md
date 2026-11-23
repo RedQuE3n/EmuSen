@@ -4488,7 +4488,8 @@ hair over it, and the window dropped the first row when the ninth was focused. A
 `kit-qt/src/measured_walk.rs` puts it on Qt as `MeasuredWalk`: it reads a list model's `kind`, `held`, `marked` and a
 slider's `minimum`, `maximum`, `step` and `amount` as `SettingsLayout` reads them (one function, `settings::walk_rows`, for
 both), takes `window` and `gap`, a row's height by `measure(row, height)`, and the pad and the keys by `press` and `key`;
-it gives `current`, `first`, `offset` (the scroll to the first row shown), `marked` and `count`, and raises `stepped`,
+from 1.11 `follows`, a row it keeps focused whenever that changes and whenever the rows are read, the window kept
+around it (-1, the default, none; kit-core's `follow`); it gives `current`, `first`, `offset` (the scroll to the first row shown), `marked` and `count`, and raises `stepped`,
 `slid`, `chosen` and `sectionChosen` as `SettingsLayout` does. Settings became a screen a theme can supply (decided
 2026-11-16 by the tester, R-20261116-19); a walk that takes each row's height from the screen that draws it, rather than
 one height for every row, is this piece's own technical choice, so a theme's rows may be of any height. Exported to themes

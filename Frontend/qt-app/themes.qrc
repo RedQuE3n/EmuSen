@@ -16,6 +16,7 @@
         <file alias="theme.json">../themes/emusen/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/eclipse">
+        <file alias="assets/sections.svg">../themes/eclipse/assets/sections.svg</file>
         <file alias="parts/ArtHues.qml">../themes/eclipse/parts/ArtHues.qml</file>
         <file alias="parts/Board.qml">../themes/eclipse/parts/Board.qml</file>
         <file alias="parts/Brand.qml">../themes/eclipse/parts/Brand.qml</file>

@@ -1,7 +1,7 @@
 //! The oracle of Eclipse's Settings on its Display page in the running program, driven by an SDL pad in this process and by the pointer (EmuSen_Qt.md §3.4.11).
 
 use crate::common::wait_for;
-use crate::eclipse_board::{held, read, rows};
+use crate::eclipse_board::{held, read, rows, Row};
 use crate::eclipse_pad::{focused, press};
 use cxx_qt::casting::Upcast;
 use emusen_client_fixture::{library, World};
@@ -215,6 +215,7 @@ pub fn oracle(backend: &str) {
             ("asideHeading".to_owned(), "CRT shader".to_owned()),
             ("asideSentence".to_owned(), s.sentence().to_string()),
             ("asideCaption".to_owned(), s.caption().to_string()),
+            ("asideMuted.0".to_owned(), "For every console that had a television. A console can choose its own in Consoles.".to_owned()),
         ];
         if sections != ["Controllers", "Display", "Sound", "Consoles", "Library", "EmuSen"] {
             differences.push(format!("{at_size}: the sections are {sections:?} where the board names Controllers, Display, Sound, Consoles, Library, EmuSen"));
@@ -269,6 +270,26 @@ pub fn oracle(backend: &str) {
         differences.push("Down past the last row moved the focus".to_owned());
     }
     pictures(&mut scene, backend, "last");
+    // The program's rows past the board's nine, now in the window, each held by the table's rows of the board's row of its form.
+    for (width, height) in SIZES {
+        scene.resize(width, height);
+        scene.wait(300);
+        let tree = scene.tree();
+        let at_size = format!("{width}x{height}, the last row focused");
+        let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
+        let screen: u64 = tree.nodes[tree.find_named("settingsScreen").expect("Eclipse's Settings") as usize].id.parse().unwrap();
+        let tokens = crate::eclipse_board::tokens(screen);
+        let s = settings(&mut scene);
+        let (model_rows, facets) = (s.shown_rows().to_vec(), s.view().facets());
+        let mut later = Vec::new();
+        for i in BOARD_ROWS.len()..count {
+            later.extend(like(&table, i, model_rows[i].kind, facets[i].switch, !facets[i].about.is_empty(), i + 1 == count));
+        }
+        later.extend(table.iter().filter(|r| r.name == "rowRing").map(|r| renamed(r, 0, 0)));
+        held(&tree, &later, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
+    }
+    scene.resize(1920, 1200);
+    scene.wait(300);
     // Each row acted on by the pad: Right then Left, A twice, or A and B.
     for i in (0..count).rev() {
         if i + 1 < count {
@@ -357,6 +378,62 @@ pub fn oracle(backend: &str) {
     press(&mut scene, &sdl, &pad, PadControl::East);
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
     scene.assert_quiet();
+}
+
+/// A table row with every element of the board's row `from` named for row `to`, the row before it for the row before `to`.
+fn renamed(r: &Row, from: usize, to: usize) -> Row {
+    let spec = |s: &str| {
+        s.split(':')
+            .map(|t| match t.rsplit_once('.').and_then(|(n, i)| Some((n, i.parse::<usize>().ok()?))) {
+                Some((n, i)) if n.starts_with("row") && i == from => format!("{n}.{to}"),
+                Some((n, i)) if n.starts_with("row") && i + 1 == from => format!("{n}.{}", to - 1),
+                _ => t.to_owned(),
+            })
+            .collect::<Vec<_>>()
+            .join(":")
+    };
+    Row {
+        name: spec(&r.name),
+        part: r.part.clone(),
+        x: spec(&r.x),
+        y: spec(&r.y),
+        w: spec(&r.w),
+        h: spec(&r.h),
+        radius: r.radius.clone(),
+        colour: r.colour.clone(),
+        size: r.size.clone(),
+        status: r.status.clone(),
+        kind: r.kind.clone(),
+    }
+}
+
+/// Row `i`'s table rows by the board's frame, the rule of its form's board row (EmuSen_Qt.md §3.4.11, the proof).
+fn like(table: &[Row], i: usize, kind: RowKind, switch: Option<bool>, about: bool, focused: bool) -> Vec<Row> {
+    let from = match (switch, kind) {
+        (Some(_), _) => 6,
+        (None, RowKind::Steps | RowKind::Slider) => 4,
+        _ => 3,
+    };
+    let suffix = format!(".{from}");
+    let mut out: Vec<Row> = table.iter().filter(|r| r.name.ends_with(&suffix) && r.name.starts_with("row")).map(|r| renamed(r, from, i)).collect();
+    if !about {
+        out.retain(|r| !r.name.starts_with("rowAbout."));
+        out.iter_mut().filter(|r| r.name.starts_with("rowName.")).for_each(|r| r.y = format!("mid:row.{i}"));
+    }
+    if focused {
+        let lit = table.iter().find(|r| r.name == "rowFill.1").expect("the focused row's fill");
+        out.iter_mut().filter(|r| r.name.starts_with("rowFill.")).for_each(|r| (r.colour, r.kind) = (lit.colour.clone(), lit.kind.clone()));
+    }
+    if switch == Some(false) {
+        for r in out.iter_mut() {
+            if r.name.starts_with("rowSwitch.") {
+                (r.colour, r.kind) = ("#00000000".to_owned(), "line 2 #FF5A6076".to_owned());
+            } else if r.name.starts_with("rowKnob.") {
+                (r.x, r.colour) = (format!("in:rowSwitch.{i}:6"), "Tokens.muted".to_owned());
+            }
+        }
+    }
+    out
 }
 
 /// With `EMUSEN_ECLIPSE_PICTURES` naming a folder, the screen grabbed at the board's size into it.

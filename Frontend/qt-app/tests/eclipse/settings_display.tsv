@@ -103,6 +103,6 @@ asidePictureGlow	146	its glow, 0 0 60px 10px rgba(120, 140, 255, 0.25)	the kit's
 asideCaption	162	the small line under the picture	Settings.caption	Text	in:settingsAside:0	below:asidePicture:22	-	-	-	Tokens.muted	18	built	400 0 none
 asideHeading	162	the focused row's name, "CRT shader"	the focused row's label	Text	in:settingsAside:0	below:asideCaption:22	-	-	-	Tokens.text	26	built	600 0 none
 asideSentence	162	the paragraph, 20 px light, line height 1.5	Settings.sentence, the program's (R-20261116-20)	Text	in:settingsAside:0	below:asideHeading:22	-	-	-	#FFC9CDDB	20	built	300 0 none
-asideSmall	162	"For every console that had a television. A console can choose its own in Consoles."	none: the program has no such line (differences.tsv Display-7, open)	-	-	-	-	-	-	-	-	nothing	-
+asideMuted.0	162	"For every console that had a television. A console can choose its own in Consoles.", 18 px, line height 1.5, two lines	Settings.muted, CRT shader's muted line (qt-models/data/settings_screen.json)	Text	in:settingsAside:0	below:asideSentence:22	424	54	-	Tokens.muted	18	built	400 0 none
 help	114	the help line's entries, 34 px apart, its middle 40 + 19 px over the foot	Help.entries(Settings.help), Eclipse's HelpLine	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
 settingsPlace	118	"2 of 16": the focused row among the page's	Words.place(Settings.focused, Settings.count) (R-20261116-21)	Text	-	mid:help	right:96	-	-	Tokens.muted	21	built	400 0 none

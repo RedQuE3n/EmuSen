@@ -1089,7 +1089,7 @@ Settings' calls from the page declined with nothing changed; every tab of a game
 and words, the focus walked down each tab and read back, Favourite turned by `pageAct` and back by `pageDeclared`, an
 Options row stepped, a Details door opened and left, the question read and answered No, B leaving the page, and Resume
 stepped by `pageStepAction` and run, the game starting from the state stepped to. `theme_pages_play.rs` runs Play from
-the theme's page; `theme_pages_builtin.rs` holds that under a package of the reference's screens with Eclipse's tokens, which draws neither screen, a `refocus` told while
+the theme's page; `theme_pages_builtin.rs` holds that under a chosen theme that draws neither screen (a package of the reference's screens, through the chosen host, since the reference takes none and Eclipse now draws Settings), a `refocus` told while
 Settings is closed leaves the model's row alone. `theme-qt/tests/surface.rs` holds the two singletons and their calls, and
 that every property of `Settings`, `Page` and their rows is read-only with no call beyond reading rows; `tests/qml.rs`
 checks every help kind's lists; the built-in themes' own tests run unchanged.
@@ -2207,7 +2207,7 @@ List card and the games view agreeing) and `eclipse_games_empty.rs` (the empty b
 Decided 2026-11-16 by the tester (R-20261116-19): Settings is a screen a theme supplies through the read-only `Settings`
 view (§3.2). Eclipse's is `Frontend/themes/eclipse/screens/Settings.qml`, drawn from the Settings boards that
 `gen_settings.py` writes; its frame is every board's, and its first page is Display, the board "Eclipse theme, Settings,
-Display" (`EclipseSettings.dc.html`, gen_settings.py:152-163). Decided 2026-11-15 by the tester (R-20261115-19): the
+Display" (`EclipseSettings.dc.html`, gen_settings.py:152-163). Decided 2026-11-15 by the tester (R-20261115-24): the
 screen is its board exactly, text sizes included. The other pages follow on the same frame, each its rows' words in the
 program's data and its own aside.
 
@@ -2234,27 +2234,46 @@ and a row past the window is not drawn. Up and Down move the model's focus (`set
 by hovering, clicks it as A, steps a choice by its chevrons and moves the window by the wheel. The model's focus is the one
 that stands: a focus it moves (a page closed, a section opened) moves the walk's.
 
-The About panel: the picture where the pane's preview is one, 424 by 318 inside its rim and glow, the paused game's own
-frame (`Session.frame`) where a game is suspended (R-20261116-25); its caption; the focused row's name; the program's
-sentence (R-20261116-20); its further lines and its muted lines, in the board's paragraph and small forms
-(R-20261123-21); the text-size and variant previews' samples as lines.
+The About panel: the picture where the pane's preview is one, 424 by 318 inside its rim and glow; its caption; the
+focused row's name; the program's sentence (R-20261116-20); its further lines and its muted lines, in the board's
+paragraph and small forms (R-20261123-21); the text-size and variant previews' samples as lines. CRT shader's muted line
+is the board's small line under its paragraph, "For every console that had a television. A console can choose its own in
+Consoles." (G:162), in the description: the row sets every console whose screen is a television (`consoles`
+"televisions", `settings.rs`' `consoles`) and a console's page has its own CRT profile (the `crtprofile` row).
 
-Not built, each the tester's to rule: the board's X "Back to the default" and the help line's words "Change" and
-"Choose or open" need the theme API (a declared action and a naming of the help's entries for Settings, as `card` names
-Home's); the sections' icons need each section's key, which `Settings.sections` does not give; the picture with no game
-suspended, the last screenshot through the chosen filter, has no way to a theme; the board's small line under CRT
-shader's paragraph has no words in the program (the words list's Display-7).
+Of R-20261116-25 (decided 2026-11-16: the paused game's own frame when a game is suspended, else the last screenshot
+taken, each through the chosen filter) one half is built: where a game is suspended the picture is `Session.frame`, the
+item `qt-play/qml/Game.qml` draws the game in (`Kit.GamePicture`, which draws a still picture again through what the
+settings ask for, Game.qml:71-72), cut to the panel's shape. The other half is not built: the last screenshot has no way
+to a theme (`Session` gives `frame` alone, `theme-qt/src/session.rs:21-29`), so with no game suspended the picture is
+its rim and glow over nothing. No test yet suspends a game under this page.
+
+Not built, each waiting on the theme API, which is frozen for the sprint (R-20261123-26): the board's X "Back to the
+default" (a help entry and its action); the help line's words and order, "Change" on ◀ ▶ and "Choose or open" on A
+before Section and Home (the Settings lists are shared with the program's own Settings, `qt-models/src/help.rs`
+Screen::Settings, and a theme names a list only as `Own`, `Card`, `Options` or `Games`, `theme-qt/src/help.rs`); the ◀ ▶
+key as one glyph (the kit's `HelpBar` gives a theme's glyph its `button` alone and draws the pair's second glyph apart);
+the sections' icons (`Settings.sections` gives names, no keys); the last screenshot. Four words the screen still works
+out in QML wait on the same freeze: the header's title (Library.places searched for the settings place), the heading (the
+trail's last, else the section's name), the About heading (the focused row's label) and a row's form (`kind`, `isSwitch`
+and, for an action, whether it has a value).
 
 **Proof.** qt-app's `eclipse_settings.rs`, the oracle `eclipse_settings_oracle` in the running program on the software
 backend: Settings opened from Home with the reference theme, Eclipse then chosen, RB to Display and Down to CRT shader,
 the board's state; every row of `tests/eclipse/settings_display.tsv` (read from the board in Chrome after
 `document.fonts.ready`, with the program's own Sora files) held at the gate's five sizes by `eclipse_board`'s rules; the
 page's glow in Display's colour; the words: the title, the sections, the heading, the nine board rows' names, short lines
-and values, "2 of 15", the panel's heading, sentence and caption; every row reached by the pad down to the last and back,
+and values, "2 of 15", the panel's heading, sentence, caption and CRT shader's small line; every row reached by the pad down to the last and back,
 each focused, drawn and counted; every row acted on by the pad (Right and Left, A twice on a switch, A and B on a door)
-and by the pointer (a click, the chevrons, the wheel for the rows past the window); the sections by RB, LB and a click;
+and by the pointer (a click, the chevrons, the wheel for the rows past the window); the program's six rows past the
+board's nine, with the last row focused, held at every gate size by the table's rows of the board's row of their form
+(a choice row 4's, a switch row 6's, a door row 3's, renamed): the same height, the 10 px gap, the value forms; a row
+with no short line has its name in the row's middle, as the board's centred column puts it (G:27); the focused row is
+filled as row 1 is; a switch turned off has the board's off track and knob (G:56-58: no fill, the line #5A6076, the knob
+4 px in and muted); the sections by RB, LB and a click;
 B leaving Settings. `eclipse_settings_gpu.rs` runs the same oracle on the graphics card (a GPU job, through `gpu.sh`) and
-saves the pictures to the folder `EMUSEN_ECLIPSE_PICTURES` names. qt-models' `settings.rs` holds Display's short lines.
+saves the pictures to the folder `EMUSEN_ECLIPSE_PICTURES` names. qt-models' `settings.rs` holds Display's short lines
+and CRT shader's small line.
 
 ### 3.5 Loading and the sandbox
 

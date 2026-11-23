@@ -359,4 +359,6 @@ fn qt_3_4_11_display_s_rows_carry_their_board_s_short_lines_and_the_others_none(
     }
     let drawn: Vec<usize> = board.iter().map(|(id, _)| index(&view, id)).collect();
     assert!((0..facets.len()).filter(|i| !drawn.contains(i)).all(|i| facets[i].about.is_empty()), "a row no board draws has no short line until it is ruled on");
+    // The board's small line under CRT shader's paragraph (G:162), true of the row: it sets the televisions, and a console's page has its own CRT profile.
+    assert_eq!(view.pane(index(&view, "crt")).muted, ["For every console that had a television. A console can choose its own in Consoles."]);
 }

@@ -1,5 +1,4 @@
-//! EmuSen_Kit.md §7.121: under Eclipse, whose size tokens were read off its boards, no word of the program's own Settings
-//! or Themes tab is under the legibility floor at any gate size, by the kit's gate's own rule.
+//! EmuSen_Kit.md §7.121: under Eclipse's tokens no word of the program's Themes tab or of its own Settings (under a theme with those tokens that supplies none) is under the floor.
 
 mod common;
 
@@ -35,7 +34,7 @@ fn too_small(scene: &mut Scene<'_>, at: &str) -> Vec<String> {
 }
 
 #[test]
-fn kit_7_121_under_eclipse_no_word_of_the_program_s_settings_is_under_the_floor() {
+fn kit_7_121_under_eclipse_s_tokens_no_word_of_the_program_s_themes_tab_or_settings_is_under_the_floor() {
     let _world = sandbox("qt-app-eclipse-floor", &[("NES", "One.nes")]);
     let mut harness = emusen_qt_test::Harness::new();
     let (w, h) = emusen_qt_test::harness::SIZES[0];
@@ -72,8 +71,7 @@ fn kit_7_121_under_eclipse_no_word_of_the_program_s_settings_is_under_the_floor(
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);
     wait_for(&mut scene, "themesModel", "findings", "In use.", 2000);
 
-    // The Themes tab, then each of the program's own Settings' six sections, at every gate size: Eclipse draws its own Settings
-    // (EmuSen_Qt.md §3.4.11), so the program's is shown under a package of the reference's screens with Eclipse's tokens.
+    // The Themes tab under Eclipse, then the program's Settings under the reference's screens with Eclipse's tokens, as Eclipse draws its own (EmuSen_Kit.md §7.121).
     let mut found = too_small(&mut scene, "Themes");
     let folder = eclipse_reference();
     assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));
@@ -91,5 +89,5 @@ fn kit_7_121_under_eclipse_no_word_of_the_program_s_settings_is_under_the_floor(
         scene.pad(UiButton::PageDown);
     }
     let _ = std::fs::remove_dir_all(&folder);
-    assert!(found.is_empty(), "{} words under the floor under Eclipse:\n{}", found.len(), found.join("\n"));
+    assert!(found.is_empty(), "{} words under the floor under Eclipse's tokens:\n{}", found.len(), found.join("\n"));
 }

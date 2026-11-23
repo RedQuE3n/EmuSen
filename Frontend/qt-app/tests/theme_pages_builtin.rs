@@ -1,4 +1,4 @@
-//! Under a theme that draws neither screen, the feed never answers Settings' model (EmuSen_Qt.md §3.2, the proof paragraph).
+//! Under a chosen theme that draws neither Settings nor a game's page, the feed never answers Settings' model (EmuSen_Qt.md §3.2, the proof paragraph).
 
 mod common;
 
@@ -11,13 +11,13 @@ use emusen_qt_models::settings_model::qobject::SettingsModel;
 use std::pin::Pin;
 
 #[test]
-fn qt_3_2_a_built_in_theme_leaves_settings_to_the_program() {
+fn qt_3_2_a_chosen_theme_that_supplies_neither_screen_leaves_settings_to_the_program() {
     let _world = sandbox("qt-app-theme-pages-builtin", &[("NES", "One.nes"), ("NES", "Two.nes")]);
     let mut harness = emusen_qt_test::Harness::new();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
-    // A package of the reference's screens with Eclipse's tokens, which draws neither Settings nor a game's page.
+    // No built-in but the reference, which takes no chosen host, now lacks Settings: a package of its screens, through the chosen host as Eclipse once was.
     let folder = eclipse_reference();
     assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);

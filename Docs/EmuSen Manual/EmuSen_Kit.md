@@ -4456,8 +4456,12 @@ where the floor there is 11.60. Eclipse's tokens were read off its boards (`font
 program's own screens drew Settings rows and pane lines under the floor; they are now raised. The kit's own big-screen
 sizes (20 and above) pass the floor, so the reference's sizes do not move. Tests: kit-core's `legible_text.rs`
 (`kit_7_121_a_theme_s_size_tokens_are_never_under_the_floor_on_the_big_screen`), kit-qt's `column.rs`, qt-app's `eclipse`,
-and qt-app's `eclipse_floor`, which uses Eclipse and runs the kit's gate's legibility rule over the Themes tab and Settings'
-six sections at every gate size: 85 words under the floor at 1280 × 720 before, none after.
+and qt-app's `eclipse_floor`, which runs the kit's gate's legibility rule at every gate size over the Themes tab with
+Eclipse in use and over the program's own Settings' six sections under Eclipse's tokens: 85 words under the floor at
+1280 × 720 before, none after. Since Eclipse draws its own Settings (EmuSen_Qt.md §3.4.11), the program's Settings is
+shown there under a package of the reference's screens with Eclipse's tokens, as under any theme with those tokens that
+supplies no Settings; Eclipse's own Settings is drawn at its board's sizes, which the legibility gate does not judge
+(R-20261115-29).
 
 
 ### 7.122 MeasuredWalk: the rows' walk over rows of their own heights (2026-11-16)

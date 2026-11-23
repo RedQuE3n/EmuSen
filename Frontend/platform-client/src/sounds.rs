@@ -6,6 +6,10 @@ use crate::raw;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
+/// The interface player's samples: this rate and these channels, 32-bit float interleaved, as `remember` keeps them.
+pub const RATE: u32 = 48_000;
+pub const CHANNELS: u32 = 2;
+
 /// The interface's sound player.
 pub struct InterfacePlayer {
     platform: Arc<Platform>,

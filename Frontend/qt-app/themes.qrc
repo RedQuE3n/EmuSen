@@ -28,6 +28,11 @@
         <file alias="parts/Nav.qml">../themes/eclipse/parts/Nav.qml</file>
         <file alias="parts/Pill.qml">../themes/eclipse/parts/Pill.qml</file>
         <file alias="parts/SectionsHelp.qml">../themes/eclipse/parts/SectionsHelp.qml</file>
+        <file alias="parts/Ease.qml">../themes/eclipse/parts/Ease.qml</file>
+        <file alias="parts/Encore.qml">../themes/eclipse/parts/Encore.qml</file>
+        <file alias="parts/PlanetInk.qml">../themes/eclipse/parts/PlanetInk.qml</file>
+        <file alias="parts/SplashCorona.qml">../themes/eclipse/parts/SplashCorona.qml</file>
+        <file alias="parts/Blend.qml">../themes/eclipse/parts/Blend.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
         <file alias="parts/Chevron.qml">../themes/eclipse/parts/Chevron.qml</file>
         <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>
@@ -41,6 +46,8 @@
         <file alias="screens/Consoles.qml">../themes/eclipse/screens/Consoles.qml</file>
         <file alias="screens/Home.qml">../themes/eclipse/screens/Home.qml</file>
         <file alias="screens/Settings.qml">../themes/eclipse/screens/Settings.qml</file>
+        <file alias="screens/Splash.qml">../themes/eclipse/screens/Splash.qml</file>
+        <file alias="sounds/splash.flac">../themes/eclipse/sounds/splash.flac</file>
         <file alias="theme.json">../themes/eclipse/theme.json</file>
     </qresource>
 </RCC>

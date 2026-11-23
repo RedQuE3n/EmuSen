@@ -25,7 +25,7 @@ const TABLE: &str = include_str!("../eclipse_home.tsv");
 const ECLIPSE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes/eclipse");
 
 /// The board's six games in Recent's order, each with an extension only its console lists; the first is the one suspended.
-const GAMES: [(&str, &str); 6] = [
+pub const GAMES: [(&str, &str); 6] = [
     ("Aurora Drift", "sfc"),
     ("Lumen Garden", "gb"),
     ("Tower Set", "nes"),
@@ -77,7 +77,7 @@ Window {
 }
 "##;
 
-fn rom(world: &World, title: &str, ext: &str) -> String {
+pub fn rom(world: &World, title: &str, ext: &str) -> String {
     world.dir("Roms").join(format!("{title}.{ext}")).to_string_lossy().into_owned()
 }
 
@@ -86,7 +86,7 @@ const COVER: (u32, u32) = (450, 600);
 
 /// The six games written, played an hour apart with the first the latest, each but the last with a cover in an ES-DE media
 /// folder, and read through the real clients; the media folder, which the host lets a theme show.
-fn synthetic(world: &World, harness: &mut emusen_qt_test::Harness) -> (LibraryView, std::path::PathBuf) {
+pub fn synthetic(world: &World, harness: &mut emusen_qt_test::Harness) -> (LibraryView, std::path::PathBuf) {
     for (title, ext) in GAMES {
         std::fs::write(rom(world, title, ext), [0u8; 4096]).unwrap();
     }

@@ -13,6 +13,7 @@ extern crate emusen_theme_qt;
 #[cfg(feature = "gate-pad")]
 pub mod gate_pad;
 pub mod cues;
+pub mod splash_sound;
 pub mod start;
 pub mod style;
 pub mod theme;

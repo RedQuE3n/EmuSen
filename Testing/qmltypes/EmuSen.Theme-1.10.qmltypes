@@ -747,7 +747,7 @@ Module {
     }
     Component {
         file: "library.cxxqt.h"
-        lineNumber: 33
+        lineNumber: 42
         name: "ThemeLibrary"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -761,7 +761,7 @@ Module {
             isPointer: true
             read: "getConsoles"
             index: 0
-            lineNumber: 39
+            lineNumber: 48
             isReadonly: true
             isPropertyConstant: true
         }
@@ -771,7 +771,7 @@ Module {
             isPointer: true
             read: "getPlaces"
             index: 1
-            lineNumber: 40
+            lineNumber: 49
             isReadonly: true
             isPropertyConstant: true
         }
@@ -781,7 +781,7 @@ Module {
             isPointer: true
             read: "getShelves"
             index: 2
-            lineNumber: 41
+            lineNumber: 50
             isReadonly: true
             isPropertyConstant: true
         }
@@ -791,7 +791,7 @@ Module {
             isPointer: true
             read: "getRecent"
             index: 3
-            lineNumber: 42
+            lineNumber: 51
             isReadonly: true
             isPropertyConstant: true
         }
@@ -801,7 +801,7 @@ Module {
             isPointer: true
             read: "getFavourites"
             index: 4
-            lineNumber: 43
+            lineNumber: 52
             isReadonly: true
             isPropertyConstant: true
         }
@@ -811,7 +811,7 @@ Module {
             isPointer: true
             read: "getCollections"
             index: 5
-            lineNumber: 44
+            lineNumber: 53
             isReadonly: true
             isPropertyConstant: true
         }
@@ -821,7 +821,7 @@ Module {
             isPointer: true
             read: "getShelf"
             index: 6
-            lineNumber: 45
+            lineNumber: 54
             isReadonly: true
             isPropertyConstant: true
         }
@@ -831,7 +831,7 @@ Module {
             isPointer: true
             read: "getSections"
             index: 7
-            lineNumber: 46
+            lineNumber: 55
             isReadonly: true
             isPropertyConstant: true
         }
@@ -841,7 +841,26 @@ Module {
             read: "getSection"
             notify: "sectionChanged"
             index: 8
-            lineNumber: 47
+            lineNumber: 56
+            isReadonly: true
+        }
+        Property {
+            name: "cores"
+            type: "ThemeRows"
+            isPointer: true
+            read: "getCores"
+            index: 9
+            lineNumber: 57
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "gameCount"
+            type: "int"
+            read: "getGameCount"
+            notify: "gameCountChanged"
+            index: 10
+            lineNumber: 58
             isReadonly: true
         }
         Property {
@@ -849,31 +868,32 @@ Module {
             type: "int"
             read: "getArtHuesRead"
             notify: "artHuesReadChanged"
-            index: 9
-            lineNumber: 48
+            index: 11
+            lineNumber: 59
             isReadonly: true
         }
-        Signal { name: "sectionChanged"; lineNumber: 63 }
-        Signal { name: "artHuesReadChanged"; lineNumber: 64 }
+        Signal { name: "sectionChanged"; lineNumber: 76 }
+        Signal { name: "gameCountChanged"; lineNumber: 77 }
+        Signal { name: "artHuesReadChanged"; lineNumber: 78 }
         Method {
             name: "gamesOf"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 65
+            lineNumber: 79
             Parameter { name: "id"; type: "QString" }
         }
         Method {
             name: "search"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 66
+            lineNumber: 80
             Parameter { name: "words"; type: "QString" }
         }
         Method {
             name: "firstOf"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 67
+            lineNumber: 81
             Parameter { name: "id"; type: "QString" }
             Parameter { name: "count"; type: "int" }
         }
@@ -881,7 +901,7 @@ Module {
             name: "consolesBy"
             type: "ThemeRows"
             isPointer: true
-            lineNumber: 68
+            lineNumber: 82
             Parameter { name: "show"; type: "int" }
             Parameter { name: "order"; type: "int" }
             Parameter { name: "shortened"; type: "QStringList" }
@@ -889,7 +909,7 @@ Module {
         Method {
             name: "artHues"
             type: "QList_f64"
-            lineNumber: 69
+            lineNumber: 83
             Parameter { name: "key"; type: "QString" }
             Parameter { name: "most"; type: "int" }
         }
@@ -1497,6 +1517,47 @@ Module {
         Signal { name: "shown"; lineNumber: 67 }
     }
     Component {
+        file: "splash.cxxqt.h"
+        lineNumber: 41
+        name: "ThemeSplash"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Theme/Splash 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "shown"
+            type: "bool"
+            read: "getShown"
+            notify: "shownChanged"
+            index: 0
+            lineNumber: 47
+            isReadonly: true
+        }
+        Property {
+            name: "time"
+            type: "double"
+            read: "getTime"
+            notify: "timeChanged"
+            index: 1
+            lineNumber: 48
+            isReadonly: true
+        }
+        Property {
+            name: "ease"
+            type: "double"
+            read: "getEase"
+            notify: "easeChanged"
+            index: 2
+            lineNumber: 49
+            isReadonly: true
+        }
+        Signal { name: "shownChanged"; lineNumber: 57 }
+        Signal { name: "timeChanged"; lineNumber: 58 }
+        Signal { name: "easeChanged"; lineNumber: 59 }
+    }
+    Component {
         file: "words.cxxqt.h"
         lineNumber: 23
         name: "ThemeWords"
@@ -1817,10 +1878,18 @@ Module {
             Parameter { name: "consoles"; type: "int" }
         }
         Method {
-            name: "summary"
+            name: "splashCounts"
             type: "QString"
             isMethodConstant: true
             lineNumber: 95
+            Parameter { name: "games"; type: "int" }
+            Parameter { name: "cores"; type: "int" }
+        }
+        Method {
+            name: "summary"
+            type: "QString"
+            isMethodConstant: true
+            lineNumber: 96
             Parameter { name: "consoles"; type: "int" }
             Parameter { name: "games"; type: "int" }
         }
@@ -1828,14 +1897,14 @@ Module {
             name: "pausedAgo"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 96
+            lineNumber: 97
             Parameter { name: "paused_since"; type: "double" }
         }
         Method {
             name: "playedFacts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 97
+            lineNumber: 98
             Parameter { name: "at"; type: "double" }
             Parameter { name: "seconds"; type: "double" }
         }
@@ -1843,28 +1912,28 @@ Module {
             name: "continueLine"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 98
+            lineNumber: 99
             Parameter { name: "console"; type: "QString" }
         }
         Method {
             name: "resumePoint"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 99
+            lineNumber: 100
             Parameter { name: "paused_since"; type: "double" }
         }
         Method {
             name: "gameArt"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 100
+            lineNumber: 101
             Parameter { name: "title"; type: "QString" }
         }
         Method {
             name: "shortTime"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 101
+            lineNumber: 102
             Parameter { name: "at"; type: "double" }
         }
     }

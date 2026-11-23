@@ -48,6 +48,15 @@ fn focused(scene: &mut Scene<'_>) -> Option<(String, f64, f64, f64, f64)> {
     })
 }
 
+/// The focused element's id, type and name from the harness tree: the element itself, which a rectangle does not say.
+fn focus_identity(scene: &mut Scene<'_>) -> Option<(String, String, String)> {
+    let tree = scene.tree();
+    scene.focus(&tree).map(|i| {
+        let n = &tree.nodes[i as usize];
+        (n.id.clone(), n.ty.clone(), n.name.clone())
+    })
+}
+
 /// The colour drawn at the focused row's left edge, where a kit row draws its accent bar.
 fn bar(scene: &mut Scene<'_>) -> (u8, u8, u8) {
     let (name, x, y, _, h) = focused(scene).expect("a focused row");
@@ -198,7 +207,7 @@ fn judged(scene: &mut Scene<'_>) -> Vec<String> {
 /// Each overriding theme over the screen shown, dark and light, its own screens loaded behind: what the gate finds that it
 /// does not under the kit's; with `notice`, a pad's notice raised over the screen for each look judged.
 fn under_each_theme(scene: &mut Scene<'_>, screen: &str, notice: Option<&Sdl>, report: &mut Vec<String>) {
-    let held = focused(scene).expect("the screen's focus");
+    let held = focus_identity(scene).expect("the screen's focus");
     for variant in [Variant::Dark, Variant::Light] {
         choose(scene, "");
         scene.set_variant(variant);
@@ -206,7 +215,7 @@ fn under_each_theme(scene: &mut Scene<'_>, screen: &str, notice: Option<&Sdl>, r
         for theme in overriding() {
             choose(scene, &format!("{THEMES}/{theme}"));
             assert_eq!(scene.property("chosenTheme", "status"), "Ready", "{theme}");
-            assert_eq!(focused(scene), Some(held.clone()), "{screen} keeps the focus under {theme}");
+            assert_eq!(focus_identity(scene), Some(held.clone()), "{screen} keeps the same element focused under {theme}");
             for line in judged_with(scene, notice).into_iter().filter(|l| !kit.contains(l)) {
                 report.push(format!("{screen} {theme} {variant:?}: {line}"));
             }

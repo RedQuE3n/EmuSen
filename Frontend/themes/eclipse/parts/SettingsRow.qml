@@ -39,19 +39,6 @@ Walkable {
     Ink {
         id: shared
     }
-    LineBox {
-        id: nameBox
-        size: 24
-        weight: Tokens.weightTitle
-    }
-    LineBox {
-        id: aboutBox
-        size: 17
-    }
-    LineBox {
-        id: valueBox
-        size: 22
-    }
     Rectangle {
         objectName: "rowFill." + root.index
         anchors.fill: parent
@@ -83,7 +70,8 @@ Walkable {
         Line {
             objectName: "rowName." + root.index
             unit: root.unit
-            height: nameBox.box * root.unit
+            // Its box the board's line box, its words on the board's baseline (Line.qml, boardLine).
+            boardLine: true
             text: root.label
             color: Tokens.text
             size: 24
@@ -95,7 +83,8 @@ Walkable {
             unit: root.unit
             visible: root.about.length > 0
             width: Math.min(implicitWidth, root.width - 2 * root.padX * root.unit - 24 * root.unit - shown.width)
-            height: aboutBox.box * root.unit
+            // Its box the board's line box, its words on the board's baseline (Line.qml, boardLine).
+            boardLine: true
             text: root.about
             color: Tokens.muted
             elide: Text.ElideRight
@@ -125,7 +114,8 @@ Walkable {
             unit: root.unit
             visible: !root.fact || root.value.length > 0
             width: Math.min(implicitWidth, 420 * root.unit)
-            height: valueBox.box * root.unit
+            // Its box the board's line box, its words on the board's baseline (Line.qml, boardLine).
+            boardLine: true
             y: (shown.height - height) / 2
             text: root.value
             color: root.choice || root.isSwitch ? Tokens.text : Tokens.muted

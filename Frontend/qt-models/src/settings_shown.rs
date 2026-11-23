@@ -12,6 +12,39 @@ pub struct RowFacets {
     pub tile: Option<ConsoleTile>,
 }
 
+/// How a theme draws a row's value, as the Settings boards do (EmuSen_Qt.md §3.4.11): between chevrons, a switch, a door's chevron, or words alone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Form {
+    Choice,
+    Switch,
+    Door,
+    Fact,
+}
+
+impl Form {
+    /// A row's form: a switch; a stepped value or a slider a choice; a page, a question or an action with no value a door; else a fact.
+    pub fn of(row: &crate::settings::Row, switch: Option<bool>) -> Form {
+        use emusen_kit_core::settings::RowKind;
+        match row.kind {
+            _ if switch.is_some() => Form::Switch,
+            RowKind::Steps | RowKind::Slider => Form::Choice,
+            RowKind::Opens | RowKind::Asks => Form::Door,
+            RowKind::Action if row.value.is_empty() => Form::Door,
+            _ => Form::Fact,
+        }
+    }
+
+    /// Its name as a theme reads it in `Settings.rows`' `form`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Form::Choice => "choice",
+            Form::Switch => "switch",
+            Form::Door => "door",
+            Form::Fact => "fact",
+        }
+    }
+}
+
 /// A console row's tile: its stored name, its system key, its games and the engine that runs it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ConsoleTile {

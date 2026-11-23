@@ -375,3 +375,86 @@ fn qt_3_4_11_display_s_rows_carry_their_board_s_short_lines_and_the_others_their
     // The board's small line under CRT shader's paragraph (G:162), true of the row: it sets the televisions, and a console's page has its own CRT profile.
     assert_eq!(view.pane(index(&view, "crt")).muted, ["For every console that had a television. A console can choose its own in Consoles."]);
 }
+
+#[test]
+fn qt_3_4_11_the_program_s_settings_bar_is_unchanged_and_eclipse_s_is_the_board_s() {
+    use emusen_kit_core::input::UiButton;
+    use emusen_qt_models::help::{self, Screen};
+    // The program's own Settings bar, as it stood before Eclipse's naming (Mistress's SettingsView hints).
+    let own = [(UiButton::Accept, "Change", None), (UiButton::Left, "Value", None), (UiButton::PageUp, "Section", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Home", Some(help::HOME))];
+    assert_eq!(help::entries(Screen::Settings), own);
+    assert_eq!(help::entries(Screen::SettingsPage), [own[0], own[1], own[3], own[4]]);
+    // Eclipse's, the board's words and order (gen_settings.py:24), Section and Home after (R-20261123-20).
+    let named: Vec<(UiButton, &str)> = help::settings_named(help::entries(Screen::Settings).to_vec()).iter().map(|e| (e.0, e.1)).collect();
+    assert_eq!(
+        named,
+        [(UiButton::Left, "Change"), (UiButton::Accept, "Choose or open"), (UiButton::Screensaver, "Back to the default"), (UiButton::Back, "Back"), (UiButton::PageUp, "Section"), (UiButton::Menu, "Home")]
+    );
+    assert!(help::settings_named(help::entries(Screen::SettingsPage).to_vec()).contains(&help::TO_DEFAULT));
+    assert!(!help::settings_named(help::entries(Screen::SettingsChoices).to_vec()).contains(&help::TO_DEFAULT), "no X where nothing steps");
+}
+
+#[test]
+fn qt_3_4_11_x_takes_a_row_back_to_its_default_and_declines_a_door() {
+    let source = fake(json!({}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "Display");
+    assert_eq!((view.title(), view.heading()), ("Settings".to_owned(), "Display".to_owned()));
+    // A row of the app's settings: stepped away and back to Galaxia's default.
+    let art = index(&view, "art");
+    let before = view.rows()[art].value.clone();
+    view.step(art, 1);
+    assert_ne!(view.rows()[art].value, before);
+    assert!(view.defaultable(art));
+    assert!(matches!(view.to_default(art), Outcome::Saved(Model::App, _)));
+    assert_eq!(view.rows()[art].value, before, "Background art back to its default");
+    // A row set per console: each console's own stored value forgotten.
+    let crop = index(&view, "crop");
+    let before = view.rows()[crop].value.clone();
+    view.step(crop, 1);
+    assert_ne!(view.rows()[crop].value, before);
+    view.to_default(crop);
+    assert_eq!(view.rows()[crop].value, before, "Crop overscan back to each console's default");
+    // The CRT: each television's filter and its levers forgotten.
+    let crt = index(&view, "crt");
+    let before = view.rows()[crt].value.clone();
+    view.step(crt, 1);
+    view.to_default(crt);
+    assert_eq!(view.rows()[crt].value, before, "the CRT back to each console's own");
+    assert!(view.read.graphics["Consoles"]["NES"].get("ScreenFilter").is_none());
+    // A door: X declines it.
+    let levers = index(&view, "levers");
+    assert!(!view.defaultable(levers));
+    assert_eq!(view.to_default(levers), Outcome::Nothing);
+    // The forms a theme draws by.
+    use emusen_qt_models::settings_shown::Form;
+    let (rows, facets) = (view.rows(), view.facets());
+    assert_eq!(Form::of(&rows[crt], facets[crt].switch), Form::Choice);
+    assert_eq!(Form::of(&rows[art], facets[art].switch), Form::Switch);
+    assert_eq!(Form::of(&rows[levers], facets[levers].switch), Form::Door);
+    // On a page, the heading is the page's.
+    section(&mut view, "Library");
+    assert_eq!(view.choose(index(&view, "scraping")), Outcome::Opened);
+    assert_eq!(view.heading(), view.trail().last().cloned().unwrap());
+    assert_ne!(view.heading(), "Library");
+}
+
+#[test]
+fn qt_3_4_11_the_picture_preview_names_the_newest_screenshot() {
+    let folder = std::env::temp_dir().join(format!("emusen-shots-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    assert_eq!(emusen_qt_models::screenshots::newest(&folder), None, "none where none was taken");
+    let (older, newer) = (folder.join("Aurora Drift 2026-11-01 10.00.00.000.png"), folder.join("Cobalt Harbor 2026-11-02 10.00.00.000.png"));
+    std::fs::write(&older, b"png").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&newer, b"png").unwrap();
+    std::fs::write(folder.join("notes.txt"), b"not a picture").unwrap();
+    assert_eq!(emusen_qt_models::screenshots::newest(&folder), Some(newer.to_string_lossy().into_owned()));
+    let source = fake(json!({}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "Display");
+    view.read.shot = Some(newer.to_string_lossy().into_owned());
+    assert_eq!(view.pane(index(&view, "crt")).shot, newer.to_string_lossy());
+    assert_eq!(view.pane(index(&view, "art")).shot, "", "only a picture preview names it");
+    let _ = std::fs::remove_dir_all(&folder);
+}

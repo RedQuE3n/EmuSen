@@ -15,6 +15,8 @@ Item {
     property real glyphSide: 34
     // The line's centre over the board's foot, in board pixels from the top.
     property real middle: 1137
+    // Left and Right drawn as one key, as the Settings boards draw them (G:24).
+    property bool keyPairs: false
     property real inset: 96
     default property alias side: sideSlot.data
     readonly property Item bar: bar
@@ -40,6 +42,7 @@ Item {
         // The words at the board's size, which a font's whole pixel size cannot hold in canvas units (parts/Line.qml).
         label: Component {
             Line {
+                objectName: "helpWords-" + text
                 unit: root.unit
                 size: root.size
             }
@@ -55,6 +58,7 @@ Item {
                 unit: root.unit
                 side: root.glyphSide
                 ink: root.ink
+                keyPairs: root.keyPairs
             }
         }
     }

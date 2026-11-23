@@ -24,27 +24,8 @@ ThemeScreen {
             readonly property real wide: root.width / design.unit
             // The foot of the board's ninth row, where the rows' window ends (G:67-69: 150 + 56 + 12 + 9 × 84 + 8 × 10).
             readonly property real rowsFoot: 1064
-            // The place on the Home card that is Settings, whose name the header gives (Library.places, EmuSen_Qt.md §3.2).
-            readonly property string placeKey: "settings"
-            readonly property string title: {
-                for (let i = 0; i < places.count; i++) {
-                    const place = places.itemAt(i) as PlaceName
-                    if (place && place.key === root.placeKey)
-                        return place.name
-                }
-                return ""
-            }
-            // The focused row's name, the About panel's heading, which that row gives.
-            property string heading
-            component PlaceName: Item {
-                required property string key
-                required property string name
-            }
-            Repeater {
-                id: places
-                model: Library.places
-                delegate: PlaceName {}
-            }
+            // The help line's entries as the boards name them, X drawn declined on a row with no default (1.11).
+            readonly property var help: Settings.help >= 0 ? Help.entries(Settings.help, { settings: true, defaultable: Settings.defaultable }) : null
             Board {
                 id: design
                 designHeight: canvas.designHeight
@@ -89,7 +70,7 @@ ThemeScreen {
                 surfaceDrawn: false
                 helpShown: false
                 // The help's entries are the frame's actions, which the pad's buttons invoke; the help line draws them.
-                help: Settings.help >= 0 ? Help.entries(Settings.help) : null
+                help: root.help
                 padFamily: Device.family
                 focus: true
                 controller.navigationShown: false
@@ -116,7 +97,7 @@ ThemeScreen {
                         unit: design.unit
                         x: brand.x + brand.width + 20 * design.unit
                         y: 80 * design.unit - height / 2
-                        text: root.title
+                        text: Settings.title
                         color: Tokens.text
                         size: 34
                         weight: Tokens.weightTitle
@@ -144,8 +125,7 @@ ThemeScreen {
                         unit: design.unit
                         x: 500 * design.unit
                         y: 150 * design.unit
-                        // The section's name on a section, the innermost page's under it (Settings.trail is empty on a section).
-                        text: Settings.trail.length > 0 ? Settings.trail[Settings.trail.length - 1] : (Settings.sections[Settings.section] ?? "")
+                        text: Settings.heading
                         color: Tokens.text
                         size: 44
                         weight: Tokens.weightTitle
@@ -221,16 +201,11 @@ ThemeScreen {
                                     required property bool isSwitch
                                     required property bool switchOn
                                     required property bool code
+                                    required property string form
                                     width: list.width
                                     height: row.height
                                     focus: slot.index === Settings.focused
                                     onHeightChanged: walk.measure(slot.index, slot.height)
-                                    Binding {
-                                        target: root
-                                        property: "heading"
-                                        value: slot.label
-                                        when: slot.index === Settings.focused
-                                    }
                                     SettingsRow {
                                         id: row
                                         unit: design.unit
@@ -244,6 +219,7 @@ ThemeScreen {
                                         isSwitch: slot.isSwitch
                                         switchOn: slot.switchOn
                                         code: slot.code
+                                        form: slot.form
                                         width: slot.width
                                         focus: true
                                         // A row wholly in the window is drawn; one the window has scrolled past is not.
@@ -266,7 +242,7 @@ ThemeScreen {
                     SettingsAside {
                         unit: design.unit
                         pixelScale: canvas.unit
-                        heading: root.heading
+                        heading: Settings.aboutHeading
                         x: parent.width - 96 * design.unit - width
                         y: 236 * design.unit
                     }
@@ -274,8 +250,9 @@ ThemeScreen {
                         objectName: "settingsHelp"
                         unit: design.unit
                         controller: frame.controller
-                        model: Settings.help >= 0 ? Help.entries(Settings.help) : null
+                        model: root.help
                         ink: ink.help
+                        keyPairs: true
                         // The boards' foot: its row 40 px over the bottom, 38 px tall for a ringed glyph (G:114).
                         middle: 1141
                         Line {

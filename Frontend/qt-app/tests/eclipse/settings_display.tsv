@@ -110,5 +110,18 @@ asideCaption	162	the small line under the picture	Settings.caption	Text	in:setti
 asideHeading	162	the focused row's name, "CRT shader"	the focused row's label	Text	in:settingsAside:0	below:asideCaption:22	-	-	-	Tokens.text	26	built	600 0 none
 asideSentence	162	the paragraph, 20 px light, line height 1.5	Settings.sentence, the program's (R-20261116-20)	Text	in:settingsAside:0	below:asideHeading:22	-	-	-	#FFC9CDDB	20	built	300 0 none
 asideMuted.0	162	"For every console that had a television. A console can choose its own in Consoles.", 18 px, line height 1.5, two lines	Settings.muted, CRT shader's muted line (qt-models/data/settings_screen.json)	Text	in:settingsAside:0	below:asideSentence:22	424	54	-	Tokens.muted	18	built	400 0 none
-help	114	the help line's entries, 34 px apart, its middle 40 + 19 px over the foot	Help.entries(Settings.help), Eclipse's HelpLine	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+help	114	the help line's entries, 34 px apart, its middle 40 + 19 px over the foot	Help.entries(Settings.help, {settings: true, defaultable}) (1.11), Eclipse's HelpLine	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Change	24	"◀ ▶" in a 2 px box, 30 px inside, corner 8, padding 10, the words 15 px (G:19)	Eclipse's Glyph through the kit's HelpBar, drawing the pair as one key (drawsPair)	-	in:help:0	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Change	24	"Change", 10 px after its key	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph-Change:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Choose or open	24	A, filled, 34 px (G:15)	Eclipse's Glyph through the kit's HelpBar, A filled on this line	-	after:helpWords-Change:34	mid:help	34	34	-	-	-	built	glyph 17 700
+helpWords-Choose or open	24	"Choose or open"	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph-Choose or open:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Back to the default	24	X in a 2 px ring, 34 px inside (G:17)	Eclipse's Glyph through the kit's HelpBar	-	after:helpWords-Choose or open:34	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back to the default	24	"Back to the default"	the entry's label, help.rs settings_named, Eclipse's HelpLine (R-20261116-22)	Text	after:ownGlyph-Back to the default:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Back	24	B in a 2 px ring, 34 px inside (G:17)	Eclipse's Glyph through the kit's HelpBar	-	after:helpWords-Back to the default:34	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back	24	"Back"	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph-Back:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Section	24	not on the board: LB in the board's box for a named button, after its four (R-20261123-20)	Eclipse's Glyph through the kit's HelpBar	-	after:helpWords-Back:34	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Section	24	not on the board: RB, the pair's second, in the same box	Eclipse's Glyph through the kit's HelpBar	-	after:ownGlyph-Section:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Section	24	not on the board: "Section" (R-20261123-20)	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph2-Section:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Home	24	not on the board: Start named in a 2 px capsule, 34 inside, the kit's name in the pad's family (R-20261123-20)	Eclipse's Glyph through the kit's HelpBar	-	after:helpWords-Section:34	mid:help	-	38	-	-	-	built	word 15 400
+helpWords-Home	24	not on the board: "Home" (R-20261123-20)	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph-Home:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
 settingsPlace	118	"2 of 16": the focused row among the page's	Words.place(Settings.focused, Settings.count) (R-20261116-21)	Text	-	mid:help	right:96	-	-	Tokens.muted	21	built	400 0 none

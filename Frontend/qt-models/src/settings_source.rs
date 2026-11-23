@@ -6,7 +6,7 @@ use crate::clients::app_settings;
 use crate::settings::{Model, SettingsSource};
 use crate::settings_controllers::{Chooser, ControlWord};
 use emusen_platform_client::bindings::consts as files;
-use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, DIR_SHADERS, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
+use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, DIR_SCREENSHOTS, DIR_SHADERS, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::{serenity, Platform};
 use serde_json::Value;
 
@@ -138,6 +138,10 @@ impl SettingsSource for ClientSettings {
     fn folders(&self) -> std::collections::BTreeMap<String, String> {
         let firmware = self.platform.directory(DIR_FIRMWARE).ok().flatten();
         firmware.into_iter().map(|d| ("firmware".to_owned(), d.display().to_string())).collect()
+    }
+
+    fn shot(&self) -> Option<String> {
+        crate::screenshots::newest(&self.platform.directory(DIR_SCREENSHOTS).ok().flatten()?)
     }
 
     fn pack(&self) -> Vec<String> {

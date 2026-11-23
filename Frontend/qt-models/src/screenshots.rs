@@ -49,6 +49,18 @@ pub fn of_game(folder: &Path, game: &str) -> Vec<(String, i64)> {
     found
 }
 
+/// The newest screenshot of any game in `folder`, by its modified time; none where there is none.
+pub fn newest(folder: &Path) -> Option<String> {
+    let entries = std::fs::read_dir(folder).ok()?;
+    entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case(EXTENSION)))
+        .filter_map(|p| Some((std::fs::metadata(&p).ok()?.modified().ok()?, p)))
+        .max_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
+        .map(|(_, p)| p.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

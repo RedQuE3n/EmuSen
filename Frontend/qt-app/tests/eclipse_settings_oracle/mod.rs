@@ -1,7 +1,7 @@
 //! The oracle of Eclipse's Settings on its Display page in the running program, driven by an SDL pad in this process and by the pointer (EmuSen_Qt.md §3.4.11).
 
 use crate::common::wait_for;
-use crate::eclipse_board::{held, read, rows, Row};
+use crate::eclipse_board::{held, object, read, rows, Row};
 use crate::eclipse_pad::{focused, press};
 use cxx_qt::casting::Upcast;
 use emusen_client_fixture::{library, World};
@@ -18,6 +18,7 @@ use emusen_qt_models::themes;
 use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
 use emusen_qt_test::Scene;
+use emusen_theme_qt::host;
 
 const BOARD: &str = include_str!("../eclipse/settings_display.tsv");
 
@@ -74,6 +75,24 @@ fn centre(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
 /// Whether a row is drawn: inside the rows' window.
 fn shown(scene: &mut Scene<'_>, name: &str) -> bool {
     scene.tree().nodes.iter().any(|n| n.name == name && n.visible)
+}
+
+/// The help line's words as drawn, left to right, and whether X's entry is drawn taken.
+fn help_line(scene: &mut Scene<'_>) -> (Vec<String>, String) {
+    let tree = scene.tree();
+    let mut entries: Vec<(f64, String)> = tree.nodes.iter().filter(|n| n.visible && n.name.starts_with("help-")).map(|n| (n.x, n.name["help-".len()..].to_owned())).collect();
+    entries.sort_by(|a, b| a.0.total_cmp(&b.0));
+    entries.dedup_by(|a, b| a.1 == b.1);
+    (entries.into_iter().map(|e| e.1).collect(), read(&tree, "help-Back to the default", "enabled"))
+}
+
+/// Session.frame as the program sets it: the game's own picture item while a game is suspended (`ThemeHost.qml`'s showSession), else none.
+fn paused_frame(scene: &mut Scene<'_>, paused: bool) {
+    let tree = scene.tree();
+    let id = |name: &str| -> u64 { tree.nodes[tree.find_named(name).unwrap_or_else(|| panic!("{name} in the tree")) as usize].id.parse().unwrap() };
+    let frame = if paused { id("picture") as *mut _ } else { std::ptr::null_mut() };
+    host::session(object(id("settingsScreen"))).expect("Session").show_frame(frame);
+    settle(scene);
 }
 
 /// Waits a moment for the model to answer a press or a click.
@@ -194,6 +213,14 @@ pub fn oracle(backend: &str) {
     assert_eq!(focused(&mut scene), "row.1");
     let count = settings(&mut scene).shown_rows().len();
     let mut differences = Vec::new();
+    // The preview (R-20261116-25): no picture and no caption while no game is suspended; the board's state has one paused.
+    if shown(&mut scene, "asidePicture") || shown(&mut scene, "asideCaption") {
+        differences.push("the preview is drawn with no game suspended".to_owned());
+    }
+    paused_frame(&mut scene, true);
+    if !shown(&mut scene, "asidePicture") || !shown(&mut scene, "asidePictureFrame") || !shown(&mut scene, "asideCaption") {
+        differences.push("the paused game's frame is not drawn in the preview".to_owned());
+    }
 
     // The board's table at every gate size.
     let (board_height, table) = rows(BOARD);
@@ -259,7 +286,31 @@ pub fn oracle(backend: &str) {
     }
     scene.resize(1920, 1200);
     scene.wait(300);
+    // The help line: the board's four, then Section and Home (G:24, R-20261123-20); X taken on CRT shader, declined on a door; ◀ ▶ one key.
+    let board_line = ["Change", "Choose or open", "Back to the default", "Back", "Section", "Home"].map(str::to_owned).to_vec();
+    if help_line(&mut scene) != (board_line.clone(), "true".to_owned()) {
+        differences.push(format!("the help line on CRT shader is {:?}", help_line(&mut scene)));
+    }
+    let tree = scene.tree();
+    let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
+    let key = crate::eclipse_board::boxes(&tree, unit)[&"ownGlyph-Change".to_owned()];
+    if shown(&mut scene, "ownGlyph2-Change") || !crate::eclipse_board::same(key.h, 34.0 * k) {
+        differences.push(format!("◀ ▶ is not one key 34 px high: a second glyph {}, {} high", shown(&mut scene, "ownGlyph2-Change"), key.h / k));
+    }
+    press(&mut scene, &sdl, &pad, PadControl::Down);
+    settle(&mut scene);
+    if help_line(&mut scene) != (board_line.clone(), "false".to_owned()) {
+        differences.push(format!("the help line on Shader levers, a door, is {:?}", help_line(&mut scene)));
+    }
+    press(&mut scene, &sdl, &pad, PadControl::Up);
+    settle(&mut scene);
     pictures(&mut scene, backend, "crt");
+    // On CRT shader still, the game no longer suspended: the preview and its caption go.
+    paused_frame(&mut scene, false);
+    if shown(&mut scene, "asidePicture") || shown(&mut scene, "asideCaption") {
+        differences.push("the preview stays with no game suspended".to_owned());
+    }
+
 
     // The pad: Up to the first row, Down through every row to the last, each focused and in the window, then back up.
     press(&mut scene, &sdl, &pad, PadControl::Up);
@@ -330,6 +381,24 @@ pub fn oracle(backend: &str) {
             |scene, by| press(scene, sdl_ref, pad_ref, if by > 0 { PadControl::Right } else if by < 0 { PadControl::Left } else { PadControl::South }),
             &mut |scene| press(scene, sdl_ref, pad_ref, PadControl::East),
         );
+        // X: a value back to its default after a change; a door's row left as it is.
+        let defaultable = settings(&mut scene).view().defaultable(i);
+        press(&mut scene, &sdl, &pad, PadControl::West);
+        settle(&mut scene);
+        let default = state(&mut scene, i);
+        if defaultable {
+            let change = if default.1.is_some() { PadControl::South } else { PadControl::Right };
+            press(&mut scene, &sdl, &pad, change);
+            settle(&mut scene);
+            let changed = state(&mut scene, i);
+            press(&mut scene, &sdl, &pad, PadControl::West);
+            settle(&mut scene);
+            if changed == default || state(&mut scene, i) != default {
+                differences.push(format!("X on row {i}: {default:?} → {changed:?} → {:?}", state(&mut scene, i)));
+            }
+        } else if at(&mut scene) != (i as i32, "display".to_owned()) {
+            differences.push(format!("X on row {i}, a door, left {:?}", at(&mut scene)));
+        }
     }
 
     assert!(differences.is_empty(), "{} differences by the pad:\n{}", differences.len(), differences.join("\n"));

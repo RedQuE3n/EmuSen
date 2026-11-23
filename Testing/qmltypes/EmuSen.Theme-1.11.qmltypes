@@ -1523,7 +1523,52 @@ Module {
             lineNumber: 46
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 69 }
+        Property {
+            name: "title"
+            type: "QString"
+            read: "getTitle"
+            notify: "shown"
+            index: 18
+            lineNumber: 47
+            isReadonly: true
+        }
+        Property {
+            name: "heading"
+            type: "QString"
+            read: "getHeading"
+            notify: "shown"
+            index: 19
+            lineNumber: 48
+            isReadonly: true
+        }
+        Property {
+            name: "aboutHeading"
+            type: "QString"
+            read: "getAboutHeading"
+            notify: "shown"
+            index: 20
+            lineNumber: 49
+            isReadonly: true
+        }
+        Property {
+            name: "shot"
+            type: "QString"
+            read: "getShot"
+            notify: "shown"
+            index: 21
+            lineNumber: 50
+            isReadonly: true
+        }
+        Property {
+            name: "defaultable"
+            type: "bool"
+            read: "getDefaultable"
+            notify: "shown"
+            index: 22
+            lineNumber: 51
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 79 }
     }
     Component {
         file: "splash.cxxqt.h"

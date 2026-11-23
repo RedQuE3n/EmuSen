@@ -24,11 +24,11 @@ Column {
     SettingsInk {
         id: own
     }
-    // The picture, 318 high at a corner of 22 inside its 2 px rim and its 60 px glow (G:146): the paused game's own frame (R-20261116-25).
+    // The picture, 318 high at a corner of 22 inside its 2 px rim and its 60 px glow (G:146): the paused game's own frame, none while no game is paused (R-20261116-25).
     Item {
         id: picture
         objectName: "asidePicture"
-        visible: root.pictured
+        visible: root.pictured && Session.frame !== null
         width: root.width
         height: 318 * root.unit
         readonly property real radius: 22 * root.unit
@@ -81,7 +81,7 @@ Column {
     Line {
         objectName: "asideCaption"
         unit: root.unit
-        visible: root.pictured && text.length > 0
+        visible: picture.visible && text.length > 0
         width: root.width
         text: Settings.caption
         color: Tokens.muted

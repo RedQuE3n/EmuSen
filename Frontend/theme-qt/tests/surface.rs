@@ -189,7 +189,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),
         (
             "Settings",
-            &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples", "sampleScales", "sectionKeys"],
+            &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples", "sampleScales", "sectionKeys",
+              "title", "heading", "aboutHeading", "shot", "defaultable"],
             &[],
         ),
         (

@@ -2996,6 +2996,11 @@ A theme that draws its own glyphs (`glyph`) gets the pair's second as its own gl
 Maker is two of the theme's boxes as Eclipse's Choose a console board draws it (added 2026-11-16; before, only the first
 was drawn).
 
+A theme's glyph that declares `drawsPair` true is given the entry's `pair` (a `PadGlyph.Button`, -1 for none) and draws
+both buttons itself; the bar then makes no second glyph for that entry (added 2026-11-23, R-20261123-30 (c)). Eclipse's
+Settings boards draw Left with Right as one key, "◀ ▶" in a box (gen_settings.py:19, 24), which no glyph of the kit's
+draws. A glyph that declares nothing, every theme's glyph before, draws as it did; no property of `HelpBar` changed.
+
 **Held to**: kit-core's `tests/glyph.rs` `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
 sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
 glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry

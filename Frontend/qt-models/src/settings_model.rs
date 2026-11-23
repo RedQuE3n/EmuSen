@@ -662,6 +662,12 @@ impl qobject::SettingsModel {
         self.outcome(outcome)
     }
 
+    /// X on a row, a theme's `Actions.act("default")`: its value back to its default; whether it did anything.
+    pub fn to_default(mut self: Pin<&mut Self>, row: i32) -> bool {
+        let outcome = self.as_mut().rust_mut().view.to_default(row.max(0) as usize);
+        self.outcome(outcome)
+    }
+
     pub fn choose(mut self: Pin<&mut Self>, row: i32) -> bool {
         let outcome = self.as_mut().rust_mut().view.choose(row.max(0) as usize);
         self.outcome(outcome)

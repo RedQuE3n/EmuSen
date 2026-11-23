@@ -1,5 +1,6 @@
 #include "sound_file.h"
 
+#include <QtCore/QCryptographicHash>
 #include <QtMultimedia/QAudioBuffer>
 #include <QtMultimedia/QAudioFormat>
 
@@ -78,6 +79,11 @@ void SoundFile::start()
         finish(QStringLiteral("The theme's sound %1 could not be read: %2").arg(m_source.toString(), m_decoder->errorString()));
     });
     m_decoder->start();
+}
+
+QString SoundFile::digest() const
+{
+    return QString::fromLatin1(QCryptographicHash::hash(m_samples, QCryptographicHash::Sha256).toHex());
 }
 
 void SoundFile::take()

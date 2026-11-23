@@ -37,7 +37,7 @@
         <file alias="screens/Consoles.qml">../themes/eclipse/screens/Consoles.qml</file>
         <file alias="screens/Home.qml">../themes/eclipse/screens/Home.qml</file>
         <file alias="screens/Splash.qml">../themes/eclipse/screens/Splash.qml</file>
-        <file alias="sounds/splash.wav">../themes/eclipse/sounds/splash.wav</file>
+        <file alias="sounds/splash.flac">../themes/eclipse/sounds/splash.flac</file>
         <file alias="theme.json">../themes/eclipse/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/horizon">

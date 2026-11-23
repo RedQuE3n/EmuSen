@@ -21,6 +21,8 @@ class SoundFile : public QObject {
     // Read to its end, or failed with the words in `problem`; never for no source.
     Q_PROPERTY(bool read READ read NOTIFY readChanged)
     Q_PROPERTY(QString problem READ problem NOTIFY readChanged)
+    // The samples' SHA-256 in hex, worked out when asked, so a reader can hold them to a sound's own.
+    Q_PROPERTY(QString digest READ digest NOTIFY readChanged)
 
 public:
     explicit SoundFile(QObject* parent = nullptr);
@@ -34,6 +36,7 @@ public:
     void setChannels(int channels);
     bool read() const { return m_read; }
     QString problem() const { return m_problem; }
+    QString digest() const;
     const QByteArray& samples() const { return m_samples; }
 
 Q_SIGNALS:

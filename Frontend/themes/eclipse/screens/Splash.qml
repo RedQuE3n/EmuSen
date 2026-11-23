@@ -13,8 +13,8 @@ ThemeScreen {
     // Home whole, ec-h4's 88 per cent of the board's 11 s loop (splash_times_original.json): the splash's length in ms, a constant of the design.
     length: 9680
     still: Tokens.reducedMotion
-    // The sound the board was made with (splash-sound-chosen.wav, R-20261111-118), as it is.
-    sound.source: "../sounds/splash.wav"
+    // The sound the board was made with (splash-sound-chosen.wav, R-20261111-118), its samples as they are, in FLAC (EmuSen_Qt.md §3.5.3).
+    sound.source: "../sounds/splash.flac"
     NormalizedCanvas {
         id: canvas
         objectName: "splashCanvas"

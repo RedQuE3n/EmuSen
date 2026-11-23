@@ -1994,7 +1994,7 @@ order holds: Home's backdrop under the splash's ground, which fades as ec-home b
 header, words, Recent and help line over it. `parts/Encore.qml` gives Home's parts the board's arrival (ec-h1 to ec-h4,
 from 16 above, 30 to the left, 36 below, the help line fading), whole once the splash has gone; while it shows, Home's own
 disc, the art label and the two streak fields, which the playing board does not draw, are not drawn. The sound is the
-board's own file, `sounds/splash.wav` (splash-sound-chosen.wav, as it is). Past eight cores a planet stands halfway
+board's own sound, `sounds/splash.flac` (splash-sound-chosen.wav's samples, every one; §3.5.3). Past eight cores a planet stands halfway
 between two of the board's angles, its colours the board's eight in turn. Held to by `qt-app/tests/eclipse_splash.rs`
 (the board read by headless Chrome into `eclipse_splash.tsv`; §3.5.3).
 
@@ -2445,6 +2445,20 @@ driver's file: no step at the end past twice the sound's own) and Home not actin
 `qt-app/tests/splash_start.rs` (software backend, the clock held) holds what that oracle sets by hand: three held seconds move the splash's clock three
 seconds; a key the kit's map makes a press, and a tap, each skip to the last frame with the sound let go; navigation
 sounds off, the splash runs and no sound starts. The oracle's fade is the Fade token's, read from the program's tokens.
+
+**The sound's file, FLAC** (measured 2026-11-23). The chosen sound as a WAV is 2,549,804 bytes, over the merge check's
+1 MiB for a committed file. Qt's documentation names no list of formats for `QAudioDecoder`; it says FFmpeg is the media
+backend by default on desktop Linux and `QT_MEDIA_BACKEND` chooses another (Qt 6, "Qt Multimedia"), and that a default
+`QMediaFormat`'s `supportedFileFormats(QMediaFormat::Decode)` lists what can be read (Qt 6, "QMediaFormat"). Asked on
+this machine (Qt 6.11.2, Fedora 44, both backends installed), it lists the lossless FLAC (file and codec), ALAC (in
+MPEG-4 Audio) and Wave. Each of FLAC (levels 8 and 12), ALAC, WavPack and TTA, made from the chosen WAV by ffmpeg 8.1.3,
+decoded under both the FFmpeg and the GStreamer backend, as `SoundFile` decodes (`QFile`, `setSourceDevice`, 48 kHz
+stereo float), to the same 1,274,880 samples as the WAV, every one, each 16-bit sample over 32768 (a probe of
+`QAudioDecoder` built against the system's Qt, `cmp` on the bytes). Their sizes: WavPack 502,017, TTA 511,506, FLAC
+520,431 at level 12, ALAC 565,829. The theme's file is FLAC (`sounds/splash.flac`, 520,399 bytes, level 12, no tags),
+the one lossless form both in Qt's own decode list and an open standard (RFC 9639), so nothing of the sound is changed
+for its size. `SoundFile.digest`, the decoded samples' SHA-256 (`QCryptographicHash`, worked out only when asked), is
+held by `splash_start.rs` to the chosen sound's; the handheld's Qt was not asked.
 
 **When the sound does not answer** (seen 2026-11-23). The splash waits for its sound (`set`), so a sound that never
 settles would hold its first frame for ever. Each path it waits on can fail to answer:

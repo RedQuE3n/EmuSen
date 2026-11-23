@@ -19,6 +19,9 @@ use emusen_qt_test::Scene;
 use start_held::{held, started, until, Start, PLAIN};
 
 const SIZE: (i32, i32) = (1920, 1200);
+/// SHA-256 of splash-sound-chosen.wav's samples (R-20261111-118) as the player takes them, each 16-bit sample over 32768 as a
+/// little-endian 32-bit float, interleaved stereo at 48 kHz: the theme's FLAC must decode to these and no others (EmuSen_Qt.md §3.5.3).
+const CHOSEN_SOUND: &str = "bca08baf85ae348be6a3c1cb75e85e42582e6b79b3d1425be4432d93b5416c45";
 
 fn length(scene: &mut Scene<'_>) -> f64 {
     scene.property("themeSplash", "length").parse().unwrap()
@@ -64,6 +67,7 @@ fn qt_3_5_3_a_splash_that_enters_home_starts_as_its_settings_and_its_theme_say()
     {
         let mut scene = started(&mut harness, SIZE, &PLAIN, &media);
         assert_eq!(scene.property("themeSplash", "set"), "true", "the start read and the sound ready");
+        assert_eq!(scene.property("splashSoundFile", "digest"), CHOSEN_SOUND, "the theme's sound decodes to the chosen sound's samples, every one");
         scene.hold_clock(Some(1000));
         let from = number(&mut scene, "themeSplash", "clock");
         scene.hold_clock(Some(4000));

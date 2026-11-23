@@ -23,7 +23,7 @@ use start_held::{started, until, Start, PLAIN};
 use std::path::PathBuf;
 
 const TABLE: &str = include_str!("eclipse_splash.tsv");
-const SOUND: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes/eclipse/sounds/splash.wav");
+const SOUND: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes/eclipse/sounds/splash.flac");
 
 /// The board's height in pixels, every Eclipse board's (themes/eclipse/parts/Board.qml).
 const BOARD_HEIGHT: f64 = 1200.0;
@@ -57,11 +57,12 @@ fn board() -> Vec<Board> {
         .collect()
 }
 
-/// The frames of the theme's sound file: its data chunk's bytes over 16-bit stereo's four a frame.
+/// The frames of the theme's sound file: STREAMINFO's 36-bit total samples, after "fLaC" and the block's 4-byte header (RFC 9639, 8.2).
 fn sound_frames() -> i64 {
     let bytes = std::fs::read(SOUND).unwrap();
-    let at = bytes.windows(4).position(|w| w == b"data").expect("the WAV's data chunk");
-    i64::from(u32::from_le_bytes(bytes[at + 4..at + 8].try_into().unwrap())) / 4
+    assert_eq!(&bytes[..4], b"fLaC", "the theme's sound is FLAC");
+    let info = &bytes[8..];
+    (i64::from(info[13] & 0x0F) << 32) | i64::from(u32::from_be_bytes(info[14..18].try_into().unwrap()))
 }
 
 /// The last shown node of a name, else the last of it.
@@ -257,7 +258,7 @@ fn qt_3_4_8_eclipse_s_splash_is_its_board_and_enters_home() {
         let said = ["frames", "settled", "problem", "on", "platformLibrary", "folder", "source"].map(|p| format!("{p}={}", scene.property("splashSound", p)));
         let file = ["source", "read", "problem", "rate"].map(|p| format!("{p}={}", scene.property("splashSoundFile", p)));
         assert_eq!(scene.property("splashSound", "starts"), "1", "{at}: {said:?} {file:?}");
-        assert!(scene.property("splashSoundFile", "source").ends_with("/eclipse/sounds/splash.wav"), "{at}: the theme's own file");
+        assert!(scene.property("splashSoundFile", "source").ends_with("/eclipse/sounds/splash.flac"), "{at}: the theme's own file");
         assert_eq!(scene.property("splashSound", "frames").parse::<i64>().unwrap(), sound_frames(), "{at}: the file whole");
         assert_eq!(scene.property("splashSound", "heldVolume"), scene.property("settingsModel", "navigationVolume"), "{at}: at the Sound volume");
         // The words: the library's six games and the cores.

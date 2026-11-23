@@ -431,6 +431,12 @@ impl SettingsView {
     }
 
     /// The pages' trail: empty on a section, else the section's name and each page's.
+    /// The trail's line over a page's heading: every level above the page, joined as the boards join them; empty on a section (R-20261123-39).
+    pub fn trail_line(&self) -> String {
+        let trail = self.trail();
+        trail[..trail.len().saturating_sub(1)].join(crate::words::TRAIL_BETWEEN)
+    }
+
     pub fn trail(&self) -> Vec<String> {
         if self.pages.is_empty() {
             return Vec::new();

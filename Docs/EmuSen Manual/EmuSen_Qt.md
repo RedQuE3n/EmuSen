@@ -2319,7 +2319,8 @@ board: `EclipseSettingsSound.dc.html` (gen_settings.py:165-178), `EclipseSetting
 
 - *The trail over a page's heading.* A page under a section draws, 20 px and muted, every level above it over its heading,
   joined by "  ›  ", the heading under it by its 6 px margin and the column's 10 px gap (G:66-68); a section's own page
-  draws none (decided 2026-11-23, R-20261123-39). `screens/Settings.qml` builds it once from `Settings.trail`.
+  draws none (decided 2026-11-23, R-20261123-39). The program joins it (`Settings.trailLine`, 1.12, the separator
+  `words::TRAIL_BETWEEN`, two spaces either side of U+203A as gen_settings.py:272 writes it); the frame only draws it.
 - *The ring* (`parts/SettingsMeter.qml`) is the About panel's meter preview (`Settings.preview` 2): a 340 px disc
   centred in the panel, filled clockwise from 225° over 270° in the accent fading to #F3C9D2 to `Settings.meter`'s share,
   the rest of the 270° in #262A3A, inside it a disc of the ground 14 px in, holding the focused row's value (84 px, 600,
@@ -2349,7 +2350,8 @@ board: `EclipseSettingsSound.dc.html` (gen_settings.py:165-178), `EclipseSetting
   fifteen rows are drawn in its order, the board's nine among them (R-20261116-21), the On-screen keyboard row hidden
   until the Steam keyboard call exists (R-20261112-13); the pad pages its doors open are the program's own until their
   boards are built (R-20261116-26).
-- *Glows.* Collections takes Library's glow, Saves and states EmuSen's (`SettingsInk.pageGlows` by the page's key).
+- *Glows.* A page under a section takes its section's glow (`SettingsInk.pageGlow` by `Settings.section`): Collections
+  Library's, Saves and states EmuSen's, as their boards draw them.
 
 **Proof of the four.** qt-app's `eclipse_settings_sound.rs`, `eclipse_settings_controllers.rs`,
 `eclipse_settings_collections.rs` and `eclipse_settings_saves.rs`, each the oracle `eclipse_settings_pages` on the

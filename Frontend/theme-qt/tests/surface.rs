@@ -191,7 +191,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         (
             "Settings",
             &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples", "sampleScales", "sectionKeys",
-              "title", "heading", "aboutHeading", "shot", "defaultable"],
+              "title", "heading", "aboutHeading", "shot", "defaultable", "trailLine"],
             &[],
         ),
         (

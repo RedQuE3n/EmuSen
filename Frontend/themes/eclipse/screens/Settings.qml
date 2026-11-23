@@ -125,10 +125,10 @@ ThemeScreen {
                         objectName: "settingsCrumb"
                         unit: design.unit
                         boardLine: true
-                        visible: Settings.trail.length > 1
+                        visible: text.length > 0
                         x: 500 * design.unit
                         y: 150 * design.unit
-                        text: Settings.trail.slice(0, -1).join("  ›  ")
+                        text: Settings.trailLine
                         color: Tokens.muted
                         size: 20
                     }

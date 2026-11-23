@@ -7,6 +7,8 @@ never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
 - **`Settings.preview` 6** (no new member): the help bar's face buttons as they are drawn now, the preview of Controller
   type's row, which Eclipse's Controllers board draws as four faces (R-20261116-22; EmuSen_Qt.md §3.4.11).
+- **`Settings.trailLine`**: every level above the page shown, joined by "  ›  " as the boards join them
+  (gen_settings.py:272; `words::TRAIL_BETWEEN`), empty on a section's own page (decided 2026-11-23, R-20261123-39).
 - The module is 1.12 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.12.*`.
 
 ## 1.11, an addition: what Eclipse's Settings boards draw (2026-11-23)

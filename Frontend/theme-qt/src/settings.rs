@@ -60,6 +60,8 @@ pub mod qobject {
         /// From 1.11 (R-20261123-30): each section's key, in `sections`' order, by which a theme picks a section's picture.
         #[qproperty(QStringList, section_keys, cxx_name = "sectionKeys", READ, NOTIFY = shown)]
         /// From 1.11: the screen's title, the page's heading and the About panel's (the focused row's name), the newest screenshot as a file URL for a picture preview, and whether X takes the focused row back to a default.
+        /// From 1.12 (R-20261123-39): every level above the page shown, joined as the boards join them; empty on a section.
+        #[qproperty(QString, trail_line, cxx_name = "trailLine", READ, NOTIFY = shown)]
         #[qproperty(QString, title, READ, NOTIFY = shown)]
         #[qproperty(QString, heading, READ, NOTIFY = shown)]
         #[qproperty(QString, about_heading, cxx_name = "aboutHeading", READ, NOTIFY = shown)]
@@ -94,6 +96,7 @@ pub struct SettingsFacts {
     pub defaultable: bool,
     pub section: i32,
     pub trail: Vec<String>,
+    pub trail_line: String,
     pub page: String,
     pub rows: Vec<Row>,
     pub focused: i32,
@@ -149,6 +152,7 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         defaultable: usize::try_from(focused).is_ok_and(|f| view.defaultable(f)),
         section: view.section as i32,
         trail: view.trail(),
+        trail_line: view.trail_line(),
         page: view.page_key(),
         rows: cells,
         focused,
@@ -183,6 +187,7 @@ pub struct ThemeSettingsRust {
     defaultable: bool,
     section: i32,
     trail: QStringList,
+    trail_line: QString,
     page: QString,
     rows: *mut ThemeRows,
     focused: i32,
@@ -212,6 +217,7 @@ impl Default for ThemeSettingsRust {
             defaultable: false,
             section: 0,
             trail: QStringList::default(),
+            trail_line: QString::default(),
             page: QString::default(),
             rows: std::ptr::null_mut(),
             focused: 0,
@@ -265,6 +271,7 @@ impl qobject::ThemeSettings {
         me.defaultable = facts.defaultable;
         me.section = facts.section;
         me.trail = list(&facts.trail);
+        me.trail_line = QString::from(facts.trail_line.as_str());
         me.page = QString::from(facts.page.as_str());
         me.focused = facts.focused;
         me.count = facts.rows.len() as i32;

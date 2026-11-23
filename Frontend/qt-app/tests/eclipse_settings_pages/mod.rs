@@ -305,7 +305,10 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
             scene.wheel(x, y, towards);
             settle(scene);
         }
+        // Onto the row from the heading, as a row the wheel brought under a pointer at rest takes nothing (EmuSen_Kit.md §7.108).
         let (x, y) = centre(scene, &format!("rowName.{i}"));
+        let (hx, hy) = centre(scene, "settingsHeading");
+        scene.hover(hx, hy);
         scene.hover(x + 1.0, y);
         scene.hover(x, y);
         settle(scene);

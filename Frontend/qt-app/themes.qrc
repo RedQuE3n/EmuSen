@@ -16,6 +16,7 @@
         <file alias="theme.json">../themes/emusen/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/eclipse">
+        <file alias="assets/sections.svg">../themes/eclipse/assets/sections.svg</file>
         <file alias="parts/ArtHues.qml">../themes/eclipse/parts/ArtHues.qml</file>
         <file alias="parts/Board.qml">../themes/eclipse/parts/Board.qml</file>
         <file alias="parts/Brand.qml">../themes/eclipse/parts/Brand.qml</file>
@@ -34,10 +35,18 @@
         <file alias="parts/SplashCorona.qml">../themes/eclipse/parts/SplashCorona.qml</file>
         <file alias="parts/Blend.qml">../themes/eclipse/parts/Blend.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
+        <file alias="parts/Chevron.qml">../themes/eclipse/parts/Chevron.qml</file>
+        <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>
+        <file alias="parts/Limb.qml">../themes/eclipse/parts/Limb.qml</file>
+        <file alias="parts/SettingsAside.qml">../themes/eclipse/parts/SettingsAside.qml</file>
+        <file alias="parts/SettingsInk.qml">../themes/eclipse/parts/SettingsInk.qml</file>
+        <file alias="parts/SettingsNav.qml">../themes/eclipse/parts/SettingsNav.qml</file>
+        <file alias="parts/SettingsRow.qml">../themes/eclipse/parts/SettingsRow.qml</file>
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>
         <file alias="screens/Games.qml">../themes/eclipse/screens/Games.qml</file>
         <file alias="screens/Consoles.qml">../themes/eclipse/screens/Consoles.qml</file>
         <file alias="screens/Home.qml">../themes/eclipse/screens/Home.qml</file>
+        <file alias="screens/Settings.qml">../themes/eclipse/screens/Settings.qml</file>
         <file alias="screens/Splash.qml">../themes/eclipse/screens/Splash.qml</file>
         <file alias="sounds/splash.flac">../themes/eclipse/sounds/splash.flac</file>
         <file alias="theme.json">../themes/eclipse/theme.json</file>

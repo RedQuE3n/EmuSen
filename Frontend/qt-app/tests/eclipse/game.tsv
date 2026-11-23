@@ -1,4 +1,4 @@
-# Eclipse's game page, its States tab, against its board, EclipseGame.dc.html (design project, "Eclipse theme, game page", 1920 by 1200), one row an element (EmuSen_Qt.md §3.4.11).
+# Eclipse's game page, its States tab, against its board, EclipseGame.dc.html (design project, "Eclipse theme, game page", 1920 by 1200), one row an element (EmuSen_Qt.md §3.4.12).
 # board_height: 1200
 # Read from the board in Chrome after document.fonts.ready (measured 2026-11-23); the columns, rules, sizes, types and colours are eclipse_home.tsv's, held by tests/eclipse_board/mod.rs.
 # A row whose part is "Line" is held by Eclipse's Line, the box the board's CSS gives the line, its words standing on Chrome's baseline within it (themes/eclipse/parts/Line.qml boardLine).

@@ -1,4 +1,4 @@
-//! Eclipse's game page, its States tab, held to its board in the program (EmuSen_Qt.md §3.4.11): the board's game with its
+//! Eclipse's game page, its States tab, held to its board in the program (EmuSen_Qt.md §3.4.12): the board's game with its
 //! resume point and three slots, the page opened through Eclipse's Home and the States tab by the right shoulder, slot 1
 //! focused, and every row of `eclipse/game.tsv` held at each of the gate's sizes with the board's words.
 
@@ -13,7 +13,7 @@ use game::{board_states, focused, open_page, program, states_tab, when_words, wo
 const TABLE: &str = include_str!("eclipse/game.tsv");
 
 #[test]
-fn qt_3_4_11_eclipse_s_game_page_is_its_board_at_every_size() {
+fn qt_3_4_12_eclipse_s_game_page_is_its_board_at_every_size() {
     let mut harness = emusen_qt_test::Harness::new();
     let states = board_states();
     let world = world("qt-app-eclipse-game", &states, true, true);

@@ -1,5 +1,5 @@
 //! Every pill, tab, link and card of Eclipse's game page reached and acted on, by the pad and by the pointer, in the program
-//! (EmuSen_Qt.md §3.4.11): the walk between them, Favourite turned, the tabs stepped by the shoulders and tapped, the trail's
+//! (EmuSen_Qt.md §3.4.12): the walk between them, Favourite turned, the tabs stepped by the shoulders and tapped, the trail's
 //! links, and Resume, Start from the beginning and a card each starting the game from its state.
 
 mod common;
@@ -46,7 +46,7 @@ fn shown(scene: &mut Scene<'_>) -> (i32, bool) {
 }
 
 #[test]
-fn qt_3_4_11_every_pill_tab_link_and_card_is_reached_and_acted_on_by_pad_and_pointer() {
+fn qt_3_4_12_every_pill_tab_link_and_card_is_reached_and_acted_on_by_pad_and_pointer() {
     let mut harness = Harness::new();
     let world = world("qt-app-eclipse-game-pad", &board_states(), true, true);
     let file = |slot| state_file(&world, slot).to_string_lossy().into_owned();

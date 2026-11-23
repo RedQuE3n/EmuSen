@@ -50,7 +50,7 @@ Item {
     readonly property bool splash: splashSlot.themed
     readonly property bool settings: settingsSlot.themed
     readonly property bool game: gameSlot.themed
-    // The theme draws the game's page as it stands: its screen is placed and names the tab shown, or names none (1.11).
+    // The theme draws the game's page as it stands: its screen is placed and names the tab shown, or names none (1.12).
     readonly property bool pageDrawn: gameSlot.themed && (themed.pageModel?.themeDraws ?? true)
     readonly property alias failed: host.failed
     readonly property alias warnings: host.warnings
@@ -64,7 +64,7 @@ Item {
     readonly property var homeScreen: homeSlot.placed ? (homeSlot.item as Placing)?.screen.children[0] ?? null : null
     // The splash placed, read as a theme's ThemeScreen; from 1.10 one that enters Home leads the start, with no Moonrise under it.
     readonly property var splashScreen: splashSlot.placed ? (splashSlot.item as Placing)?.screen.children[0] ?? null : null
-    // The game's page placed, read as a theme's ThemeScreen, whose pageSections the page's model hears (1.11).
+    // The game's page placed, read as a theme's ThemeScreen, whose pageSections the page's model hears (1.12).
     readonly property var gameScreen: gameSlot.placed ? (gameSlot.item as Placing)?.screen.children[0] ?? null : null
     readonly property bool leads: themed.splash && (themed.splashScreen?.entersHome ?? false)
     // The theme provides a splash not yet placed while the splash shows, so the window waits to know which splash leads.

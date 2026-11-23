@@ -34,6 +34,9 @@ pub mod qobject {
         #[qproperty(i32, sections)]
         #[qproperty(i32, section)]
         #[qproperty(bool, trail_shown)]
+        /// A row the walk keeps focused, the host's: focused when it changes and whenever the rows are read, so the walk never
+        /// tells a focus of its own in between; -1, the default, follows none (EmuSen_Kit.md §7.122).
+        #[qproperty(i32, follows)]
         #[qproperty(i32, count, READ, NOTIFY = walked)]
         #[qproperty(i32, current, READ, NOTIFY = walked)]
         #[qproperty(i32, first, READ, NOTIFY = walked)]
@@ -91,6 +94,7 @@ pub struct MeasuredWalkRust {
     sections: i32,
     section: i32,
     trail_shown: bool,
+    follows: i32,
     count: i32,
     current: i32,
     first: i32,
@@ -108,6 +112,7 @@ impl Default for MeasuredWalkRust {
             sections: 0,
             section: 0,
             trail_shown: false,
+            follows: -1,
             count: 0,
             current: 0,
             first: 0,
@@ -121,6 +126,12 @@ impl Default for MeasuredWalkRust {
 impl cxx_qt::Initialize for qobject::MeasuredWalk {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_model_changed(|this| this.take_rows(false)).release();
+        self.as_mut()
+            .on_follows_changed(|mut this| {
+                this.as_mut().take_follows();
+                this.sync();
+            })
+            .release();
         self.as_mut()
             .on_window_changed(|mut this| {
                 let window = this.window;
@@ -183,7 +194,14 @@ impl qobject::MeasuredWalk {
         // SAFETY: QML hands the pointer of a live model, cleared by the engine when the model is destroyed.
         let rows = crate::settings::walk_rows(unsafe { self.model.as_ref() });
         self.as_mut().rust_mut().walk.set_rows(rows, keep);
+        self.as_mut().take_follows();
         self.sync();
+    }
+
+    /// The followed row focused, where one is followed and the rows hold it; whether the focus moved.
+    fn take_follows(mut self: Pin<&mut Self>) -> bool {
+        let follows = self.follows;
+        usize::try_from(follows).is_ok_and(|row| self.as_mut().rust_mut().walk.follow(row))
     }
 
     /// The walk's section where a shoulder stepped it.

@@ -1,4 +1,4 @@
-# Eclipse's game page for a game never played, against its board, EclipseGameNoState.dc.html (design project, "Eclipse theme, game page, a game never played", 1920 by 1200), one row an element (EmuSen_Qt.md §3.4.11).
+# Eclipse's game page for a game never played, against its board, EclipseGameNoState.dc.html (design project, "Eclipse theme, game page, a game never played", 1920 by 1200), one row an element (EmuSen_Qt.md §3.4.12).
 # board_height: 1200
 # Read from the board in Chrome after document.fonts.ready (measured 2026-11-23); the columns, rules, sizes, types and colours are eclipse_home.tsv's and game.tsv's, held by tests/eclipse_board/mod.rs.
 # The rows the two boards share are game.tsv's, numbered by EclipseGame's lines (this board's from line 47 on are one fewer); the rest are this board's. The note's two lines are 1.45 × 22 = 31.9 each, which Chrome's 64ths read 63.781 together.

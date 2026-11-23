@@ -45,6 +45,10 @@ pub trait SettingsSource {
     fn preset_parameters(&self, _path: &str) -> Result<Vec<Value>, String> {
         Ok(Vec::new())
     }
+    /// The newest screenshot the player took, of any game, as a file's path (`screenshots::newest`).
+    fn shot(&self) -> Option<String> {
+        None
+    }
 }
 
 /// One read of everything the screen shows.
@@ -65,6 +69,8 @@ pub struct Read {
     /// The parameters of each pack preset a console draws with, by the value its `ScreenFilter` holds, or why they
     /// could not be read.
     pub levers: std::collections::BTreeMap<String, Result<Vec<Value>, String>>,
+    /// The newest screenshot's path, for a picture preview with no game suspended.
+    pub shot: Option<String>,
 }
 
 /// Reads the source once; a model with no file yet reads as null, and its keys show their defaults.
@@ -85,6 +91,7 @@ pub fn read(source: &dyn SettingsSource) -> Result<Read, String> {
         consoles: ConsoleRead::default(),
         bindings: crate::bindings::Bindings::default(),
         pack: source.pack(),
+        shot: source.shot(),
     })
 }
 
@@ -146,6 +153,8 @@ pub struct Pane {
     pub samples: Vec<(String, f64)>,
     /// The sentence's tone, then each plain line's, by what it says.
     pub tones: Vec<Tone>,
+    /// A picture preview's newest screenshot, a file's path; empty for none or another preview.
+    pub shot: String,
 }
 
 /// What a press asked for, beyond the rows read again.
@@ -389,6 +398,21 @@ impl SettingsView {
 
     pub fn sections(&self) -> Vec<String> {
         self.description["sections"].as_array().map(|s| s.iter().map(|s| text_of(&s["name"])).collect()).unwrap_or_default()
+    }
+
+    /// The screen's title, the Home place's name that opens it.
+    pub fn title(&self) -> String {
+        crate::words::HOME_PLACES[crate::screens::SETTINGS_PLACE].to_owned()
+    }
+
+    /// The page's heading: the innermost page's name, else the section's.
+    pub fn heading(&self) -> String {
+        self.trail().last().cloned().or_else(|| self.sections().get(self.section).cloned()).unwrap_or_default()
+    }
+
+    /// Each section's id in the description, in the sections' order, by which a theme picks a section's picture.
+    pub fn section_keys(&self) -> Vec<String> {
+        self.description["sections"].as_array().map(|s| s.iter().map(|s| text_of(&s["id"])).collect()).unwrap_or_default()
     }
 
     /// The pages' trail: empty on a section, else the section's name and each page's.
@@ -954,6 +978,7 @@ impl SettingsView {
             meter,
             samples,
             tones: Vec::new(),
+            shot: if preview == Preview::Picture { self.read.shot.clone().unwrap_or_default() } else { String::new() },
         }
     }
 
@@ -1044,6 +1069,49 @@ impl SettingsView {
             return Outcome::Saved(Model::Graphics, self.read.graphics.clone());
         }
         Outcome::Nothing
+    }
+
+    /// Whether X takes a row back to a default: a value of Galaxia's rows the player may change, or the CRT's (R-20261116-22).
+    pub fn defaultable(&self, index: usize) -> bool {
+        let Some(entry) = self.entries().get(index).cloned() else { return false };
+        match self.keyed(&entry) {
+            Some(keyed) => keyed.row["locked"] != true && !self.declined(&entry),
+            None => entry.get("filter").is_some(),
+        }
+    }
+
+    /// X on a row: its value back to its default, Galaxia's row's or, set per console, each console's own; nothing on a row with none.
+    pub fn to_default(&mut self, index: usize) -> Outcome {
+        if !self.defaultable(index) {
+            return Outcome::Nothing;
+        }
+        let entry = self.entries()[index].clone();
+        let forget = |document: &mut Value, parent: &str, key: &str| {
+            if let Some(map) = parent.split('.').try_fold(&mut *document, |v, part| v.get_mut(part)).and_then(Value::as_object_mut) {
+                map.remove(key);
+            }
+        };
+        if let Some(keyed) = self.keyed(&entry) {
+            let (key, kind, default) = (text_of(&keyed.row["key"]), text_of(&keyed.row["kind"]), text_of(&keyed.row["default"]));
+            let (model, consoles) = (keyed.model.to_owned(), keyed.consoles.clone());
+            if consoles.is_empty() {
+                let graphics = model.starts_with("GraphicsConfig");
+                let document = if graphics { &mut self.read.graphics } else { &mut self.read.app };
+                let old = at(document, &key).cloned();
+                set_at(document, &key, typed(old.as_ref(), &kind, &default));
+                return Outcome::Saved(if graphics { Model::Graphics } else { Model::App }, document.clone());
+            }
+            for c in consoles {
+                forget(&mut self.read.graphics, &format!("Consoles.{c}"), &key);
+            }
+            return Outcome::Saved(Model::Graphics, self.read.graphics.clone());
+        }
+        let name = self.filter_name(&entry["filter"]);
+        for c in self.consoles(entry["consoles"].as_str().unwrap_or("every")) {
+            forget(&mut self.read.graphics, &format!("Consoles.{c}"), "ScreenFilter");
+            forget(&mut self.read.graphics, &format!("ShaderParameters.{c}"), &name);
+        }
+        Outcome::Saved(Model::Graphics, self.read.graphics.clone())
     }
 
     /// A on a row: a value steps on, a page opens, a door is the screens' to open.

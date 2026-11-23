@@ -3,12 +3,12 @@ import QtQuick
 import EmuSen.Theme
 import "../parts"
 
-// Eclipse's game page as its board draws it (EclipseGame.dc.html, EclipseGameNoState.dc.html): the disc and the horizon, the trail, the game's words and buttons, the tabs and the States tab's cards, every measure the board's in canvas units (EmuSen_Qt.md §3.4.11).
+// Eclipse's game page as its board draws it (EclipseGame.dc.html, EclipseGameNoState.dc.html): the disc and the horizon, the trail, the game's words and buttons, the tabs and the States tab's cards, every measure the board's in canvas units (EmuSen_Qt.md §3.4.12).
 ThemeScreen {
     id: screen
     objectName: "gameScreen"
     role: ThemeScreen.Game
-    // The tabs this screen draws; the program draws the others, every deeper page and every question (1.11).
+    // The tabs this screen draws; the program draws the others, every deeper page and every question (1.12).
     pageSections: ["states"]
     // Where the focus starts: the first state's card, else the first button.
     focusItems: [

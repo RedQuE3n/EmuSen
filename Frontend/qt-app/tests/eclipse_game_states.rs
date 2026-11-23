@@ -1,5 +1,5 @@
 //! The states of Eclipse's game page that neither board draws, as the tester ruled them (R-20261123-33, -34, -36), in the
-//! program (EmuSen_Qt.md §3.4.11): only a resume point; slots and no resume point; every slot full and the row following
+//! program (EmuSen_Qt.md §3.4.12): only a resume point; slots and no resume point; every slot full and the row following
 //! the focus; Delete asking the program's question; a state gone since the page read it handed to the program as its own page
 //! hands it; and every tab Eclipse does not name opening the program's page.
 
@@ -70,7 +70,7 @@ fn help(scene: &mut Scene<'_>) -> Vec<String> {
 }
 
 #[test]
-fn qt_3_4_11_the_states_no_board_draws_are_as_the_tester_ruled() {
+fn qt_3_4_12_the_states_no_board_draws_are_as_the_tester_ruled() {
     let mut harness = emusen_qt_test::Harness::new();
     let today = midnight();
     // (1) Only a resume point, saved today: its card with the badge, then the empty slot; Resume leads (R-20261123-36).
@@ -179,7 +179,7 @@ fn qt_3_4_11_the_states_no_board_draws_are_as_the_tester_ruled() {
         // runs the game (qt-models/src/session_model.rs start_from); no core runs the synthetic image here, so it is not held.
     }
 
-    // (6) Every tab Eclipse does not name opens the program's page; States is Eclipse's again (EmuSen_Qt.md §3.2, 1.11).
+    // (6) Every tab Eclipse does not name opens the program's page; States is Eclipse's again (EmuSen_Qt.md §3.2, 1.12).
     let mut scene = program(&mut harness);
     open_page(&mut scene, &world);
     states_tab(&mut scene);

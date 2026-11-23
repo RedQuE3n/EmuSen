@@ -129,7 +129,7 @@ Kit.NormalizedCanvas {
             }
             onChosen: (index) => screen.page.answer(index)
         }
-        // Opened each time it is asked while the page is shown, so one asked under a theme's screen opens as the page appears (EmuSen_Qt.md §3.4.11); a Binding, since B closing the popup would undo a plain one.
+        // Opened each time it is asked while the page is shown, so one asked under a theme's screen opens as the page appears (EmuSen_Qt.md §3.4.12); a Binding, since B closing the popup would undo a plain one.
         Binding {
             question.visible: screen.page.asking && screen.visible
         }

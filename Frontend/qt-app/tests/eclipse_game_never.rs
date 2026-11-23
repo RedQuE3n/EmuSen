@@ -1,4 +1,4 @@
-//! Eclipse's game page for a game never played, held to its board in the program (EmuSen_Qt.md §3.4.11): no state, no play,
+//! Eclipse's game page for a game never played, held to its board in the program (EmuSen_Qt.md §3.4.12): no state, no play,
 //! not a favourite; the States tab shows the empty slot at rest beside the board's words, Start takes the focus, and every
 //! row of `eclipse/game_never.tsv` is held at each of the gate's sizes with the board's words.
 
@@ -12,7 +12,7 @@ use game::{focused, open_page, program, states_tab, world};
 const TABLE: &str = include_str!("eclipse/game_never.tsv");
 
 #[test]
-fn qt_3_4_11_a_game_never_played_is_its_board_at_every_size() {
+fn qt_3_4_12_a_game_never_played_is_its_board_at_every_size() {
     let mut harness = emusen_qt_test::Harness::new();
     let world = world("qt-app-eclipse-game-never", &[], false, true);
     let mut scene = program(&mut harness);

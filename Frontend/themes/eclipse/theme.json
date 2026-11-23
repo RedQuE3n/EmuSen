@@ -1,6 +1,6 @@
 {
     "schema": 1,
-    "api": "1.11",
+    "api": "1.12",
     "name": "Eclipse",
     "author": "The EmuSen project",
     "licence": "GPL-3.0-or-later",
@@ -12,6 +12,7 @@
         "games",
         "consoles",
         "splash",
+        "settings",
         "game"
     ],
     "tokens": {

@@ -345,6 +345,14 @@ impl ActionSink for Sink {
     fn act(&mut self, action: &Action) -> bool {
         // Safety: the cell holds the feed while it lives and null after; the theme's engine runs on the feed's thread.
         let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
+        // X on a theme's Settings row: the focused row back to its default (help::DEFAULT, R-20261116-22).
+        if matches!(action, Action::Act(key) if key == help::DEFAULT) {
+            let settings = feed.taken(Role::Settings).then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
+            return settings.is_some_and(|s| {
+                let row = *s.focused();
+                s.to_default(row)
+            });
+        }
         let mut feed = unsafe { Pin::new_unchecked(feed) };
         let suspended = feed.session.as_ref().filter(|s| s.running).map(|s| s.game.clone());
         let rows: Vec<String> = feed.library().map(|l| l.view().rows.rows().iter().map(|r| r.key.clone()).collect()).unwrap_or_default();

@@ -92,6 +92,9 @@ pub const NOT_PLAYED: &str = "Not played";
 pub const ALL: &str = "All";
 /// Between the places of the path in Eclipse's games view's header (EclipseLibrary:27).
 pub const CRUMB: &str = "/";
+
+/// Left with Right named as one key, as the Settings boards' help line draws it (gen_settings.py:24).
+pub const KEY_PAIR: &str = "◀ ▶";
 /// A, which plays the focused game, as Eclipse's games view names it (EclipseLibrary:51, 85).
 pub const START: &str = "Start";
 

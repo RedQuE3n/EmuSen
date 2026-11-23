@@ -1,6 +1,6 @@
 import QtQuick
 
-// The colours only the game page draws that no token or Ink entry holds, constants of the design with their board lines (EmuSen_Qt.md §3.4.11).
+// The colours only the game page draws that no token or Ink entry holds, constants of the design with their board lines (EmuSen_Qt.md §3.4.12).
 QtObject {
     // The horizon's line: rgba(246, 231, 216, 0.55) between 30% and 70% of the width, clear at its ends (EclipseGame:24).
     readonly property color horizon: "#8CF6E7D8"

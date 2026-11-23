@@ -47,7 +47,7 @@ pub mod qobject {
         #[qproperty(QStringList, question_sentences, cxx_name = "questionSentences", READ, NOTIFY = shown)]
         #[qproperty(QStringList, question_choices, cxx_name = "questionChoices", READ, NOTIFY = shown)]
         #[qproperty(i32, question_back, cxx_name = "questionBack", READ, NOTIFY = shown)]
-        /// 1.11: Eclipse's board's tabs and the one shown, its kicker and line, its buttons, its state cards, the words beside
+        /// 1.12: Eclipse's board's tabs and the one shown, its kicker and line, its buttons, its state cards, the words beside
         /// them where the game has none, and the help for the focus in its words (R-20261116-29, -30, -36).
         #[qproperty(QStringList, tabs, READ, NOTIFY = shown)]
         #[qproperty(i32, tab, READ, NOTIFY = shown)]
@@ -57,7 +57,7 @@ pub mod qobject {
         #[qproperty(*mut ThemeRows, cards, READ, CONSTANT)]
         #[qproperty(QString, note, READ, NOTIFY = shown)]
         #[qproperty(i32, board_help, cxx_name = "boardHelp", READ, NOTIFY = shown)]
-        /// 1.11: the board's trail, the key of the section its first link opens and the console's id its second opens.
+        /// 1.12: the board's trail, the key of the section its first link opens and the console's id its second opens.
         #[qproperty(QStringList, trail, READ, NOTIFY = shown)]
         #[qproperty(QString, trail_section, cxx_name = "trailSection", READ, NOTIFY = shown)]
         #[qproperty(QString, console, READ, NOTIFY = shown)]
@@ -80,9 +80,9 @@ pub const PAGE_ROW_ROLES: [&str; 8] = ["key", "label", "value", "line", "picture
 
 /// `Page.pills`' roles: the board's button, its pad button (-1 none), filled, whether it is the heart's and the heart on,
 /// the place among `actions` of the action it is, which `pageAct` and `pageFocus` take, and the tile among `rows` it
-/// chooses instead, -1 for none: Resume's is the resume point's (1.11).
+/// chooses instead, -1 for none: Resume's is the resume point's (1.12).
 pub const PAGE_PILL_ROLES: [&str; 8] = ["key", "label", "button", "filled", "heart", "on", "act", "row"];
-/// `Page.cards`' roles: a state card or the empty one, its badge's words, and `row`, its tile among `rows`, -1 for the empty card (1.11).
+/// `Page.cards`' roles: a state card or the empty one, its badge's words, and `row`, its tile among `rows`, -1 for the empty card (1.12).
 pub const PAGE_CARD_ROLES: [&str; 7] = ["key", "label", "line", "picture", "marked", "badge", "row"];
 
 /// Everything the singleton shows, as the host reads it from the program's model.

@@ -3,7 +3,7 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
-## 1.11, an addition: Eclipse's game page, its tabs and its States tab (2026-11-23)
+## 1.12, an addition: Eclipse's game page, its tabs and its States tab (2026-11-23)
 
 Decided 2026-11-16 by the tester (R-20261116-27, -29, -30, -36) and 2026-11-23 (R-20261123-33 to -36): Eclipse draws the
 game page as its board does, six tabs in the board's order and the States tab's cards, and the program draws every tab
@@ -25,6 +25,33 @@ and deeper page the theme does not.
   first link opens and the console the second opens.
 - **`Page.boardHelp`** and the `Help` kinds **`PageState`**, **`PageStart`** and **`PageSections`**: the help in the
   boards' words for a state's card and for Start, -1 where the boards draw none and `Page.help` is shown.
+- The module is 1.12 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.12.*`.
+
+## 1.11, an addition: what Eclipse's Settings boards draw (2026-11-23)
+
+Decided 2026-11-23 by the tester (R-20261123-30): "Add all four, one minor."
+
+- **`Settings.sectionKeys`**: each section's id in the description (`controllers`, `display`, …), in `sections`' order, by
+  which a theme picks the board's icon for a section (`SettingsView::section_keys`).
+- A row's `about` (no new member): the description's short line, else the Galaxia row's, else the row's hint (decided
+  2026-11-23, R-20261123-31), so a row no board draws still has a line under its name.
+- **`Settings.title`**, **`heading`** and **`aboutHeading`**: the screen's name (Home's place that opens it), the page's
+  heading (the innermost page's name, else the section's) and the About panel's (the focused row's name), the words a
+  theme drew by its own reasoning before (`SettingsView::title`, `heading`).
+- **`Settings.rows`' `form`**: a `SettingsForm` (`Settings.Choice`, `Switch`, `Door` or `Fact`), how the boards draw a
+  row's value (`settings_shown::Form`), so a theme no longer works it out from `kind` and `value`; a number, since the
+  theme rules read a word compared in QML as words the player would read.
+- **`Words.keyPair`**: Left with Right named as one key, "◀ ▶", the word the Settings boards' help line draws
+  (`words::KEY_PAIR`).
+- **X, back to the default** (R-20261123-30 (b), R-20261116-22): `Settings.defaultable` says whether the focused row has a
+  default X restores; `Actions.act("default")` restores it (`SettingsView::to_default`: Galaxia's default, or on a row
+  set per console each console's own); `Help.entries(kind, {settings: true, defaultable})` is a Settings kind's list as
+  the boards name and order it, ◀ ▶ Change, A Choose or open, X Back to the default, B Back, then LB RB Section and
+  Start Home (R-20261123-20), X's entry not `enabled` where `defaultable` is false. The program's own bar is unchanged.
+- **The ◀ ▶ key** (R-20261123-30 (c)): no new member here; the kit's `HelpBar` gives a theme's glyph the entry's `pair`
+  where the glyph declares `drawsPair`, and leaves the second glyph out (`EmuSen_Kit.md` §7.54).
+- **`Settings.shot`** (R-20261123-30 (d)): the newest screenshot of any game as a file URL, on a picture preview's
+  pane, empty for none. Eclipse does not draw it yet: R-20261116-25 asks for it through the chosen filter.
 - The module is 1.11 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.11.*`.
 
 ## 1.10, an addition: a splash that enters Home (2026-11-17)

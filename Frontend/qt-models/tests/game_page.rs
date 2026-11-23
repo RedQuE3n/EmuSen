@@ -618,7 +618,7 @@ fn qt_7_8_5_cover_art_whose_pictures_could_not_be_looked_for_says_why() {
     assert_eq!(page.choose_row(at), Outcome::Said(format!("{COVER_UNREAD}: the scraper could not be opened")));
 }
 
-/// Eclipse's page as its boards word it (EclipseGame.dc.html; EmuSen_Qt.md §3.4.11).
+/// Eclipse's page as its boards word it (EclipseGame.dc.html; EmuSen_Qt.md §3.4.12).
 fn detailed(mut r: Read) -> Read {
     r.details = vec![
         Detail { field: "genre", value: "Action".into(), edited: false },
@@ -628,14 +628,14 @@ fn detailed(mut r: Read) -> Read {
 }
 
 #[test]
-fn qt_3_4_11_a_themes_trail_opens_choose_a_console_and_the_consoles_games() {
+fn qt_3_4_12_a_themes_trail_opens_choose_a_console_and_the_consoles_games() {
     assert_eq!(page_step(false, Shown::Home, &Ask::Section(emusen_qt_models::screens::CONSOLES_KEY.into())), Some(Shown::Consoles));
     assert_eq!(page_step(false, Shown::Home, &Ask::Open("snes".into())), Some(Shown::Grid));
     assert_eq!(page_step(false, Shown::Home, &Ask::Section("library".into())), None, "a section that opens at a key is not a trail's");
 }
 
 #[test]
-fn qt_3_4_11_the_tabs_are_the_boards_six_in_its_order_cheats_only_with_cheats() {
+fn qt_3_4_12_the_tabs_are_the_boards_six_in_its_order_cheats_only_with_cheats() {
     let mut page = GamePage::new(read(), NOW);
     let names = |p: &GamePage| p.tabs().iter().map(|t| t.name()).collect::<Vec<_>>();
     assert_eq!(names(&page), ["Overview", "States", "Media", "Details", "Options", "Cheats"]);
@@ -656,7 +656,7 @@ fn qt_3_4_11_the_tabs_are_the_boards_six_in_its_order_cheats_only_with_cheats() 
 }
 
 #[test]
-fn qt_3_4_11_a_theme_draws_the_tabs_it_names_and_never_a_deeper_page_or_a_question() {
+fn qt_3_4_12_a_theme_draws_the_tabs_it_names_and_never_a_deeper_page_or_a_question() {
     let mut page = GamePage::new(read(), NOW);
     let states = vec!["states".to_owned()];
     assert!(page.drawn_by(&[], false) && page.drawn_by(&[], true), "a screen that names none draws everything");
@@ -671,7 +671,7 @@ fn qt_3_4_11_a_theme_draws_the_tabs_it_names_and_never_a_deeper_page_or_a_questi
 }
 
 #[test]
-fn qt_3_4_11_the_kicker_the_line_and_the_buttons_are_the_boards() {
+fn qt_3_4_12_the_kicker_the_line_and_the_buttons_are_the_boards() {
     let mut r = detailed(read());
     r.console = "Super Nintendo".into();
     r.played_seconds = 3 * 3600 + 20 * 60;
@@ -697,7 +697,7 @@ fn qt_3_4_11_the_kicker_the_line_and_the_buttons_are_the_boards() {
 }
 
 #[test]
-fn qt_3_4_11_the_cards_are_the_resume_point_the_slots_in_order_and_one_empty_slot() {
+fn qt_3_4_12_the_cards_are_the_resume_point_the_slots_in_order_and_one_empty_slot() {
     let mut page = GamePage::new(read(), NOW);
     page.choose_tab(1);
     let when = |at: i64| format!("at {}", NOW - at);
@@ -720,7 +720,7 @@ fn qt_3_4_11_the_cards_are_the_resume_point_the_slots_in_order_and_one_empty_slo
 }
 
 #[test]
-fn qt_3_4_11_a_states_when_line_is_the_boards_and_the_testers_forms() {
+fn qt_3_4_12_a_states_when_line_is_the_boards_and_the_testers_forms() {
     let (today, yesterday) = ((2026, 11, 23), (2026, 11, 22));
     let when = |day| state_when(day, today, yesterday, "9:12 PM");
     assert_eq!(when(yesterday), "Yesterday, 9:12 PM");
@@ -731,7 +731,7 @@ fn qt_3_4_11_a_states_when_line_is_the_boards_and_the_testers_forms() {
 }
 
 #[test]
-fn qt_3_4_11_resume_loads_the_resume_point_and_is_never_stepped() {
+fn qt_3_4_12_resume_loads_the_resume_point_and_is_never_stepped() {
     let mut r = read();
     r.states[0].when = NOW - 5 * 86_400;
     let mut page = GamePage::new(r, NOW);
@@ -745,7 +745,7 @@ fn qt_3_4_11_resume_loads_the_resume_point_and_is_never_stepped() {
 }
 
 #[test]
-fn qt_3_4_11_the_states_no_board_draws_as_the_tester_ruled() {
+fn qt_3_4_12_the_states_no_board_draws_as_the_tester_ruled() {
     let state = |slot, path: &str| State { path: path.into(), slot, picture: String::new(), when: NOW - 60 };
     // Only a resume point: its card, then the empty slot (R-20261123-36, 1).
     let mut only = read();
@@ -773,7 +773,7 @@ fn qt_3_4_11_the_states_no_board_draws_as_the_tester_ruled() {
 }
 
 #[test]
-fn qt_3_4_11_the_help_in_the_boards_words_on_a_state_and_on_start() {
+fn qt_3_4_12_the_help_in_the_boards_words_on_a_state_and_on_start() {
     let mut page = GamePage::new(read(), NOW);
     page.choose_tab(1);
     let Content::Tiles(tiles) = page.content() else { panic!("tiles") };

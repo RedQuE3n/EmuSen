@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::{sandbox, wait_for};
+use common::{eclipse_reference, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::audit::{self, contrast, fit, Rect};
 use emusen_kit_core::input::{UiButton, WalkForm};
@@ -129,8 +129,9 @@ fn qt_3_5_1_the_chosen_theme_s_tokens_draw_the_program_s_screens_and_none_gives_
     choose(&mut scene, "");
     assert_eq!(bar(&mut scene), kit, "no theme chosen gives the kit's back");
 
-    // Eclipse's accent (dark only: no package in Frontend/themes lists a light variant), on Settings and on the Home card.
-    choose(&mut scene, &format!("{THEMES}/eclipse"));
+    // Eclipse's accent (dark only), on the program's Settings, held under the reference's screens with Eclipse's tokens as Eclipse draws its own, and on the Home card.
+    choose(&mut scene, &package("eclipse", "Settings"));
+    assert_eq!(scene.property("chosenTheme", "status"), "Ready");
     assert_eq!(bar(&mut scene), rgb("#F6E7D8"), "Eclipse's accent");
     back_home(&mut scene);
     choose(&mut scene, "");
@@ -184,6 +185,14 @@ fn qt_3_5_1_the_chosen_theme_s_tokens_draw_the_program_s_screens_and_none_gives_
 }
 
 
+/// The package a program screen is judged under for a theme's colours: the theme, or for a screen it draws itself (Eclipse's Settings, and the notice over it) the reference's screens with its tokens.
+fn package(theme: &str, screen: &str) -> String {
+    match (theme, screen) {
+        ("eclipse", "Settings" | "Notice") => eclipse_reference().display().to_string(),
+        _ => format!("{THEMES}/{theme}"),
+    }
+}
+
 /// The gate's fit and contrast findings of the window as shown, at 1280 by 800, each with the items it names.
 fn judged(scene: &mut Scene<'_>) -> Vec<String> {
     let (w, h) = (1280.0, 800.0);
@@ -213,7 +222,7 @@ fn under_each_theme(scene: &mut Scene<'_>, screen: &str, notice: Option<&Sdl>, r
         scene.set_variant(variant);
         let kit = judged_with(scene, notice);
         for theme in overriding() {
-            choose(scene, &format!("{THEMES}/{theme}"));
+            choose(scene, &package(&theme, screen));
             assert_eq!(scene.property("chosenTheme", "status"), "Ready", "{theme}");
             assert_eq!(focus_identity(scene), Some(held.clone()), "{screen} keeps the same element focused under {theme}");
             for line in judged_with(scene, notice).into_iter().filter(|l| !kit.contains(l)) {

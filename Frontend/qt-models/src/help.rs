@@ -386,6 +386,29 @@ pub fn card_named(list: Vec<Entry>) -> Vec<Entry> {
         .collect()
 }
 
+/// X on a Settings row as Eclipse's boards name it: the row's value back to its default (R-20261116-22).
+pub const DEFAULT: &str = "default";
+pub const TO_DEFAULT: Entry = (UiButton::Screensaver, "Back to the default", Some(DEFAULT));
+
+/// A Settings list as Eclipse's boards name and order it, X added where a value steps (EmuSen_Qt.md §3.4.11).
+pub fn settings_named(list: Vec<Entry>) -> Vec<Entry> {
+    const ORDER: [UiButton; 6] = [UiButton::Left, UiButton::Accept, UiButton::Screensaver, UiButton::Back, UiButton::PageUp, UiButton::Menu];
+    let steps = list.iter().any(|e| e.0 == UiButton::Left);
+    let mut named: Vec<Entry> = list
+        .into_iter()
+        .map(|(button, label, action)| match (button, label) {
+            (UiButton::Accept, "Change") => (button, "Choose or open", action),
+            (UiButton::Left, "Value") => (button, "Change", action),
+            _ => (button, label, action),
+        })
+        .collect();
+    if steps {
+        named.push(TO_DEFAULT);
+    }
+    named.sort_by_key(|e| ORDER.iter().position(|b| *b == e.0).unwrap_or(ORDER.len()));
+    named
+}
+
 /// Choose a console's list as Eclipse's board gives it: Y steps the order and X opens options (EclipseConsoles:46-50, 94).
 pub fn options_named(list: Vec<Entry>) -> Vec<Entry> {
     list.into_iter()

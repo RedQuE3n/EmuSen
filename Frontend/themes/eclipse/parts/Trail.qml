@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Theme
 
-// The header's trail: the places before the page, each a link the pad and the pointer take, a slash between, the page's own name last in the title's weight (EclipseGame:29-35; EmuSen_Qt.md §3.4.11).
+// The header's trail: the places before the page, each a link the pad and the pointer take, a slash between, the page's own name last in the title's weight (EclipseGame:29-35; EmuSen_Qt.md §3.4.12).
 Item {
     id: root
     // A board pixel in canvas units, Board.unit.

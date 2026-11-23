@@ -45,6 +45,8 @@ pub mod qobject {
         /// program sets it from its clock, which a test holds (decided 2026-11-09 by the tester); a theme only reads it.
         #[qproperty(f64, now, READ, NOTIFY)]
         #[qproperty(QString, name, READ, CONSTANT)]
+        /// From 1.11: Left with Right named as one key, "◀ ▶", as the Settings boards' help line draws it.
+        #[qproperty(QString, key_pair, cxx_name = "keyPair", READ, CONSTANT)]
         type ThemeWords = super::ThemeWordsRust;
     }
 
@@ -146,6 +148,7 @@ pub struct ThemeWordsRust {
     crumb: QString,
     no_games_line: QString,
     console_sorts: cxx_qt_lib::QStringList,
+    key_pair: QString,
     now: f64,
 }
 
@@ -176,6 +179,7 @@ impl Default for ThemeWordsRust {
             crumb: QString::from(words::CRUMB),
             no_games_line: QString::from(words::NO_GAMES_LINE),
             console_sorts: string_list(&words::CONSOLE_SORTS),
+            key_pair: QString::from(words::KEY_PAIR),
             now: 0.0,
         }
     }

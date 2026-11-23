@@ -1,4 +1,4 @@
-//! Eclipse's game page in the program, for the eclipse_game tests (EmuSen_Qt.md §3.4.11): a library of the board's game
+//! Eclipse's game page in the program, for the eclipse_game tests (EmuSen_Qt.md §3.4.12): a library of the board's game
 //! with the states asked for, the program under Eclipse with its page opened, and the board's table held at every size.
 #![allow(dead_code)]
 

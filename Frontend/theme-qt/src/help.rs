@@ -52,7 +52,7 @@ pub mod qobject {
         PageNone,
         PageEdit,
         PageCoverArt,
-        /// 1.11: Eclipse's page in its boards' words, a state's card, Start with no state, and the shoulders' Section.
+        /// 1.12: Eclipse's page in its boards' words, a state's card, Start with no state, and the shoulders' Section.
         PageState,
         PageStart,
         PageSections,
@@ -77,7 +77,7 @@ pub mod qobject {
     extern "RustQt" {
         #[qinvokable]
         fn entries(self: &ThemeHelp, kind: HelpKind) -> *mut ThemeHelpEntries;
-        /// The kind's list with the entries `group`, `back`, `accept`, `actions`, the names and `letters` ask for (EmuSen_Qt.md §3.2, `Help`).
+        /// The kind's list with the entries `group`, `back`, `accept`, `actions`, the names and `letters` ask for; from 1.11 `settings`, Eclipse's Settings naming, with `defaultable` (EmuSen_Qt.md §3.2).
         #[qinvokable]
         #[cxx_name = "entries"]
         fn entries_with(self: &ThemeHelp, kind: HelpKind, flags: &QMap_QString_QVariant) -> *mut ThemeHelpEntries;
@@ -195,11 +195,13 @@ pub enum Names {
 pub struct ThemeHelpRust {
     lists: [[*mut qobject::ThemeHelpEntries; 192]; KINDS.len()],
     sections: *mut qobject::ThemeHelpEntries,
+    /// From 1.11: each kind's list as Eclipse's Settings boards name it, X drawn declined (0) or taken (1).
+    settings: [[*mut qobject::ThemeHelpEntries; 2]; KINDS.len()],
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [[std::ptr::null_mut(); 192]; KINDS.len()], sections: std::ptr::null_mut() }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 192]; KINDS.len()], sections: std::ptr::null_mut(), settings: [[std::ptr::null_mut(); 2]; KINDS.len()] }
     }
 }
 
@@ -213,6 +215,14 @@ impl cxx_qt::Initialize for qobject::ThemeHelp {
                     unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back, accept, actions, names, letters);
                 }
                 self.as_mut().rust_mut().lists[i][f] = list;
+            }
+            for (d, defaultable) in [false, true].into_iter().enumerate() {
+                let list = ffi::new_help_entries(self.as_mut().upcast_pin());
+                // Safety: the list was just made, a child of this singleton.
+                if let Some(entries) = unsafe { list.as_mut() } {
+                    unsafe { Pin::new_unchecked(entries) }.show_settings(screen_of(kind), defaultable);
+                }
+                self.as_mut().rust_mut().settings[i][d] = list;
             }
         }
         let sections = ffi::new_help_entries(self.as_mut().upcast_pin());
@@ -231,6 +241,9 @@ impl qobject::ThemeHelp {
 
     pub fn entries_with(&self, kind: HelpKind, flags: &QMap<QMapPair_QString_QVariant>) -> *mut qobject::ThemeHelpEntries {
         let flag = |name: &str, unset: bool| flags.get(&QString::from(name)).and_then(|v| v.value::<bool>()).unwrap_or(unset);
+        if flag("settings", false) {
+            return KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.settings[i][usize::from(flag("defaultable", true))]);
+        }
         let group = flag("group", false).then_some(if flag("triggers", false) { help::MAKER } else { help::GROUP });
         let names = if flag("card", false) {
             Names::Card
@@ -257,6 +270,8 @@ pub struct ThemeHelpEntriesRust {
     screen: Screen,
     list: Vec<Entry>,
     accept: bool,
+    /// Whether the host would take X's Back to the default; drawn declined where not.
+    defaultable: bool,
     action_lines: QString,
 }
 
@@ -266,6 +281,7 @@ impl Default for ThemeHelpEntriesRust {
             screen: Screen::Home,
             list: entries_with(Screen::Home, false, false),
             accept: true,
+            defaultable: true,
             action_lines: QString::from(action_lines(Screen::Home).as_str()),
         }
     }
@@ -293,6 +309,16 @@ impl qobject::ThemeHelpEntries {
         self.as_mut().rust_mut().action_lines = QString::from((lines + &help::letter_lines(screen, letters)).as_str());
     }
 
+    /// The screen's list as Eclipse's Settings boards name it (`help::settings_named`), set once when it is made.
+    fn show_settings(mut self: Pin<&mut Self>, screen: Screen, defaultable: bool) {
+        let list = help::settings_named(help::entries(screen).to_vec());
+        let lines = help::lines_of(screen, &list);
+        self.as_mut().rust_mut().screen = screen;
+        self.as_mut().rust_mut().defaultable = defaultable;
+        self.as_mut().rust_mut().list = list;
+        self.as_mut().rust_mut().action_lines = QString::from(lines.as_str());
+    }
+
     /// A list of the entries given, declaring no action, set once when it is made.
     fn show_entries(mut self: Pin<&mut Self>, list: Vec<Entry>) {
         self.as_mut().rust_mut().list = list;
@@ -302,6 +328,11 @@ impl qobject::ThemeHelpEntries {
     /// The help bar's screen, for the host's tests.
     pub fn screen(&self) -> Screen {
         self.screen
+    }
+
+    /// Whether X's Back to the default is drawn taken, as the list was asked for.
+    pub fn defaultable(&self) -> bool {
+        self.defaultable
     }
 
     /// Whether the host would take A's action, as the list was asked for.
@@ -322,7 +353,7 @@ impl qobject::ThemeHelpEntries {
             0 => QVariant::from(&(button.index() as i32)),
             1 => QVariant::from(&QString::from(*label)),
             2 => QVariant::from(&help::pair_of(*button).map_or(-1, |b| b.index() as i32)),
-            3 => QVariant::from(&(self.accept || *button != UiButton::Accept)),
+            3 => QVariant::from(&((self.accept || *button != UiButton::Accept) && (self.defaultable || *action != Some(help::DEFAULT)))),
             4 => QVariant::from(&QString::from(action.unwrap_or_default())),
             _ => QVariant::default(),
         }

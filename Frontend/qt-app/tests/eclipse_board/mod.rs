@@ -175,7 +175,8 @@ pub fn typed(tree: &Tree, row: &Row, k: f64, unit: f64, tokens: &BTreeMap<String
                 .chain(tree.nodes.iter().enumerate().filter(|(_, n)| n.parent == tree.nodes[node].id).map(|(i, _)| i))
                 .find(|&i| tree.nodes[i].cls.contains("Glyph") || tree.nodes[i].ty.contains("Glyph"))
                 .unwrap_or(node);
-            let lead = prop(glyph, "lead") == "true";
+            // The letter is drawn at the filled size where the glyph is filled (Glyph.qml's metrics), the lead or, on a Settings line, A.
+            let lead = prop(glyph, "filled") == "true";
             let (size_of, weight_of) = match (*kind, lead) {
                 ("word", _) => (prop(glyph, "wordSize"), "400".to_owned()),
                 (_, true) => (prop(glyph, "leadLetterSize"), prop(glyph, "leadWeight")),

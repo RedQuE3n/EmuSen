@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Theme
 
-// A page's tabs as the game board draws them: the one shown marked and underlined, the shoulders stepping them through the frame's walk and a tab tapped choosing it (EclipseGame:55-62; EmuSen_Qt.md §3.4.11).
+// A page's tabs as the game board draws them: the one shown marked and underlined, the shoulders stepping them through the frame's walk and a tab tapped choosing it (EclipseGame:55-62; EmuSen_Qt.md §3.4.12).
 Row {
     id: root
     // A board pixel in canvas units, Board.unit.

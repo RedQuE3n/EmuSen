@@ -12,6 +12,39 @@ pub struct RowFacets {
     pub tile: Option<ConsoleTile>,
 }
 
+/// How a theme draws a row's value, as the Settings boards do (EmuSen_Qt.md §3.4.11): between chevrons, a switch, a door's chevron, or words alone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Form {
+    Choice,
+    Switch,
+    Door,
+    Fact,
+}
+
+impl Form {
+    /// A row's form: a switch; a stepped value or a slider a choice; a page, a question or an action with no value a door; else a fact.
+    pub fn of(row: &crate::settings::Row, switch: Option<bool>) -> Form {
+        use emusen_kit_core::settings::RowKind;
+        match row.kind {
+            _ if switch.is_some() => Form::Switch,
+            RowKind::Steps | RowKind::Slider => Form::Choice,
+            RowKind::Opens | RowKind::Asks => Form::Door,
+            RowKind::Action if row.value.is_empty() => Form::Door,
+            _ => Form::Fact,
+        }
+    }
+
+    /// Its name as a theme reads it in `Settings.rows`' `form`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Form::Choice => "choice",
+            Form::Switch => "switch",
+            Form::Door => "door",
+            Form::Fact => "fact",
+        }
+    }
+}
+
 /// A console row's tile: its stored name, its system key, its games and the engine that runs it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ConsoleTile {
@@ -62,10 +95,12 @@ impl SettingsView {
         self.entries().iter().map(|entry| RowFacets { about: self.about_of(entry), switch: self.switch_of(entry), tile: self.tile_of(entry) }).collect()
     }
 
-    /// A row's short line under its name: the description's `about` for the row, else its Galaxia row's; empty for none.
+    /// A row's short line under its name: the description's `about`, else its Galaxia row's, else its hint (R-20261123-31).
     fn about_of(&self, entry: &Value) -> String {
-        let own = entry["about"].as_str().map(str::to_owned);
-        own.or_else(|| self.keyed(entry).and_then(|k| k.row["about"].as_str().map(str::to_owned))).unwrap_or_default()
+        let keyed = self.keyed(entry);
+        let own = entry["about"].as_str().or_else(|| keyed.as_ref().and_then(|k| k.row["about"].as_str()));
+        let hint = keyed.as_ref().map_or(&entry["hint"], |k| &k.row["hint"]).as_str().unwrap_or_default();
+        self.fill(own.unwrap_or(hint), "")
     }
 
     /// A Galaxia row or a console's setting of the kind `switch`: on where every place it is stored for holds it on.

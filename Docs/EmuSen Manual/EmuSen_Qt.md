@@ -1089,7 +1089,7 @@ Settings' calls from the page declined with nothing changed; every tab of a game
 and words, the focus walked down each tab and read back, Favourite turned by `pageAct` and back by `pageDeclared`, an
 Options row stepped, a Details door opened and left, the question read and answered No, B leaving the page, and Resume
 stepped by `pageStepAction` and run, the game starting from the state stepped to. `theme_pages_play.rs` runs Play from
-the theme's page; `theme_pages_builtin.rs` holds that under Eclipse, which draws neither screen, a `refocus` told while
+the theme's page; `theme_pages_builtin.rs` holds that under the EmuSen theme, which draws neither screen, a `refocus` told while
 Settings is closed leaves the model's row alone. `theme-qt/tests/surface.rs` holds the two singletons and their calls, and
 that every property of `Settings`, `Page` and their rows is read-only with no call beyond reading rows; `tests/qml.rs`
 checks every help kind's lists; the built-in themes' own tests run unchanged.
@@ -2201,6 +2201,60 @@ game reached by the pad, the wheel and the pointer, each whole inside the grid, 
 the path by the pointer goes back. `eclipse_games_gpu.rs` runs the same oracle on the graphics card (a GPU job, through
 `gpu.sh`), and saves the pictures to the folder `EMUSEN_ECLIPSE_PICTURES` names. `eclipse_games_lists.rs` (the chips, the
 List card and the games view agreeing) and `eclipse_games_empty.rs` (the empty board by `eclipse/empty.tsv`).
+
+#### 3.4.11 Eclipse's Settings **[M 2026-11-23]**
+
+Decided 2026-11-16 by the tester (R-20261116-19): Settings is a screen a theme supplies through the read-only `Settings`
+view (§3.2). Eclipse's is `Frontend/themes/eclipse/screens/Settings.qml`, drawn from the Settings boards that
+`gen_settings.py` writes; its frame is every board's, and its first page is Display, the board "Eclipse theme, Settings,
+Display" (`EclipseSettings.dc.html`, gen_settings.py:152-163). Decided 2026-11-15 by the tester (R-20261115-19): the
+screen is its board exactly, text sizes included. The other pages follow on the same frame, each its rows' words in the
+program's data and its own aside.
+
+The frame, every measure the board's in canvas units (`parts/Board.qml`): the ground `Tokens.surface`, the page's glow (a
+900 px disc blurred 150 px at 0.4 in the section's colour, `parts/SettingsInk.qml` by `Settings.page`) and the limb's glow
+as the kit's `BackdropField`s; the limb, a 2000 by 2600 ellipse with a 2 px rim, drawn by `parts/Limb.qml` as SVG's two
+half arcs, since a box that is no square takes no `Rectangle` radius as an ellipse; the header (the mark of `Brand`, the
+words of the settings place in `Library.places`, the battery and clock of `Status`); the sections down the left
+(`parts/SettingsNav.qml`, a click on one is `Actions.settingsSection`); the heading, the trail's last; the rows
+(`parts/SettingsRow.qml`); the About panel (`parts/SettingsAside.qml`); the help line (`HelpLine`, `Help.entries` of
+`Settings.help`) and at its right "N of M", `Words.place(Settings.focused, Settings.count)` (R-20261116-21).
+
+A row is 84 px high at least, its name (24/600) over its short line (17, cut where the value needs the room, as the
+board's ellipsis is), its value 24 px in from the right in one of the board's four forms, by `Settings.rows`' `kind` and
+`isSwitch`: a choice (Steps or Slider) between ◀ and ▶, a switch (its words and a 68 by 38 track, `switchOn`), a door
+(Opens, Asks, or an action with no value) and a fact (a choice of a page of choices, or an action with a value). The
+focused row is filled `Tokens.surfaceRaised` inside the kit's `FocusRing` at the board's 3, 3, 40 and 8 px. The short line
+is the row's `about`: the board's words for each row it draws, in the description (`qt-models/data/settings_screen.json`,
+R-20261116-20); a row no board draws has none and is drawn with its name alone (R-20261116-21). The rows walk by the kit's
+`MeasuredWalk` (`EmuSen_Kit.md` §7.122): each row tells its height, the window ends at the foot of the board's ninth row,
+and a row past the window is not drawn. Up and Down move the model's focus (`settingsFocus`), Left and Right step
+(`settingsStep`, `settingsSlide`), A chooses (`settingsChoose`), LB and RB step the sections on a section's page
+(`settingsSection`) and are the page's own under it (`settingsShoulder`), B is `settingsBack`; the pointer focuses a row
+by hovering, clicks it as A, steps a choice by its chevrons and moves the window by the wheel. The model's focus is the one
+that stands: a focus it moves (a page closed, a section opened) moves the walk's.
+
+The About panel: the picture where the pane's preview is one, 424 by 318 inside its rim and glow, the paused game's own
+frame (`Session.frame`) where a game is suspended (R-20261116-25); its caption; the focused row's name; the program's
+sentence (R-20261116-20); its further lines and its muted lines, in the board's paragraph and small forms
+(R-20261123-21); the text-size and variant previews' samples as lines.
+
+Not built, each the tester's to rule: the board's X "Back to the default" and the help line's words "Change" and
+"Choose or open" need the theme API (a declared action and a naming of the help's entries for Settings, as `card` names
+Home's); the sections' icons need each section's key, which `Settings.sections` does not give; the picture with no game
+suspended, the last screenshot through the chosen filter, has no way to a theme; the board's small line under CRT
+shader's paragraph has no words in the program (the words list's Display-7).
+
+**Proof.** qt-app's `eclipse_settings.rs`, the oracle `eclipse_settings_oracle` in the running program on the software
+backend: Settings opened from Home with the reference theme, Eclipse then chosen, RB to Display and Down to CRT shader,
+the board's state; every row of `tests/eclipse/settings_display.tsv` (read from the board in Chrome after
+`document.fonts.ready`, with the program's own Sora files) held at the gate's five sizes by `eclipse_board`'s rules; the
+page's glow in Display's colour; the words: the title, the sections, the heading, the nine board rows' names, short lines
+and values, "2 of 15", the panel's heading, sentence and caption; every row reached by the pad down to the last and back,
+each focused, drawn and counted; every row acted on by the pad (Right and Left, A twice on a switch, A and B on a door)
+and by the pointer (a click, the chevrons, the wheel for the rows past the window); the sections by RB, LB and a click;
+B leaving Settings. `eclipse_settings_gpu.rs` runs the same oracle on the graphics card (a GPU job, through `gpu.sh`) and
+saves the pictures to the folder `EMUSEN_ECLIPSE_PICTURES` names. qt-models' `settings.rs` holds Display's short lines.
 
 ### 3.5 Loading and the sandbox
 

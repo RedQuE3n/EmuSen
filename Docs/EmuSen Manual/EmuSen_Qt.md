@@ -1422,6 +1422,8 @@ page says ("along and back"), and hears all 120 (man theme-check).
 
 #### 3.4.3 Horizon as built **[M 2026-11-08]**
 
+Retired 2026-11-23 (decided 2026-11-23): the package, its resources, its mockups and its recorded audit are removed; the text below is kept as the record.
+
 Horizon is the package `Frontend/themes/horizon/`, the design of `horizon.md` (2026-11-08) with Games as Rise: the
 horizon line high at y 440, the focused game or console risen over it at the right as a world in a 300 disc, its words in
 the sky at the left, and the things browsed standing on the land on one foot line (700) under a clamped camera. Its
@@ -1488,6 +1490,8 @@ running under reduced motion alone was not caught, since the audit's device is o
 stops it too: the audit proves the battery rule, and the reduced-motion rule only with it.
 
 #### 3.4.4 Meridian as built **[M 2026-11-08]**
+
+Retired 2026-11-23 (decided 2026-11-23): the package, its resources, its mockups, its recorded audit and the tests that held them are removed; the text below is kept as the record.
 
 "Meridian" (`Frontend/themes/meridian/`, resources at `qrc:/emusen/themes/meridian/`) is the design of
 `qt-s3/final/meridian.md`: a glass rail of destinations at the left, the band showing what the focused entry holds. Written
@@ -1556,6 +1560,8 @@ the theme before its fix, which a revert restores.
 
 #### 3.4.5 Constellation as built **[M 2026-11-09]**
 
+Retired 2026-11-23 (decided 2026-11-23): the package, its mockups and its tests are removed; the text below is kept as the record. The test named below is now `qt_3_4_5_the_program_carries_the_built_in_themes_but_the_retired_ones`, which holds the resources to EmuSen and Eclipse and the three retired folders gone.
+
 **Pulled from the program, 2026-11-11.** The tester ruled (R-20261111-33) that Constellation's 20 differences from its
 mockup are not fixed and that it is pulled until the new default look lands, its mockup gate with it. The themes the
 program carries are the blocks of `qt-app/themes.qrc`; Constellation's block is removed, so the program no longer
@@ -1609,6 +1615,8 @@ its step and RECENT at 820 (the contrast findings of 6 and 7, the default state)
 on the GPU.
 
 #### 3.4.6 Orrery as built **[M 2026-11-09]**
+
+Retired 2026-11-23 (decided 2026-11-23): the package, its resources, its mockups and its recorded audit are removed; the text below is kept as the record.
 
 "Orrery" (`Frontend/themes/orrery/`, resources at `qrc:/emusen/themes/orrery/`) is the design of `qt-s3/final/orrery.md`:
 the paused game under the moon, the recent games on one wide orbit with the focus at its apex, and a dial of small

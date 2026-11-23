@@ -1,5 +1,5 @@
 //! The chosen EmuSen theme's token overrides on the program's own screens (decided by the tester, 2026-11-13; EmuSen_Qt.md
-//! §3.5.1): a focused row of Settings and of the Home card drawn in the theme's accent, in its light and dark variants, and
+//! §3.5.1): a focused row of Settings and of the Home card drawn in the theme's accent (dark only: no package left lists a light variant), and
 //! the kit's again for a theme with none and with none chosen; then Settings, the Home card, the List card, the game page,
 //! a tool and a notice held to the gate's fit and contrast rules under each in-repo theme that overrides a token, its own
 //! screens loaded behind (the Pause Card in theme_reach_pause.rs); one test, as the harness is one per process.
@@ -19,7 +19,21 @@ use emusen_qt_test::Scene;
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../theme-host/tests/themes");
 const THEMES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes");
 /// The in-repo themes whose theme.json overrides a token.
-const OVERRIDING: [&str; 4] = ["constellation", "horizon", "meridian", "orrery"];
+/// The in-repo themes whose theme.json overrides a token, read from the packages in Frontend/themes.
+fn overriding() -> Vec<String> {
+    let mut found: Vec<String> = std::fs::read_dir(THEMES)
+        .unwrap()
+        .flatten()
+        .filter(|e| {
+            let text = std::fs::read_to_string(e.path().join("theme.json")).unwrap_or_default();
+            serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v.get("tokens").and_then(|t| t.as_object()).map(|t| !t.is_empty())).unwrap_or(false)
+        })
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    found.sort();
+    assert!(!found.is_empty(), "a package in Frontend/themes overrides a token");
+    found
+}
 
 fn choose(scene: &mut Scene<'_>, folder: &str) {
     assert!(scene.set_property("program", "theme", folder));
@@ -31,6 +45,15 @@ fn focused(scene: &mut Scene<'_>) -> Option<(String, f64, f64, f64, f64)> {
     scene.focus(&tree).map(|i| {
         let n = &tree.nodes[i as usize];
         (n.name.clone(), n.x, n.y, n.w, n.h)
+    })
+}
+
+/// The focused element's id, type and name from the harness tree: the element itself, which a rectangle does not say.
+fn focus_identity(scene: &mut Scene<'_>) -> Option<(String, String, String)> {
+    let tree = scene.tree();
+    scene.focus(&tree).map(|i| {
+        let n = &tree.nodes[i as usize];
+        (n.id.clone(), n.ty.clone(), n.name.clone())
     })
 }
 
@@ -106,12 +129,9 @@ fn qt_3_5_1_the_chosen_theme_s_tokens_draw_the_program_s_screens_and_none_gives_
     choose(&mut scene, "");
     assert_eq!(bar(&mut scene), kit, "no theme chosen gives the kit's back");
 
-    // Meridian's two accents, each in its variant, on Settings and on the Home card.
-    choose(&mut scene, &format!("{THEMES}/meridian"));
-    assert_eq!(bar(&mut scene), rgb("#5FD0B5"), "Meridian's night accent");
-    scene.set_variant(Variant::Light);
-    assert_eq!(bar(&mut scene), rgb("#0B7A64"), "Meridian's day accent");
-    scene.set_variant(Variant::Dark);
+    // Eclipse's accent (dark only: no package in Frontend/themes lists a light variant), on Settings and on the Home card.
+    choose(&mut scene, &format!("{THEMES}/eclipse"));
+    assert_eq!(bar(&mut scene), rgb("#F6E7D8"), "Eclipse's accent");
     back_home(&mut scene);
     choose(&mut scene, "");
     home(&mut scene);
@@ -119,11 +139,8 @@ fn qt_3_5_1_the_chosen_theme_s_tokens_draw_the_program_s_screens_and_none_gives_
     wait_for(&mut scene, "screens", "shown", "HomeCard", 2000);
     scene.wait(500);
     assert_eq!(bar(&mut scene), kit, "the Home card's focused row in the kit's accent with no theme");
-    choose(&mut scene, &format!("{THEMES}/meridian"));
-    assert_eq!(bar(&mut scene), rgb("#5FD0B5"), "the Home card's focused row in Meridian's accent");
-    scene.set_variant(Variant::Light);
-    assert_eq!(bar(&mut scene), rgb("#0B7A64"), "the Home card's focused row in Meridian's day accent");
-    scene.set_variant(Variant::Dark);
+    choose(&mut scene, &format!("{THEMES}/eclipse"));
+    assert_eq!(bar(&mut scene), rgb("#F6E7D8"), "the Home card's focused row in Eclipse's accent");
     choose(&mut scene, "");
     back_home(&mut scene);
 
@@ -190,15 +207,15 @@ fn judged(scene: &mut Scene<'_>) -> Vec<String> {
 /// Each overriding theme over the screen shown, dark and light, its own screens loaded behind: what the gate finds that it
 /// does not under the kit's; with `notice`, a pad's notice raised over the screen for each look judged.
 fn under_each_theme(scene: &mut Scene<'_>, screen: &str, notice: Option<&Sdl>, report: &mut Vec<String>) {
-    let held = focused(scene).expect("the screen's focus");
+    let held = focus_identity(scene).expect("the screen's focus");
     for variant in [Variant::Dark, Variant::Light] {
         choose(scene, "");
         scene.set_variant(variant);
         let kit = judged_with(scene, notice);
-        for theme in OVERRIDING {
+        for theme in overriding() {
             choose(scene, &format!("{THEMES}/{theme}"));
             assert_eq!(scene.property("chosenTheme", "status"), "Ready", "{theme}");
-            assert_eq!(focused(scene), Some(held.clone()), "{screen} keeps the focus under {theme}");
+            assert_eq!(focus_identity(scene), Some(held.clone()), "{screen} keeps the same element focused under {theme}");
             for line in judged_with(scene, notice).into_iter().filter(|l| !kit.contains(l)) {
                 report.push(format!("{screen} {theme} {variant:?}: {line}"));
             }

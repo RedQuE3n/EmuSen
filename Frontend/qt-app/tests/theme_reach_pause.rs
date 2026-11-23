@@ -11,7 +11,21 @@ use emusen_qt_test::harness::Measures;
 use emusen_qt_test::Scene;
 
 const THEMES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes");
-const OVERRIDING: [&str; 4] = ["constellation", "horizon", "meridian", "orrery"];
+/// The in-repo themes whose theme.json overrides a token, read from the packages in Frontend/themes.
+fn overriding() -> Vec<String> {
+    let mut found: Vec<String> = std::fs::read_dir(THEMES)
+        .unwrap()
+        .flatten()
+        .filter(|e| {
+            let text = std::fs::read_to_string(e.path().join("theme.json")).unwrap_or_default();
+            serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v.get("tokens").and_then(|t| t.as_object()).map(|t| !t.is_empty())).unwrap_or(false)
+        })
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    found.sort();
+    assert!(!found.is_empty(), "a package in Frontend/themes overrides a token");
+    found
+}
 
 /// The gate's fit and contrast findings of the window as shown, at 1280 by 800, each with the items it names.
 fn judged(scene: &mut Scene<'_>) -> Vec<String> {
@@ -67,7 +81,7 @@ fn qt_3_5_1_the_pause_card_keeps_its_fit_and_contrast_under_each_theme_s_colours
         scene.set_variant(variant);
         scene.kit_tokens().expect("the kit's tokens").set_overrides(Vec::new());
         let kit = judged(&mut scene);
-        for theme in OVERRIDING {
+        for theme in overriding() {
             let text = std::fs::read_to_string(format!("{THEMES}/{theme}/theme.json")).unwrap();
             let package = emusen_theme_host::package::read(&text).unwrap();
             // The table as the program's ThemeStyle sets it, through the kit's Tokens of this scene's engine.

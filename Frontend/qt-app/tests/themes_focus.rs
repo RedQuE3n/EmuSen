@@ -1,5 +1,5 @@
 //! The Themes tab keeps the pad while a theme it uses loads behind it (EmuSen_Qt.md §3.5.2): Settings ▸ Library ▸ Themes,
-//! Meridian, Horizon, Orrery and Constellation each checked and used with the pad, and after each the tab still walks its
+//! each package of Frontend/themes but the reference (Eclipse) checked and used with the pad, and after each the tab still walks its
 //! rows, then B goes back to Settings. A theme's screens that are not shown never take the focus, whatever they call.
 
 mod common;
@@ -7,24 +7,25 @@ mod common;
 use common::{sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
-use emusen_platform_client::galaxia::consts::DIR_THEMES;
-use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
 use emusen_qt_test::Scene;
-use std::path::Path;
 
 const THEMES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes");
 
-fn copy(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap().flatten() {
-        let target = to.join(entry.file_name());
-        if entry.path().is_dir() {
-            copy(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), target).unwrap();
-        }
-    }
+/// The names of the packages in Frontend/themes the Themes tab can use, the reference (which loads no host) left out.
+fn used_themes() -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(THEMES)
+        .unwrap()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy() != emusen_qt_models::themes::REFERENCE)
+        .map(|e| {
+            let text = std::fs::read_to_string(e.path().join("theme.json")).unwrap();
+            serde_json::from_str::<serde_json::Value>(&text).unwrap()["name"].as_str().unwrap().to_owned()
+        })
+        .collect();
+    names.sort();
+    assert!(!names.is_empty(), "a package in Frontend/themes besides the reference");
+    names
 }
 
 fn focused(scene: &mut Scene<'_>) -> String {
@@ -47,11 +48,6 @@ fn to(scene: &mut Scene<'_>, name: &str) {
 #[test]
 fn qt_3_5_2_the_themes_tab_keeps_the_pad_while_each_theme_it_uses_loads() {
     let world = sandbox("qt-app-themes-focus", &[("NES", "One.nes")]);
-    let platform = Platform::load(library()).unwrap();
-    let store = platform.directory(DIR_THEMES).unwrap().unwrap();
-    for theme in ["constellation", "horizon", "meridian", "orrery"] {
-        copy(&Path::new(THEMES).join(theme), &store.join(theme));
-    }
     // theme-audit stood in for by a script that finds nothing: the themes' own audits are theme-audit's tests'.
     let audit = world.root.join("audit.sh");
     std::fs::write(&audit, "#!/bin/bash\nexit 0\n").unwrap();
@@ -85,7 +81,8 @@ fn qt_3_5_2_the_themes_tab_keeps_the_pad_while_each_theme_it_uses_loads() {
     wait_for(&mut scene, "screens", "shown", "Themes", 2000);
     wait_for(&mut scene, "themesModel", "name", "EmuSen", 5000);
 
-    for name in ["Meridian", "Horizon", "Orrery", "Constellation"] {
+    for name in used_themes() {
+        let name = name.as_str();
         while scene.property("themesModel", "name") != "EmuSen" {
             scene.pad(UiButton::Up);
             scene.wait(50);

@@ -335,3 +335,28 @@ fn qt_3_2_the_page_s_key_and_each_row_s_facets_a_theme_reads() {
     view.back();
     assert_eq!(view.page_key(), "library");
 }
+
+#[test]
+fn qt_3_4_11_display_s_rows_carry_their_board_s_short_lines_and_the_others_none() {
+    let source = fake(json!({}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "Display");
+    // EclipseSettings.dc.html's renderVals (gen_settings.py:153-161), the board's words for the nine rows it draws (R-20261116-20).
+    let board = [
+        ("shape", "The screen each console was made for, or each of the frame's pixels square."),
+        ("crt", "The television's picture for every console that had one."),
+        ("levers", "The CRT's own levers for one console: the mask, the bloom, the scanlines and the glass."),
+        ("shaders", "The shader each console draws with: the built-in filters, the recent ones and the slang pack's presets."),
+        ("crop", "What is hidden at the picture's edges on a console that had a television."),
+        ("textsize", "Every word on the big screen, and the desktop's, through the interface's type scale."),
+        ("art", "The focused game's art behind Home, dimmed and blurred."),
+        ("motion", "No movement, shorter fades. System follows the desktop's own setting."),
+        ("splash", "The eclipse while big picture starts. Any button skips it."),
+    ];
+    let facets = view.facets();
+    for (id, about) in board {
+        assert_eq!(facets[index(&view, id)].about, about, "{id}'s short line, the board's");
+    }
+    let drawn: Vec<usize> = board.iter().map(|(id, _)| index(&view, id)).collect();
+    assert!((0..facets.len()).filter(|i| !drawn.contains(i)).all(|i| facets[i].about.is_empty()), "a row no board draws has no short line until it is ruled on");
+}

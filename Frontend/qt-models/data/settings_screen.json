@@ -46,19 +46,19 @@
         {"id": "players", "label": "Players", "hint": "Which controller plays as which player.", "controllers": "players"},
         {"id": "bindings", "label": "Controller bindings", "hint": "Each console's buttons on the controller in your hand.", "controllers": "bindings"},
         {"id": "profiles", "label": "Profiles", "hint": "Named sets of a console's bindings, and the one its games start with.", "controllers": "profiles"},
-        {"id": "rumble", "row": "AppSettings Rumble", "controllers": "rumble", "pane": {"by_value": {
+        {"id": "rumble", "row": "AppSettings Rumble", "controllers": "rumble", "about": "The motors in your controller, where the console's games drive them.", "pane": {"by_value": {
            "On": "Your controller shakes when the game drives its motor.",
            "Off": "Your controller never shakes."}}},
-        {"id": "swap", "row": "AppSettings SwapPadButtons"},
-        {"id": "chords", "row": "AppSettings GuideChords"},
+        {"id": "swap", "row": "AppSettings SwapPadButtons", "about": "A and B trade what they do in the library, the menus and every sheet, and so do X and Y."},
+        {"id": "chords", "row": "AppSettings GuideChords", "about": "Guide held with Up saves, with Down loads, with R1 takes a screenshot."},
         {"id": "keys", "label": "Keyboard keys", "hint": "Each console's buttons on the keyboard, drawn on its controller.", "controllers": "keys"},
         {"id": "hotkeys", "label": "Hotkeys", "hint": "The emulator's own keys: fast forward, rewind, states, pause and the rest, shared by every console.", "controllers": "hotkeys"},
-        {"id": "type", "row": "AppSettings ControllerType"},
-        {"id": "firstonly", "row": "AppSettings FirstControllerOnly"},
+        {"id": "type", "row": "AppSettings ControllerType", "about": "Which buttons the help bar draws.", "pane": {"preview": "buttons", "muted": ["{choices}"]}},
+        {"id": "firstonly", "row": "AppSettings FirstControllerOnly", "about": "Only the first controller connected steers the menus."},
         {"id": "notices", "row": "AppSettings ControllerNotifications"},
         {"id": "keyboard", "row": "AppSettings OnScreenKeyboard"},
         {"id": "stickdpad", "row": "AppSettings AnalogStickAsDpad"},
-        {"id": "deadzone", "row": "AppSettings StickDeadzone", "pane": {"preview": "meter"}},
+        {"id": "deadzone", "row": "AppSettings StickDeadzone", "about": "How far a stick must travel before it counts as a direction.", "pane": {"preview": "meter"}},
         {"id": "mirror", "row": "AppSettings MirrorPlayer1ToPlayer2"},
         {"id": "resetbindings", "label": "Reset every binding", "hint": "Every console's buttons on the pad and the keyboard, and the hotkeys, back to their defaults; named profiles are yours and stay.", "controllers": "reset"}
       ]
@@ -103,8 +103,9 @@
       "name": "Sound",
       "rows": [
         {"id": "volume", "pause": true, "row": "AppSettings Volume",
-         "pane": {"preview": "meter", "sentence": "The game's volume. On the handheld this row defers to the device's quick menu."}},
-        {"id": "navsounds", "row": "AppSettings NavigationSounds"},
+         "pane": {"preview": "meter", "caption": "the game's volume", "sentence": "The game's volume. On the handheld this row defers to the device's quick menu.",
+          "muted": ["The ring fills as the volume rises; the next sound plays at the level you chose."]}},
+        {"id": "navsounds", "row": "AppSettings NavigationSounds", "about": "The sounds for moving, choosing and going back, on a stream of their own beside the game's."},
         {"id": "soundvolume", "row": "AppSettings BigPictureInterface.NavigationVolume", "pane": {"preview": "meter"}},
         {"id": "output", "pause": true, "row": "AppSettings SoundOutputDevice", "more": "outputs",
          "pane": {"by_value": {
@@ -148,12 +149,21 @@
       "name": "EmuSen",
       "rows": [
         {"id": "saves", "label": "Saves and states", "hint": "Where states go, what happens when a game starts again, and how play time is counted.", "page": "Saves and states",
-         "pane": {"sentence": "States and saves live beside the games, with one resume point kept per game.", "muted": ["Resume · {AppSettings ResumeOnLaunch}"]}},
+         "pane": {"sentence": "States and saves are kept in EmuSen's own Saves folder, with one resume point per game.", "muted": ["Resume · {AppSettings ResumeOnLaunch}"]}},
         {"id": "background", "row": "AppSettings PauseInBackground"},
         {"id": "about", "label": "About", "hint": "EmuSen's version.", "value": {"fact": "version", "code": true}}
       ]
     }
   ],
+  "groups": {
+    "Collections": {
+      "BigPictureCollections.DefaultSortOrder": {"pane": {"muted": ["{choices}, each ascending or descending."]}}
+    },
+    "Saves and states": {
+      "ResumeOnLaunch": {"pane": {"muted": ["{choices}"]}},
+      "MaxPlayTimeTracking": {"about": "A launch longer than this adds nothing to the game's play time."}
+    }
+  },
   "consoles": {
     "words": {
       "unsupported": "Not supported yet",

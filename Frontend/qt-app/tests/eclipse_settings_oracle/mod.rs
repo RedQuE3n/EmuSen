@@ -1,4 +1,5 @@
-//! The oracle of Eclipse's Settings on its Display page in the running program, driven by an SDL pad in this process and by the pointer (EmuSen_Qt.md §3.4.11).
+//! The oracle of Eclipse's Settings on its Display page in the running program, driven by an SDL pad in this process and by the pointer, and the means the other pages' oracles share (EmuSen_Qt.md §3.4.11).
+#![allow(dead_code)]
 
 use crate::common::wait_for;
 use crate::eclipse_board::{held, object, read, rows, Row};
@@ -60,14 +61,15 @@ fn icon(tree: &emusen_qt_test::tree::Tree, i: usize) -> (String, String) {
     (attribute("d"), attribute("stroke"))
 }
 
-/// Each row's words held to the board's lines (a lines table): the Line's box under its row's top and its height, and the words' baseline, in canvas units within a millionth.
+/// Each row's words held to the board's lines (a lines table): the Line's box under its row's top (or the element a fifth column names) and its height, and the words' baseline, in canvas units within a millionth.
 pub fn lines_held(tree: &emusen_qt_test::tree::Tree, lines: &str, k: f64, at: &str, differences: &mut Vec<String>) {
     let unit: f64 = read(tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
     let got = crate::eclipse_board::boxes(tree, unit);
     for line in lines.lines().filter(|l| !l.starts_with('#') && !l.starts_with("element\t") && !l.trim().is_empty()) {
         let c: Vec<&str> = line.split('\t').collect();
         let (name, top, high, base) = (c[0], c[1].parse::<f64>().unwrap() * k, c[2].parse::<f64>().unwrap() * k, c[3].parse::<f64>().unwrap() * k);
-        let row = got[&format!("row.{}", name.rsplit('.').next().unwrap())];
+        // Under its row, or under the element a fifth column names.
+        let row = c.get(4).map_or_else(|| got[&format!("row.{}", name.rsplit('.').next().unwrap())], |under| got[*under]);
         // The Line comes before its words in the tree, the words are the last of the name.
         let (Some(boxed), Some(words)) = (tree.nodes.iter().find(|n| n.name == name && n.visible), tree.nodes.iter().rev().find(|n| n.name == name && n.visible)) else {
             differences.push(format!("{at}: {name} is not drawn"));
@@ -85,7 +87,7 @@ pub fn lines_held(tree: &emusen_qt_test::tree::Tree, lines: &str, k: f64, at: &s
 }
 
 /// The window's SettingsModel, as its own type.
-fn settings(scene: &mut Scene<'_>) -> &'static SettingsModel {
+pub fn settings(scene: &mut Scene<'_>) -> &'static SettingsModel {
     let object = scene.object("settingsModel");
     assert!(!object.is_null(), "the window's settings model");
     // Safety: the window's model of that name is a SettingsModel, its list model's QObject at its address, alive while the window is.
@@ -93,31 +95,31 @@ fn settings(scene: &mut Scene<'_>) -> &'static SettingsModel {
 }
 
 /// The focused row and the page as the model holds them.
-fn at(scene: &mut Scene<'_>) -> (i32, String) {
+pub fn at(scene: &mut Scene<'_>) -> (i32, String) {
     let s = settings(scene);
     (*s.focused(), s.view().page_key())
 }
 
 /// The row's values as the model holds them: its value and, for a switch, whether it is on.
-fn state(scene: &mut Scene<'_>, row: usize) -> (String, Option<bool>) {
+pub fn state(scene: &mut Scene<'_>, row: usize) -> (String, Option<bool>) {
     let s = settings(scene);
     (s.shown_rows()[row].value.clone(), s.view().facets()[row].switch)
 }
 
 /// The centre of a drawn element by name, in the window's pixels.
-fn centre(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
+pub fn centre(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
     let tree = scene.tree();
     let n = tree.nodes.iter().rev().find(|n| n.name == name && n.visible).unwrap_or_else(|| panic!("{name} is drawn"));
     (n.x + n.w / 2.0, n.y + n.h / 2.0)
 }
 
 /// Whether a row is drawn: inside the rows' window.
-fn shown(scene: &mut Scene<'_>, name: &str) -> bool {
+pub fn shown(scene: &mut Scene<'_>, name: &str) -> bool {
     scene.tree().nodes.iter().any(|n| n.name == name && n.visible)
 }
 
 /// The help line's words as drawn, left to right, and whether X's entry is drawn taken.
-fn help_line(scene: &mut Scene<'_>) -> (Vec<String>, String) {
+pub fn help_line(scene: &mut Scene<'_>) -> (Vec<String>, String) {
     let tree = scene.tree();
     let mut entries: Vec<(f64, String)> = tree.nodes.iter().filter(|n| n.visible && n.name.starts_with("help-")).map(|n| (n.x, n.name["help-".len()..].to_owned())).collect();
     entries.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -135,25 +137,24 @@ fn paused_frame(scene: &mut Scene<'_>, paused: bool) {
 }
 
 /// Waits a moment for the model to answer a press or a click.
-fn settle(scene: &mut Scene<'_>) {
+pub fn settle(scene: &mut Scene<'_>) {
     scene.wait(120);
 }
 
 /// What a row's own action does to it, undone again, by `act` (a press or a click); the differences pushed.
-fn acted(scene: &mut Scene<'_>, i: usize, how: &str, differences: &mut Vec<String>, mut act: impl FnMut(&mut Scene<'_>, i32), back: &mut dyn FnMut(&mut Scene<'_>)) {
+pub fn acted(scene: &mut Scene<'_>, page: &str, i: usize, how: &str, differences: &mut Vec<String>, mut act: impl FnMut(&mut Scene<'_>, i32), back: &mut dyn FnMut(&mut Scene<'_>)) {
     let kind = settings(scene).shown_rows()[i].kind;
     let before = state(scene, i);
     match kind {
         RowKind::Opens | RowKind::Asks => {
             act(scene, 0);
             settle(scene);
-            let page = at(scene).1;
-            if page == "display" {
+            if at(scene).1 == page {
                 differences.push(format!("{how}: row {i}'s door opened nothing"));
             }
             back(scene);
             settle(scene);
-            if at(scene) != (i as i32, "display".to_owned()) {
+            if at(scene) != (i as i32, page.to_owned()) {
                 differences.push(format!("{how}: B from row {i}'s page left {:?}", at(scene)));
             }
         }
@@ -177,12 +178,17 @@ fn acted(scene: &mut Scene<'_>, i: usize, how: &str, differences: &mut Vec<Strin
                 differences.push(format!("{how}: row {i} stepped {before:?} → {stepped:?} → {:?}", state(scene, i)));
             }
         }
-        _ => differences.push(format!("{how}: row {i} is a {kind:?}, which Display has none of")),
+        _ => differences.push(format!("{how}: row {i} is a {kind:?}, which {page} has none of")),
     }
 }
 
 /// Eclipse's Settings on Display in the program: the board's table at every gate size, the words, every row by pad and pointer, the sections, B (EmuSen_Qt.md §3.4.11).
 pub fn oracle(backend: &str) {
+    with_settings(|scene, sdl, pad| display(scene, sdl, pad, backend));
+}
+
+/// The program in a made-up world with one NES game and the board's battery, Eclipse chosen on Settings by the pad, `f` run there on its first section's first row.
+pub fn with_settings(f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPad)) {
     std::env::set_var("LC_ALL", "en_US.UTF-8");
     let world = World::new("qt-app-eclipse-settings");
     let roms = world.dir("Roms/NES");
@@ -241,6 +247,11 @@ pub fn oracle(backend: &str) {
     }
     assert_eq!(focused(&mut scene), "row.0", "Settings opens on its first section's first row");
     assert_eq!(at(&mut scene), (0, "controllers".to_owned()));
+    f(&mut scene, &sdl, &pad);
+}
+
+/// Display at the board's state, held to its table, its words, its rows by pad and pointer, its sections and B.
+fn display(mut scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, backend: &str) {
 
     // RB to Display, Down to CRT shader: the board's state.
     press(&mut scene, &sdl, &pad, PadControl::RightShoulder);
@@ -357,7 +368,7 @@ pub fn oracle(backend: &str) {
     }
     press(&mut scene, &sdl, &pad, PadControl::Up);
     settle(&mut scene);
-    pictures(&mut scene, backend, "crt");
+    pictures(&mut scene, backend, "display-crt");
     // On CRT shader still, the game no longer suspended: the preview and its caption go.
     paused_frame(&mut scene, false);
     if shown(&mut scene, "asidePicture") || shown(&mut scene, "asideCaption") {
@@ -384,7 +395,7 @@ pub fn oracle(backend: &str) {
     if at(&mut scene).0 != count as i32 - 1 {
         differences.push("Down past the last row moved the focus".to_owned());
     }
-    pictures(&mut scene, backend, "last");
+    pictures(&mut scene, backend, "display-last");
     // The program's rows past the board's nine, now in the window, each held by the table's rows of the board's row of its form.
     for (width, height) in SIZES {
         scene.resize(width, height);
@@ -428,6 +439,7 @@ pub fn oracle(backend: &str) {
         let (sdl_ref, pad_ref): (&Sdl, &VirtualPad) = (&sdl, &pad);
         acted(
             &mut scene,
+            "display",
             i,
             "the pad",
             &mut differences,
@@ -479,6 +491,7 @@ pub fn oracle(backend: &str) {
         let (sdl_ref, pad_ref): (&Sdl, &VirtualPad) = (&sdl, &pad);
         acted(
             &mut scene,
+            "display",
             i,
             "the pointer",
             &mut differences,
@@ -525,7 +538,7 @@ pub fn oracle(backend: &str) {
 }
 
 /// A table row with every element of the board's row `from` named for row `to`, the row before it for the row before `to`.
-fn renamed(r: &Row, from: usize, to: usize) -> Row {
+pub fn renamed(r: &Row, from: usize, to: usize) -> Row {
     let spec = |s: &str| {
         s.split(':')
             .map(|t| match t.rsplit_once('.').and_then(|(n, i)| Some((n, i.parse::<usize>().ok()?))) {
@@ -552,7 +565,7 @@ fn renamed(r: &Row, from: usize, to: usize) -> Row {
 }
 
 /// Row `i`'s table rows by the board's frame, the rule of its form's board row (EmuSen_Qt.md §3.4.11, the proof).
-fn like(table: &[Row], i: usize, kind: RowKind, switch: Option<bool>, about: bool, focused: bool) -> Vec<Row> {
+pub fn like(table: &[Row], i: usize, kind: RowKind, switch: Option<bool>, about: bool, focused: bool) -> Vec<Row> {
     let from = match (switch, kind) {
         (Some(_), _) => 6,
         (None, RowKind::Steps | RowKind::Slider) => 4,
@@ -583,11 +596,11 @@ fn like(table: &[Row], i: usize, kind: RowKind, switch: Option<bool>, about: boo
 }
 
 /// With `EMUSEN_ECLIPSE_PICTURES` naming a folder, the screen grabbed at the board's size into it.
-fn pictures(scene: &mut Scene<'_>, backend: &str, what: &str) {
+pub fn pictures(scene: &mut Scene<'_>, backend: &str, what: &str) {
     let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") else { return };
     std::fs::create_dir_all(&folder).unwrap();
     scene.resize(1920, 1200);
     scene.wait(500);
-    let path = std::path::Path::new(&folder).join(format!("settings-display-{what}-1920x1200-{backend}.png"));
+    let path = std::path::Path::new(&folder).join(format!("settings-{what}-1920x1200-{backend}.png"));
     assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
 }

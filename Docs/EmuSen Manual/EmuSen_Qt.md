@@ -952,7 +952,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept, triggers, actions, card, letters})` the same with LB RB Group (LT RT Maker with `triggers`, 1.5) B Back and (1.7) LT RT Letter added where the kind takes them, A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false, the screen's own actions left out with `actions` false (1.5), and the entries named as Eclipse's Home names them with `card` (1.4); the curated face of `help.rs`; from 1.5, `entries(kind, {options: true})` declares Y and X as a screen's own actions, each entry's `action` the key `Actions` hears; from 1.9, the kinds `Settings`, `SettingsPage`, `SettingsConsole`, `SettingsChoices` and the game page's `Page`, `PageResume`, `PageResumeSlots`, `PageFavourite`, `PageLoad`, `PageView`, `PageValue`, `PageChange`, `PageChoose`, `PageNone`, `PageEdit`, `PageCoverArt`, the bars `help.rs` already holds; `Settings.help` and `Page.help` name the one in force; `sections` (1.8), the shoulders' LB RB Sections entry alone, declaring nothing, for a nav's help; from 1.11 `entries(kind, {settings: true, defaultable})`, a Settings kind's list as Eclipse's boards name and order it (◀ ▶ Change, A Choose or open, X Back to the default declaring `default`, B Back, then LB RB Section and Start Home), X not `enabled` when `defaultable` is false (decided 2026-11-23, R-20261123-30, R-20261123-20) |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only, the face tokens among them (1.3, `EmuSen_Kit.md` §7.117); `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown); from 1.7 `kind` (`all`, `favourites`, `recent`, `console`), `emptyWords`, `filters` (`key`, `name`, `count`) and `filter`, `sort`, `letters` (`letter`) and `letter`: the List card's listing, one state with it (§3.4.10); from 1.7 the focused game's facts, read off the GUI thread as the focus moves: `factsKey` (the game they are of, set last), `year`, `genre`, `players` (in words), `description`, `timePlayed` (in words) and `states`, each empty or 0 where the program holds none |
-| `Settings` | singleton | from 1.9, Settings as the program's `SettingsModel` holds it, read-only: `sections`, `section`, `trail`, `page` (the section's id, or the innermost page's kind and what it is of, `console:SNES`, `group:Scraping`, `players`; `settings_shown.rs`' `Page::key`), `rows` (`key`, `label`, `about`, `value`, `kind` = `RowKinds`' number, `isSwitch` and `switchOn`, a switch's state from its stored value, `held`, `marked`, `code`, a slider's `minimum`, `maximum`, `step`, `amount`, and a console row's `consoleName` (its stored name), `system` = the key `Library.consoles` takes, `games`, `engine`), `focused`, `count`, `help` (a `Help` kind, -1 for none), and the focused row's pane: `sentence`, `lines`, `muted`, `tones`, `preview`, `caption`, `meter`, `samples`; from 1.11, `sectionKeys`, each section's id in `sections`' order (decided 2026-11-23, R-20261123-30); a row's `about` is the board's short line where the description gives one, else its hint (decided 2026-11-23, R-20261123-31); from 1.11 also `title` (the screen's name), `heading` (the innermost page's name, else the section's), `aboutHeading` (the focused row's name), a row's `form` (a `SettingsForm`: `Settings.Choice`, `Switch`, `Door`, `Fact`), `Words.keyPair` ("◀ ▶"), `defaultable` (whether X restores the focused row's default) and `shot` (the newest screenshot as a file URL on a picture preview, empty for none) (decided 2026-11-23, R-20261123-30) |
+| `Settings` | singleton | from 1.9, Settings as the program's `SettingsModel` holds it, read-only: `sections`, `section`, `trail`, `page` (the section's id, or the innermost page's kind and what it is of, `console:SNES`, `group:Scraping`, `players`; `settings_shown.rs`' `Page::key`), `rows` (`key`, `label`, `about`, `value`, `kind` = `RowKinds`' number, `isSwitch` and `switchOn`, a switch's state from its stored value, `held`, `marked`, `code`, a slider's `minimum`, `maximum`, `step`, `amount`, and a console row's `consoleName` (its stored name), `system` = the key `Library.consoles` takes, `games`, `engine`), `focused`, `count`, `help` (a `Help` kind, -1 for none), and the focused row's pane: `sentence`, `lines`, `muted`, `tones`, `preview`, `caption`, `meter`, `samples`; from 1.11, `sectionKeys`, each section's id in `sections`' order (decided 2026-11-23, R-20261123-30); a row's `about` is the board's short line where the description gives one, else its hint (decided 2026-11-23, R-20261123-31); from 1.11 also `title` (the screen's name), `heading` (the innermost page's name, else the section's), `aboutHeading` (the focused row's name), a row's `form` (a `SettingsForm`: `Settings.Choice`, `Switch`, `Door`, `Fact`), `Words.keyPair` ("◀ ▶"), `defaultable` (whether X restores the focused row's default) and `shot` (the newest screenshot as a file URL on a picture preview, empty for none) (decided 2026-11-23, R-20261123-30); `preview` is 0 none, 1 a picture, 2 a meter, 3 the variants, 4 the text sizes, 5 a heading, and from 1.12 6 the help bar's face buttons (§3.4.11); from 1.12 `trailLine`, every level above the page joined by "  ›  ", empty on a section's own page (decided 2026-11-23, R-20261123-39) |
 | `Page` | singleton | from 1.9, a game's page as the program's `GamePageModel` holds it, read-only: `ready`, `key` (the game's file), `title`, `facts`, `cover`, `hero`, `clip`, `actions` (`label`, `value`, `button`, `filled`, `stepped`, `stepLeft`, `stepRight`), `sections` (the tabs), `section`, `shows` (0 words, 1 cards, 2 rows), `words`, `picture`, `rows` (`key`, `label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`: a row, a state's card or a cover), `coverArt`, `focusedAction`, `focusedContent`, `help`, and the question: `asking`, `questionTitle`, `questionSentences`, `questionChoices`, `questionBack` |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30); `FocusRing`, `PlanetMark`, `CoronaDisc`, `CoronaGlow`, `Backdrop`, `BackdropField`, `Glow`, `GroupGridLayout` and `MeasuredWalk` (1.9, the walk over rows of their own heights, `EmuSen_Kit.md` §7.122) are the later minors' (`CHANGELOG-theme-api.md`) |
@@ -2312,6 +2312,65 @@ B leaving Settings. `eclipse_settings_gpu.rs` runs the same oracle on the graphi
 saves the pictures to the folder `EMUSEN_ECLIPSE_PICTURES` names. qt-models' `settings.rs` holds Display's short lines
 and CRT shader's small line, the title and the heading, X on Galaxia's rows, a row set per console and the CRT, the
 forms, the newest screenshot, and the program's own Settings bar beside Eclipse's naming.
+
+**Sound, Controllers, Collections, and Saves and states.** The next four pages stand on the same frame, each held to its
+board: `EclipseSettingsSound.dc.html` (gen_settings.py:165-178), `EclipseSettingsControllers.dc.html` (180-195),
+`EclipseSettingsCollections.dc.html` (332-341) and `EclipseSettingsSaves.dc.html` (343-347). What they added:
+
+- *The trail over a page's heading.* A page under a section draws, 20 px and muted, every level above it over its heading,
+  joined by "  ›  ", the heading under it by its 6 px margin and the column's 10 px gap (G:66-68); a section's own page
+  draws none (decided 2026-11-23, R-20261123-39). The program joins it (`Settings.trailLine`, 1.12, the separator
+  `words::TRAIL_BETWEEN`, two spaces either side of U+203A as gen_settings.py:272 writes it); the frame only draws it.
+- *The ring* (`parts/SettingsMeter.qml`) is the About panel's meter preview (`Settings.preview` 2): a 340 px disc
+  centred in the panel, filled clockwise from 225° over 270° in the accent fading to #F3C9D2 to `Settings.meter`'s share,
+  the rest of the 270° in #262A3A, inside it a disc of the ground 14 px in, holding the focused row's value (84 px, 600,
+  -0.02 em) and the pane's `caption` (20 px) 4 px under it; its glow is 70 px and 12 px at rgba(240, 180, 196, 0.22)
+  (G:166-171). The board draws CSS's `conic-gradient`; Qt's `ConicalGradient` turns counter-clockwise from three
+  o'clock, so the shape is mirrored about its middle and starts at 315°, and each hard stop is two stops 0.0001 apart,
+  since `QGradient` keeps one stop at a position (both checked by a render on 2026-11-23). Volume's caption is "the
+  game's volume" and its small line R-20261123-12's words, "The ring fills as the volume rises; the next sound plays at
+  the level you chose."; Sound volume and Stick deadzone, whose meters no board draws, show the same ring with their
+  value and no caption (decided 2026-11-23, R-20261123-38).
+- *The face buttons* (`parts/SettingsFaces.qml`) are the About panel's `Settings.preview` 6 (1.12), named by Controller
+  type's row: A, B, X and Y as the help bar draws them now (Eclipse's `Glyph` in the pad's family), 64 px, 18 apart,
+  bold at 26 px, A filled and the others ringed, in a panel #11131C with its 1 px line #262A3A, 34 px deep (G:181-183).
+- *The small lines from the row's own choices.* A pane's `{choices}` is each of the row's choices' words up to a comma,
+  each once, joined by " · " (`settings.rs`' `choice_heads`): Controller type's line is "Automatic · Xbox · PlayStation
+  · Nintendo · Generic", Collections' Default sort order's "{choices}, each ascending or descending." lists the program's
+  ten orders (decided 2026-11-23, R-20261123-18), and Continue where you left off's is its three choices, the third
+  "Always restart" (decided 2026-11-23, R-20261123-37, which renamed Galaxia's label).
+- *A group's rows' own words.* A page of Galaxia's rows by group takes each row's `about` and `pane` from the
+  description's `groups` member, by group and key (`settings.rs`' `entries`): Play time counted up to's short line, the
+  two small lines above.
+- *The words.* The rows' short lines are the boards' where a board draws the row (R-20261116-20); a line the board cuts
+  stays cut at the value: Navigation sounds; Swap A and B, Controller notices, Left stick as the D-pad; Group your
+  collections, Default sort order, Random entry button; Continue where you left off. The EmuSen section's Saves and states
+  row's sentence is "States and saves are kept in EmuSen's own Saves folder, with one resume point per game." (decided
+  2026-11-23, R-20261123-19); the Saves page's paragraph is Continue's hint (R-20261116-20). On Controllers the program's
+  fifteen rows are drawn in its order, the board's nine among them (R-20261116-21), the On-screen keyboard row hidden
+  until the Steam keyboard call exists (R-20261112-13); the pad pages its doors open are the program's own until their
+  boards are built (R-20261116-26).
+- *B from a page back to its row.* The frame's walk tells the model its focus only once it has read the program's rows
+  (`walk.count === Settings.count`): a page's rows reach the Repeater before the walk reads them, and a walk still
+  holding a page of no rows (a bindings page) told its first row back, so B from Controller bindings or Keyboard keys
+  landed on Controllers' first row; Hotkeys, whose page has rows, landed on its own.
+- *Glows.* A page under a section takes its section's glow (`SettingsInk.pageGlow` by `Settings.section`): Collections
+  Library's, Saves and states EmuSen's, as their boards draw them.
+
+**Proof of the four.** qt-app's `eclipse_settings_sound.rs`, `eclipse_settings_controllers.rs`,
+`eclipse_settings_collections.rs` and `eclipse_settings_saves.rs`, each the oracle `eclipse_settings_pages` on the
+software backend from Display's start (`eclipse_settings_oracle::with_settings`): the page reached by the pad at its
+board's state; its table (`tests/eclipse/settings_sound.tsv`, `settings_controllers.tsv`, `settings_collections.tsv`,
+`settings_saves.tsv`, read from the board in Chrome after `document.fonts.ready`) held at the gate's five sizes, and
+each drawn row's words, and Sound's ring's, to the board's line boxes and baselines (`settings_<page>_lines.tsv`); the
+glow; the title, heading, trail, "N of M", the board rows' names and short lines, every row's words as the model has
+them, the About panel's heading, sentence and small lines; every drawn short line ending 24 px before its value, cut
+there only, and cut where the board cuts it; the help line; every row reached, focused, counted and named in the panel
+by the pad, acted on by the pad and the pointer, and X; B. Sound's adds the ring's words, share and centring, after a
+step too, Sound volume's ring with no caption and none on Output; Controllers' the four faces' letters, fill and weight
+and Stick deadzone's ring; Saves and states' a trail of three levels, a console's page and a page under it. qt-models'
+`settings.rs` holds the four pages' short lines, the ring's words, the faces' preview, `{choices}` and the groups'
+words.
 
 ### 3.5 Loading and the sandbox
 

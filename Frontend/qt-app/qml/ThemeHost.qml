@@ -36,6 +36,11 @@ Item {
     property bool splashShown: false
     // Where the splash's slot is drawn: over Moonrise, which keeps the splash's clock, its skip and its fade (EmuSen_Interface.md §22).
     property Item splashLayer: themed
+    // A splash that enters Home on the window's clock: whether it is shown, and its time in ms, which the theme's `Splash` reads (EmuSen_Qt.md §3.5.3).
+    property bool splashLeading: false
+    property real splashTime: 0
+    // From 1.10: the hand-over's length in ms after Home whole, the theme's `Splash.ease`.
+    property real splashEase: 0
     readonly property bool searching: themed.screens.shown === Screens.Search || themed.screens.shown === Screens.SearchGrid
     readonly property bool typing: themed.screens.shown === Screens.Search
     readonly property bool listOpen: themed.screens.shown === Screens.List
@@ -55,6 +60,11 @@ Item {
     readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus || settingsSlot.focus || gameSlot.focus
     // The Home screen placed, read as a theme's ThemeScreen (its engine's type, so not named here).
     readonly property var homeScreen: homeSlot.placed ? (homeSlot.item as Placing)?.screen.children[0] ?? null : null
+    // The splash placed, read as a theme's ThemeScreen; from 1.10 one that enters Home leads the start, with no Moonrise under it.
+    readonly property var splashScreen: splashSlot.placed ? (splashSlot.item as Placing)?.screen.children[0] ?? null : null
+    readonly property bool leads: themed.splash && (themed.splashScreen?.entersHome ?? false)
+    // The theme provides a splash not yet placed while the splash shows, so the window waits to know which splash leads.
+    readonly property bool splashComing: themed.splashShown && host.ready && !host.failed && host.provides(Host.ThemeHost.Splash) && !themed.splash
     signal played(string path)
     signal resumed()
     signal backed()
@@ -115,6 +125,9 @@ Item {
         settingsShown: settingsSlot.shown
         pageShown: gameSlot.shown
         shownSection: themed.screens.section
+        splashShown: themed.splashLeading
+        splashTime: themed.splashTime
+        splashEase: themed.splashEase
         onPlayed: (game) => themed.played(game)
         onResumed: themed.resumed()
         onPlaceChosen: (index) => themed.screens.place(index)
@@ -272,8 +285,10 @@ Item {
         objectName: "splash." + themed.objectName
         role: Host.ThemeHost.Splash
         host: host
-        inputs: themed.inputs
-        parent: themed.splashLayer
+        // A splash takes no keys: the window keeps its skip, and one placed in Home would take Home's focus as it goes.
+        inputs: false
+        // A splash that enters Home is drawn in the place Home names, between what Home draws under it and over it (1.10).
+        parent: themed.leads && themed.homeScreen?.splashPlace ? themed.homeScreen.splashPlace : themed.splashLayer
         wanted: themed.splashShown
         shown: themed.splashShown
     }

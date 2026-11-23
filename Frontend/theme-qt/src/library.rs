@@ -41,6 +41,9 @@ pub mod qobject {
         /// The program's top sections (1.8), and the key of the one shown, empty where the screen shown is none.
         #[qproperty(*mut ThemeRows, sections, READ, CONSTANT)]
         #[qproperty(QString, section, READ, NOTIFY)]
+        /// The installed cores, each once in the systems table's order (`key`), and the library's games as All counts them (1.10).
+        #[qproperty(*mut ThemeRows, cores, READ, CONSTANT)]
+        #[qproperty(i32, game_count, cxx_name = "gameCount", READ, NOTIFY)]
         /// Moves each time a picture's hues have been read and each time the library is fed, so a binding on `artHues` asks again.
         #[qproperty(i32, art_hues_read, cxx_name = "artHuesRead", READ, NOTIFY)]
         type ThemeLibrary = super::ThemeLibraryRust;
@@ -88,6 +91,8 @@ pub struct ThemeLibraryRust {
     collections: *mut ThemeRows,
     sections: *mut ThemeRows,
     section: QString,
+    cores: *mut ThemeRows,
+    game_count: i32,
     games: HashMap<String, *mut ThemeRows>,
     firsts: HashMap<(String, usize), *mut ThemeRows>,
     listed: HashMap<(usize, usize, Vec<String>), *mut ThemeRows>,
@@ -122,6 +127,8 @@ impl Default for ThemeLibraryRust {
             collections: none,
             sections: none,
             section: QString::default(),
+            cores: none,
+            game_count: 0,
             games: HashMap::new(),
             firsts: HashMap::new(),
             listed: HashMap::new(),
@@ -156,6 +163,7 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
         let collections = self.as_mut().made(&view::COLLECTION_ROLES);
         let found = self.as_mut().made(&view::GAME_ROLES);
         let sections = self.as_mut().made(&view::SECTION_ROLES);
+        let cores = self.as_mut().made(&view::CORE_ROLES);
         fill(sections, view::sections());
         let mut me = self.as_mut().rust_mut();
         me.consoles = consoles;
@@ -167,6 +175,7 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
         me.collections = collections;
         me.found = found;
         me.sections = sections;
+        me.cores = cores;
         drop(me);
         self.show(&LibraryView::empty(), "[]");
     }
@@ -227,6 +236,12 @@ impl qobject::ThemeLibrary {
     pub fn show(mut self: Pin<&mut Self>, view: &LibraryView, home_lines: &str) {
         let now = words::now();
         fill(self.consoles, view::consoles(view));
+        fill(self.cores, view::cores(view));
+        let games = view::game_count(view);
+        if self.game_count != games {
+            self.as_mut().rust_mut().game_count = games;
+            self.as_mut().game_count_changed();
+        }
         let lines = view::lines_of(home_lines);
         fill(self.places, view::places(view, &lines, &self.declined));
         fill(self.shelves, view::shelves(view));

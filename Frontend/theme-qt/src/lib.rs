@@ -15,6 +15,7 @@ pub mod page;
 pub mod rows;
 pub mod session;
 pub mod settings;
+pub mod splash;
 pub mod view;
 pub mod words;
 
@@ -32,6 +33,7 @@ pub mod host {
     use crate::page::qobject::ThemePage;
     use crate::session::qobject::ThemeSession;
     use crate::settings::qobject::ThemeSettings;
+    use crate::splash::qobject::ThemeSplash;
     use crate::words::qobject::ThemeWords;
     use core::pin::Pin;
     use cxx_qt::casting::Upcast;
@@ -93,6 +95,10 @@ pub mod host {
 
     pub fn page(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemePage>> {
         find(within, "Page")
+    }
+
+    pub fn splash(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeSplash>> {
+        find(within, "Splash")
     }
 
     /// The kit's tokens in the theme's engine, which the host keeps in step with the program's (reduced motion).

@@ -4,7 +4,8 @@ import QtQuick
 QtObject {
     // The canvas's design height, NormalizedCanvas's designHeight.
     required property real designHeight
-    // The height of every Eclipse board, canvas.json's h: a constant of the design.
+    // The height of every Eclipse board, canvas.json's h, and its width, w: constants of the design.
     readonly property real height: 1200
+    readonly property real width: 1920
     readonly property real unit: designHeight / height
 }

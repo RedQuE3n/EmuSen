@@ -10,6 +10,27 @@ QtObject {
     readonly property color field2: "#1D6BF2"
     readonly property color field3: "#B8FFE9"
     readonly property color field4: "#D9C8FF"
+    // The splash's ground and its moon, its stars, its sun and the counts under its name (EclipseSplashPlay:31, 41, 51, 55, 71).
+    readonly property color splashGround: "#05060B"
+    readonly property color star: "#E9ECF7"
+    readonly property color sun: "#FFF4E6"
+    readonly property color splashCounts: "#C9CDDB"
+    // The orbit's line, the sun's glow and the corona's three, rgba as the board writes them (EclipseSplashPlay:45, 51, 54).
+    readonly property color orbit: Qt.rgba(246 / 255, 231 / 255, 216 / 255, 0.3)
+    readonly property color sunGlow: Qt.rgba(255 / 255, 240 / 255, 225 / 255, 0.6)
+    readonly property color coronaNear: Qt.rgba(255 / 255, 244 / 255, 230 / 255, 0.85)
+    readonly property color coronaMiddle: Qt.rgba(246 / 255, 214 / 255, 200 / 255, 0.5)
+    readonly property color coronaFar: Qt.rgba(236 / 255, 160 / 255, 186 / 255, 0.26)
+    // The flare's point and its two glows, and its two bars' clear ends and middles (EclipseSplashPlay:59-61).
+    readonly property color flare: "#FFFFFF"
+    readonly property color flareNear: Qt.rgba(255 / 255, 250 / 255, 240 / 255, 0.9)
+    readonly property color flareFar: Qt.rgba(255 / 255, 230 / 255, 215 / 255, 0.55)
+    readonly property color flareClear: Qt.rgba(1, 1, 1, 0)
+    readonly property color flareAcross: Qt.rgba(1, 1, 1, 0.95)
+    readonly property color flareDown: Qt.rgba(1, 1, 1, 0.9)
+    // The line under the splash's name, clear at its ends (EclipseSplashPlay:70).
+    readonly property color rule: Qt.rgba(246 / 255, 231 / 255, 216 / 255, 0.7)
+    readonly property color ruleClear: Qt.rgba(246 / 255, 231 / 255, 216 / 255, 0)
     // The ground of an empty library (EclipseEmpty:17).
     readonly property color emptyGround: "#05060B"
     // The words under an empty library's headline (EclipseEmpty:30).

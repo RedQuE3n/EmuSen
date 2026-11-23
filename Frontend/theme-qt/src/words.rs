@@ -86,6 +86,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "splashCaption"]
         fn splash_caption(self: &ThemeWords, consoles: i32) -> QString;
+        /// The counts under Eclipse's splash wordmark (1.10): "1,284 GAMES · 8 CORES".
+        #[qinvokable]
+        #[cxx_name = "splashCounts"]
+        fn splash_counts(self: &ThemeWords, games: i32, cores: i32) -> QString;
         /// Choose a console's summary: "11 consoles · 1,566 games".
         #[qinvokable]
         fn summary(self: &ThemeWords, consoles: i32, games: i32) -> QString;
@@ -270,6 +274,10 @@ impl qobject::ThemeWords {
 
     pub fn splash_caption(&self, consoles: i32) -> QString {
         said(words::splash_caption(consoles.max(0) as usize))
+    }
+
+    pub fn splash_counts(&self, games: i32, cores: i32) -> QString {
+        said(words::splash_counts(games.max(0) as usize, cores.max(0) as usize))
     }
 }
 

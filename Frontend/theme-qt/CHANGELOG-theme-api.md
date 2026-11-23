@@ -3,6 +3,30 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.10, an addition: a splash that enters Home (2026-11-17)
+
+Decided 2026-11-17 by the tester (R-20261117-1, R-20261111-122): Eclipse's splash is the original board, with its sound,
+entering Home as the board does. A splash over Moonrise, faded with it, cannot: the clock, the skip and the end are
+Moonrise's, Home cannot time its arrival, and the board draws Home's words over the splash's disc and its stars under it.
+
+- **`ThemeScreen.entersHome`**: a splash that leads the start in Moonrise's place; the program keeps its clock to the
+  screen's `length` (held at 0 until the start has read), skips it on a press, and draws no Moonrise under it. Every other
+  splash is as before.
+- **`ThemeScreen.sound.source`**: the splash's sound, a WAV file of the theme's own as its screen's file names it, played by
+  the program from the first frame at the Sound volume, and let go softly on a skip.
+- **`ThemeScreen.splashPlace`**: on Home, the item a splash that enters Home is placed in, so Home draws under it and over
+  it.
+- **`Splash`** (added): `shown` and `time`, the splash's moment in ms, which the splash and Home both read.
+- **`Splash.ease`** (added to 1.10, decided 2026-11-23, R-20261123-24): the hand-over's length in ms, from Home whole to
+  the splash sound's last sample, 0 where there is no sound or it was given up; the program keeps `time` running through
+  `length` + `ease` while `shown` is false, so Home eases its own arrival in the time the sound's tail has.
+- **`Library.cores`** (rows of `key`) and **`Library.gameCount`**: the installed cores each once in the systems table's
+  order (`library::installed_cores`) and the library's games as the All shelf counts them; **`Words.splashCounts(games,
+  cores)`**, "1,284 GAMES · 8 CORES" (`words::splash_counts`).
+- Nothing smaller would do: the time must reach two screens, Home and the splash, in step, and only the program owns the
+  clock the skip and the start's reads stop; a splash cannot name Home's layers, so Home names the place.
+- The module is 1.10 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.10.*`.
+
 ## 1.9, an addition: Settings and the game page as a theme's screens (2026-11-16)
 
 Decided 2026-11-16 by the tester (R-20261116-19, R-20261116-27): Settings and the game page become screens a theme can
@@ -25,7 +49,7 @@ supply, each with a read-only view; a theme that supplies neither gets the progr
   `PageEdit`, `PageCoverArt` (added), `help.rs`'s bars for those screens.
 - **`MeasuredWalk`** (the kit's, by name; 1.9 in the qmldir): the rows' walk over rows of their own heights
   (`EmuSen_Kit.md` §7.122).
-- The module is 1.9 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.9.*`.
+- The module is 1.9 and `theme.json`'s `api` may name it; its registry and qmldir were `Testing/qmltypes/EmuSen.Theme-1.9.*` until 1.10.
 
 ## 1.8, an addition: the program's sections (2026-11-15)
 

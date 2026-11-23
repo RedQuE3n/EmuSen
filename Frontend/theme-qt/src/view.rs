@@ -95,6 +95,19 @@ pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
 /// `Library.sections`: the program's top sections, in a nav's order (1.8).
 pub const SECTION_ROLES: [&str; 2] = ["key", "name"];
 
+/// `Library.cores`: the installed cores, each once (1.10).
+pub const CORE_ROLES: [&str; 1] = ["key"];
+
+/// The installed cores as rows, from their one owner (`library::installed_cores`).
+pub fn cores(view: &LibraryView) -> Vec<Row> {
+    library::installed_cores(&view.systems).into_iter().map(|c| vec![Cell::Text(c)]).collect()
+}
+
+/// The library's games as its All shelf counts them; none before the first read.
+pub fn game_count(view: &LibraryView) -> i32 {
+    view.rows.rows().iter().find(|r| r.kind == Some(Kind::Place) && r.key == library::ALL).map_or(0, |r| r.count as i32)
+}
+
 /// The program's sections as rows, from their one owner (emusen_qt_models::sections).
 pub fn sections() -> Vec<Row> {
     emusen_qt_models::sections::all().iter().map(|s| vec![Cell::Text(s.key.to_owned()), Cell::Text(s.name.to_owned())]).collect()

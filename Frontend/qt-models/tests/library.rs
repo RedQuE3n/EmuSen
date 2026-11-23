@@ -309,6 +309,19 @@ fn moonrise_has_a_planet_for_each_system_with_an_engine_games_or_not() {
 }
 
 #[test]
+fn eclipse_s_splash_counts_each_installed_core_once_in_the_table_s_order() {
+    let mut systems = fake().systems;
+    systems[0].engines = vec!["Moon".into(), "Nestopia".into()];
+    systems[1].engines = vec!["Venus".into(), "Moon".into()];
+    systems.push(SystemRow { engines: Vec::new(), ..system("pico", "Pico", 99.0, "") });
+    let cores = emusen_qt_models::library::installed_cores(&systems);
+    assert_eq!(&cores[..3], ["Moon", "Nestopia", "Venus"], "each once, as the table first lists it");
+    assert!(cores.iter().all(|c| systems.iter().any(|s| s.engines.contains(c))), "no core no system names");
+    assert_eq!(emusen_qt_models::words::splash_counts(1284, 8), "1,284 GAMES · 8 CORES");
+    assert_eq!(emusen_qt_models::words::splash_counts(1, 1), "1 GAME · 1 CORE");
+}
+
+#[test]
 fn the_screens_switch_by_what_was_asked() {
     use emusen_qt_models::screens::{step, Ask, Shown};
     assert_eq!(step(Shown::Home, &Ask::Place(0)), Some((Shown::Consoles, None)));

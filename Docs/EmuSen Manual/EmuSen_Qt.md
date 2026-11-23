@@ -937,18 +937,18 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 `import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
 `Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.9.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.10.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
 |---|---|---|
-| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own; `played`, from 1.5, how many of its games were played; `glow`, from 1.5, its own colour, kit-core's `world::glow` for its hue); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `sections` (1.8), the program's top sections in a nav's order (`key`, `name`), and `section`, the key of the one shown, empty for a screen that is none; `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts`, `consoleName` (the console's name alone, that `facts` begins with; 1.4) (cover and hero as file URLs); from 1.5, `consolesBy(show, order, shortened)`: the consoles `Words.consoleShows[show]` holds in `Words.consoleSorts[order]`'s order, each maker's together, by name the consoles keyed in `shortened` by their short `name`, with `consoles`' roles and `screen`, the console's screen in words ("CRT, television") |
+| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own; `played`, from 1.5, how many of its games were played; `glow`, from 1.5, its own colour, kit-core's `world::glow` for its hue); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `sections` (1.8), the program's top sections in a nav's order (`key`, `name`), and `section`, the key of the one shown, empty for a screen that is none; `cores` (1.10), the installed cores each once in the systems table's order (`key`), and `gameCount` (1.10), the library's games as the All shelf counts them; `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts`, `consoleName` (the console's name alone, that `facts` begins with; 1.4) (cover and hero as file URLs); from 1.5, `consolesBy(show, order, shortened)`: the consoles `Words.consoleShows[show]` holds in `Words.consoleSorts[order]`'s order, each maker's together, by name the consoles keyed in `shortened` by their short `name`, with `consoles`' roles and `screen`, the console's screen in words ("CRT, television") |
 | `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
 | `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (0 to 100, -1 none), `charging`, `network`, `bigScreen`, `form`; since interface 50 the program feeds `battery` and `charging` from the platform library's `emusen_galaxia_battery`, asked by `qt-models`' `Battery` on start and every 30 s (`EmuSen_RustPlatform.md` §58) |
 | `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `openSection(key)` (1.8), `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting; from 1.5, `consoleOptions(key)`, Settings at that console's page; from 1.9, Settings' calls `settingsStep(row, by)`, `settingsChoose(row)`, `settingsSlide(row, amount)`, `settingsSection(i)`, `settingsFocus(row)`, `settingsShoulder(by)`, `settingsBack()` and the game page's `pageSection(i)`, `pageAct(i)`, `pageStepAction(i, by)`, `pageChoose(row)`, `pageStep(row, by)`, `pageFocus(action, row)`, `pageDeclared(key)`, `pageAnswer(choice)`, `pageBack()`; from 1.7 `setFilter(key)`, `stepSort(by)`, `stepLetter(by)` |
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
 | `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
-| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations; since 1.4 `name`, the program's name in its own case, `playedFacts(at, seconds)`, `continueLine(console)` and `resumePoint(pausedSince)`; from 1.5 `played(n)`, `place(index, count)`, `line(parts)` (the parts joined as the facts join theirs), `count(n)` and `factLabels`: the curated face of `words.rs`; from 1.5, `consoleShows` and `consoleSorts` (the chips' and the orders' words), `noGamesLine`, `line(parts)`, `percent(charge)` (empty below 0) |
+| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations; since 1.4 `name`, the program's name in its own case, `playedFacts(at, seconds)`, `continueLine(console)` and `resumePoint(pausedSince)`; from 1.5 `played(n)`, `place(index, count)`, `line(parts)` (the parts joined as the facts join theirs), `count(n)` and `factLabels`: the curated face of `words.rs`; from 1.5, `consoleShows` and `consoleSorts` (the chips' and the orders' words), `noGamesLine`, `line(parts)`, `percent(charge)` (empty below 0); from 1.10 `splashCounts(games, cores)`, "1,284 GAMES · 8 CORES" |
 | `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept, triggers, actions, card, letters})` the same with LB RB Group (LT RT Maker with `triggers`, 1.5) B Back and (1.7) LT RT Letter added where the kind takes them, A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false, the screen's own actions left out with `actions` false (1.5), and the entries named as Eclipse's Home names them with `card` (1.4); the curated face of `help.rs`; from 1.5, `entries(kind, {options: true})` declares Y and X as a screen's own actions, each entry's `action` the key `Actions` hears; from 1.9, the kinds `Settings`, `SettingsPage`, `SettingsConsole`, `SettingsChoices` and the game page's `Page`, `PageResume`, `PageResumeSlots`, `PageFavourite`, `PageLoad`, `PageView`, `PageValue`, `PageChange`, `PageChoose`, `PageNone`, `PageEdit`, `PageCoverArt`, the bars `help.rs` already holds; `Settings.help` and `Page.help` name the one in force; `sections` (1.8), the shoulders' LB RB Sections entry alone, declaring nothing, for a nav's help |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only, the face tokens among them (1.3, `EmuSen_Kit.md` §7.117); `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown); from 1.7 `kind` (`all`, `favourites`, `recent`, `console`), `emptyWords`, `filters` (`key`, `name`, `count`) and `filter`, `sort`, `letters` (`letter`) and `letter`: the List card's listing, one state with it (§3.4.10); from 1.7 the focused game's facts, read off the GUI thread as the focus moves: `factsKey` (the game they are of, set last), `year`, `genre`, `players` (in words), `description`, `timePlayed` (in words) and `states`, each empty or 0 where the program holds none |
@@ -956,7 +956,8 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Page` | singleton | from 1.9, a game's page as the program's `GamePageModel` holds it, read-only: `ready`, `key` (the game's file), `title`, `facts`, `cover`, `hero`, `clip`, `actions` (`label`, `value`, `button`, `filled`, `stepped`, `stepLeft`, `stepRight`), `sections` (the tabs), `section`, `shows` (0 words, 1 cards, 2 rows), `words`, `picture`, `rows` (`key`, `label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`: a row, a state's card or a cover), `coverArt`, `focusedAction`, `focusedContent`, `help`, and the question: `asking`, `questionTitle`, `questionSentences`, `questionChoices`, `questionBack` |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30); `FocusRing`, `PlanetMark`, `CoronaDisc`, `CoronaGlow`, `Backdrop`, `BackdropField`, `Glow`, `GroupGridLayout` and `MeasuredWalk` (1.9, the walk over rows of their own heights, `EmuSen_Kit.md` §7.122) are the later minors' (`CHANGELOG-theme-api.md`) |
-| `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`, and from 1.9 `Settings` and `Game`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
+| `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`, and from 1.9 `Settings` and `Game`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()`; from 1.10 the splash's `entersHome` and `sound.source` (a WAV file of the theme's own, as its screen's file names it), and Home's `splashPlace` (§3.5.3) |
+| `Splash` | singleton | from 1.10, a splash that enters Home: `shown`, and `time`, its moment in ms on the window's clock, which the splash and Home both draw from, and `ease`, the hand-over's length in ms from Home whole to the sound's last sample (decided 2026-11-23, R-20261123-24; §3.5.3) |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
 `screens/Splash.qml`; a theme that omits one gets the reference theme's (Moonrise for the splash). From 1.9 it may also
@@ -1984,6 +1985,34 @@ console's board draws no such entry (EclipseConsoles:99-105), so its help line h
 and Home's the glass's; `qt-app`'s `eclipse_nav.rs` presses the shoulders of an in-process SDL pad and taps the nav on the
 real program, from Home and from Choose a console, and holds each screen, key and page a section opens. The theme's own `Type` is exported at 1.0, as every singleton made in Rust is.
 
+**The splash** (R-20261111-122, R-20261111-118, R-20261117-1; built 2026-11-17). Eclipse's splash is its own,
+`screens/Splash.qml`, drawn as `EclipseSplashPlay.dc.html` draws it: on the board's ground the stars (its seeded generator,
+110 of them), the sun and the moon crossing it (ec-sun, ec-moon), the corona (the kit's `CoronaDisc` with no fill, a 2 px
+rim and the board's three glows), the orbit, a plain planet for each installed core (`Library.cores`) at the board's
+angles, sizes and colours, in front of the disc or behind it as the board places them, the flare, then `Words.name`, the
+line and `Words.splashCounts(Library.gameCount, Library.cores.count)`; then the disc group opens (ec-group, scale 5 about
+its middle and moved -810, 120) so its limb becomes Home's arc. Each element's keyframes are written once, beside it, as
+bindings on the board's per cent of its 11 s loop, the theme's rules allowing no function and no list in QML: linear
+spans as ratios, and each eased span through `parts/Ease.qml`, CSS's cubic Bézier solved by eight Newton steps unrolled as
+bindings; a planet's delay is its index times 0.09 s, its angle and colours `parts/PlanetInk.qml`'s by its place, and each
+star's four draws of the board's generator follow the star before's (`Math.imul`, as the board's 32-bit arithmetic). The splash's length is Home whole, 9.68 s; it enters Home (`entersHome`,
+§3.5.3) and Home places it in its `splashPlace`, over its backdrop and under its disc and everything on it, so the board's
+order holds: Home's backdrop under the splash's ground, which fades as ec-home brings Home's in (the same blend: a ground at
+1 − α over the backdrop is the board's backdrop at α over its ground), the stars and planets under the disc, Home's
+header, words, Recent and help line over it. `parts/Encore.qml` gives Home's parts the board's arrival (ec-h1 to ec-h4,
+from 16 above, 30 to the left, 36 below, the help line fading), whole once the splash has gone; while it shows, Home's own
+disc, the art label and the two streak fields, which the playing board does not draw, are not drawn. The sound is the
+board's own sound, `sounds/splash.flac` (splash-sound-chosen.wav's samples, every one; §3.5.3). Past eight cores a planet stands halfway
+between two of the board's angles, its colours the board's eight in turn; past sixteen no more are drawn, so none is
+stacked, and the line under the name still counts every core (decided 2026-11-23, R-20261123-25; `parts/PlanetInk.qml`'s
+`places` is the one owner of the limit). The hand-over (decided 2026-11-23, R-20261123-9): from Home whole, over
+`Splash.ease` (§3.5.3), ease-out as Home's arrival, a disc of Home's (`handoverDisc`) eases the opened splash disc's rim,
+three glows and ground (`parts/SplashCorona.qml`, the one owner of the splash's corona) into Home's disc, and the art
+label, the two streaks and the focus ring fade in; once whole, Home's own disc stands and Home is as before. Held to by
+`qt-app/tests/eclipse_splash.rs` (the board read by headless Chrome into `eclipse_splash.tsv`, and the hand-over frame by
+frame from 9.5 s to the sound's end, no measure moving by more than its whole change times the ease's step; §3.5.3) and
+`qt-app/tests/eclipse_splash_planets.rs` (30 and 120 cores: sixteen planets at sixteen places, the true count).
+
 #### 3.4.9 Eclipse's Choose a console **[M 2026-11-15]**
 
 `Frontend/themes/eclipse/screens/Consoles.qml`, listed in Eclipse's `theme.json`, is the board "Eclipse theme, Consoles"
@@ -2391,6 +2420,156 @@ item holds out of the window's: without that, `acceptance.rs` failed `assert_sti
 **Where covers come from.** A theme reads pictures only inside its folder and the cover stores (§3.5.1); the reference
 is held to that too, so the window's `coverStores` (the start's media store, `ArtworkDirectory` and
 `EsdeMediaDirectory`) must name every folder a cover is read from, and the tests that draw covers name theirs.
+
+#### 3.5.3 A splash that enters Home **[M 2026-11-17]**
+
+EmuSen.Theme 1.10, R-20261117-1, built 2026-11-17. Until 1.10 a theme's splash was
+drawn over Moonrise and faded with it, Moonrise keeping its clock, its skip and its fade, and `ThemeScreen.length`,
+`still` and `finished` were not read; that stays so for every theme whose splash does not say `entersHome` (the reference,
+Horizon, Meridian, Orrery). One that does leads the start in Moonrise's place, and the program gives it what Moonrise
+had: `ThemeSplash.qml` (`EmuSen.App`) keeps its clock, a `NumberAnimation` from 0 to the screen's `length` on Qt's
+animation clock (so a test's held clock steps it), held at 0 until the start has read what Home shows (the library, the
+look, the theme's Home placed, the settings) and the sound is ready, then run, the sound started on the same frame;
+`ThemeFeed` feeds the theme's `Splash` (`shown`, `time`) every frame, through the singleton found once an engine
+(a lookup by name makes a string); under reduced motion (`still`) the time is the length from the first frame, held
+for the length as Moonrise holds its still frame, and the sound still plays: the kit has no rule for a splash's sound under reduced motion, Moonrise being silent. The window draws no Moonrise under it: Moonrise waits unseen
+while the chosen theme's splash is still to be placed (`moonriseHeld`), and once a splash has led (`led`) Moonrise
+never runs. Any press the kit's map makes (the pad through the router, a key through `PadRouter.pushKey`) or a tap skips
+to the length, the sound let go softly; the splash keeps the focus, and every press, until it has ended and the router
+holds nothing (`pending`), so the press that skipped is never Home's. With `StartupSplash` off nothing is shown and no
+sound starts, and Home is whole at once (`Splash.shown` false). A splash slot takes no keys (`inputs: false`): one placed
+in Home that took the focus as it went left Home's frame without it (seen 2026-11-17). When loading outlasts the splash,
+its first frame, the board's own ground, holds until it is read: a picture the board draws, never Home half loaded, and
+the splash then plays whole from its first frame.
+
+The sound is played as an ES-DE theme's are (`cues.rs`): through Endymion's interface player, which `SplashSound`
+(`qt-app/src/splash_sound.rs`) makes off the GUI thread with `bell_player::open_player`, keeping the samples under its own
+key and opening the stream with a frame of silence so the start plays at once; the theme's `Cues` and `Bells` have no
+player or striker set, so they are silent still. A theme's file may be in Qt's resources, which SDL's decoder cannot read,
+so Qt reads it: `SoundFile` (`qt-app/cpp/sound_file.cpp`) opens it with `QFile` and decodes it with Qt Multimedia's
+`QAudioDecoder` into the player's format (`platform-client`'s `sounds::RATE` and `CHANNELS`, 32-bit float), the module
+the kit's `VideoClip` already links. A sound outside the theme's folder is refused, as the host's policy keeps a theme to
+its folder. Navigation sounds off plays nothing; it plays at the Sound volume once the settings are read. The soft end
+takes the samples from where the stream plays (the bytes still queued), falling over the Fade token by a raised cosine,
+and plays them in the sound's place. Proof: `qt-app/tests/eclipse_splash.rs` (on the card, the clock held under the basic
+render loop) holds every element of the board's table at 1.0, 2.42, 3.3, 5.72, 7.0, 8.36 and 9.68 s at 1920 by 1200 and 1280 by
+800 within a hundredth of a board pixel and half a level of opacity, Moonrise unseen from the first frame, the sound
+started once from the theme's file whole, Home whole and focused after; a press skipping with the sound let go (SDL's disk
+driver's file: no step at the end past twice the sound's own) and Home not acting on it; the splash off; reduced motion.
+`eclipse_splash_capture.rs` (`#[ignore]`d) writes the frames the tester's video is made from; `EMUSEN_CAPTURE_CORES` gives it a library of that many installed cores (the test core approved in the world's /Cores, its sidecar copied under other ids and names, since copies of one sidecar count as one core) and `EMUSEN_CAPTURE_AT` writes only the frames at the seconds it lists.
+`qt-app/tests/splash_start.rs` (software backend, the clock held) holds what that oracle sets by hand: three held seconds move the splash's clock three
+seconds; a key the kit's map makes a press, and a tap, each skip past the hand-over (`length` + `ease`) with the sound let go; navigation
+sounds off, the splash runs and no sound starts. The oracle's fade is the Fade token's, read from the program's tokens.
+
+**The hand-over** (decided 2026-11-23, R-20261123-9, R-20261123-24). The splash ends at Home whole, but its sound runs on:
+`Splash.ease` is the time from the splash's `length` to the sound's last sample (`SplashSound`'s frames over its rate,
+less the length; 0 where there is no sound or it was given up), and `ThemeSplash`'s clock runs on to `length` + `ease`
+on the same animation clock while `shown` is false, so a theme eases Home's arrival over the sound's tail. Home is the
+player's from Home whole: the pad, the keys and the focus are Home's during the ease. A press that skips the splash sets
+the clock to `length` + `ease`, Home whole at once; under reduced motion the time holds at the length while the splash
+shows and is `length` + `ease` once it has gone, so Home is whole at once. The wait for a sound that never answers stays one
+splash length (R-20261123-10).
+
+**The sound's file, FLAC** (measured 2026-11-23). The chosen sound as a WAV is 2,549,804 bytes, over the merge check's
+1 MiB for a committed file. Qt's documentation names no list of formats for `QAudioDecoder`; it says FFmpeg is the media
+backend by default on desktop Linux and `QT_MEDIA_BACKEND` chooses another (Qt 6, "Qt Multimedia"), and that a default
+`QMediaFormat`'s `supportedFileFormats(QMediaFormat::Decode)` lists what can be read (Qt 6, "QMediaFormat"). Asked on
+this machine (Qt 6.11.2, Fedora 44, both backends installed), it lists the lossless FLAC (file and codec), ALAC (in
+MPEG-4 Audio) and Wave. Each of FLAC (levels 8 and 12), ALAC, WavPack and TTA, made from the chosen WAV by ffmpeg 8.1.3,
+decoded under both the FFmpeg and the GStreamer backend, as `SoundFile` decodes (`QFile`, `setSourceDevice`, 48 kHz
+stereo float), to the same 1,274,880 samples as the WAV, every one, each 16-bit sample over 32768 (a probe of
+`QAudioDecoder` built against the system's Qt, `cmp` on the bytes). Their sizes: WavPack 502,017, TTA 511,506, FLAC
+520,431 at level 12, ALAC 565,829. The theme's file is FLAC (`sounds/splash.flac`, 520,399 bytes, level 12, no tags),
+the one lossless form both in Qt's own decode list and an open standard (RFC 9639), so nothing of the sound is changed
+for its size. `SoundFile.digest`, the decoded samples' SHA-256 (`QCryptographicHash`, worked out only when asked), is
+held by `splash_start.rs` to the chosen sound's; the handheld's Qt was not asked.
+
+**The words' baselines** (measured 2026-11-23; the board is law, R-20261115-20). Until now the name's glyphs stood 5.1
+and the counts' 3.1 board pixels above Chrome's at 5.72 s. What each source says:
+
+1. The face. `kit-qt/fonts/Sora-Regular.ttf` and `Sora-SemiBold.ttf` (read with a table parser of our own, 2026-11-23):
+   1000 units to the em; hhea ascender 970, descender -290, line gap 0; OS/2 version 4, `fsSelection` 0x00C0, so
+   USE_TYPO_METRICS (bit 7) is set; sTypoAscender 970, sTypoDescender -290, sTypoLineGap 0; usWinAscent 1220,
+   usWinDescent 320. The board's own face, Google Fonts' Sora v17 (the woff2 the board links), gives Chrome the same
+   ascent and descent at 104 and 24 px as the bundled files (`measureText`'s `fontBoundingBoxAscent` and `Descent`).
+2. Qt. `QFontEngine::initializeHeightMetrics` reads hhea, then lets OS/2 override it: the typo metrics when
+   USE_TYPO_METRICS is set or `QFont::PreferTypoLineMetrics` is asked, else usWin with no leading; it rounds ascent and
+   descent only for an engine without subpixel positions (qtbase 6.11, `src/gui/text/qfontengine.cpp`, `processHheaTable`,
+   `processOS2Table`). Qt's documentation says only that `height()` is always `ascent() + descent()` (Qt 6, "QFontMetricsF")
+   and gives `Text`'s `lineHeight` as a multiplier or fixed pixels and `topPadding` as space beside the content (Qt 6,
+   "Text"). Measured (Qt 6.11.2, a `FontMetrics` and a `Text` in `qml`, offscreen and on Wayland alike): at 104 px semi-bold
+   ascent 100.875, descent 30.15625, `Text.baselineOffset` 100.875, `implicitHeight` 132; at 24 px ascent 23.265625,
+   descent 6.953125, `baselineOffset` 23.265625, `implicitHeight` 31. So Qt reads Sora's typo metrics unrounded.
+3. Chrome. Blink rounds the face's ascent and descent to whole pixels (`SkScalarRoundToScalar`, `FontMetrics::AscentDescentWithHacks`,
+   `third_party/blink/renderer/platform/fonts/font_metrics.cc`), and puts half the leading, floored, above the line
+   (`CalculateLeadingSpace`, `core/layout/inline/line_utils.cc`: `((line_height - current_height.LineHeight()) / 2).Floor()`).
+   Read 2026-11-23 from Chromium's main branch.
+4. The board's CSS (EclipseSplashPlay:68-71): a flex column from 800 down, gap 22; the name 104 px, `line-height: 1`,
+   weight 600; the rule 2 px; the counts 24 px with `line-height` normal. So the name's line box is 104 high, ascent 101
+   and descent 30 leave a leading of -27, -14 of it above: its baseline 87 under the box's top; the counts' box is 30 high
+   (23 + 7), its baseline 23 under its top. Chrome gives exactly these (an empty inline-block on each baseline).
+
+The cause was the board's table, not Qt's metrics: `eclipse_splash.tsv` was read on 2026-11-17 by a script that ran as the
+page parsed, before the board's web font had loaded, so the words' boxes were Noto Sans's, `system-ui` here (the name 446.06
+wide with its baseline 92 under its top, the counts 33 high with theirs 26 under; with Sora 469.56 and 87, 30 and 23). Read
+again once `document.fonts.ready` resolves, only the words' and Home's text boxes changed (28 rows). Against those, the
+program's name stood 0.125 above the board's baseline and the counts 0.27 below it.
+
+**The rule.** `parts/Line.qml` places a Line as the board's CSS places a line when `boardLine` is set: its box the line box
+(`boardLineHeight` in board pixels, or 0 for normal: the rounded ascent and descent, which is CSS's normal for a face with no
+line gap, as Sora has), and its words' baseline at the rounded ascent plus the floored half-leading under the box's top, read
+from a `FontMetrics` of the Line's own font, so a Line at any size, face or weight follows. The words' `Text` keeps its own
+height. The splash's name (104) and counts (normal) use it, the rule 22 under the name's box and the counts 22 under the
+rule, as the column's gap gives. Home's and the games view's Lines keep their placing until their own pieces move them.
+`eclipse_splash.rs` holds at each moment the words' line boxes to the board's (top and height) and at 5.72 s their baselines
+(the Text's top plus its `baselineOffset`), within a hundredth of a board pixel.
+
+**Home holds such offsets too** (measured 2026-11-23, Home's oracle at 1920 by 1200 and 1280 by 800, against Main.dc.html in
+Chrome with Sora loaded; program minus board, in board pixels, positive lower): the name -0.23, the sections -0.23, the
+battery and clock -0.17, the eyebrow +0.39, the title +1.125, the facts +1.22, the resume point +0.83, the Resume pill's
+word +1.22, Options' and Favourite's +0.77, the art label -0.48, Recent and its count +0.16, the shown tile's title +0.36
+and its console +0.55, the sections' help -0.14. None is the splash's 5 px; each is the rounding and leading above, the
+title's line box (1.02 of 112) carrying its +1 to the column under it. Home is not changed in this piece.
+
+**When the sound does not answer** (seen 2026-11-23). The splash waits for its sound (`set`), so a sound that never
+settles would hold its first frame for ever. Each path it waits on can fail to answer:
+
+1. Qt's decoder. `QAudioDecoder::start` returns at once, emitting nothing, where no platform decoder was made
+   (qtmultimedia 6.11, `src/multimedia/audio/qaudiodecoder.cpp`, `start`: `if (!d->decoder) return;`; the constructor
+   only logs "Failed to initialize QAudioDecoder"), and with no backend plugin loaded Qt falls back to
+   `QFallbackIntegration` (`src/multimedia/platform/qplatformmediaintegration.cpp`, `InstanceHolder::init`). Qt's
+   documentation promises `finished()` on success and `error()` on failure (Qt 6, "QAudioDecoder") and gives no time
+   within which either comes. `SoundFile` asks `isSupported()` first and reports the decoder's `errorString()`.
+2. The player. Its first `play` opens SDL 3's audio (`UiSounds::open`, `Platform/endymion/src/audio.rs`, from the thread
+   `SplashSound` starts). SDL 3.4's PipeWire driver waits on the server with `pw_thread_loop_wait` and no timeout, for
+   the registry's first sync in `PIPEWIRE_PREFERRED_Init` and `PIPEWIRE_DetectDevices`, and for the stream's state in
+   `PIPEWIRE_OpenDevice` (`src/audio/pipewire/SDL_pipewire.c`, branch release-3.4.x, read 2026-11-23). Seen 2026-11-23
+   (SDL 3.4.20, Fedora 44): with `SDL_AUDIO_DRIVER=pipewire` and `PIPEWIRE_REMOTE` naming a socket that takes the
+   connection and never answers, `SDL_InitSubSystem(SDL_INIT_AUDIO)` had not returned after 5 s; the dummy driver
+   returned at once.
+3. The hand-back. cxx-qt 0.10's `queue` fails when the object is gone or Qt's `invokeMethod` fails
+   (`ThreadingQueueError`, `cxx-qt-0.10.0/src/threading.rs`); the sound then never hears the player's answer, and
+   there is nothing to tell, since the queue to it is what failed.
+
+So the wait is bounded in one place, a `PauseAnimation` in `ThemeSplash.qml`: from the splash's first frame, for the
+splash's own `length`, on the window's animation clock (so a test's held clock steps it). Neither Qt nor SDL gives a
+time to take; the splash's length is the one duration the start owns for its splash, and the sound is that length's
+(argued, not decided). A sound not ready by then is given up (`SplashSound.giveUp`): its `problem` says so, the splash
+plays silent from its first frame, and a player made after is let go unplayed (`opening`), so the sound never starts out
+of step with its picture. Proof: `qt-app/tests/splash_silent_device.rs`, the silent PipeWire socket above in a process
+of its own: the first frame holds until the length on the held clock, then the splash runs silent and Home follows. The
+decoder's case has no test yet: it needs Qt started with none of the media backends the system installs.
+
+Every error the sound could drop is reported in its `problem`, where its other problems are: a failed `queued()` (the
+bytes still to play, which the soft end starts from) and a missing `file`. Two cannot fail: `faded` takes nothing for a
+start past the samples' end, which `end` never asks (it starts at the samples' length less what is queued); the queue's
+refusal is case 3.
+
+**A chosen theme that fails.** A theme whose package cannot be read leaves its host `ready` false and `failed` true
+(`theme-host/src/host.rs`, `reload`). `moonriseHeld` held Moonrise unseen while the host was not ready, so such a theme
+started with no splash seen, Moonrise running unseen until Home (seen 2026-11-23: `splash_start.rs` failed at "Moonrise
+is seen when the chosen theme fails"). It holds now only while the host is neither ready nor failed: a theme that fails
+starts with Moonrise and reaches the reference's Home, as `splash_start.rs` holds.
 
 ### 3.6 Console-style designs as themes: the test that the API is sufficient
 

@@ -1,0 +1,26 @@
+# The words of Collections's rows against their board, EclipseSettingsCollections.dc.html (gen_settings.py:332-341): each line's box (its top under its row's, or under the element a fifth column names, and its height) and its baseline, in board pixels; the rows by the program's place for them.
+# Measured 2026-11-23 in Chrome after document.fonts.ready with the program's own Sora files (measure_board.py, a zero-size inline-block at each text's start giving its baseline).
+element	line top	line height	baseline
+rowName.0	14.5	30	37.5
+rowAbout.0	48.5	21	64.5
+rowWords.0	28.5	27	49.5
+rowName.1	14.5	30	37.5
+rowAbout.1	48.5	21	64.5
+rowWords.1	28.5	27	49.5
+rowName.2	14.5	30	37.5
+rowAbout.2	48.5	21	64.5
+rowWords.2	28.5	27	49.5
+rowName.3	14.5	30	37.5
+rowAbout.3	48.5	21	64.5
+rowWords.3	28.5	27	49.5
+rowName.4	14.5	30	37.5
+rowAbout.4	48.5	21	64.5
+rowWords.4	28.5	27	49.5
+rowName.5	14.5	30	37.5
+rowAbout.5	48.5	21	64.5
+rowWords.5	28.5	27	49.5
+rowName.6	14.5	30	37.5
+rowAbout.6	48.5	21	64.5
+rowWords.6	28.5	27	49.5
+settingsCrumb	150	25	169	settingsCanvas
+settingsHeading	191	56	234	settingsCanvas

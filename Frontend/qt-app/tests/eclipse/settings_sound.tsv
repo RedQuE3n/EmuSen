@@ -31,39 +31,39 @@ sectionIcon.4	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G
 section.5	103	section link 5, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.4:6	300	66	16	#00000000	-	built	-
 sectionWords.5	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.5:64	mid:section.5	-	-	-	#FFD8DBE6	23	built	400 0 none
 sectionIcon.5	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.5:20	mid:section.5	28	28	-	#FFD8DBE6	-	built	-
-settingsHeading	68	"Sound", the page's heading, its box 56	Settings.heading	Text	500	150	-	56	-	Tokens.text	44	built	600 0 none
-settingsRows	67	the rows, 22 px under the heading (its 12 px margin and the 10 px gap)	MeasuredWalk's window, to the ninth row's foot	FocusScope	500	below:settingsHeading:22	820	-	-	-	-	built	-
+settingsHeading	68	"Sound", the page's heading; its line box and baseline in the lines table	Settings.heading	Text	500	-	-	-	-	Tokens.text	44	built	600 0 none
+settingsRows	67	the rows, 22 px under the heading (its 12 px margin and the 10 px gap), at 228	MeasuredWalk's window, to the ninth row's foot	FocusScope	500	228	820	-	-	-	-	built	-
 row.0	27	row 0, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	top:settingsRows:0	820	84	20	-	-	built	-
 rowFill.0	27	its fill and no line, focused	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.0:0	top:row.0:0	820	84	20	Tokens.surfaceRaised	-	built	line 0 -
-rowName.0	29	its name	the row's label	Text	in:row.0:24	top:row.0:14.5	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.0	30	its short line	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.0:24	below:rowName.0:4	-	-	-	Tokens.muted	17	built	400 0 none
+rowName.0	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.0:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.0	30	its short line; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.0:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.0	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.0	inright:row.0:24	-	-	-	-	built	-
 rowLess.0	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.0:0	mid:row.0	22	22	-	Tokens.accent	-	built	-
-rowWords.0	36	the value, 14 px after it	the row's value	Text	after:rowLess.0:14	mid:row.0	-	-	-	Tokens.text	22	built	400 0 none
+rowWords.0	36	the value, 14 px after it; its line box and baseline in the page's lines table	the row's value	Text	after:rowLess.0:14	-	-	-	-	Tokens.text	22	built	400 0 none
 rowMore.0	38	▶, 14 px after the value	Chevron	Chevron	after:rowWords.0:14	mid:row.0	22	22	-	Tokens.accent	-	built	-
 row.1	27	row 1, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.0:10	820	84	20	-	-	built	-
 rowFill.1	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.1:0	top:row.1:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.1	29	its name	the row's label	Text	in:row.1:24	top:row.1:14.5	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.1	30	its short line, cut at the value as the board cuts it	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.1:24	below:rowName.1:4	before:rowValue.1:24	-	-	Tokens.muted	17	built	400 0 none
+rowName.1	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.1:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.1	30	its short line, cut at the value as the board cuts it; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.1:24	-	before:rowValue.1:24	-	-	Tokens.muted	17	built	400 0 none
 rowValue.1	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.1	inright:row.1:24	-	-	-	-	built	-
-rowWords.1	36	"On"	the row's value	Text	in:rowValue.1:0	mid:row.1	-	-	-	Tokens.text	22	built	400 0 none
+rowWords.1	36	"On"; its line box and baseline in the page's lines table	the row's value	Text	in:rowValue.1:0	-	-	-	-	Tokens.text	22	built	400 0 none
 rowSwitch.1	41	the switch, 68 by 38 inside its 2 px line, on	Settings.rows' switchOn	Rectangle	after:rowWords.1:14	mid:row.1	68	38	19	Tokens.accent	-	built	line 2 #FFF6E7D8
 rowKnob.1	41	its knob, 26, at the right end 4 px in	switchOn	Rectangle	in:rowSwitch.1:36	mid:row.1	26	26	13	Tokens.overAccent	-	built	-
 row.2	27	row 2, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.1:10	820	84	20	-	-	built	-
 rowFill.2	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.2:0	top:row.2:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.2	29	its name	the row's label	Text	in:row.2:24	top:row.2:14.5	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.2	30	its short line	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.2:24	below:rowName.2:4	-	-	-	Tokens.muted	17	built	400 0 none
+rowName.2	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.2:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.2	30	its short line; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.2:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.2	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.2	inright:row.2:24	-	-	-	-	built	-
 rowLess.2	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.2:0	mid:row.2	22	22	-	Tokens.accent	-	built	-
-rowWords.2	36	the value, 14 px after it	the row's value	Text	after:rowLess.2:14	mid:row.2	-	-	-	Tokens.text	22	built	400 0 none
+rowWords.2	36	the value, 14 px after it; its line box and baseline in the page's lines table	the row's value	Text	after:rowLess.2:14	-	-	-	-	Tokens.text	22	built	400 0 none
 rowMore.2	38	▶, 14 px after the value	Chevron	Chevron	after:rowWords.2:14	mid:row.2	22	22	-	Tokens.accent	-	built	-
 row.3	27	row 3, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.2:10	820	84	20	-	-	built	-
 rowFill.3	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.3:0	top:row.3:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.3	29	its name	the row's label	Text	in:row.3:24	top:row.3:14.5	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.3	30	its short line	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.3:24	below:rowName.3:4	-	-	-	Tokens.muted	17	built	400 0 none
+rowName.3	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.3:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.3	30	its short line; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.3:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.3	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.3	inright:row.3:24	-	-	-	-	built	-
 rowLess.3	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.3:0	mid:row.3	22	22	-	Tokens.accent	-	built	-
-rowWords.3	36	the value, 14 px after it	the row's value	Text	after:rowLess.3:14	mid:row.3	-	-	-	Tokens.text	22	built	400 0 none
+rowWords.3	36	the value, 14 px after it; its line box and baseline in the page's lines table	the row's value	Text	after:rowLess.3:14	-	-	-	-	Tokens.text	22	built	400 0 none
 rowMore.3	38	▶, 14 px after the value	Chevron	Chevron	after:rowWords.3:14	mid:row.3	22	22	-	Tokens.accent	-	built	-
 rowRing	63	the focused row's ring: 3 px of #07080F, 3 px of the accent, 40 px of glow 8 px out at rgba(240, 180, 196, 0.4)	the kit's FocusRing	FocusRing	-	-	-	-	-	-	-	built	ring 3 3 40 8 26 #66F0B4C4 #FF07080F #FFF6E7D8
 settingsAside	139	the About panel, 424 wide, 96 px from the right	SettingsAside	SettingsAside	-	236	right:96	-	-	-	-	built	-
@@ -71,8 +71,8 @@ asideMeter	166	the ring's place, 340 high, the panel's width	SettingsMeter, Sett
 asideRing	166	the ring, a 340 px disc centred in the panel	SettingsMeter	Item	in:settingsAside:42	top:settingsAside:0	340	340	-	-	-	built	-
 asideRingGlow	166	its glow, 0 0 70px 12px rgba(240, 180, 196, 0.22)	the kit's Glow, SettingsInk.ringGlow	Glow	in:asideRing:0	top:asideRing:0	340	340	170	#38F0B4C4	-	built	glow 70 12 0 0
 asideRingInside	167	the inside, inset 14, #07080F	Tokens.surface	Rectangle	in:asideRing:14	top:asideRing:14	312	312	156	Tokens.surface	-	built	-
-asideMeterValue	168	"70%", 84 px, 600, spaced -0.02 em, its box 105, the column centred	the focused row's value	Text	-	top:asideRingInside:89	-	105	-	Tokens.text	84	built	600 -0.02 none
-asideMeterCaption	169	"the game's volume", 20 px, 4 px under it, its box 25	Settings.caption, Volume's pane (qt-models/data/settings_screen.json)	Text	-	below:asideMeterValue:4	-	25	-	Tokens.muted	20	built	400 0 none
+asideMeterValue	168	"70%", 84 px, 600, spaced -0.02 em, its box 105, the column centred	the focused row's value	Text	-	-	-	-	-	Tokens.text	84	built	600 -0.02 none
+asideMeterCaption	169	"the game's volume", 20 px, 4 px under it, its box 25	Settings.caption, Volume's pane (qt-models/data/settings_screen.json)	Text	-	-	-	-	-	Tokens.muted	20	built	400 0 none
 asideHeading	177	the focused row's name, "Volume", 22 under the ring	Settings.aboutHeading	Text	in:settingsAside:0	below:asideMeter:22	-	-	-	Tokens.text	26	built	600 0 none
 asideSentence	177	the paragraph, 20 px light, line height 1.5	Settings.sentence, Volume's pane	Text	in:settingsAside:0	below:asideHeading:22	-	60	-	#FFC9CDDB	20	built	300 0 none
 asideMuted.0	177	the small line, 18 px, line height 1.5, R-20261123-12's words for the board's	Settings.muted, Volume's pane	Text	in:settingsAside:0	below:asideSentence:22	424	-	-	Tokens.muted	18	built	400 0 none

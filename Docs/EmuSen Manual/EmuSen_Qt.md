@@ -2350,6 +2350,10 @@ board: `EclipseSettingsSound.dc.html` (gen_settings.py:165-178), `EclipseSetting
   fifteen rows are drawn in its order, the board's nine among them (R-20261116-21), the On-screen keyboard row hidden
   until the Steam keyboard call exists (R-20261112-13); the pad pages its doors open are the program's own until their
   boards are built (R-20261116-26).
+- *B from a page back to its row.* The frame's walk tells the model its focus only once it has read the program's rows
+  (`walk.count === Settings.count`): a page's rows reach the Repeater before the walk reads them, and a walk still
+  holding a page of no rows (a bindings page) told its first row back, so B from Controller bindings or Keyboard keys
+  landed on Controllers' first row; Hotkeys, whose page has rows, landed on its own.
 - *Glows.* A page under a section takes its section's glow (`SettingsInk.pageGlow` by `Settings.section`): Collections
   Library's, Saves and states EmuSen's, as their boards draw them.
 
@@ -2357,7 +2361,8 @@ board: `EclipseSettingsSound.dc.html` (gen_settings.py:165-178), `EclipseSetting
 `eclipse_settings_collections.rs` and `eclipse_settings_saves.rs`, each the oracle `eclipse_settings_pages` on the
 software backend from Display's start (`eclipse_settings_oracle::with_settings`): the page reached by the pad at its
 board's state; its table (`tests/eclipse/settings_sound.tsv`, `settings_controllers.tsv`, `settings_collections.tsv`,
-`settings_saves.tsv`, read from the board in Chrome after `document.fonts.ready`) held at the gate's five sizes; the
+`settings_saves.tsv`, read from the board in Chrome after `document.fonts.ready`) held at the gate's five sizes, and
+each drawn row's words, and Sound's ring's, to the board's line boxes and baselines (`settings_<page>_lines.tsv`); the
 glow; the title, heading, trail, "N of M", the board rows' names and short lines, every row's words as the model has
 them, the About panel's heading, sentence and small lines; every drawn short line ending 24 px before its value, cut
 there only, and cut where the board cuts it; the help line; every row reached, focused, counted and named in the panel

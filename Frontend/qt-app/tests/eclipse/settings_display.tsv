@@ -31,8 +31,8 @@ sectionIcon.4	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G
 section.5	103	section link 5, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.4:6	300	66	16	#00000000	-	built	-
 sectionWords.5	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.5:64	mid:section.5	-	-	-	#FFD8DBE6	23	built	400 0 none
 sectionIcon.5	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.5:20	mid:section.5	28	28	-	#FFD8DBE6	-	built	-
-settingsHeading	68	"Display", the page's heading, its box 56	Settings.trail's last	Text	500	150	-	56	-	Tokens.text	44	built	600 0 none
-settingsRows	67	the rows, 22 px under the heading (its 12 px margin and the 10 px gap)	MeasuredWalk's window, to the ninth row's foot	FocusScope	500	below:settingsHeading:22	820	-	-	-	-	built	-
+settingsHeading	68	"Display", the page's heading; its line box and baseline in the lines table	Settings.trail's last	Text	500	-	-	-	-	Tokens.text	44	built	600 0 none
+settingsRows	67	the rows, 22 px under the heading (its 12 px margin and the 10 px gap), at 228	MeasuredWalk's window, to the ninth row's foot	FocusScope	500	228	820	-	-	-	-	built	-
 row.0	27	row 0, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	top:settingsRows:0	820	84	20	-	-	built	-
 rowFill.0	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.0:0	top:row.0:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
 rowName.0	29	its name; its line box and baseline in settings_display_lines.tsv	the row's label	Text	in:row.0:24	-	-	-	-	Tokens.text	24	built	600 0 none

@@ -21,39 +21,52 @@ Rectangle {
     SettingsInk {
         id: own
     }
-    // A face as the help bar draws its button now: filled where it leads, else ringed, 64 px with its 2 px line as the board's border-box draws it, its letter bold at 26 px.
-    component Face: Glyph {
-        keyPairs: true
-        side: filled ? 64 : 64 - 4
-        letterSize: 26
-        leadLetterSize: 26
-        letterWeight: Font.Bold
-    }
     // Centred by its own sums, as centring anchors round to whole pixels.
     Row {
         id: faces
         x: (root.width - faces.width) / 2
         y: (root.height - faces.height) / 2
         spacing: 18 * root.unit
-        Face {
+        // Each face as the help bar draws its button now: filled where it leads, else ringed, 64 px with its 2 px line as the board's border-box draws it, its letter bold at 26 px.
+        Glyph {
             objectName: "asideFace.0"
             unit: root.unit
             button: PadGlyph.Accept
+            keyPairs: true
+            side: filled ? root.face : root.face - 4
+            letterSize: 26
+            leadLetterSize: 26
+            letterWeight: Font.Bold
         }
-        Face {
+        Glyph {
             objectName: "asideFace.1"
             unit: root.unit
             button: PadGlyph.Back
+            keyPairs: true
+            side: filled ? root.face : root.face - 4
+            letterSize: 26
+            leadLetterSize: 26
+            letterWeight: Font.Bold
         }
-        Face {
+        Glyph {
             objectName: "asideFace.2"
             unit: root.unit
             button: PadGlyph.Screensaver
+            keyPairs: true
+            side: filled ? root.face : root.face - 4
+            letterSize: 26
+            leadLetterSize: 26
+            letterWeight: Font.Bold
         }
-        Face {
+        Glyph {
             objectName: "asideFace.3"
             unit: root.unit
             button: PadGlyph.Search
+            keyPairs: true
+            side: filled ? root.face : root.face - 4
+            letterSize: 26
+            leadLetterSize: 26
+            letterWeight: Font.Bold
         }
     }
 }

@@ -61,14 +61,15 @@ fn icon(tree: &emusen_qt_test::tree::Tree, i: usize) -> (String, String) {
     (attribute("d"), attribute("stroke"))
 }
 
-/// Each row's words held to the board's lines (a lines table): the Line's box under its row's top and its height, and the words' baseline, in canvas units within a millionth.
+/// Each row's words held to the board's lines (a lines table): the Line's box under its row's top (or the element a fifth column names) and its height, and the words' baseline, in canvas units within a millionth.
 pub fn lines_held(tree: &emusen_qt_test::tree::Tree, lines: &str, k: f64, at: &str, differences: &mut Vec<String>) {
     let unit: f64 = read(tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
     let got = crate::eclipse_board::boxes(tree, unit);
     for line in lines.lines().filter(|l| !l.starts_with('#') && !l.starts_with("element\t") && !l.trim().is_empty()) {
         let c: Vec<&str> = line.split('\t').collect();
         let (name, top, high, base) = (c[0], c[1].parse::<f64>().unwrap() * k, c[2].parse::<f64>().unwrap() * k, c[3].parse::<f64>().unwrap() * k);
-        let row = got[&format!("row.{}", name.rsplit('.').next().unwrap())];
+        // Under its row, or under the element a fifth column names.
+        let row = c.get(4).map_or_else(|| got[&format!("row.{}", name.rsplit('.').next().unwrap())], |under| got[*under]);
         // The Line comes before its words in the tree, the words are the last of the name.
         let (Some(boxed), Some(words)) = (tree.nodes.iter().find(|n| n.name == name && n.visible), tree.nodes.iter().rev().find(|n| n.name == name && n.visible)) else {
             differences.push(format!("{at}: {name} is not drawn"));

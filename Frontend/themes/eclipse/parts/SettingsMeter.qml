@@ -79,19 +79,10 @@ Item {
                 x: (parent.width - width) / 2
                 y: (parent.height - height) / 2
                 spacing: 4 * root.unit
-                LineBox {
-                    id: valueBox
-                    size: 84
-                    weight: Tokens.weightTitle
-                }
-                LineBox {
-                    id: captionBox
-                    size: 20
-                }
                 Line {
                     objectName: "asideMeterValue"
                     x: (words.width - width) / 2
-                    height: valueBox.box * root.unit
+                    boardLine: true
                     unit: root.unit
                     text: root.value
                     color: Tokens.text
@@ -102,7 +93,7 @@ Item {
                 Line {
                     objectName: "asideMeterCaption"
                     x: (words.width - width) / 2
-                    height: captionBox.box * root.unit
+                    boardLine: true
                     unit: root.unit
                     visible: text.length > 0
                     text: root.caption

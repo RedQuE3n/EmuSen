@@ -516,3 +516,15 @@ fn qt_3_4_11_a_pane_s_choices_are_each_choice_s_words_to_a_comma_each_once() {
     assert_eq!(settings::choice_heads(&pairs(&["Name, ascending", "Name, descending", "Rating, ascending"])), "Name · Rating");
     assert_eq!(settings::choice_heads(&pairs(&[])), "");
 }
+
+#[test]
+fn qt_3_4_11_the_trail_line_names_every_level_above_the_page_as_the_boards_join_them() {
+    let source = fake(json!({}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "Library");
+    assert_eq!(view.trail_line(), "", "a section's own page has none");
+    view.choose(index(&view, "collections"));
+    // A page one level under its section: the section alone; three levels are the Saves oracle's (eclipse_settings_pages).
+    assert_eq!(view.trail_line(), "Library", "one level above: the section alone");
+    assert_eq!(view.trail(), ["Library", "Collections"]);
+}

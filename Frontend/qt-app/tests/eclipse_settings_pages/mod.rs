@@ -3,7 +3,7 @@
 
 use crate::eclipse_board::{boxes, held, read, rows, same};
 use crate::eclipse_pad::{focused, press};
-use crate::eclipse_settings_oracle::{acted, at, centre, help_line, pictures, settings, settle, shown, state, with_settings};
+use crate::eclipse_settings_oracle::{acted, at, centre, help_line, lines_held, pictures, settings, settle, shown, state, with_settings};
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::input::PadControl;
 use emusen_kit_core::settings::RowKind;
@@ -17,6 +17,8 @@ pub struct Page {
     /// The page's name in pictures.
     pub name: &'static str,
     pub table: &'static str,
+    /// The board's lines: each row's words' line box and baseline, by the program's row.
+    pub lines: &'static str,
     /// The section's key, and the row of it that opens the page where the page is one under it.
     pub section: &'static str,
     pub opens: Option<&'static str>,
@@ -31,14 +33,21 @@ pub struct Page {
     pub board: &'static [(usize, &'static str, &'static str, bool)],
     /// Rows the board draws that an earlier ruling hides, by name.
     pub hidden: &'static [&'static str],
-    /// Doors whose B is not held to return to their row, by name, and why.
-    pub unheld: &'static [(&'static str, &'static str)],
     pub glow: &'static str,
     /// The About panel's heading, and its small lines as the board's state gives them.
     pub about: &'static str,
     pub muted: &'static [&'static str],
     /// The help line's words in order.
     pub help: &'static [&'static str],
+}
+
+/// The lines table's rows of the rows `drawn` holds, and every row naming no row.
+fn lines_of(lines: &str, drawn: impl Fn(usize) -> bool) -> String {
+    lines
+        .lines()
+        .filter(|l| l.starts_with('#') || l.starts_with("element\t") || l.split('\t').next().and_then(|n| n.rsplit_once('.')).and_then(|(_, i)| i.parse::<usize>().ok()).is_none_or(&drawn))
+        .map(|l| format!("{l}\n"))
+        .collect()
 }
 
 /// The model's row ids, in order.
@@ -96,18 +105,6 @@ fn lines_cut(scene: &mut Scene<'_>, page: &Page, k: f64, at_size: &str, differen
     }
 }
 
-/// The pad back to row `i` of the page from wherever its focus stands.
-fn refocus(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, i: usize) {
-    let at_now = at(scene).0.max(0) as usize;
-    for _ in i..at_now {
-        press(scene, sdl, pad, PadControl::Up);
-    }
-    for _ in at_now..i {
-        press(scene, sdl, pad, PadControl::Down);
-    }
-    settle(scene);
-}
-
 /// The page held to its board at every gate size, its words, its rows by pad and pointer, X, and B.
 pub fn oracle(page: &Page, backend: &str, extra: &dyn Fn(&mut Scene<'_>, &Sdl, &VirtualPad, &mut Vec<String>)) {
     with_settings(|scene, sdl, pad| run(scene, sdl, pad, page, backend, extra));
@@ -133,6 +130,7 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         let screen: u64 = tree.nodes[tree.find_named("settingsScreen").expect("Eclipse's Settings") as usize].id.parse().unwrap();
         let tokens = crate::eclipse_board::tokens(screen);
         held(&tree, &table, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
+        lines_held(&tree, &lines_of(page.lines, |i| i < page.drawn), k, &at_size, &mut differences);
         if Colour::parse(&read(&tree, "backdropField.0", "paint")) != Colour::parse(page.glow) {
             differences.push(format!("{at_size}: the page's glow is {} where the board gives {}", read(&tree, "backdropField.0", "paint"), page.glow));
         }
@@ -215,6 +213,9 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         differences.push("Down past the last row moved the focus".to_owned());
     }
     lines_cut(scene, page, k, "the last row focused", &mut differences);
+    let tree = scene.tree();
+    let in_window: Vec<bool> = (0..count).map(|i| shown(scene, &format!("row.{i}"))).collect();
+    lines_held(&tree, &lines_of(page.lines, |i| in_window.get(i) == Some(&true)).lines().filter(|l| !l.starts_with("aside")).map(|l| format!("{l}\n")).collect::<String>(), k, "the last row focused", &mut differences);
 
     // Each row acted on by the pad from the last: Right then Left, A twice, or A and B; then X.
     let mut opened = Vec::new();
@@ -234,20 +235,6 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
             opened.push(format!("{}: {}", row.label, at(scene).1));
             press(scene, sdl, pad, PadControl::East);
             settle(scene);
-            if let Some((_, why)) = page.unheld.iter().find(|u| u.0 == row.label) {
-                // Not held: where B from this door's page lands; the page is left and the focus walked back to the row.
-                println!("{}: B from {}'s page lands on {:?} ({why})", page.name, row.label, at(scene));
-                if at(scene).1 != page.key || opened.last().is_some_and(|o| o.ends_with(page.key)) {
-                    differences.push(format!("{}: A opened {:?}, B left {:?}", row.label, opened.last(), at(scene)));
-                }
-                refocus(scene, sdl, pad, i);
-                press(scene, sdl, pad, PadControl::West);
-                settle(scene);
-                if at(scene) != (i as i32, page.key.to_owned()) {
-                    differences.push(format!("X on {}, a door, left {:?}", row.label, at(scene)));
-                }
-                continue;
-            }
         }
         // Swap A and B in menus swaps the very buttons that turn it (and X with Y): turned on by South, off again by East, X then North.
         if row.id == "swap" {
@@ -314,18 +301,6 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         settle(scene);
         if at(scene).0 != i as i32 {
             differences.push(format!("the pointer on row {i} focused {:?}, the row drawn {}, the window from row {}", at(scene), shown(scene, &format!("row.{i}")), scene.property("settingsWalk", "first")));
-            continue;
-        }
-        if let Some((_, why)) = page.unheld.iter().find(|u| u.0 == settings(scene).shown_rows()[i].label) {
-            scene.click(x, y);
-            settle(scene);
-            if at(scene).1 == page.key {
-                differences.push(format!("a click on row {i}, a door, opened nothing"));
-            }
-            press(scene, sdl, pad, PadControl::East);
-            settle(scene);
-            println!("{}: B from row {i}'s page after a click lands on {:?} ({why})", page.name, at(scene));
-            refocus(scene, sdl, pad, i);
             continue;
         }
         if settings(scene).shown_rows()[i].kind == RowKind::Action && settings(scene).shown_rows()[i].value.is_empty() {
@@ -433,10 +408,12 @@ pub fn three_levels(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &P
         differences.push(format!("a trail of {trail:?}: the line over the heading {:?}, drawn {}, the heading {:?}", read(&tree, "settingsCrumb", "text"), shown(scene, "settingsCrumb"), read(&tree, "settingsHeading", "text")));
     }
     let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
-    let got = boxes(&tree, unit);
     let k = DESIGN_HEIGHT / 1200.0;
-    if !same(got["settingsHeading"].y, got["settingsCrumb"].bottom() + 16.0 * k) {
-        differences.push(format!("the heading at {} under a trail ending at {}", got["settingsHeading"].y, got["settingsCrumb"].bottom()));
+    // The trail's and the heading's line boxes, each Line before its words in the tree.
+    let line = |name: &str| tree.nodes.iter().find(|n| n.name == name && n.visible).map_or((f64::NAN, f64::NAN), |n| (n.y / unit, (n.y + n.h) / unit));
+    let (heading, trail) = (line("settingsHeading").0, line("settingsCrumb").1);
+    if !same(heading, trail + 16.0 * k) {
+        differences.push(format!("the heading at {heading} under a trail ending at {trail}"));
     }
     pictures(scene, backend, "trail-of-three");
     press(scene, sdl, pad, PadControl::East);
@@ -453,6 +430,7 @@ pub fn three_levels(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &P
 pub const SOUND: Page = Page {
     name: "sound",
     table: include_str!("../eclipse/settings_sound.tsv"),
+    lines: include_str!("../eclipse/settings_sound_lines.tsv"),
     section: "sound",
     opens: None,
     key: "sound",
@@ -467,7 +445,6 @@ pub const SOUND: Page = Page {
         (3, "Output", "Where the game's sound and the interface's sounds play.", false),
     ],
     hidden: &[],
-    unheld: &[],
     glow: "#7A3FA8",
     about: "Volume",
     // R-20261123-12's words for the board's line.
@@ -504,6 +481,7 @@ pub fn sound(backend: &str) {
 pub const CONTROLLERS: Page = Page {
     name: "controllers",
     table: include_str!("../eclipse/settings_controllers.tsv"),
+    lines: include_str!("../eclipse/settings_controllers_lines.tsv"),
     section: "controllers",
     opens: None,
     key: "controllers",
@@ -523,8 +501,6 @@ pub const CONTROLLERS: Page = Page {
     ],
     // R-20261112-13: the On-screen keyboard row waits for the Steam keyboard call.
     hidden: &["On-screen keyboard"],
-    // Not held until its cause is found: B from a bindings page (Controller bindings, Keyboard keys) lands on the first row, where Hotkeys' lands on its own.
-    unheld: &[("Controller bindings", "B from a bindings page lands on the first row, a defect not traced to its line"), ("Keyboard keys", "B from a bindings page lands on the first row, a defect not traced to its line")],
     glow: "#2A6FD6",
     about: "Controller type",
     muted: &["Automatic · Xbox · PlayStation · Nintendo · Generic"],
@@ -561,6 +537,7 @@ pub fn controllers(backend: &str) {
 pub const COLLECTIONS: Page = Page {
     name: "collections",
     table: include_str!("../eclipse/settings_collections.tsv"),
+    lines: include_str!("../eclipse/settings_collections_lines.tsv"),
     section: "library",
     opens: Some("collections"),
     key: "group:Collections",
@@ -578,7 +555,6 @@ pub const COLLECTIONS: Page = Page {
         (6, "Random entry button", "Either thumbstick pressed in jumps to a random game, or console.", true),
     ],
     hidden: &[],
-    unheld: &[],
     glow: "#1FA890",
     about: "Default sort order",
     muted: &["Name · Rating · Release date · Developer · Publisher · Genre · Players · Last played · Times played · Play time, each ascending or descending."],
@@ -594,6 +570,7 @@ pub fn collections(backend: &str) {
 pub const SAVES: Page = Page {
     name: "saves",
     table: include_str!("../eclipse/settings_saves.tsv"),
+    lines: include_str!("../eclipse/settings_saves_lines.tsv"),
     section: "emusen",
     opens: Some("saves"),
     key: "group:Saves and states",
@@ -606,7 +583,6 @@ pub const SAVES: Page = Page {
         (1, "Play time counted up to", "A launch longer than this adds nothing to the game's play time.", false),
     ],
     hidden: &[],
-    unheld: &[],
     glow: "#B0487A",
     about: "Continue where you left off",
     // R-20261123-37: the third choice is the board's word.

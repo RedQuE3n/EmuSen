@@ -20,5 +20,7 @@ FocusScope {
     property Item splashPlace: null
     // 1.13: on the game page, the tabs this screen draws as flags, 1 << Page.States and so on (Page.PageSection); the program draws every other tab, deeper page and question. 0 names them all.
     property int pageSections: 0
+    // 1.16: on the game page, the deeper pages this screen draws as flags, 1 << Page.Package (Page.PageSubpage); 0 names none.
+    property int pageSubpages: 0
     signal finished()
 }

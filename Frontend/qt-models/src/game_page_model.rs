@@ -101,6 +101,8 @@ pub mod qobject {
         #[qproperty(QString, cover_trail, cxx_name = "coverTrail", READ, NOTIFY)]
         /// The tabs a theme's game screen draws, as flags (`ThemeScreen.pageSections`, `Tab::flag`); 0 where it names none.
         #[qproperty(i32, theme_sections, cxx_name = "themeSections")]
+        /// The deeper pages a theme's game screen draws, as flags (`ThemeScreen.pageSubpages`, `Subpage::flag`).
+        #[qproperty(i32, theme_subpages, cxx_name = "themeSubpages")]
         /// Whether the theme's screen draws the page as it stands; else the program's page is shown (EmuSen_Qt.md §3.2).
         #[qproperty(bool, theme_draws, cxx_name = "themeDraws", READ, NOTIFY)]
         type GamePageModel = super::GamePageModelRust;
@@ -499,6 +501,7 @@ pub struct GamePageModelRust {
     /// Set to ask the package's job running to stop.
     job_stop: Option<Arc<std::sync::atomic::AtomicBool>>,
     theme_sections: i32,
+    theme_subpages: i32,
     theme_draws: bool,
 }
 
@@ -563,6 +566,7 @@ impl Default for GamePageModelRust {
             cover_chosen: false,
             job_stop: None,
             theme_sections: 0,
+            theme_subpages: 0,
             theme_draws: true,
         }
     }
@@ -599,6 +603,7 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
             })
             .release();
         self.as_mut().on_theme_sections_changed(|model| model.helped()).release();
+        self.as_mut().on_theme_subpages_changed(|model| model.helped()).release();
         self.on_section_changed(|mut model| {
             let section = model.section.max(0) as usize;
             if model.page.section != section {
@@ -760,6 +765,11 @@ impl qobject::GamePageModel {
     /// turned, else in place), the help.
     fn shown(self: Pin<&mut Self>, turned: bool) {
         self.telling(|mut model| {
+            // Hide the theme's page before resetting its lists when a program deeper page or question takes over.
+            if model.theme_draws && !model.page.drawn_by_subpages(model.theme_sections, model.theme_subpages, model.asking || model.viewing || model.typing) {
+                model.as_mut().rust_mut().theme_draws = false;
+                model.as_mut().theme_draws_changed();
+            }
             let facts = QString::from(model.page.facts().as_str());
             if model.facts != facts {
                 model.as_mut().rust_mut().facts = facts;
@@ -833,7 +843,7 @@ impl qobject::GamePageModel {
             self.as_mut().rust_mut().help = help;
             self.as_mut().help_changed();
         }
-        let draws = self.page.drawn_by(self.theme_sections, self.asking || self.viewing || self.typing);
+        let draws = self.page.drawn_by_subpages(self.theme_sections, self.theme_subpages, self.asking || self.viewing || self.typing);
         if self.theme_draws != draws {
             self.as_mut().rust_mut().theme_draws = draws;
             self.theme_draws_changed();
@@ -870,6 +880,7 @@ impl qobject::GamePageModel {
                     if ok {
                         model.as_mut().rust_mut().page.changed(&change);
                         model.as_mut().shown(false);
+                        model.as_mut().focus_moved();
                     }
                     // The viewer's Set as cover leaves the picture now the cover.
                     if ok && matches!(change, crate::game_page::Change::Cover(_)) {
@@ -901,7 +912,8 @@ impl qobject::GamePageModel {
                 }
                 Outcome::Package => {
                     model.as_mut().rust_mut().page.packaging = true;
-                    model.as_mut().rust_mut().focus = (None, 0);
+                    let start = usize::from(model.theme_subpages & crate::game_page::Subpage::Package.flag() != 0 && model.page.read.package_job.is_some());
+                    model.as_mut().rust_mut().focus = (None, start);
                     model.as_mut().shown(true);
                 }
                 Outcome::Said(words) => model.as_mut().said(words),
@@ -1032,7 +1044,16 @@ impl qobject::GamePageModel {
         put!(view_pan_x, view_pan_x_changed, view.pan.0);
         put!(view_pan_y, view_pan_y_changed, view.pan.1);
         put!(view_help, view_help_changed, help);
-        put!(viewing, viewing_changed, viewing);
+        if self.viewing != viewing {
+            self.as_mut().rust_mut().viewing = viewing;
+            if !viewing {
+                self.as_mut().helped();
+            }
+            self.as_mut().viewing_changed();
+            if viewing {
+                self.as_mut().helped();
+            }
+        }
     }
 
     pub fn view_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
@@ -1073,6 +1094,7 @@ impl qobject::GamePageModel {
             let _ = self.qt_thread().queue(|mut model| {
                 model.as_mut().rust_mut().viewer = None;
                 model.as_mut().viewed();
+                model.as_mut().helped();
                 model.returned();
             });
         }
@@ -1095,6 +1117,11 @@ impl qobject::GamePageModel {
             }
             return true;
         }
+        // When the theme draws Cheats as a top-level tab, B leaves the game page rather than returning to Options.
+        if self.page.cheating && (self.theme_sections & crate::game_page::Tab::Cheats.flag() != 0) {
+            self.as_mut().left();
+            return false;
+        }
         let went = self.as_mut().rust_mut().page.back();
         if went {
             self.as_mut().rust_mut().focus = (None, 0);
@@ -1111,6 +1138,7 @@ impl qobject::GamePageModel {
         if self.typing {
             let _ = self.qt_thread().queue(|mut model| {
                 model.as_mut().rust_mut().typing = false;
+                model.as_mut().helped();
                 model.as_mut().typing_changed();
                 model.returned();
             });
@@ -1290,10 +1318,25 @@ impl qobject::GamePageModel {
                 let outcome = self.page.to_default(self.focus.1);
                 self.did(outcome)
             }
-            crate::help::SET_COVER => match self.viewer.as_ref().and_then(|v| self.page.viewer_cover(v)) {
-                Some(kind) => self.did(Outcome::Changed(crate::game_page::Change::Cover(Some(kind)))),
-                None => false,
-            },
+            crate::help::SET_COVER => {
+                let kind = match self.viewer.as_ref() {
+                    Some(v) => self.page.viewer_cover(v),
+                    None if self.focus.0.is_none() && self.page.tab_drawn() == Some(crate::game_page::Tab::Media) => self.page.media_cover(self.focus.1),
+                    None => None,
+                };
+                match kind {
+                    Some(kind) => self.did(Outcome::Changed(crate::game_page::Change::Cover(Some(kind)))),
+                    None => false,
+                }
+            }
+            crate::help::ALL_CHEATS => {
+                if self.focus.0.is_none() && self.page.tab_drawn() == Some(crate::game_page::Tab::Cheats) {
+                    self.passed(key.clone());
+                    true
+                } else {
+                    false
+                }
+            }
             _ => {
                 self.passed(key.clone());
                 true
@@ -1335,7 +1378,7 @@ impl qobject::GamePageModel {
         if !self.as_mut().rust_mut().page.choose_tab(index) {
             return false;
         }
-        self.as_mut().rust_mut().focus = (Some(0), 0);
+        self.as_mut().rust_mut().focus = (None, 0);
         let section = self.page.section as i32;
         self.as_mut().telling(|mut model| {
             if model.section != section {
@@ -1414,6 +1457,35 @@ impl qobject::GamePageModel {
     /// Whether X on the focused Options row resets an override back to the console's default.
     pub fn defaultable(&self) -> bool {
         self.focus.0.is_none() && self.page.defaultable(self.focus.1)
+    }
+
+    /// The deeper page open if one is, else `Subpage::None`.
+    pub fn subpage(&self) -> crate::game_page::Subpage {
+        self.page.subpage()
+    }
+
+    /// Eclipse's Media tiles, pictures as URLs.
+    pub fn media_cards(&self) -> Vec<crate::game_page::Tile> {
+        self.page.media_tiles().into_iter().map(|t| crate::game_page::Tile { picture: cover_url(&t.picture), ..t }).collect()
+    }
+
+    /// The words shown on Eclipse's Media tab when the game has no media.
+    pub fn media_note(&self) -> &'static str {
+        self.page.media_note()
+    }
+
+    /// Whether X on the focused Media tile sets it as the game's cover.
+    pub fn coverable(&self) -> bool {
+        self.focus.0.is_none() && self.page.tab_drawn() == Some(crate::game_page::Tab::Media) && self.page.media_cover(self.focus.1).is_some()
+    }
+
+    /// The deeper page's heading and subtitle where one is open.
+    pub fn subpage_title(&self) -> &'static str {
+        if self.page.packaging { crate::game_page::PACKAGE_TITLE } else { "" }
+    }
+
+    pub fn subpage_subtitle(&self) -> &'static str {
+        if self.page.packaging { crate::game_page::PACKAGE_SUBTITLE } else { "" }
     }
 
     /// Told while the page tells QML of a change, the focus is kept and applied once the telling has finished (EmuSen_Qt.md §7.8.1).

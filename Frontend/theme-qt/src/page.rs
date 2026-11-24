@@ -32,6 +32,13 @@ pub mod qobject {
         Cheats,
     }
 
+    /// 1.16: deeper pages of the game page a theme may draw as flags `1 << Page.Package` (`ThemeScreen.pageSubpages`).
+    #[qenum(ThemePage)]
+    enum PageSubpage {
+        None,
+        Package,
+    }
+
     extern "RustQt" {
         #[qobject]
         #[qml_element = "Page"]
@@ -79,6 +86,13 @@ pub mod qobject {
         #[qproperty(QString, row_sentence, cxx_name = "rowSentence", READ, NOTIFY = shown)]
         #[qproperty(QString, row_place, cxx_name = "rowPlace", READ, NOTIFY = shown)]
         #[qproperty(bool, defaultable, READ, NOTIFY = shown)]
+        /// 1.16: Eclipse's Media, Cheats and Package: media tiles, empty media note, coverable flag, and deeper page state.
+        #[qproperty(*mut ThemeRows, media_tiles, cxx_name = "mediaTiles", READ, CONSTANT)]
+        #[qproperty(QString, media_note, cxx_name = "mediaNote", READ, NOTIFY = shown)]
+        #[qproperty(bool, coverable, READ, NOTIFY = shown)]
+        #[qproperty(i32, subpage, READ, NOTIFY = shown)]
+        #[qproperty(QString, subpage_title, cxx_name = "subpageTitle", READ, NOTIFY = shown)]
+        #[qproperty(QString, subpage_subtitle, cxx_name = "subpageSubtitle", READ, NOTIFY = shown)]
         type ThemePage = super::ThemePageRust;
     }
 
@@ -102,8 +116,10 @@ pub const PAGE_ROW_ROLES: [&str; 8] = ["key", "label", "value", "line", "picture
 pub const PAGE_PILL_ROLES: [&str; 8] = ["key", "label", "button", "filled", "heart", "on", "act", "row"];
 /// `Page.cards`' roles: a state card or the empty one, its badge's words, and `row`, its tile among `rows`, -1 for the empty card (1.13).
 pub const PAGE_CARD_ROLES: [&str; 7] = ["key", "label", "line", "picture", "marked", "badge", "row"];
-/// `Page.boardRows`' roles: a Details or Options row, its value form, aside sentence, and real index among `rows` (1.15).
+/// `Page.boardRows`' roles: a Details, Options, Cheats or Package row, its value form, aside sentence, and content index (1.15).
 pub const PAGE_BOARD_ROW_ROLES: [&str; 9] = ["key", "label", "value", "steps", "opens", "isSwitch", "switchOn", "sentence", "row"];
+/// `Page.mediaTiles`' roles: a media item's key, label, picture URL, and index among `rows` (1.16).
+pub const PAGE_MEDIA_TILE_ROLES: [&str; 4] = ["key", "label", "picture", "row"];
 
 /// Everything the singleton shows, as the host reads it from the program's model.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -149,6 +165,12 @@ pub struct PageFacts {
     pub row_sentence: String,
     pub row_place: String,
     pub defaultable: bool,
+    pub media_tiles: Vec<Row>,
+    pub media_note: String,
+    pub coverable: bool,
+    pub subpage: i32,
+    pub subpage_title: String,
+    pub subpage_subtitle: String,
 }
 
 /// The board's buttons' rows: each with the place among the actions of the action it is.
@@ -188,7 +210,7 @@ pub fn card_rows(cards: &[emusen_qt_models::game_page::Card]) -> Vec<Row> {
         .collect()
 }
 
-/// Eclipse's Details and Options rows.
+/// Eclipse's Details, Options, Cheats and Package rows.
 pub fn board_row_rows(rows: &[emusen_qt_models::game_page::BoardRow]) -> Vec<Row> {
     rows.iter()
         .map(|r| {
@@ -204,6 +226,15 @@ pub fn board_row_rows(rows: &[emusen_qt_models::game_page::BoardRow]) -> Vec<Row
                 Cell::Whole(r.row as i32),
             ]
         })
+        .collect()
+}
+
+/// Eclipse's Media tiles.
+pub fn media_tile_rows(tiles: &[emusen_qt_models::game_page::Tile]) -> Vec<Row> {
+    tiles
+        .iter()
+        .enumerate()
+        .map(|(row, t)| vec![Cell::Text(t.key.clone()), Cell::Text(t.label.clone()), Cell::Text(t.picture.clone()), Cell::Whole(row as i32)])
         .collect()
 }
 
@@ -290,6 +321,12 @@ pub struct ThemePageRust {
     row_sentence: QString,
     row_place: QString,
     defaultable: bool,
+    media_tiles: *mut ThemeRows,
+    media_note: QString,
+    coverable: bool,
+    subpage: i32,
+    subpage_title: QString,
+    subpage_subtitle: QString,
     last: PageFacts,
 }
 
@@ -335,6 +372,12 @@ impl Default for ThemePageRust {
             row_sentence: QString::default(),
             row_place: QString::default(),
             defaultable: false,
+            media_tiles: std::ptr::null_mut(),
+            media_note: QString::default(),
+            coverable: false,
+            subpage: 0,
+            subpage_title: QString::default(),
+            subpage_subtitle: QString::default(),
             last: PageFacts { focused: (-1, 0), help: -1, board_help: -1, ..PageFacts::default() },
         }
     }
@@ -355,11 +398,13 @@ impl cxx_qt::Initialize for qobject::ThemePage {
         let pills = made(self.as_mut(), &PAGE_PILL_ROLES);
         let cards = made(self.as_mut(), &PAGE_CARD_ROLES);
         let board_rows = made(self.as_mut(), &PAGE_BOARD_ROW_ROLES);
+        let media_tiles = made(self.as_mut(), &PAGE_MEDIA_TILE_ROLES);
         self.as_mut().rust_mut().actions = actions;
         self.as_mut().rust_mut().rows = rows;
         self.as_mut().rust_mut().pills = pills;
         self.as_mut().rust_mut().cards = cards;
         self.as_mut().rust_mut().board_rows = board_rows;
+        self.as_mut().rust_mut().media_tiles = media_tiles;
     }
 }
 
@@ -377,11 +422,6 @@ impl qobject::ThemePage {
         if self.last == *facts {
             return;
         }
-        fill(self.actions, &facts.actions);
-        fill(self.rows, &facts.rows);
-        fill(self.pills, &facts.pills);
-        fill(self.cards, &facts.cards);
-        fill(self.board_rows, &facts.board_rows);
         let text = |t: &str| QString::from(t);
         let mut me = self.as_mut().rust_mut();
         me.ready = facts.ready;
@@ -417,8 +457,19 @@ impl qobject::ThemePage {
         me.row_sentence = text(&facts.row_sentence);
         me.row_place = text(&facts.row_place);
         me.defaultable = facts.defaultable;
+        me.media_note = text(&facts.media_note);
+        me.coverable = facts.coverable;
+        me.subpage = facts.subpage;
+        me.subpage_title = text(&facts.subpage_title);
+        me.subpage_subtitle = text(&facts.subpage_subtitle);
         me.last = facts.clone();
         drop(me);
+        fill(self.actions, &facts.actions);
+        fill(self.rows, &facts.rows);
+        fill(self.pills, &facts.pills);
+        fill(self.cards, &facts.cards);
+        fill(self.board_rows, &facts.board_rows);
+        fill(self.media_tiles, &facts.media_tiles);
         self.shown();
     }
 

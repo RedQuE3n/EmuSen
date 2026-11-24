@@ -25,8 +25,8 @@ Kit.NormalizedCanvas {
     }
     readonly property int contentFocused: screen.page.coverArt ? coverCards.currentIndex : frame.showsTiles ? frame.tileView.currentIndex : frame.rowView.currentIndex
     // Told as it moves, inside the model's own reset too, where the model keeps it until the reset ends (EmuSen_Qt.md §7.8.1).
-    onActionFocusedChanged: screen.page.focus(screen.actionFocused, screen.contentFocused)
-    onContentFocusedChanged: screen.page.focus(screen.actionFocused, screen.contentFocused)
+    onActionFocusedChanged: if (screen.visible) screen.page.focus(screen.actionFocused, screen.contentFocused)
+    onContentFocusedChanged: if (screen.visible) screen.page.focus(screen.actionFocused, screen.contentFocused)
     PageActionModel {
         id: actions
         actions: screen.page.actions
@@ -96,13 +96,18 @@ Kit.NormalizedCanvas {
         // The question's popup held the focus; the page's walk takes it back where it was.
         Connections {
             target: screen.page
+            enabled: screen.inputs
             function onAnswered() { frame.forceActiveFocus() }
         }
         // The viewer and the keyboard likewise, once closed.
         Connections {
             target: screen.page
+            enabled: screen.inputs
             function onReturned() { frame.forceActiveFocus() }
-            // B with nothing of the page's own open leaves the page.
+        }
+        // B with nothing of the page's own open leaves the page.
+        Connections {
+            target: screen.page
             function onLeft() { screen.backed() }
         }
         Connections {

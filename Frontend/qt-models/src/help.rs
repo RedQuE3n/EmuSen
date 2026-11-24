@@ -91,6 +91,11 @@ pub enum Screen {
     GamePageViewerManualCover,
     /// Details' Cover art: A uses the focused card, B goes back to Details (EmuSen_Interface.md §18.2).
     GamePageCoverArt,
+    /// Eclipse's page in its boards' words (R-20261116-30): a state's card, Start on a game with no state, and the shoulders'
+    /// Section at the line's right (EclipseGame:86-96, EclipseGameNoState:73-84).
+    GamePageState,
+    GamePageStart,
+    GamePageSections,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -287,6 +292,9 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::GamePageViewerCover => &[(UiButton::Left, "Browse", None), (UiButton::Screensaver, "Set as cover", Some(SET_COVER)), BACK],
         Screen::GamePageViewerManualCover => &[(UiButton::Left, "Browse", None), (UiButton::Up, "Manual", None), (UiButton::Screensaver, "Set as cover", Some(SET_COVER)), BACK],
         Screen::GamePageCoverArt => &[(UiButton::Accept, "Use this one", None), PAGE_HEART, (UiButton::Back, "Details", None), PAGE_HOME],
+        Screen::GamePageState => &[(UiButton::Accept, "Load this state", None), (UiButton::Screensaver, "Delete", Some(DELETE)), BACK],
+        Screen::GamePageStart => &[(UiButton::Accept, "Start", None), PAGE_HEART, BACK, PAGE_HOME],
+        Screen::GamePageSections => &[PAGE_SECTION],
     }
 }
 

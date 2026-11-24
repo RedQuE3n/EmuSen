@@ -129,9 +129,9 @@ Kit.NormalizedCanvas {
             }
             onChosen: (index) => screen.page.answer(index)
         }
-        // Opened each time it is asked; a Binding, since B closing the popup would undo a plain one.
+        // Opened each time it is asked while the page is shown, so one asked under a theme's screen opens as the page appears (EmuSen_Qt.md §3.4.12); a Binding, since B closing the popup would undo a plain one.
         Binding {
-            question.visible: screen.page.asking
+            question.visible: screen.page.asking && screen.visible
         }
     }
     // Details ▸ Cover art: the game's covers as cards four across, the one in use marked, the focused one large in the

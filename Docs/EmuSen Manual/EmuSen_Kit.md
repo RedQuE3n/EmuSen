@@ -328,7 +328,9 @@ focus marks (`ringThickness`, `ringOffset`, `barWidth`, `tileScale`, `hoverBorde
 milliseconds with reduced motion applied (`instant`, `quick`, `enter`, `exit`, `pan`, `reel`, `fade`, `poster`), the
 fade of each (`quickFade` … `posterFade`; `fade` itself is the Fade token's fade, 120 ms under reduced motion) and each
 token's curve as `QEasingCurve::Type`'s number so QML binds `easing.type` to it (Linear 0, InQuad 1, OutQuad 2, OutCubic
-6); and the breath (`breathDelay`, `breathPeriod`, `breathLow`, `breathes`). The properties are read-only on purpose:
+6); the breath (`breathDelay`, `breathPeriod`, `breathLow`, `breathes`); and from 1.12 `dashPattern`, a dashed line's
+dash and gap in widths of the line as `ShapePath.dashPattern` takes it, kit-core's `DASH_PATTERN` (Qt's `DashLine` default,
+4 and 2) unless a theme writes its own as two numbers apart by a space (`dash_pattern`). The properties are read-only on purpose:
 a theme overrides token values through §3.4's mechanism, never by writing the singleton.
 
 Three tokens are renamed from the design's table: OnAccent, OnArt and OnArtScrim are `overAccent`, `overArt` and

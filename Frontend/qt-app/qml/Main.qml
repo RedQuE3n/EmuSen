@@ -611,7 +611,7 @@ Window {
         PageScreen {
             id: pageScreen
             objectName: "gamePage"
-            themed: program.themeHost?.game ?? false
+            themed: program.themeHost?.pageDrawn ?? false
             screens: screens
             library: library
             platformLibrary: program.platformLibrary

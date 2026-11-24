@@ -143,3 +143,16 @@ fn kit_7_121_a_theme_s_size_token_under_the_floor_is_drawn_at_the_rule_s_size() 
     // The desktop's sizes are not the big screen's floor's.
     assert_eq!(themed(Form::Desktop, 1.0, false, &[("fontBody", "14")]).type_scale.body, 14.0);
 }
+
+#[test]
+fn kit_7_2_the_dash_pattern_is_qt_s_dashline_unless_a_theme_gives_its_own() {
+    let kit = Column::compute(Form::BigScreen, Variant::Dark, 1.0, false, &caps);
+    assert_eq!(kit.dash, [4.0, 2.0], "Qt's DashLine default");
+    let given = [("dashPattern".to_owned(), "3 2".to_owned())];
+    assert_eq!(Column::themed(Form::BigScreen, Variant::Dark, 1.0, false, &given, &caps).dash, [3.0, 2.0]);
+    for bad in ["3", "3 0", "3 two", "3 2 1", "-1 2"] {
+        let given = [("dashPattern".to_owned(), bad.to_owned())];
+        assert_eq!(Column::themed(Form::BigScreen, Variant::Dark, 1.0, false, &given, &caps).dash, [4.0, 2.0], "{bad} is not read");
+        assert_eq!(Column::unread(Form::BigScreen, &given), [format!("dashPattern: {bad}")], "{bad} is said");
+    }
+}

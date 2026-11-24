@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use emusen_kit_core::motion::{breathes_if, movement, Curve, MotionToken, BREATH_DELAY, BREATH_LOW, BREATH_PERIOD};
-use emusen_kit_core::tokens::{self, BUNDLED, Colour, ColourToken, Corona, FaceRole, FocusMarks, WeightRole, Form, Shadow, Spacing, TypeScale, Variant};
+use emusen_kit_core::tokens::{self, BUNDLED, Colour, ColourToken, Corona, DASH_PATTERN, FaceRole, FocusMarks, WeightRole, Form, Shadow, Spacing, TypeScale, Variant};
 
 /// QEasingCurve::Type's number for a kit-core curve, so QML binds `easing.type` to a token.
 pub fn easing_type(curve: Curve) -> i32 {
@@ -41,6 +41,8 @@ pub struct Column {
     pub breath_period: i32,
     pub breath_low: f64,
     pub breathes: bool,
+    /// A dashed line's dash and gap in widths of the line (`DASH_PATTERN`, or a theme's).
+    pub dash: [f64; 2],
 }
 
 /// The values a column is made from before the text scale and reduced motion: kit-core's, or a theme's in their place.
@@ -60,6 +62,7 @@ struct Bases {
     breath_period: i32,
     breath_low: f64,
     breathes: bool,
+    dash: [f64; 2],
 }
 
 /// Where a number or switch token's base is held, by the kind an override of it is read as.
@@ -70,6 +73,8 @@ enum Slot<'a> {
     Switch(&'a mut bool),
     Colour(&'a mut Colour),
     Face(&'a mut Option<&'static str>),
+    /// Two positive numbers apart by a space, as `theme.json` writes a pattern: "3 2".
+    Pattern(&'a mut [f64; 2]),
 }
 
 impl Bases {
@@ -91,6 +96,7 @@ impl Bases {
             breath_period: millis(BREATH_PERIOD),
             breath_low: BREATH_LOW,
             breathes: true,
+            dash: DASH_PATTERN,
         }
     }
 
@@ -175,6 +181,7 @@ impl Bases {
             "breathPeriod" => Slot::Whole(&mut self.breath_period),
             "breathLow" => Slot::Number(&mut self.breath_low),
             "breathes" => Slot::Switch(&mut self.breathes),
+            "dashPattern" => Slot::Pattern(&mut self.dash),
             _ => return None,
         })
     }
@@ -191,6 +198,13 @@ impl Bases {
             Some(Slot::Switch(held)) => value.parse::<bool>().map(|v| *held = v).is_ok(),
             Some(Slot::Colour(held)) => Colour::parse(value).map(|v| *held = v).is_some(),
             Some(Slot::Face(held)) => BUNDLED.iter().find(|family| **family == value).map(|family| *held = Some(*family)).is_some(),
+            Some(Slot::Pattern(held)) => match tokens::dash_pattern(value) {
+                Some(p) => {
+                    *held = p;
+                    true
+                }
+                None => false,
+            },
             None => false,
         }
     }
@@ -241,6 +255,7 @@ impl Column {
             breath_period: b.breath_period,
             breath_low: b.breath_low,
             breathes: breathes_if(b.breathes, reduced),
+            dash: b.dash,
         }
         .overridden(&colours, shadow)
     }

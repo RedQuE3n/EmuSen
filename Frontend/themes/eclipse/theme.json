@@ -1,6 +1,6 @@
 {
     "schema": 1,
-    "api": "1.12",
+    "api": "1.13",
     "name": "Eclipse",
     "author": "The EmuSen project",
     "licence": "GPL-3.0-or-later",
@@ -12,10 +12,12 @@
         "games",
         "consoles",
         "splash",
-        "settings"
+        "settings",
+        "game"
     ],
     "tokens": {
         "dark": {
+            "dashPattern": "3 2",
             "surface": "#07080F",
             "surfaceRaised": "#151826",
             "border": "#5E647B",

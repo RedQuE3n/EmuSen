@@ -283,6 +283,8 @@ pub struct SettingsView {
     pub(crate) from_card: bool,
     /// The Pause Card's Display or Sound, Settings' rows read under a section and pages of its own (settings_card.rs).
     pub(crate) card: crate::settings_card::CardPlace,
+    /// Whether Consoles' list is narrowed to consoles holding at least one game (board #27, R-20261116-22).
+    pub(crate) consoles_with_games: bool,
 }
 
 impl Default for SettingsView {
@@ -408,6 +410,7 @@ impl SettingsView {
             listening: None,
             from_card: false,
             card: Default::default(),
+            consoles_with_games: false,
         }
     }
 
@@ -485,6 +488,61 @@ impl SettingsView {
         self.binding = None;
         self.listening = None;
         self.from_card = false;
+        self.consoles_with_games = false;
+    }
+
+    /// Resets Consoles' has-games filter when leaving the section or closing Settings (board #27).
+    pub fn reset_consoles_filter(&mut self) {
+        self.consoles_with_games = false;
+    }
+
+    /// Whether Consoles' list is currently narrowed to consoles holding at least one game.
+    pub fn consoles_with_games(&self) -> bool {
+        self.consoles_with_games
+    }
+
+    /// Whether at least one console in the list has games in the library, so Y can filter to them.
+    pub fn has_consoles_with_games(&self) -> bool {
+        self.read.consoles.consoles.iter().any(|c| self.games_of(c) > 0)
+    }
+
+    /// Toggles Consoles' has-games filter; declines when no console has games and the filter is off.
+    pub fn toggle_consoles_with_games(&mut self) -> bool {
+        if !self.consoles_with_games && !self.has_consoles_with_games() {
+            return false;
+        }
+        self.consoles_with_games = !self.consoles_with_games;
+        true
+    }
+
+    /// The consoles currently listed in the Consoles section, respecting the has-games filter.
+    pub(crate) fn listed_consoles(&self) -> Vec<&Console> {
+        self.read.consoles.consoles.iter().filter(|c| !self.consoles_with_games || self.games_of(c) > 0).collect()
+    }
+
+    /// Steps through sorted distinct starting letters of listed consoles and returns the first matching index (LT/RT, board #27).
+    pub fn jump_console_letter(&self, focused: usize, by: i32) -> Option<usize> {
+        let listed = self.listed_consoles();
+        let initial = |c: &Console| c.name.chars().next().map(|ch| ch.to_ascii_uppercase());
+        let here = initial(listed.get(focused)?)?;
+        let mut letters: Vec<char> = listed.iter().filter_map(|c| initial(c)).collect();
+        letters.sort_unstable();
+        letters.dedup();
+        if letters.len() < 2 {
+            return None;
+        }
+        let pos = letters.iter().position(|&ch| ch == here)?;
+        let target = letters[wrapped(pos, by, letters.len())];
+        listed.iter().position(|c| initial(c) == Some(target))
+    }
+
+    /// Leading firmware-need row count on the Firmware page (0 elsewhere), split into Eclipse's Aside card (board #29).
+    pub fn firmware_need_count(&self) -> usize {
+        if matches!(self.page(), Some(Page::Firmware(_))) {
+            self.console().map_or(0, |c| c.needs().len())
+        } else {
+            0
+        }
     }
 
     /// B: the page closed, and the index of the row that opened it; none on a section, where B is the screens'.
@@ -553,7 +611,7 @@ impl SettingsView {
             }
             Some(page) => self.console_entries(page),
             None if self.description["sections"][self.section]["from"] == "consoles" => {
-                self.read.consoles.consoles.iter().map(|c| json!({ "id": format!("console:{}", c.console), "console": c.console })).collect()
+                self.listed_consoles().into_iter().map(|c| json!({ "id": format!("console:{}", c.console), "console": c.console })).collect()
             }
             None => self.description["sections"][self.section]["rows"].as_array().into_iter().flatten().filter(|e| self.controller_shown(e)).cloned().collect(),
         }
@@ -588,7 +646,7 @@ impl SettingsView {
     }
 
     /// Whether a console's screen is a television, by Serenity's catalogue.
-    fn television(&self, console: &str) -> bool {
+    pub(crate) fn television(&self, console: &str) -> bool {
         self.read.catalogue["screens"].as_array().into_iter().flatten().any(|s| s["console"] == console && s["kind"] == "Television")
     }
 
@@ -674,7 +732,7 @@ impl SettingsView {
         matches!(self.page(), Some(Page::Saves(..) | Page::Save(..) | Page::Delete(..)))
     }
 
-    fn card_row(&self, entry: &Value) -> Option<cards::Row> {
+    pub(crate) fn card_row(&self, entry: &Value) -> Option<cards::Row> {
         let console = self.console()?;
         let at = entry["card"].as_u64()? as usize;
         cards::rows(&console.media, &console.schema, &|k| console.value(k), false).into_iter().nth(at)
@@ -745,7 +803,7 @@ impl SettingsView {
     }
 
     /// The CRT row's choices: off, then each of the filter's setting's named values.
-    fn filter_choices(&self, entry: &Value) -> Vec<String> {
+    pub(crate) fn filter_choices(&self, entry: &Value) -> Vec<String> {
         let filter = self.filter(entry);
         let setting = filter.and_then(|f| f["settings"].as_array()?.iter().find(|s| s["id"] == entry["setting"]));
         let mut out = vec![self.word("off")];
@@ -772,7 +830,7 @@ impl SettingsView {
     }
 
     /// A console's choice on the CRT row: 0 off, else 1 and the setting's value there or its initial value.
-    fn filter_tier(&self, entry: &Value, c: &str) -> usize {
+    pub(crate) fn filter_tier(&self, entry: &Value, c: &str) -> usize {
         let name = self.filter_name(&entry["filter"]);
         let setting = text_of(&entry["setting"]);
         let initial = self
@@ -1152,16 +1210,28 @@ impl SettingsView {
         Outcome::Nothing
     }
 
-    /// Whether X takes a row back to a default: a value of Galaxia's rows the player may change, or the CRT's (R-20261116-22).
+    /// Whether X takes a row back to a default: a changeable Galaxia, CRT, console schema, cards mode, edge or screen row (R-20261116-22).
     pub fn defaultable(&self, index: usize) -> bool {
         let Some(entry) = self.entries().get(index).cloned() else { return false };
-        match self.keyed(&entry) {
-            Some(keyed) => keyed.row["locked"] != true && !self.declined(&entry),
-            None => entry.get("filter").is_some(),
+        if let Some(keyed) = self.keyed(&entry) {
+            return keyed.row["locked"] != true && !self.declined(&entry);
         }
+        if entry.get("filter").is_some() {
+            return true;
+        }
+        if let Some(key) = entry["schema"].as_str() {
+            return key != consoles::ENGINE_KEY && self.console().and_then(|c| c.row(key)).is_some_and(|r| !r.locked);
+        }
+        if entry["page"] == "cards" {
+            return self.console().and_then(|c| c.media.first().and_then(|m| cards::keys(m, &c.schema).mode)).is_some_and(|r| !r.locked);
+        }
+        if entry["edge"].as_str().and_then(Edge::by_key).is_some() || entry["filters"] == "suiting" {
+            return self.page().and_then(Page::console).is_some();
+        }
+        false
     }
 
-    /// X on a row: its value back to its default, Galaxia's row's or, set per console, each console's own; nothing on a row with none.
+    /// X on a row: its value back to its default, Galaxia's, console schema's, cards mode's, edge's or screen's; nothing on a row with none.
     pub fn to_default(&mut self, index: usize) -> Outcome {
         if !self.defaultable(index) {
             return Outcome::Nothing;
@@ -1185,6 +1255,25 @@ impl SettingsView {
             for c in consoles {
                 forget(&mut self.read.graphics, &format!("Consoles.{c}"), &key);
             }
+            return Outcome::Saved(Model::Graphics, self.read.graphics.clone());
+        }
+        if let Some(key) = entry["schema"].as_str() {
+            let Some(console) = self.console().map(|c| c.console.clone()) else { return Outcome::Nothing };
+            return self.set(&console, key, None);
+        }
+        if entry["page"] == "cards" {
+            let target = self.console().and_then(|c| Some((c.console.clone(), cards::keys(c.media.first()?, &c.schema).mode?.key.clone())));
+            let Some((console, key)) = target else { return Outcome::Nothing };
+            return self.set(&console, &key, None);
+        }
+        if let Some(edge) = entry["edge"].as_str().and_then(Edge::by_key) {
+            let Some(c) = self.page().and_then(Page::console).map(str::to_owned) else { return Outcome::Nothing };
+            forget(&mut self.read.graphics, &format!("Consoles.{c}"), edge.key);
+            return Outcome::Saved(Model::Graphics, self.read.graphics.clone());
+        }
+        if entry["filters"] == "suiting" {
+            let Some(c) = self.page().and_then(Page::console).map(str::to_owned) else { return Outcome::Nothing };
+            forget(&mut self.read.graphics, &format!("Consoles.{c}"), "ScreenFilter");
             return Outcome::Saved(Model::Graphics, self.read.graphics.clone());
         }
         let name = self.filter_name(&entry["filter"]);
@@ -1485,6 +1574,14 @@ impl SettingsView {
             let row = self.card_row(entry)?;
             return Some(match cards::step(&row, &console.schema, &value, by) {
                 Some((key, next)) => self.set(&console.console, &key, Some(next)),
+                None => Outcome::Nothing,
+            });
+        }
+        if entry["page"] == "cards" {
+            let mode = console.media.first().and_then(|m| cards::keys(m, &console.schema).mode);
+            let Some(row) = mode.filter(|r| !r.locked) else { return Some(Outcome::Nothing) };
+            return Some(match schema::stepped(row, &value(&row.key), by) {
+                Some(next) => self.set(&console.console, &row.key, Some(next)),
                 None => Outcome::Nothing,
             });
         }

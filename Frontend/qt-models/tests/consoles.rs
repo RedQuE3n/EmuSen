@@ -493,3 +493,228 @@ fn qt_7_7_e_the_card_manager_lists_a_cards_saves_and_copies_moves_and_deletes_th
     assert_eq!(view.rows()[1].value, "1 block(s)  ·  damaged");
     assert!(view.rows().last().unwrap().held);
 }
+
+#[test]
+fn qt_3_4_11_eclipse_consoles_console_core_and_firmware_boards() {
+    use emusen_qt_models::firmware::{self, FileState};
+    use emusen_qt_models::help;
+    use emusen_qt_models::settings_shown::{planet_of, planet_shade, Form};
+
+    let world = World::new();
+    let mut view = view(&world);
+    view.facts = json!({ "systems": { "snes": 5, "psx": 88 } });
+
+    // Planet mapping: known 8 EmuSen cores, deterministic mod 8 for others, -1 libretro, -2 unsupported.
+    assert_eq!(planet_of("Diamond", false, true), 6);
+    assert_eq!(planet_of("Venus", false, true), 1);
+    assert_eq!(planet_of("Flycast", true, true), -1);
+    assert_eq!(planet_of("", false, false), -2);
+    assert!((0..8).contains(&planet_of("CustomCore", false, true)));
+    assert_eq!(planet_shade(6), "#4A7890");
+    assert_eq!(planet_shade(-1), "#4A7890");
+    assert_eq!(planet_shade(-2), "#4A7890");
+    assert_eq!(planet_shade(1), "#7A5416");
+
+    let board = |v: &SettingsView, at: usize| {
+        let rows = v.rows();
+        let facets = v.facets();
+        let pane = v.pane(at);
+        let brows = v.board_rows(&rows, &facets);
+        let aside = v.board_aside(at, &rows, &brows, &pane);
+        (rows, brows, aside)
+    };
+
+    // #27 Consoles: subtitle, board rows, dynamic page glow, LT/RT letter jump, and Y games filter.
+    let (rows, brows, aside) = board(&view, 0);
+    assert_eq!(rows.len(), 4);
+    assert_eq!(aside.consoles_subtitle, "4 consoles. Each one's core, firmware, memory cards and picture.");
+    let psx_i = brows.iter().position(|r| r.label == "PlayStation").unwrap();
+    let snes_i = brows.iter().position(|r| r.label == "Super Nintendo").unwrap();
+    let idle_i = brows.iter().position(|r| !r.runs).unwrap();
+    assert_eq!((brows[psx_i].planet, brows[psx_i].subtitle.as_str(), brows[psx_i].chip.as_str(), brows[psx_i].chip_attention), (6, "88 games · Diamond", "", false));
+    assert_eq!((brows[snes_i].planet, brows[snes_i].subtitle.as_str(), brows[snes_i].chip.as_str()), (1, "5 games · Venus", ""));
+    assert_eq!((brows[idle_i].planet, brows[idle_i].chip.as_str(), brows[idle_i].chip_attention), (-2, "Not supported yet", false));
+    {
+        let f = &mut view.read.consoles.console_mut("PlayStation").unwrap().firmware[0].1;
+        f.required = true;
+        f.status = "missing".into();
+    }
+    let (_, req_rows, _) = board(&view, psx_i);
+    assert_eq!((req_rows[psx_i].chip.as_str(), req_rows[psx_i].chip_attention), ("Needs firmware", true));
+    assert_eq!(board(&view, psx_i).2.page_glow, "#4A7890");
+    assert_eq!(board(&view, snes_i).2.page_glow, "#7A5416");
+    assert_eq!(board(&view, idle_i).2.page_glow, "#4A7890");
+
+    // LT/RT steps sorted distinct starting letters and wraps at ends.
+    let next = view.jump_console_letter(psx_i, 1).unwrap();
+    assert_ne!(view.rows()[next].label.chars().next(), Some('P'));
+    let prev = view.jump_console_letter(next, -1).unwrap();
+    assert_eq!(view.rows()[prev].label.chars().next(), Some('P'));
+
+    // Y toggles consoles-with-games filter; resets when leaving Consoles; declines when 0 games.
+    assert!(view.has_consoles_with_games());
+    assert!(view.toggle_consoles_with_games());
+    assert!(view.consoles_with_games());
+    assert_eq!(view.rows().len(), 2);
+    assert_eq!(board(&view, 0).2.consoles_subtitle, "2 consoles. Each one's core, firmware, memory cards and picture.");
+    assert_eq!(help::consoles_settings_named(false)[2].1, "Only consoles with games");
+    assert_eq!(help::consoles_settings_named(true)[2].1, "All consoles");
+    let consoles_section = view.section;
+    view.choose_section(1);
+    assert!(!view.consoles_with_games(), "leaving Consoles resets the filter");
+    view.choose_section(consoles_section);
+    view.facts = json!({ "systems": {} });
+    assert!(!view.has_consoles_with_games());
+    assert!(!view.toggle_consoles_with_games(), "0 games declines Y");
+    view.facts = json!({ "systems": { "snes": 5, "psx": 88 } });
+
+    // #28 One console (PlayStation): Core planet card, Found 0 of 1, Memory cards Left/Right stepping + defaultable.
+    open(&mut view, "PlayStation");
+    let (_, brows, _) = board(&view, 0);
+    let core_i = index(&view, "engine");
+    let fw_i = index(&view, "firmware");
+    let cards_i = index(&view, "cards");
+    assert_eq!((brows[core_i].label.as_str(), brows[core_i].value.as_str(), brows[core_i].form), ("Core", "Diamond", Form::Door));
+    assert_eq!((brows[fw_i].label.as_str(), brows[fw_i].value.as_str(), brows[fw_i].form), ("Firmware", "Found, 0 of 3", Form::Door));
+    assert_eq!((brows[cards_i].label.as_str(), brows[cards_i].value.as_str(), brows[cards_i].form), ("Memory cards", "Shared", Form::Choice));
+    let core_aside = board(&view, core_i).2;
+    assert_eq!((core_aside.card_planet, core_aside.card_title.as_str(), core_aside.card_subtitle.as_str()), (6, "Diamond", "EmuSen's own core, in use"));
+    assert_eq!(core_aside.sentence, "The core that runs the PlayStation's games. Its own settings are the rows marked with its planet.");
+    assert_eq!(board(&view, fw_i).2.card_planet, -3, "planet card on Core row only");
+    assert_eq!(view.step(cards_i, 1), Outcome::Set { console: "PlayStation".into(), key: "Cards".into(), value: Some("named".into()) });
+    view.read.consoles.console_mut("PlayStation").unwrap().values.insert("Cards".into(), "game".into());
+    assert_eq!(board(&view, cards_i).1[cards_i].value, "One per game", "Per game maps to One per game in Eclipse");
+    assert!(view.defaultable(cards_i) && !view.defaultable(core_i) && !view.defaultable(fw_i));
+    assert_eq!(view.to_default(cards_i), Outcome::Set { console: "PlayStation".into(), key: "Cards".into(), value: None });
+
+    // #57 Core page: single-core console re-affirms & returns on A, and shows board About lines + A/B line.
+    assert_eq!(view.choose(core_i), Outcome::Opened);
+    let (_, c_rows, c_aside) = board(&view, 0);
+    assert_eq!(c_rows.len(), 1);
+    assert_eq!((c_rows[0].label.as_str(), c_rows[0].value.as_str(), c_rows[0].form), ("Diamond", "● Default", Form::Fact));
+    assert_eq!(c_aside.about_heading, "Diamond");
+    assert_eq!(c_aside.sentence, "Diamond, the PlayStation's core: every PlayStation game opens on it unless the game's own options choose another.");
+    assert!(c_aside.muted.iter().any(|m| m == "A chooses; B keeps what was chosen."));
+    assert_eq!(view.choose(0), Outcome::Set { console: "PlayStation".into(), key: "Engine".into(), value: Some("Diamond".into()) });
+    assert_eq!(view.trail(), ["Consoles", "PlayStation"]);
+
+    // #29 Firmware page: Found, 0 of 3, missing & optional file states, and R-20261123-15 note.
+    assert_eq!(view.choose(index(&view, "firmware")), Outcome::Opened);
+    assert_eq!(view.firmware_need_count(), 1);
+    let (_, _, fw_aside) = board(&view, 0);
+    assert_eq!(fw_aside.about_heading, "Found, 0 of 3");
+    assert_eq!(fw_aside.muted, [firmware::CONTENT_NOTE]);
+    assert_eq!(fw_aside.firmware_files.len(), 3);
+    assert_eq!((fw_aside.firmware_files[0].state, fw_aside.firmware_files[0].status.as_str()), (FileState::Missing, "Not found"));
+    assert_eq!((fw_aside.firmware_files[1].state, fw_aside.firmware_files[1].status.as_str()), (FileState::Optional, "Not found · open replacement"));
+
+    // Firmware helpers: M == 0, optional, found, wrong size.
+    assert_eq!(firmware::count_value(0, 0, false), "None needed");
+    assert_eq!(firmware::count_value(0, 0, true), "No firmware needed");
+    let files = [
+        ("psx".into(), FirmwareFile { file: "a.bin".into(), label: "BIOS A".into(), status: "present".into(), required: true, ..FirmwareFile::default() }),
+        ("psx".into(), FirmwareFile { file: "b.bin".into(), label: "BIOS B".into(), status: "not_needed".into(), required: false, ..FirmwareFile::default() }),
+        ("psx".into(), FirmwareFile { file: "c.bin".into(), label: "BIOS C".into(), status: "missing".into(), required: true, ..FirmwareFile::default() }),
+    ];
+    let overview = [
+        FirmwareItem { file: "a.bin".into(), found_in: Some("your folder".into()), ..FirmwareItem::default() },
+        FirmwareItem { file: "c.bin".into(), wrong_size: true, wrong_size_in: Some("EmuSen's folder".into()), ..FirmwareItem::default() },
+    ];
+    let (found, total, statuses) = firmware::file_statuses(&files, &overview);
+    assert_eq!((found, total), (1, 3));
+    assert_eq!(firmware::count_value(found, total, false), "Found, 1 of 3");
+    assert_eq!((statuses[0].state, statuses[0].status.as_str()), (FileState::Found, "Found in your folder"));
+    assert_eq!((statuses[1].state, statuses[1].status.as_str()), (FileState::Optional, "Not found · open replacement"));
+    assert_eq!((statuses[2].state, statuses[2].status.as_str()), (FileState::WrongSize, "Wrong size in EmuSen's folder"));
+
+    // Cartridge console (Test system has 0 firmware files -> None needed; SNES has cartridge Memory cards Fact row).
+    view.back();
+    view.back();
+    open(&mut view, "test");
+    let (_, test_rows, _) = board(&view, 0);
+    assert_eq!(test_rows[index(&view, "firmware")].value, "None needed");
+    view.back();
+    open(&mut view, "SNES");
+    let (_, snes_rows, _) = board(&view, 0);
+    let snes_cards = index(&view, "cards");
+    assert_eq!((snes_rows[snes_cards].form, snes_rows[snes_cards].value.as_str(), snes_rows[snes_cards].about.as_str()), (Form::Fact, "", "The Super Nintendo's games keep their saves in the cartridge."));
+}
+
+#[test]
+fn qt_3_4_11_eclipse_memory_cards_saves_and_one_save_boards() {
+    use emusen_qt_models::help;
+    use emusen_qt_models::settings_shown::Form;
+
+    let world = World::new();
+    let mut view = view(&world);
+    open(&mut view, "PlayStation");
+
+    let board = |v: &SettingsView, at: usize| {
+        let rows = v.rows();
+        let facets = v.facets();
+        let pane = v.pane(at);
+        let brows = v.board_rows(&rows, &facets);
+        let aside = v.board_aside(at, &rows, &brows, &pane);
+        (rows, brows, aside)
+    };
+
+    // #58 Memory cards: board short lines, help flags, wrap flag, and PlayStation glow.
+    assert_eq!(view.choose(index(&view, "cards")), Outcome::Opened);
+    let (_, brows, aside) = board(&view, 0);
+    assert_eq!(brows.len(), 6);
+    assert_eq!(brows[0].about, "Per game, shared by every game as the console's were, or a drawer of named cards.");
+    assert_eq!(brows[1].about, "The card in this slot when a game starts.");
+    assert_eq!(brows[2].about, "The card in this slot when a game starts.");
+    assert_eq!(brows[3].about, "Every card in the drawer, and the saves on each.");
+    assert_eq!(brows[4].about, "Each card's saves, copied, moved or deleted.");
+    assert_eq!(brows[5].about, "A blank card in the drawer, named for you.");
+    assert_eq!((brows[0].form, brows[3].form, brows[4].form, brows[5].form), (Form::Choice, Form::Door, Form::Door, Form::Door));
+    assert_eq!((aside.heading.as_str(), aside.about_heading.as_str(), aside.page_glow.as_str()), ("Memory cards", "Mode", "#4A7890"));
+    assert!(aside.wrap_about && aside.cards_help);
+    assert_eq!(help::cards_settings_named().iter().map(|e| e.1).collect::<Vec<_>>(), ["Value", "Change", "Back", "Home"]);
+
+    // Drawer page keeps console glow and draws cards as Fact rows without door chevrons.
+    assert_eq!(view.choose(3), Outcome::Opened);
+    let (_, d_rows, d_aside) = board(&view, 0);
+    assert_eq!((d_rows[0].label.as_str(), d_rows[0].about.as_str(), d_rows[0].form), ("Card 1", "A card in the drawer.", Form::Fact));
+    assert_eq!((d_aside.page_glow.as_str(), d_aside.wrap_about, d_aside.cards_help), ("#4A7890", true, true));
+    view.back();
+
+    // #63 Saves on the cards: proper singular/plural block values, card aside even on save rows, and game muted line.
+    assert_eq!(view.choose(4), Outcome::Opened);
+    let (_, s_rows, s_aside) = board(&view, 1);
+    assert_eq!(s_rows[0].about, "Left and Right step every card, the drawer's and each game's own.");
+    assert_eq!((s_rows[1].value.as_str(), s_rows[1].about.as_str(), s_rows[1].form), ("1 block", "Choose a save to copy, move or delete it.", Form::Door));
+    assert_eq!(s_rows[2].value, "3 blocks");
+    assert_eq!(s_rows[3].about, "Every save on every game's own card copied onto the chosen card, all or none; each game's own card stays as it is.");
+    assert_eq!((s_aside.heading.as_str(), s_aside.about_heading.as_str(), s_aside.page_glow.as_str()), ("Memory Card", "Card 1", "#4A7890"));
+    assert_eq!(s_aside.sentence, "Shared: Card 1 in Slot 1, Card 2 in Slot 2.");
+    assert_eq!(s_aside.muted, ["2 saves, 11 of 15 blocks free."]);
+    assert!(s_aside.wrap_about && s_aside.cards_help);
+    let (_, _, game_aside) = board(&view, 2);
+    assert_eq!(game_aside.muted, ["2 saves, 11 of 15 blocks free.", "Tomb Raider II"]);
+
+    // Stepping to the game's own card shows proper damaged formatting and singular save count.
+    view.step(0, 1);
+    let (_, own_rows, own_aside) = board(&view, 1);
+    assert_eq!(own_rows[1].value, "1 block · damaged");
+    assert_eq!(own_aside.about_heading, "a");
+    assert_eq!(own_aside.muted, ["1 save, 14 of 15 blocks free."]);
+    view.step(0, -1);
+
+    // #64 One save on a card: target short line, empty action short lines, save title aside heading.
+    assert_eq!(view.choose(1), Outcome::Opened);
+    let (_, one_rows, one_aside) = board(&view, 0);
+    assert_eq!(one_rows[0].about, "The card the save is copied or moved to.");
+    assert!(one_rows[1].about.is_empty() && one_rows[2].about.is_empty() && one_rows[3].about.is_empty());
+    assert_eq!((one_rows[0].form, one_rows[1].form, one_rows[2].form, one_rows[3].form), (Form::Choice, Form::Door, Form::Door, Form::Door));
+    assert_eq!((one_aside.heading.as_str(), one_aside.about_heading.as_str(), one_aside.sentence.as_str(), one_aside.page_glow.as_str()), ("DRACULA X CHRONICLE SAVE", "DRACULA X CHRONICLE SAVE", "DRACULA X CHRONICLE SAVE on Card 1.", "#4A7890"));
+    assert!(one_aside.wrap_about && one_aside.cards_help);
+
+    // Delete confirmation page keeps console glow, heading, and question sentence.
+    assert_eq!(view.choose(3), Outcome::Opened);
+    let (_, del_rows, del_aside) = board(&view, 0);
+    assert_eq!(del_rows.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["No", "Yes"]);
+    assert_eq!((del_aside.heading.as_str(), del_aside.about_heading.as_str(), del_aside.sentence.as_str(), del_aside.page_glow.as_str()), ("Delete Save", "Delete Save", "Delete DRACULA X CHRONICLE SAVE from Card 1? It cannot be brought back.", "#4A7890"));
+    assert!(del_aside.wrap_about && del_aside.cards_help);
+}

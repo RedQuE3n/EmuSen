@@ -18,7 +18,7 @@ const MOVE: &str = "Move Save";
 const DELETE: &str = "Delete Save…";
 
 impl SettingsView {
-    fn saves_medium(&self) -> Option<&Medium> {
+    pub(crate) fn saves_medium(&self) -> Option<&Medium> {
         let medium = match self.page()? {
             Page::Saves(_, m) | Page::Save(_, m, _) | Page::Delete(_, m, _) => m,
             _ => return None,
@@ -27,7 +27,7 @@ impl SettingsView {
     }
 
     /// The card the page shows: the one chosen, else the one the first slot holds, else the first.
-    fn chosen(&self) -> Option<&Card> {
+    pub(crate) fn chosen(&self) -> Option<&Card> {
         let m = self.saves_medium()?;
         self.chosen_card.as_ref().and_then(|p| m.cards.iter().find(|c| &c.path == p)).or_else(|| m.first_card())
     }
@@ -39,12 +39,12 @@ impl SettingsView {
         self.target_card.as_ref().and_then(|p| others.iter().find(|c| &c.path == p).copied()).or(others.first().copied())
     }
 
-    fn save(&self, id: &str) -> Option<&Save> {
+    pub(crate) fn save(&self, id: &str) -> Option<&Save> {
         let (m, card) = (self.saves_medium()?, self.chosen()?);
         m.opened(&card.path)?.saves.iter().find(|s| s.id == id)
     }
 
-    fn page_save(&self) -> Option<String> {
+    pub(crate) fn page_save(&self) -> Option<String> {
         match self.page()? {
             Page::Save(_, _, id) | Page::Delete(_, _, id) => Some(id.clone()),
             _ => None,

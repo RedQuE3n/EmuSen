@@ -1,0 +1,29 @@
+# The words of PlayStation's page, its rows and Core planet card against their board, EclipseSettingsConsole.dc.html: each line's box and baseline in board pixels.
+# Measured 2026-11-24 in Chrome after document.fonts.ready with Sora and JetBrains Mono (s4-boards/console.json).
+element	line top	line height	baseline
+settingsCrumb	150	25	169	settingsCanvas
+settingsHeading	191	56	234	settingsCanvas
+rowName.0	14.5	30	37.5
+rowAbout.0	48.5	21	64.5
+rowWords.0	28.5	27	49.5
+rowName.1	14.5	30	37.5
+rowAbout.1	48.5	21	64.5
+rowWords.1	28.5	27	49.5
+rowName.2	14.5	30	37.5
+rowAbout.2	48.5	21	64.5
+rowWords.2	28.5	27	49.5
+rowName.3	14.5	30	37.5
+rowAbout.3	48.5	21	64.5
+rowWords.3	28.5	27	49.5
+rowName.4	14.5	30	37.5
+rowAbout.4	48.5	21	64.5
+rowName.5	14.5	30	37.5
+rowAbout.5	48.5	21	64.5
+rowWords.5	28.5	27	49.5
+rowName.6	14.5	30	37.5
+rowAbout.6	48.5	21	64.5
+rowWords.6	28.5	27	49.5
+rowName.7	14.5	30	37.5
+rowAbout.7	48.5	21	64.5
+asideCoreName	41	38	70	asideConsoleCard
+asideCoreSub	85	22	102	asideConsoleCard

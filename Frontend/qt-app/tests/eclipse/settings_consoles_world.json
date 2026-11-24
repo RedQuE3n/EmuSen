@@ -1,0 +1,254 @@
+{
+ "systems": [
+  {
+   "id": "nes",
+   "name": "Nintendo Entertainment System",
+   "console": "NES",
+   "display_name": "Nintendo Entertainment System",
+   "release_year": 1983,
+   "firmware_name": null,
+   "engines": ["MoonRT (Rust)"],
+   "starts_empty": false
+  },
+  {
+   "id": "sms",
+   "name": "Sega Master System / Mark III",
+   "console": "Master System",
+   "display_name": "Master System",
+   "release_year": 1985,
+   "firmware_name": null,
+   "engines": ["Endou"],
+   "starts_empty": false
+  },
+  {
+   "id": "md",
+   "name": "Sega Genesis / Mega Drive",
+   "console": "Genesis",
+   "display_name": "Genesis",
+   "release_year": 1988,
+   "firmware_name": null,
+   "engines": ["Nephrite"],
+   "starts_empty": false
+  },
+  {
+   "id": "gb",
+   "name": "Game Boy",
+   "console": "GB",
+   "display_name": "Game Boy",
+   "release_year": 1989,
+   "firmware_name": null,
+   "engines": ["MercuryRT (Rust)"],
+   "starts_empty": false
+  },
+  {
+   "id": "snes",
+   "name": "Super Nintendo Entertainment System",
+   "console": "SNES",
+   "display_name": "Super Nintendo",
+   "release_year": 1990,
+   "firmware_name": null,
+   "engines": ["VenusRT (Rust)"],
+   "starts_empty": false
+  },
+  {
+   "id": "psx",
+   "name": "Sony PlayStation",
+   "console": "PlayStation",
+   "display_name": "PlayStation",
+   "release_year": 1994,
+   "firmware_name": "PlayStation BIOS",
+   "engines": ["Diamond", "SwanStation", "Beetle PSX"],
+   "starts_empty": true
+  },
+  {
+   "id": "n64",
+   "name": "Nintendo 64",
+   "console": "N64",
+   "display_name": "Nintendo 64",
+   "release_year": 1996,
+   "firmware_name": null,
+   "engines": ["MarsRT (Rust)"],
+   "starts_empty": false
+  },
+  {
+   "id": "gbc",
+   "name": "Game Boy Color",
+   "console": "GBC",
+   "display_name": "Game Boy Color",
+   "release_year": 1998,
+   "firmware_name": null,
+   "engines": ["MercuryRT (Rust)"],
+   "starts_empty": false
+  },
+  {
+   "id": "dreamcast",
+   "name": "Sega Dreamcast",
+   "console": "Dreamcast",
+   "display_name": "Dreamcast",
+   "release_year": 1998,
+   "firmware_name": null,
+   "engines": ["Flycast"],
+   "starts_empty": false
+  },
+  {
+   "id": "ps2",
+   "name": "Sony PlayStation 2",
+   "console": "PlayStation 2",
+   "display_name": "PlayStation 2",
+   "release_year": 2000,
+   "firmware_name": "PlayStation 2 BIOS",
+   "engines": ["Sapphire"],
+   "starts_empty": true
+  },
+  {
+   "id": "32x",
+   "name": "Sega 32X",
+   "console": "32X",
+   "display_name": "32X",
+   "release_year": 1994,
+   "firmware_name": "32X BIOS",
+   "engines": [],
+   "starts_empty": false
+  },
+  {
+   "id": "saturn",
+   "name": "Sega Saturn",
+   "console": "Saturn",
+   "display_name": "Saturn",
+   "release_year": 1994,
+   "firmware_name": "Saturn BIOS",
+   "engines": [],
+   "starts_empty": true
+  },
+  {
+   "id": "gba",
+   "name": "Game Boy Advance",
+   "console": "GBA",
+   "display_name": "Game Boy Advance",
+   "release_year": 2001,
+   "firmware_name": "GBA BIOS",
+   "engines": [],
+   "starts_empty": false
+  },
+  {
+   "id": "gc",
+   "name": "Nintendo GameCube",
+   "console": "GameCube",
+   "display_name": "GameCube",
+   "release_year": 2001,
+   "firmware_name": null,
+   "engines": [],
+   "starts_empty": false
+  }
+ ],
+ "cores": [
+  {
+   "engine": "Flycast",
+   "name": "Flycast",
+   "systems": ["dreamcast"],
+   "libretro": { "corename": "Flycast", "name": "Flycast" }
+  },
+  {
+   "engine": "SwanStation",
+   "name": "SwanStation",
+   "systems": ["psx"],
+   "libretro": { "corename": "SwanStation", "name": "SwanStation" }
+  },
+  {
+   "engine": "Beetle PSX",
+   "name": "Beetle PSX",
+   "systems": ["psx"],
+   "libretro": { "corename": "Beetle PSX", "name": "Beetle PSX" }
+  }
+ ],
+ "schema": {
+  "NES": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "MoonRT (Rust)", "choices": ["MoonRT (Rust)"], "choice_labels": []}
+  ],
+  "Master System": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "Endou", "choices": ["Endou"], "choice_labels": []}
+  ],
+  "Genesis": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "Nephrite", "choices": ["Nephrite"], "choice_labels": []}
+  ],
+  "GB": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "MercuryRT (Rust)", "choices": ["MercuryRT (Rust)"], "choice_labels": []}
+  ],
+  "SNES": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "VenusRT (Rust)", "choices": ["VenusRT (Rust)"], "choice_labels": []}
+  ],
+  "PlayStation": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "Diamond", "choices": ["Diamond", "SwanStation", "Beetle PSX"], "choice_labels": []},
+   {"key": "FirmwarePreference", "label": "Firmware preference", "hint": "Use your own BIOS or the open replacement.", "kind": "choice", "default": "auto", "choices": ["auto", "replacement", "own"], "choice_labels": ["Auto", "Open replacement", "Own BIOS"]},
+   {"key": "Cards", "label": "Memory cards", "hint": "Shared cards or one per game.", "kind": "choice", "default": "shared", "choices": ["shared", "game", "named"], "choice_labels": ["Shared", "Per game", "Named"]},
+   {"key": "Card1", "label": "Slot 1", "hint": "The card in Slot 1.", "kind": "choice", "default": "Card 1", "choices": ["Card 1", "Card 2"], "choice_labels": [], "shown_with": {"key": "Cards", "value": "named"}},
+   {"key": "Card2", "label": "Slot 2", "hint": "The card in Slot 2.", "kind": "choice", "default": "Card 2", "choices": ["Card 1", "Card 2"], "choice_labels": [], "shown_with": {"key": "Cards", "value": "named"}}
+  ],
+  "N64": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "MarsRT (Rust)", "choices": ["MarsRT (Rust)"], "choice_labels": []}
+  ],
+  "GBC": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "MercuryRT (Rust)", "choices": ["MercuryRT (Rust)"], "choice_labels": []}
+  ],
+  "Dreamcast": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "Flycast", "choices": ["Flycast"], "choice_labels": []},
+   {"key": "Widescreen", "label": "Widescreen", "hint": "Widescreen hack for Dreamcast games.", "kind": "bool", "default": "false", "group": "Video"}
+  ],
+  "PlayStation 2": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "Sapphire", "choices": ["Sapphire"], "choice_labels": []},
+   {"key": "FirmwarePreference", "label": "Firmware preference", "hint": "Use your own BIOS or the open replacement.", "kind": "choice", "default": "auto", "choices": ["auto", "replacement", "own"], "choice_labels": ["Auto", "Open replacement", "Own BIOS"]}
+  ]
+ },
+ "settings": {
+  "PlayStation": {
+   "Cards": "game"
+  }
+ },
+ "firmware": {
+  "psx": [
+   {"label": "PlayStation BIOS, America", "file": "scph5501.bin", "required": true, "status": "present", "need": "bios"},
+   {"label": "PlayStation BIOS, Europe", "file": "scph5502.bin", "required": true, "status": "present", "need": "bios"},
+   {"label": "PlayStation BIOS, Japan", "file": "scph5500.bin", "required": true, "status": "present", "need": "bios"}
+  ],
+  "ps2": [
+   {"label": "PlayStation 2 BIOS, America", "file": "scph39001.bin", "required": true, "status": "missing", "need": "bios"},
+   {"label": "PlayStation 2 BIOS, Europe", "file": "scph39004.bin", "required": false, "status": "not_needed", "need": "bios"},
+   {"label": "PlayStation 2 BIOS, Japan", "file": "scph39000.bin", "required": true, "status": "missing", "need": "bios"}
+  ]
+ },
+ "overview": [
+  {"label": "PlayStation BIOS, America", "file": "scph5501.bin", "size": 524288, "present": true, "wrong_size": false, "found_in": "your folder", "wrong_size_in": null},
+  {"label": "PlayStation BIOS, Europe", "file": "scph5502.bin", "size": 524288, "present": true, "wrong_size": false, "found_in": "your folder", "wrong_size_in": null},
+  {"label": "PlayStation BIOS, Japan", "file": "scph5500.bin", "size": 524288, "present": true, "wrong_size": false, "found_in": "EmuSen's folder", "wrong_size_in": null},
+  {"label": "PlayStation 2 BIOS, America", "file": "scph39001.bin", "size": 4194304, "present": false, "wrong_size": false, "found_in": null, "wrong_size_in": null},
+  {"label": "PlayStation 2 BIOS, Europe", "file": "scph39004.bin", "size": 4194304, "present": false, "wrong_size": false, "found_in": null, "wrong_size_in": null},
+  {"label": "PlayStation 2 BIOS, Japan", "file": "scph39000.bin", "size": 4194304, "present": false, "wrong_size": true, "found_in": null, "wrong_size_in": "your folder"}
+ ],
+ "cards": {
+  "PlayStation": [
+   {
+    "medium": "psx.card",
+    "title": "Memory Card",
+    "noun": "Card",
+    "noun_in_text": "card",
+    "extension": ".mcr",
+    "kind": "removable",
+    "capacity": 15,
+    "unit": "block",
+    "mode": "game",
+    "mode_key": "Cards",
+    "next_name": "Card 3",
+    "import_due": false,
+    "slots": [
+     {"label": "Slot 1", "name": "Card 1", "path": "/saves/PlayStation/Cards/Card 1.mcr"},
+     {"label": "Slot 2", "name": "Card 2", "path": "/saves/PlayStation/Cards/Card 2.mcr"}
+    ],
+    "cards": [
+     {"path": "/saves/PlayStation/Cards/Card 1.mcr", "name": "Card 1", "label": "Card 1", "games_own": false, "held_by": null},
+     {"path": "/saves/PlayStation/Cards/Card 2.mcr", "name": "Card 2", "label": "Card 2", "games_own": false, "held_by": null}
+    ]
+   }
+  ]
+ },
+ "opened": {}
+}

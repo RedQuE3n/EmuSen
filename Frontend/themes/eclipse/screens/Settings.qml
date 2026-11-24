@@ -9,7 +9,7 @@ ThemeScreen {
     objectName: "settingsScreen"
     role: ThemeScreen.Settings
     focusItems: [
-        root.rowsScope
+        root.isConsoles ? root.consolesScope : root.rowsScope
     ]
     NormalizedCanvas {
         id: canvas
@@ -20,12 +20,14 @@ ThemeScreen {
             anchors.fill: parent
             focus: true
             readonly property Item rowsScope: rowsScope
+            readonly property Item consolesScope: consolesScope
+            readonly property bool isConsoles: Settings.consolesSubtitle.length > 0
             // The window's right edge in board pixels: the boards' 1920 at their shape, wider at a wider window.
             readonly property real wide: root.width / design.unit
             // The foot of the board's ninth row, where the rows' window ends (G:67-69: 150 + 56 + 12 + 9 × 84 + 8 × 10).
             readonly property real rowsFoot: 1064
-            // The help line's entries as the boards name them, X drawn declined on a row with no default (1.11).
-            readonly property var help: Settings.help >= 0 ? Help.entries(Settings.help, { settings: true, defaultable: Settings.defaultable }) : null
+            // The help line's entries as the boards name them, X drawn declined on a row with no default (1.11, 1.15).
+            readonly property var help: Settings.help >= 0 ? Help.entries(Settings.help, { settings: true, consoles: root.isConsoles, cards: Settings.cardsHelp, filtered: Settings.consolesFiltered, filterable: Settings.hasConsolesWithGames, defaultable: Settings.defaultable }) : null
             Board {
                 id: design
                 designHeight: canvas.designHeight
@@ -119,13 +121,25 @@ ThemeScreen {
                         x: 72 * design.unit
                         y: 170 * design.unit
                     }
+                    SettingsConsoles {
+                        id: consolesScope
+                        unit: design.unit
+                        controller: frame.controller
+                        pixelScale: canvas.unit
+                        visible: root.isConsoles
+                        Binding {
+                            target: consolesScope
+                            property: "focus"
+                            value: root.isConsoles
+                        }
+                    }
                     // A page's trail over its heading, every level above the page (G:66, R-20261123-39).
                     Line {
                         id: crumb
                         objectName: "settingsCrumb"
                         unit: design.unit
                         boardLine: true
-                        visible: text.length > 0
+                        visible: !root.isConsoles && text.length > 0
                         x: 500 * design.unit
                         y: 150 * design.unit
                         text: Settings.trailLine
@@ -136,12 +150,13 @@ ThemeScreen {
                         id: heading
                         objectName: "settingsHeading"
                         unit: design.unit
+                        visible: !root.isConsoles
                         x: 500 * design.unit
                         // Under the trail by its 6 px margin and the column's 10 px gap (G:66-68).
                         y: crumb.visible ? crumb.y + crumb.height + (6 + 10) * design.unit : 150 * design.unit
                         // Its box the board's line box, its words on the board's baseline, as the rows' are (G:68).
                         boardLine: true
-                        text: Settings.heading
+                        text: Settings.boardHeading
                         color: Tokens.text
                         size: 44
                         weight: Tokens.weightTitle
@@ -150,6 +165,7 @@ ThemeScreen {
                     FocusScope {
                         id: rowsScope
                         objectName: "settingsRows"
+                        visible: !root.isConsoles
                         x: 500 * design.unit
                         y: heading.y + heading.height + (12 + 10) * design.unit
                         width: 820 * design.unit
@@ -158,16 +174,16 @@ ThemeScreen {
                         Binding {
                             target: rowsScope
                             property: "focus"
-                            value: Settings.chipCount === 0 || Settings.focused < Settings.count
+                            value: !root.isConsoles && (Settings.chipCount === 0 || Settings.focused < Settings.count)
                         }
                         // The rows' grammar first; on a page under a section the shoulders are the page's, the next console, as the program's are.
-                        Keys.onPressed: (event) => event.accepted = walk.key(event.key, event.modifiers) || (event.key === Qt.Key_PageUp && Actions.settingsShoulder(-1)) || (event.key === Qt.Key_PageDown && Actions.settingsShoulder(1))
+                        Keys.onPressed: (event) => event.accepted = (event.key === Qt.Key_Left && Actions.settingsStep(Settings.focused, -1)) || (event.key === Qt.Key_Right && Actions.settingsStep(Settings.focused, 1)) || walk.key(event.key, event.modifiers) || (event.key === Qt.Key_PageUp && Actions.settingsShoulder(-1)) || (event.key === Qt.Key_PageDown && Actions.settingsShoulder(1))
                         MeasuredWalk {
                             id: walk
                             objectName: "settingsWalk"
                             // The model's focus is the one that stands: the walk follows it, and tells only the moves it makes itself.
                             follows: Settings.focused
-                            model: Settings.rows
+                            model: root.isConsoles ? null : Settings.rows
                             window: rowsScope.height
                             gap: 10 * design.unit
                             sections: Settings.sections.length
@@ -194,20 +210,20 @@ ThemeScreen {
                             spacing: walk.gap
                             Repeater {
                                 id: rows
-                                model: Settings.rows
+                                model: root.isConsoles ? null : Settings.rows
                                 onItemAdded: (index, item) => walk.measure(index, item.height)
                                 // A row's place in the column, always laid out, so the row a window has scrolled past keeps its place while it is not drawn.
                                 delegate: FocusScope {
                                     id: slot
                                     required property int index
-                                    required property string label
-                                    required property string about
-                                    required property string value
+                                    required property string boardLabel
+                                    required property string boardAbout
+                                    required property string boardValue
                                     required property int kind
                                     required property bool isSwitch
                                     required property bool switchOn
                                     required property bool code
-                                    required property int form
+                                    required property int boardForm
                                     width: list.width
                                     height: row.height
                                     Binding {
@@ -222,14 +238,15 @@ ThemeScreen {
                                         controller: frame.controller
                                         pixelScale: canvas.unit
                                         index: slot.index
-                                        label: slot.label
-                                        about: slot.about
-                                        value: slot.value
+                                        label: slot.boardLabel
+                                        about: slot.boardAbout
+                                        value: slot.boardValue
                                         kind: slot.kind
                                         isSwitch: slot.isSwitch
                                         switchOn: slot.switchOn
                                         code: slot.code
-                                        form: slot.form
+                                        form: slot.boardForm
+                                        wrapAbout: Settings.boardWrapAbout
                                         width: slot.width
                                         focus: true
                                         // A row wholly in the window is drawn; one the window has scrolled past is not.
@@ -242,7 +259,7 @@ ThemeScreen {
                                         // A chevron is Left or Right on its row: a stepped value steps, a slider slides.
                                         onStepped: (by) => {
                                             walk.focusRow(slot.index)
-                                            walk.key(by > 0 ? Qt.Key_Right : Qt.Key_Left, 0)
+                                            Actions.settingsStep(slot.index, by)
                                         }
                                     }
                                 }
@@ -254,13 +271,14 @@ ThemeScreen {
                         unit: design.unit
                         controller: frame.controller
                         pixelScale: canvas.unit
-                        heading: Settings.aboutHeading
+                        visible: !root.isConsoles
+                        heading: Settings.boardAboutHeading
                         x: parent.width - 96 * design.unit - width
                         y: 236 * design.unit
                         Binding {
                             target: aside
                             property: "focus"
-                            value: Settings.chipCount > 0 && Settings.focused >= Settings.count
+                            value: !root.isConsoles && Settings.chipCount > 0 && Settings.focused >= Settings.count
                         }
                     }
                     HelpLine {
@@ -270,6 +288,7 @@ ThemeScreen {
                         model: root.help
                         ink: ink.help
                         keyPairs: true
+                        boxMenu: Settings.cardsHelp
                         // The boards' foot: its row 40 px over the bottom, 38 px tall for a ringed glyph (G:114).
                         middle: 1141
                         Line {

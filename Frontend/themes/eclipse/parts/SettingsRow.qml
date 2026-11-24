@@ -19,6 +19,8 @@ Walkable {
     required property int form
     // Scene pixels to a canvas unit, so the ring's glow blurs at the pixels drawn.
     property real pixelScale: 1
+    // Whether the short line wraps at 1.35 line-height instead of eliding to one line (boards #58, #63, #64).
+    property bool wrapAbout: false
     // Left or Right on a chevron, which steps the value.
     signal stepped(int by)
     readonly property bool choice: root.form === Settings.Choice
@@ -65,7 +67,7 @@ Walkable {
     Column {
         id: words
         x: root.padX * root.unit
-        y: (root.height - height) / 2
+        y: (root.height - height - (root.wrapAbout && root.about.length === 0 ? 4 * root.unit : 0)) / 2
         spacing: 4 * root.unit
         Line {
             objectName: "rowName." + root.index
@@ -77,17 +79,21 @@ Walkable {
             size: 24
             weight: Tokens.weightTitle
         }
-        // The short line, cut where the value needs the room, as the board's ellipsis does (G:30).
+        // The short line, cut where the value needs the room (G:30) or wrapped at 1.35 line-height on Memory cards boards.
         Line {
             objectName: "rowAbout." + root.index
             unit: root.unit
             visible: root.about.length > 0
-            width: Math.min(implicitWidth, root.width - 2 * root.padX * root.unit - 24 * root.unit - shown.width)
+            width: root.wrapAbout ? (root.width - 2 * root.padX * root.unit - 24 * root.unit - shown.width) : Math.min(implicitWidth, root.width - 2 * root.padX * root.unit - 24 * root.unit - shown.width)
             // Its box the board's line box, its words on the board's baseline (Line.qml, boardLine).
             boardLine: true
+            boardLineHeight: root.wrapAbout ? 1.35 * 17 : 0
+            wrapMode: root.wrapAbout ? Text.WordWrap : Text.NoWrap
+            lineHeightMode: root.wrapAbout ? Text.FixedHeight : Text.ProportionalHeight
+            lineHeight: root.wrapAbout ? 1.35 * 17 : 1
             text: root.about
             color: Tokens.muted
-            elide: Text.ElideRight
+            elide: root.wrapAbout ? Text.ElideNone : Text.ElideRight
             size: 17
         }
     }

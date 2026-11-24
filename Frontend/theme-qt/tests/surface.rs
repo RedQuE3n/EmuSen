@@ -6,8 +6,8 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.16.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.16.qmldir");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.18.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.18.qmldir");
 const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.13.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
@@ -192,7 +192,9 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         (
             "Settings",
             &["sections", "section", "trail", "page", "rows", "focused", "count", "help", "sentence", "lines", "muted", "tones", "preview", "caption", "meter", "samples", "sampleScales", "sectionKeys",
-              "title", "heading", "aboutHeading", "shot", "defaultable", "trailLine", "chips", "chipCount", "total"],
+              "title", "heading", "aboutHeading", "shot", "defaultable", "trailLine", "chips", "chipCount", "total",
+              "boardHeading", "boardAboutHeading", "boardSentence", "boardMuted", "consolesSubtitle", "consolesFiltered", "hasConsolesWithGames",
+              "pageGlow", "cardPlanet", "cardTitle", "cardSubtitle", "firmwareFiles", "firmwareCount", "boardWrapAbout", "cardsHelp"],
             &[],
         ),
         (

@@ -1,0 +1,23 @@
+# The words of PlayStation's Firmware page, its 5 rows and 3 file-card items against their board, EclipseSettingsFirmware.dc.html: each line's box and baseline in board pixels.
+# Measured 2026-11-24 in Chrome after document.fonts.ready with Sora and JetBrains Mono (s4-boards/firmware.json).
+element	line top	line height	baseline
+settingsCrumb	150	25	169	settingsCanvas
+settingsHeading	191	56	234	settingsCanvas
+rowName.0	14.5	30	37.5
+rowAbout.0	48.5	21	64.5
+rowWords.0	28.5	27	49.5
+rowName.1	14.5	30	37.5
+rowAbout.1	48.5	21	64.5
+rowWords.1	28.5	27	49.5
+rowName.2	14.5	30	37.5
+rowAbout.2	48.5	21	64.5
+rowName.3	14.5	30	37.5
+rowAbout.3	48.5	21	64.5
+rowName.4	14.5	30	37.5
+rowAbout.4	48.5	21	64.5
+firmwareName.0	16	26	36	firmwareRow.0
+firmwareStatus.0	45	21	61	firmwareRow.0
+firmwareName.1	16	26	36	firmwareRow.1
+firmwareStatus.1	45	21	61	firmwareRow.1
+firmwareName.2	16	26	36	firmwareRow.2
+firmwareStatus.2	45	21	61	firmwareRow.2

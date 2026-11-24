@@ -234,6 +234,10 @@ pub struct ThemeHelpRust {
     settings: [[*mut qobject::ThemeHelpEntries; 2]; KINDS.len()],
     /// From 1.15: each kind's own list with X's default reset drawn declined (38%).
     declined: [*mut qobject::ThemeHelpEntries; KINDS.len()],
+    /// From 1.16: Eclipse's Settings Consoles list, indexed by [filtered][filterable] (board #27).
+    consoles: [[*mut qobject::ThemeHelpEntries; 2]; 2],
+    /// From 1.17: Eclipse's Settings Memory cards list (boards #58, #63, #64).
+    cards: *mut qobject::ThemeHelpEntries,
 }
 
 impl Default for ThemeHelpRust {
@@ -243,6 +247,8 @@ impl Default for ThemeHelpRust {
             sections: std::ptr::null_mut(),
             settings: [[std::ptr::null_mut(); 2]; KINDS.len()],
             declined: [std::ptr::null_mut(); KINDS.len()],
+            consoles: [[std::ptr::null_mut(); 2]; 2],
+            cards: std::ptr::null_mut(),
         }
     }
 }
@@ -273,6 +279,22 @@ impl cxx_qt::Initialize for qobject::ThemeHelp {
             }
             self.as_mut().rust_mut().declined[i] = list;
         }
+        for (fl, filtered) in [false, true].into_iter().enumerate() {
+            for (en, filterable) in [false, true].into_iter().enumerate() {
+                let list = ffi::new_help_entries(self.as_mut().upcast_pin());
+                // Safety: the list was just made, a child of this singleton.
+                if let Some(entries) = unsafe { list.as_mut() } {
+                    unsafe { Pin::new_unchecked(entries) }.show_consoles(filtered, filtered || filterable);
+                }
+                self.as_mut().rust_mut().consoles[fl][en] = list;
+            }
+        }
+        let cards = ffi::new_help_entries(self.as_mut().upcast_pin());
+        // Safety: as above.
+        if let Some(entries) = unsafe { cards.as_mut() } {
+            unsafe { Pin::new_unchecked(entries) }.show_cards();
+        }
+        self.as_mut().rust_mut().cards = cards;
         let sections = ffi::new_help_entries(self.as_mut().upcast_pin());
         // Safety: as above.
         if let Some(entries) = unsafe { sections.as_mut() } {
@@ -290,6 +312,12 @@ impl qobject::ThemeHelp {
     pub fn entries_with(&self, kind: HelpKind, flags: &QMap<QMapPair_QString_QVariant>) -> *mut qobject::ThemeHelpEntries {
         let flag = |name: &str, unset: bool| flags.get(&QString::from(name)).and_then(|v| v.value::<bool>()).unwrap_or(unset);
         if flag("settings", false) {
+            if flag("consoles", false) {
+                return self.consoles[usize::from(flag("filtered", false))][usize::from(flag("filterable", true))];
+            }
+            if flag("cards", false) {
+                return self.cards;
+            }
             return KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.settings[i][usize::from(flag("defaultable", true))]);
         }
         if !flag("defaultable", true) {
@@ -323,6 +351,8 @@ pub struct ThemeHelpEntriesRust {
     accept: bool,
     /// Whether the host would take X's Back to the default; drawn declined where not.
     defaultable: bool,
+    /// Whether Y's Only consoles with games filter is enabled; drawn declined when 0 consoles have games.
+    filterable: bool,
     action_lines: QString,
 }
 
@@ -333,6 +363,7 @@ impl Default for ThemeHelpEntriesRust {
             list: entries_with(Screen::Home, false, false),
             accept: true,
             defaultable: true,
+            filterable: true,
             action_lines: QString::from(action_lines(Screen::Home).as_str()),
         }
     }
@@ -378,6 +409,25 @@ impl qobject::ThemeHelpEntries {
         self.as_mut().rust_mut().action_lines = QString::from(action_lines(screen).as_str());
     }
 
+    /// Eclipse's Settings Consoles list (`help::consoles_settings_named`), set once when it is made.
+    fn show_consoles(mut self: Pin<&mut Self>, filtered: bool, filterable: bool) {
+        let list = help::consoles_settings_named(filtered);
+        let lines = help::consoles_settings_lines(&list);
+        self.as_mut().rust_mut().screen = Screen::Settings;
+        self.as_mut().rust_mut().filterable = filterable;
+        self.as_mut().rust_mut().list = list;
+        self.as_mut().rust_mut().action_lines = QString::from(lines.as_str());
+    }
+
+    /// Eclipse's Settings Memory cards list (`help::cards_settings_named`), set once when it is made.
+    fn show_cards(mut self: Pin<&mut Self>) {
+        let list = help::cards_settings_named();
+        let lines = help::lines_of(Screen::SettingsPage, &list);
+        self.as_mut().rust_mut().screen = Screen::SettingsPage;
+        self.as_mut().rust_mut().list = list;
+        self.as_mut().rust_mut().action_lines = QString::from(lines.as_str());
+    }
+
     /// A list of the entries given, declaring no action, set once when it is made.
     fn show_entries(mut self: Pin<&mut Self>, list: Vec<Entry>) {
         self.as_mut().rust_mut().list = list;
@@ -412,7 +462,7 @@ impl qobject::ThemeHelpEntries {
             0 => QVariant::from(&(button.index() as i32)),
             1 => QVariant::from(&QString::from(*label)),
             2 => QVariant::from(&help::pair_of(*button).map_or(-1, |b| b.index() as i32)),
-            3 => QVariant::from(&((self.accept || *button != UiButton::Accept) && (self.defaultable || !matches!(*action, Some(help::DEFAULT | help::SET_COVER))))),
+            3 => QVariant::from(&((self.accept || *button != UiButton::Accept) && (self.defaultable || !matches!(*action, Some(help::DEFAULT | help::SET_COVER))) && (self.filterable || *action != Some(help::CONSOLES_FILTER)))),
             4 => QVariant::from(&QString::from(action.unwrap_or_default())),
             _ => QVariant::default(),
         }

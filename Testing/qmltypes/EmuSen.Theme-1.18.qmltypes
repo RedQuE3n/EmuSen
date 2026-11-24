@@ -1607,7 +1607,7 @@ Module {
             name: "SettingsForm"
             isScoped: true
             type: "int"
-            lineNumber: 58
+            lineNumber: 73
             values: ["Choice", "Switch", "Door", "Fact"]
         }
         Property {
@@ -1855,7 +1855,143 @@ Module {
             lineNumber: 57
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 96 }
+        Property {
+            name: "boardHeading"
+            type: "QString"
+            read: "getBoardHeading"
+            notify: "shown"
+            index: 27
+            lineNumber: 58
+            isReadonly: true
+        }
+        Property {
+            name: "boardAboutHeading"
+            type: "QString"
+            read: "getBoardAboutHeading"
+            notify: "shown"
+            index: 28
+            lineNumber: 59
+            isReadonly: true
+        }
+        Property {
+            name: "boardSentence"
+            type: "QString"
+            read: "getBoardSentence"
+            notify: "shown"
+            index: 29
+            lineNumber: 60
+            isReadonly: true
+        }
+        Property {
+            name: "boardMuted"
+            type: "QStringList"
+            read: "getBoardMuted"
+            notify: "shown"
+            index: 30
+            lineNumber: 61
+            isReadonly: true
+        }
+        Property {
+            name: "consolesSubtitle"
+            type: "QString"
+            read: "getConsolesSubtitle"
+            notify: "shown"
+            index: 31
+            lineNumber: 62
+            isReadonly: true
+        }
+        Property {
+            name: "consolesFiltered"
+            type: "bool"
+            read: "getConsolesFiltered"
+            notify: "shown"
+            index: 32
+            lineNumber: 63
+            isReadonly: true
+        }
+        Property {
+            name: "hasConsolesWithGames"
+            type: "bool"
+            read: "getHasConsolesWithGames"
+            notify: "shown"
+            index: 33
+            lineNumber: 64
+            isReadonly: true
+        }
+        Property {
+            name: "pageGlow"
+            type: "QString"
+            read: "getPageGlow"
+            notify: "shown"
+            index: 34
+            lineNumber: 65
+            isReadonly: true
+        }
+        Property {
+            name: "cardPlanet"
+            type: "int"
+            read: "getCardPlanet"
+            notify: "shown"
+            index: 35
+            lineNumber: 66
+            isReadonly: true
+        }
+        Property {
+            name: "cardTitle"
+            type: "QString"
+            read: "getCardTitle"
+            notify: "shown"
+            index: 36
+            lineNumber: 67
+            isReadonly: true
+        }
+        Property {
+            name: "cardSubtitle"
+            type: "QString"
+            read: "getCardSubtitle"
+            notify: "shown"
+            index: 37
+            lineNumber: 68
+            isReadonly: true
+        }
+        Property {
+            name: "firmwareFiles"
+            type: "ThemeRows"
+            isPointer: true
+            read: "getFirmwareFiles"
+            index: 38
+            lineNumber: 69
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "firmwareCount"
+            type: "int"
+            read: "getFirmwareCount"
+            notify: "shown"
+            index: 39
+            lineNumber: 70
+            isReadonly: true
+        }
+        Property {
+            name: "boardWrapAbout"
+            type: "bool"
+            read: "getBoardWrapAbout"
+            notify: "shown"
+            index: 40
+            lineNumber: 71
+            isReadonly: true
+        }
+        Property {
+            name: "cardsHelp"
+            type: "bool"
+            read: "getCardsHelp"
+            notify: "shown"
+            index: 41
+            lineNumber: 72
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 126 }
     }
     Component {
         file: "splash.cxxqt.h"

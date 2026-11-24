@@ -1,0 +1,131 @@
+# Eclipse's Settings, the Consoles page, against its board, EclipseSettingsConsoles.dc.html (1920 by 1200), one row an element (EmuSen_Qt.md §3.4.11).
+# board_height: 1200
+# Read from the board in Chrome after document.fonts.ready, with Sora and JetBrains Mono (measured 2026-11-24, s4-boards/consoles.json); the rules are settings_display.tsv's (tests/eclipse_board/mod.rs).
+# The state held is Consoles shown in our 14-console world with PlayStation (index 5, Diamond) focused: rows 0..5 (cards 0..11) drawn in the 6-row grid, cards 12..13 held when scrolled in.
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground, #07080F	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
+backdropField.0	19	the page's glow: a 900 px disc of Diamond's shade #4A7890, blurred 150 px at 0.4	the kit's BackdropField, SettingsInk.pageGlow	-	right:-280	60	900	900	-	opacity:0.4	blur:150	built	field 0 -1 #4A7890 0
+backdropField.1	20	the limb's glow: 0 0 40px 6px rgba(246, 214, 200, 0.35)	the kit's BackdropField, SettingsInk.limbGlow	-	-1566	-706	2012	2612	-	opacity:0.35	blur:20	built	field 0 -1 #F6D6C8 0
+limbRim	20	the limb's 2 px rim, rgba(246, 231, 216, 0.75)	Eclipse's Limb, SettingsInk.limbRim	Limb	-1562	-702	2004	2604	-	#BFF6E7D8	-	built	-
+limb	20	the limb, a 2000 by 2600 ellipse of #0B0D16	Eclipse's Limb, SettingsInk.limb	Limb	-1560	-700	2000	2600	-	#FF0B0D16	-	built	-
+mark	24	the crescent mark, 34	Marks.crescent, Eclipse's Brand part unnamed	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+settingsTitle	25	"Settings", 20 px after the mark	Settings.title	Text	after:mark:20	mid:80	-	-	-	Tokens.text	34	built	600 0 none
+battery	27	"82%"	Device.battery as Words.percent gives it	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	27	"9:41 PM"	Device.shortTime	Text	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
+section.0	32	section link 0, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	170	300	66	16	#00000000	-	built	-
+sectionWords.0	34	its words, 20 + 28 + 16 px in	Settings.sections	Text	in:section.0:64	mid:section.0	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.0	33	its icon, 28 px	SettingsNav	Item	in:section.0:20	mid:section.0	28	28	-	#FFD8DBE6	-	built	-
+section.1	32	section link 1	Settings.sections, SettingsNav	Rectangle	72	below:section.0:6	300	66	16	#00000000	-	built	-
+sectionWords.1	34	its words	Settings.sections	Text	in:section.1:64	mid:section.1	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.1	33	its icon, 28 px	SettingsNav	Item	in:section.1:20	mid:section.1	28	28	-	#FFD8DBE6	-	built	-
+section.2	32	section link 2	Settings.sections, SettingsNav	Rectangle	72	below:section.1:6	300	66	16	#00000000	-	built	-
+sectionWords.2	34	its words	Settings.sections	Text	in:section.2:64	mid:section.2	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.2	33	its icon, 28 px	SettingsNav	Item	in:section.2:20	mid:section.2	28	28	-	#FFD8DBE6	-	built	-
+section.3	32	section link 3, filled: Consoles shown	Settings.sections, SettingsNav	Rectangle	72	below:section.2:6	300	66	16	Tokens.accent	-	built	-
+sectionWords.3	34	its words	Settings.sections	Text	in:section.3:64	mid:section.3	-	-	-	Tokens.overAccent	23	built	600 0 none
+sectionIcon.3	33	its icon, 28 px	SettingsNav	Item	in:section.3:20	mid:section.3	28	28	-	Tokens.overAccent	-	built	-
+section.4	32	section link 4	Settings.sections, SettingsNav	Rectangle	72	below:section.3:6	300	66	16	#00000000	-	built	-
+sectionWords.4	34	its words	Settings.sections	Text	in:section.4:64	mid:section.4	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.4	33	its icon, 28 px	SettingsNav	Item	in:section.4:20	mid:section.4	28	28	-	#FFD8DBE6	-	built	-
+section.5	32	section link 5	Settings.sections, SettingsNav	Rectangle	72	below:section.4:6	300	66	16	#00000000	-	built	-
+sectionWords.5	34	its words	Settings.sections	Text	in:section.5:64	mid:section.5	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.5	33	its icon, 28 px	SettingsNav	Item	in:section.5:20	mid:section.5	28	28	-	#FFD8DBE6	-	built	-
+consolesSection	39	the Consoles section, 1324 wide at 500, 150	SettingsConsoles	SettingsConsoles	500	150	1324	834	-	-	-	built	-
+consolesHeading	41	"Consoles", the page's heading	Settings.boardHeading	Text	500	-	-	-	-	Tokens.text	44	built	600 0 none
+consolesSubtitle	42	the subtitle, right-aligned with the grid, baseline-aligned with Consoles (R-20261123-13)	Settings.consolesSubtitle	Text	-	-	inright:consolesGrid:0	-	-	Tokens.muted	20	built	400 0 none
+consolesGrid	44	the 2-column grid, 22 px under the heading, 6 rows of 116 with 12 gaps	SettingsConsoles	Item	500	228	1324	756	-	-	-	built	-
+console.0	46	card 0, row 0 col 0	Settings.rows, SettingsConsoles	Walkable	in:consolesGrid:0	top:consolesGrid:0	652	116	20	-	-	built	-
+consoleFill.0	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.0:0	top:console.0:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.0	47	its 48 px planet mark	PlanetSphere	PlanetSphere	in:console.0:24	mid:console.0	48	48	-	-	-	built	-
+consoleName.0	49	its name	boardLabel	Text	after:consoleMark.0:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.0	50	its games and core	subtitle	Text	after:consoleMark.0:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.0	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.0	inright:console.0:24	22	-	Tokens.muted	-	built	-
+console.1	46	card 1, row 0 col 1	Settings.rows, SettingsConsoles	Walkable	after:console.0:20	top:consolesGrid:0	652	116	20	-	-	built	-
+consoleFill.1	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.1:0	top:console.1:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.1	47	its 48 px planet mark	PlanetSphere	PlanetSphere	in:console.1:24	mid:console.1	48	48	-	-	-	built	-
+consoleName.1	49	its name	boardLabel	Text	after:consoleMark.1:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.1	50	its games and core	subtitle	Text	after:consoleMark.1:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.1	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.1	inright:console.1:24	22	-	Tokens.muted	-	built	-
+console.2	46	card 2, row 1 col 0	Settings.rows, SettingsConsoles	Walkable	in:consolesGrid:0	below:console.0:12	652	116	20	-	-	built	-
+consoleFill.2	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.2:0	top:console.2:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.2	47	its 48 px planet mark	PlanetSphere	PlanetSphere	in:console.2:24	mid:console.2	48	48	-	-	-	built	-
+consoleName.2	49	its name	boardLabel	Text	after:consoleMark.2:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.2	50	its games and core	subtitle	Text	after:consoleMark.2:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.2	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.2	inright:console.2:24	22	-	Tokens.muted	-	built	-
+console.3	46	card 3, row 1 col 1	Settings.rows, SettingsConsoles	Walkable	after:console.2:20	below:console.1:12	652	116	20	-	-	built	-
+consoleFill.3	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.3:0	top:console.3:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.3	47	its 48 px planet mark	PlanetSphere	PlanetSphere	in:console.3:24	mid:console.3	48	48	-	-	-	built	-
+consoleName.3	49	its name	boardLabel	Text	after:consoleMark.3:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.3	50	its games and core	subtitle	Text	after:consoleMark.3:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.3	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.3	inright:console.3:24	22	-	Tokens.muted	-	built	-
+console.4	46	card 4, row 2 col 0	Settings.rows, SettingsConsoles	Walkable	in:consolesGrid:0	below:console.2:12	652	116	20	-	-	built	-
+consoleFill.4	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.4:0	top:console.4:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.4	47	its 48 px planet mark	PlanetSphere	PlanetSphere	in:console.4:24	mid:console.4	48	48	-	-	-	built	-
+consoleName.4	49	its name	boardLabel	Text	after:consoleMark.4:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.4	50	its games and core	subtitle	Text	after:consoleMark.4:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.4	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.4	inright:console.4:24	22	-	Tokens.muted	-	built	-
+console.5	46	card 5, row 2 col 1, PlayStation focused	Settings.rows, SettingsConsoles	Walkable	after:console.4:20	below:console.3:12	652	116	20	-	-	built	-
+consoleFill.5	46	its fill and no line, focused	Tokens.surfaceRaised	Rectangle	in:console.5:0	top:console.5:0	652	116	20	Tokens.surfaceRaised	-	built	line 0 -
+consoleMark.5	47	its 48 px Diamond planet mark	PlanetSphere	PlanetSphere	in:console.5:24	mid:console.5	48	48	-	-	-	built	-
+consoleName.5	49	"PlayStation"	boardLabel	Text	after:consoleMark.5:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.5	50	its games and core	subtitle	Text	after:consoleMark.5:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.5	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.5	inright:console.5:24	22	-	Tokens.muted	-	built	-
+consoleRing	46	the focused card's ring: 3 px of #07080F, 3 px of the accent, 40 px glow 8 px out	the kit's FocusRing	FocusRing	-	-	-	-	-	-	-	built	ring 3 3 40 8 26 #66F0B4C4 #FF07080F #FFF6E7D8
+console.6	46	card 6, row 3 col 0	Settings.rows, SettingsConsoles	Walkable	in:consolesGrid:0	below:console.4:12	652	116	20	-	-	built	-
+consoleFill.6	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.6:0	top:console.6:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.6	47	its 48 px planet mark	PlanetSphere	PlanetSphere	in:console.6:24	mid:console.6	48	48	-	-	-	built	-
+consoleName.6	49	its name	boardLabel	Text	after:consoleMark.6:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.6	50	its games and core	subtitle	Text	after:consoleMark.6:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.6	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.6	inright:console.6:24	22	-	Tokens.muted	-	built	-
+console.7	46	card 7, row 3 col 1	Settings.rows, SettingsConsoles	Walkable	after:console.6:20	below:console.5:12	652	116	20	-	-	built	-
+consoleFill.7	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.7:0	top:console.7:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.7	47	its 48 px planet mark	PlanetSphere	PlanetSphere	in:console.7:24	mid:console.7	48	48	-	-	-	built	-
+consoleName.7	49	its name	boardLabel	Text	after:consoleMark.7:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.7	50	its games and core	subtitle	Text	after:consoleMark.7:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.7	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.7	inright:console.7:24	22	-	Tokens.muted	-	built	-
+console.8	46	card 8, row 4 col 0, Dreamcast (Flycast libretro checkerboard)	Settings.rows, SettingsConsoles	Walkable	in:consolesGrid:0	below:console.6:12	652	116	20	-	-	built	-
+consoleFill.8	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.8:0	top:console.8:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.8	47	its 48 px libretro checkerboard mark	PlanetSphere	PlanetSphere	in:console.8:24	mid:console.8	48	48	-	-	-	built	-
+consoleName.8	49	"Dreamcast"	boardLabel	Text	after:consoleMark.8:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.8	50	its games and core	subtitle	Text	after:consoleMark.8:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChevron.8	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.8	inright:console.8:24	22	-	Tokens.muted	-	built	-
+console.9	46	card 9, row 4 col 1, PlayStation 2 with Needs firmware chip	Settings.rows, SettingsConsoles	Walkable	after:console.8:20	below:console.7:12	652	116	20	-	-	built	-
+consoleFill.9	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.9:0	top:console.9:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.9	47	its 48 px Sapphire planet mark	PlanetSphere	PlanetSphere	in:console.9:24	mid:console.9	48	48	-	-	-	built	-
+consoleName.9	49	"PlayStation 2"	boardLabel	Text	after:consoleMark.9:20	-	-	-	-	Tokens.text	25	built	600 0 none
+consoleSub.9	50	its games and core	subtitle	Text	after:consoleMark.9:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChip.9	53	"Needs firmware" rose chip, 36 high, corner 18	chip	Rectangle	-	mid:console.9	before:consoleChevron.9:20	36	18	#FFF3C9D2	-	built	-
+consoleChipWords.9	53	"Needs firmware", dark ink, 16 px, weight 600	chip	Text	-	-	-	-	-	Tokens.overAccent	16	built	600 0 none
+consoleChevron.9	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.9	inright:console.9:24	22	-	Tokens.muted	-	built	-
+console.10	46	card 10, row 5 col 0, 32X unsupported	Settings.rows, SettingsConsoles	Walkable	in:consolesGrid:0	below:console.8:12	652	116	20	-	-	built	-
+consoleFill.10	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.10:0	top:console.10:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.10	47	its 48 px hollow ring mark	PlanetSphere	PlanetSphere	in:console.10:24	mid:console.10	48	48	-	-	-	built	-
+consoleName.10	49	"32X", muted #8E94AB	boardLabel	Text	after:consoleMark.10:20	-	-	-	-	#FF8E94AB	25	built	600 0 none
+consoleSub.10	50	"0 games · no core yet"	subtitle	Text	after:consoleMark.10:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChip.10	53	"Not supported yet" outlined chip, 36 high, corner 18	chip	Rectangle	-	mid:console.10	before:consoleChevron.10:20	36	18	#00000000	-	built	line 2 #FF5A6076
+consoleChipWords.10	53	"Not supported yet", muted, 16 px, weight 600	chip	Text	-	-	-	-	-	Tokens.muted	16	built	600 0 none
+consoleChevron.10	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.10	inright:console.10:24	22	-	Tokens.muted	-	built	-
+console.11	46	card 11, row 5 col 1, Saturn unsupported	Settings.rows, SettingsConsoles	Walkable	after:console.10:20	below:console.9:12	652	116	20	-	-	built	-
+consoleFill.11	46	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:console.11:0	top:console.11:0	652	116	20	#FF0F111A	-	built	line 1 #FF22263A
+consoleMark.11	47	its 48 px hollow ring mark	PlanetSphere	PlanetSphere	in:console.11:24	mid:console.11	48	48	-	-	-	built	-
+consoleName.11	49	"Saturn", muted #8E94AB	boardLabel	Text	after:consoleMark.11:20	-	-	-	-	#FF8E94AB	25	built	600 0 none
+consoleSub.11	50	"0 games · no core yet"	subtitle	Text	after:consoleMark.11:20	-	-	-	-	Tokens.muted	18	built	400 0 none
+consoleChip.11	53	"Not supported yet" outlined chip, 36 high, corner 18	chip	Rectangle	-	mid:console.11	before:consoleChevron.11:20	36	18	#00000000	-	built	line 2 #FF5A6076
+consoleChipWords.11	53	"Not supported yet", muted, 16 px, weight 600	chip	Text	-	-	-	-	-	Tokens.muted	16	built	600 0 none
+consoleChevron.11	55	›, 22 px, muted	Chevron	Chevron	-	mid:console.11	inright:console.11:24	22	-	Tokens.muted	-	built	-
+help	63	the help line's entries, 34 px apart, middle at 1141	Help.entries(Settings.help, {settings: true, consoles: true, filtered, filterable})	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Open the console	65	A, filled, 34 px	Eclipse's Glyph	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+helpWords-Open the console	65	"Open the console", 10 px after its key	Eclipse's HelpLine	Text	after:ownGlyph-Open the console:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Jump a letter	66	LT in a 2 px box, 30 px inside	Eclipse's Glyph	-	after:helpWords-Open the console:34	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Jump a letter	66	RT, 10 px after LT	Eclipse's Glyph	-	after:ownGlyph-Jump a letter:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Jump a letter	66	"Jump a letter", 10 px after RT	Eclipse's HelpLine	Text	after:ownGlyph2-Jump a letter:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Only consoles with games	67	Y in a 2 px ring, 34 px inside	Eclipse's Glyph	-	after:helpWords-Jump a letter:34	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Only consoles with games	67	"Only consoles with games"	Eclipse's HelpLine	Text	after:ownGlyph-Only consoles with games:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Back	68	B in a 2 px ring, 34 px inside	Eclipse's Glyph	-	after:helpWords-Only consoles with games:34	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back	68	"Back"	Eclipse's HelpLine	Text	after:ownGlyph-Back:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Section	63	not on the board: LB (R-20261123-20)	Eclipse's Glyph	-	after:helpWords-Back:34	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Section	63	RB, 10 px after LB	Eclipse's Glyph	-	after:ownGlyph-Section:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Section	63	"Section"	Eclipse's HelpLine	Text	after:ownGlyph2-Section:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Home	63	not on the board: MENU capsule (R-20261123-20)	Eclipse's Glyph	-	after:helpWords-Section:34	mid:help	-	38	-	-	-	built	word 15 400
+helpWords-Home	63	"Home"	Eclipse's HelpLine	Text	after:ownGlyph-Home:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+settingsPlace	70	"6 of 14" in our world	Words.place(Settings.focused, Settings.count)	Text	-	mid:help	right:96	-	-	Tokens.muted	21	built	400 0 none

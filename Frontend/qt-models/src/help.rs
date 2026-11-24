@@ -419,8 +419,39 @@ pub fn card_named(list: Vec<Entry>) -> Vec<Entry> {
 /// X on a Settings row as Eclipse's boards name it: the row's value back to its default (R-20261116-22).
 pub const DEFAULT: &str = "default";
 pub const TO_DEFAULT: Entry = (UiButton::Screensaver, "Back to the default", Some(DEFAULT));
+/// Settings Consoles' Y filter and LT/RT letter-jump actions (board #27, R-20261116-22).
+pub const CONSOLES_FILTER: &str = "consolesFilter";
+pub const CONSOLES_LETTER_BACK: &str = "consolesLetterBack";
+pub const CONSOLES_LETTER_ON: &str = "consolesLetterOn";
 
-/// A Settings list as Eclipse's boards name and order it, X added where a value steps (EmuSen_Qt.md §3.4.11).
+/// Settings Consoles' help entries as board #27 and R-20261123-20 name and order them.
+pub fn consoles_settings_named(filtered: bool) -> Vec<Entry> {
+    vec![
+        (UiButton::Accept, "Open the console", None),
+        (UiButton::First, "Jump a letter", Some(CONSOLES_LETTER_BACK)),
+        (UiButton::Search, if filtered { "All consoles" } else { "Only consoles with games" }, Some(CONSOLES_FILTER)),
+        (UiButton::Back, "Back", None),
+        (UiButton::PageUp, "Section", None),
+        (UiButton::Menu, "Home", Some(HOME)),
+    ]
+}
+
+/// Settings Consoles' declared action lines, including RT's forward letter jump beside LT's backward jump.
+pub fn consoles_settings_lines(list: &[Entry]) -> String {
+    format!("{}{CONSOLES_LETTER_ON} {:?}\n", lines_of(Screen::Settings, list), UiButton::Last)
+}
+
+/// Settings Memory cards' help entries as boards #58, #63 and #64 name and order them.
+pub fn cards_settings_named() -> Vec<Entry> {
+    vec![
+        (UiButton::Left, "Value", None),
+        (UiButton::Accept, "Change", None),
+        (UiButton::Back, "Back", None),
+        (UiButton::Menu, "Home", Some(HOME)),
+    ]
+}
+
+/// A Settings list as Eclipse's boards name and order it, X added where a value steps and Home kept (EmuSen_Qt.md §3.4.11, R-20261123-20).
 pub fn settings_named(list: Vec<Entry>) -> Vec<Entry> {
     const ORDER: [UiButton; 6] = [UiButton::Left, UiButton::Accept, UiButton::Screensaver, UiButton::Back, UiButton::PageUp, UiButton::Menu];
     let steps = list.iter().any(|e| e.0 == UiButton::Left);
@@ -434,6 +465,9 @@ pub fn settings_named(list: Vec<Entry>) -> Vec<Entry> {
         .collect();
     if steps {
         named.push(TO_DEFAULT);
+    }
+    if !named.iter().any(|e| e.0 == UiButton::Menu) {
+        named.push((UiButton::Menu, "Home", Some(HOME)));
     }
     named.sort_by_key(|e| ORDER.iter().position(|b| *b == e.0).unwrap_or(ORDER.len()));
     named

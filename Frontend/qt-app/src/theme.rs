@@ -347,12 +347,18 @@ impl ActionSink for Sink {
     fn act(&mut self, action: &Action) -> bool {
         // Safety: the cell holds the feed while it lives and null after; the theme's engine runs on the feed's thread.
         let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
-        // X on a theme's Settings row: the focused row back to its default (help::DEFAULT, R-20261116-22).
-        if matches!(action, Action::Act(key) if key == help::DEFAULT) {
+        // X back to default, Consoles Y filter, and LT/RT letter jump on a theme's Settings (R-20261116-22).
+        if matches!(action, Action::Act(key) if matches!(key.as_str(), help::DEFAULT | help::CONSOLES_FILTER | help::CONSOLES_LETTER_BACK | help::CONSOLES_LETTER_ON)) {
             let settings = feed.taken(Role::Settings).then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
-            return settings.is_some_and(|s| {
-                let row = *s.focused();
-                s.to_default(row)
+            return settings.is_some_and(|s| match action {
+                Action::Act(key) if key == help::DEFAULT => {
+                    let row = (*s.focused()).max(s.view().firmware_need_count() as i32);
+                    s.to_default(row)
+                }
+                Action::Act(key) if key == help::CONSOLES_FILTER => s.toggle_consoles_with_games(),
+                Action::Act(key) if key == help::CONSOLES_LETTER_BACK => s.jump_console_letter(-1),
+                Action::Act(key) if key == help::CONSOLES_LETTER_ON => s.jump_console_letter(1),
+                _ => false,
             });
         }
         let mut feed = unsafe { Pin::new_unchecked(feed) };
@@ -402,20 +408,27 @@ impl ActionSink for Sink {
         let within = |at: i32, count: usize| usize::try_from(at).is_ok_and(|at| at < count);
         match (action, settings, page) {
             (ScreenAction::SettingsStep(row, by), Some(s), _) => {
-                if let Some(start) = s.view().chip_start().filter(|&st| *row >= 0 && (*row as usize) < st) {
-                    if s.view().facets().get(*row as usize).is_some_and(|f| f.switch.is_some()) {
+                let target = *row + s.view().firmware_need_count() as i32;
+                if let Some(start) = s.view().chip_start().filter(|&st| target >= 0 && (target as usize) < st) {
+                    if s.view().facets().get(target as usize).is_some_and(|f| f.switch.is_some()) {
                         if *by > 0 {
-                            self.chip_return = *row;
+                            self.chip_return = target;
                             s.set_focused(start as i32);
                             return true;
                         }
                         return false;
                     }
                 }
-                s.step(*row, *by)
+                s.step(target, *by)
             }
-            (ScreenAction::SettingsChoose(row), Some(s), _) => s.choose(*row),
-            (ScreenAction::SettingsSlide(row, amount), Some(s), _) => s.slide(*row, *amount),
+            (ScreenAction::SettingsChoose(row), Some(s), _) => {
+                let target = *row + s.view().firmware_need_count() as i32;
+                s.choose(target)
+            }
+            (ScreenAction::SettingsSlide(row, amount), Some(s), _) => {
+                let target = *row + s.view().firmware_need_count() as i32;
+                s.slide(target, *amount)
+            }
             (ScreenAction::SettingsSection(section), Some(s), _) => {
                 let took = within(*section, s.sections().iter().count());
                 if took {
@@ -425,12 +438,13 @@ impl ActionSink for Sink {
                 took
             }
             (ScreenAction::SettingsFocus(row), Some(s), _) => {
-                let took = within(*row, s.shown_rows().len());
+                let target = *row + s.view().firmware_need_count() as i32;
+                let took = *row >= 0 && within(target, s.shown_rows().len());
                 if took {
-                    if s.view().chip_start().is_some_and(|st| (*row as usize) < st) {
-                        self.chip_return = *row;
+                    if s.view().chip_start().is_some_and(|st| (target as usize) < st) {
+                        self.chip_return = target;
                     }
-                    s.set_focused(*row);
+                    s.set_focused(target);
                 }
                 took
             }

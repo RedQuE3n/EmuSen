@@ -3,14 +3,27 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
-## 1.16, an addition: Eclipse's game page Media, Cheats and Package (2026-11-24)
+## 1.18, an addition: Eclipse's game page Media, Cheats and Package (2026-11-24)
 
-Decided 2026-11-24 by the tester (R-20261113-16, -26, R-20261116-27, -29, -30): Eclipse draws the game page's Media and Cheats tabs and its Package deeper page as their boards draw them.
+Decided 2026-11-24 by the tester (R-20261113-16, -26, R-20261116-27, -29, -30, R-20261123-32): Eclipse draws the game page's Media and Cheats tabs and its Package deeper page as their boards draw them.
 
 - **`ThemeScreen.pageSubpages`** and **`Page.PageSubpage`** (`None`, `Package`): deeper pages of the game page a theme's screen draws as flags, written `1 << Page.Package`.
 - **`Page.mediaTiles`** (`key`, `label`, `picture`, `row`), **`Page.mediaNote`** and **`Page.coverable`**: the game's media items, the empty-media fallback sentence, and whether X (`setCover`) sets the focused tile as cover.
 - **`Page.subpage`**, **`Page.subpageTitle`** and **`Page.subpageSubtitle`**: the deeper page open, its heading and its subtitle; `Page.boardRows` also serves Cheats and Package rows, and `Page.rowPlace` carries Media's, Cheats' and Package's counts.
 - **`Help.PageMedia`**, **`Help.PageCheatOn`**, **`Help.PageCheatOff`**, **`Help.PagePackageCheck`**, **`Help.PagePackageMake`**, **`Help.PagePackageStop`** and **`Help.PagePackageInfo`**: the boards' help lines for Media, Cheats and Package.
+- The module is 1.18 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.18.*`.
+
+## 1.17, an addition: Settings Memory cards and card saves boards (2026-11-24)
+
+- **`Settings.boardWrapAbout`** and **`Settings.cardsHelp`**: whether rows wrap their short line at 1.35 line-height (`SettingsRow`) and whether the Memory cards help bar (`◀ ▶ Value`, `A Change`, `B Back`, `START Home`) is shown on Memory cards, Drawer, Saves on the cards, One save and Delete pages (boards #58, #63, #64; R-20261116-20, R-20261123-32).
+- **`Help.entries(kind, {settings: true, cards: true})`** (no new method): Memory cards' help bar in the boards' wording and order (`help::cards_settings_named`).
+- The module is 1.17 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.17.*`.
+
+## 1.16, an addition: Settings Consoles grid, one console, Core and Firmware boards (2026-11-24)
+
+- **`Settings.rows` additive board roles** (`boardLabel`, `boardAbout`, `boardValue`, `boardForm`, `planet`, `subtitle`, `chip`, `chipAttention`, `runs`): board-word projections and console card metadata (`PlanetInk` index, libretro checkerboard, hollow ring, firmware/unsupported chips) without changing the reference theme's mirrored roles (R-20261111-20, R-20261116-20, -21, -22, R-20261123-13, -14, -27).
+- **`Settings.boardHeading`**, **`boardAboutHeading`**, **`boardSentence`**, **`boardMuted`**, **`consolesSubtitle`**, **`consolesFiltered`**, **`hasConsolesWithGames`**, **`pageGlow`**, **`cardPlanet`**, **`cardTitle`**, **`cardSubtitle`**, **`firmwareFiles`** (roles `label`, `status`, `state`), and **`firmwareCount`**: Consoles' filter/subtitle, dynamic planet page glow, Console's Core planet card, Core's About panel, and Firmware's `"Found, N of M"` file status card (R-20261123-13, -14, -15, -21, -27).
+- **`Help.entries(kind, {settings: true, consoles: true, filtered, filterable})`** and **`Actions.act("consolesFilter" | "consolesLetterBack" | "consolesLetterOn")`** (no new method): Consoles' `LT`/`RT` letter jump and `Y` consoles-with-games filter (R-20261116-22, R-20261123-20).
 - The module is 1.16 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.16.*`.
 
 ## 1.15, an addition: Eclipse's game page Overview, Details and Options (2026-11-23)

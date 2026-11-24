@@ -4,7 +4,7 @@
 use emusen_qt_models::game_page::TABS;
 use emusen_theme_qt::page::qobject::PageSection;
 
-const TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.16.qmltypes");
+const TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.18.qmltypes");
 
 #[test]
 fn qt_3_2_the_page_sections_are_the_models_tabs_in_their_order() {

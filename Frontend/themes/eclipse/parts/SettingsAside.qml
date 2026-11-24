@@ -137,6 +137,11 @@ FocusScope {
         pixelScale: root.pixelScale
         visible: root.marked
     }
+    SettingsConsoleCard {
+        unit: root.unit
+        pixelScale: root.pixelScale
+        visible: Settings.cardPlanet >= -2
+    }
     Line {
         objectName: "asideCaption"
         unit: root.unit
@@ -178,12 +183,16 @@ FocusScope {
         size: 26
         weight: Tokens.weightTitle
     }
+    SettingsFirmwareCard {
+        unit: root.unit
+        visible: Settings.firmwareCount > 0
+    }
     Line {
         objectName: "asideSentence"
         unit: root.unit
         visible: text.length > 0
         width: root.width
-        text: Settings.preview === 7 ? root.focusedAbout : Settings.sentence
+        text: Settings.preview === 7 ? root.focusedAbout : Settings.boardSentence
         color: ink.emptyAbout
         wrapMode: Text.WordWrap
         lineHeightMode: Text.FixedHeight
@@ -192,7 +201,7 @@ FocusScope {
         weight: Tokens.weightSentence
     }
     Repeater {
-        model: Settings.lines
+        model: Settings.firmwareCount > 0 ? [] : Settings.lines
         delegate: Line {
             required property int index
             required property string modelData
@@ -211,7 +220,7 @@ FocusScope {
         }
     }
     Repeater {
-        model: Settings.muted
+        model: Settings.boardMuted
         delegate: Line {
             required property int index
             required property string modelData

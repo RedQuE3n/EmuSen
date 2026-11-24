@@ -1232,16 +1232,10 @@ pub enum Tab {
 pub const TABS: [Tab; 6] = [Tab::Overview, Tab::States, Tab::Media, Tab::Details, Tab::Options, Tab::Cheats];
 
 impl Tab {
-    /// The tab's key, by which a theme's screen names the tabs it draws (EmuSen_Qt.md §3.2, `ThemeScreen.pageSections`).
-    pub fn key(self) -> &'static str {
-        match self {
-            Tab::Overview => "overview",
-            Tab::States => "states",
-            Tab::Media => "media",
-            Tab::Details => "details",
-            Tab::Options => "options",
-            Tab::Cheats => "cheats",
-        }
+    /// The tab's flag, by which a theme's screen names the tabs it draws: one bit at its place in `TABS`, as theme-qt's
+    /// `Page.PageSection` numbers it (EmuSen_Qt.md §3.2, `ThemeScreen.pageSections`).
+    pub fn flag(self) -> i32 {
+        1 << TABS.iter().position(|t| *t == self).unwrap_or(0)
     }
 
     pub fn name(self) -> &'static str {
@@ -1303,16 +1297,16 @@ impl GamePage {
         true
     }
 
-    /// The key of the tab a theme would draw now; none for a deeper page, which stays the program's (EmuSen_Qt.md §3.2).
-    pub fn tab_key(&self) -> Option<&'static str> {
+    /// The tab a theme would draw now; none for a deeper page, which stays the program's (EmuSen_Qt.md §3.2).
+    pub fn tab_drawn(&self) -> Option<Tab> {
         let deeper = self.editing || self.cropping || self.packaging || self.covering;
-        (!deeper).then(|| self.tabs()[self.tab()].key())
+        (!deeper).then(|| self.tabs()[self.tab()])
     }
 
-    /// Whether a theme's game screen that names `drawn` draws the page as it stands: every tab where it names none, else the
-    /// tab shown where it is named, never a deeper page or a question (EmuSen_Qt.md §3.2, `ThemeScreen.pageSections`).
-    pub fn drawn_by(&self, drawn: &[String], asking: bool) -> bool {
-        drawn.is_empty() || (!asking && self.tab_key().is_some_and(|k| drawn.iter().any(|d| d == k)))
+    /// Whether a theme's game screen whose `pageSections` flags are `drawn` draws the page as it stands: every tab where it
+    /// names none (0), else the tab shown where its flag is set, never a deeper page or a question (EmuSen_Qt.md §3.2).
+    pub fn drawn_by(&self, drawn: i32, asking: bool) -> bool {
+        drawn == 0 || (!asking && self.tab_drawn().is_some_and(|t| drawn & t.flag() != 0))
     }
 
     /// The board's line over the title (EclipseGame:43): console · year · genre, each the game has.
@@ -1351,6 +1345,28 @@ impl GamePage {
         };
         out.push(Action { value: if self.read.favourite { HEART_ON } else { HEART_OFF }.into(), ..pill(FAVOURITE, "Favourite", -1, false) });
         out
+    }
+
+    /// The board's buttons, each with the place among `actions` of the action it is, which a theme's `pageAct` takes, and for
+    /// Resume the resume point's tile it chooses (R-20261123-35), else -1.
+    pub fn placed_pills(&self) -> Vec<(Action, i32, i32)> {
+        let actions = self.actions();
+        let point = self.resume_point_row().map_or(-1, |r| r as i32);
+        self.pills()
+            .into_iter()
+            .map(|p| {
+                let at = actions.iter().position(|a| a.key == p.key).map_or(-1, |i| i as i32);
+                let row = if p.key == RESUME { point } else { -1 };
+                (p, at, row)
+            })
+            .collect()
+    }
+
+    /// The state cards with their when-lines in the machine's zone and clock form at the page's moment.
+    pub fn cards_now(&self) -> Vec<Card> {
+        let now = self.now;
+        let when = |at: i64| state_when(crate::clock::local_day(at, 0), crate::clock::local_day(now, 0), crate::clock::local_day(now, 1), &crate::clock::short_time(at));
+        self.state_cards(&when)
     }
 
     /// The resume point, the state kept where the player left off, which Eclipse's Resume loads (R-20261123-35).

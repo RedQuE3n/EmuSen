@@ -106,6 +106,16 @@ impl Corona {
     pub const COLOUR_PROPERTIES: [&'static str; 3] = ["coronaColor", "coronaGlowColor", "coronaHaloColor"];
 }
 
+/// A dashed line's pattern, its dash and its gap in widths of the line, as `ShapePath.dashPattern` takes it: Qt's own
+/// `DashLine` default, which a theme may replace (EmuSen_Kit.md §7.2).
+pub const DASH_PATTERN: [f64; 2] = [4.0, 2.0];
+
+/// A dash pattern as `theme.json` writes it, two positive numbers apart by a space ("3 2"); none for anything else.
+pub fn dash_pattern(value: &str) -> Option<[f64; 2]> {
+    let n: Vec<f64> = value.split_whitespace().map(str::parse::<f64>).collect::<Result<_, _>>().ok()?;
+    (n.len() == 2 && n.iter().all(|v| v.is_finite() && *v > 0.0)).then(|| [n[0], n[1]])
+}
+
 /// The largest text scale a player may choose.
 pub const MAX_TEXT_SCALE: f64 = 1.3;
 

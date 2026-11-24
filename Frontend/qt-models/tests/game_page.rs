@@ -641,11 +641,11 @@ fn qt_3_4_12_the_tabs_are_the_boards_six_in_its_order_cheats_only_with_cheats() 
     assert_eq!(names(&page), ["Overview", "States", "Media", "Details", "Options", "Cheats"]);
     assert_eq!(page.tab(), 0);
     assert!(page.choose_tab(1));
-    assert_eq!((page.shown(), page.tab(), page.tab_key()), (Section::States, 1, Some("states")));
+    assert_eq!((page.shown(), page.tab(), page.tab_drawn()), (Section::States, 1, Some(Tab::States)));
     assert!(page.choose_tab(2));
     assert_eq!((page.shown(), page.tab()), (Section::Media, 2), "Media is the board's third, the program's fourth section");
     assert!(page.choose_tab(5));
-    assert_eq!((page.shown(), page.cheating, page.tab(), page.tab_key()), (Section::Options, true, 5, Some("cheats")));
+    assert_eq!((page.shown(), page.cheating, page.tab(), page.tab_drawn()), (Section::Options, true, 5, Some(Tab::Cheats)));
     assert!(page.choose_tab(4));
     assert_eq!((page.cheating, page.tab()), (false, 4), "Options leaves Cheats");
     assert!(!page.choose_tab(6), "no seventh tab");
@@ -658,16 +658,17 @@ fn qt_3_4_12_the_tabs_are_the_boards_six_in_its_order_cheats_only_with_cheats() 
 #[test]
 fn qt_3_4_12_a_theme_draws_the_tabs_it_names_and_never_a_deeper_page_or_a_question() {
     let mut page = GamePage::new(read(), NOW);
-    let states = vec!["states".to_owned()];
-    assert!(page.drawn_by(&[], false) && page.drawn_by(&[], true), "a screen that names none draws everything");
-    assert!(!page.drawn_by(&states, false), "the Overview is the program's");
+    let states = Tab::States.flag();
+    assert_eq!(TABS.map(Tab::flag), [1, 2, 4, 8, 16, 32], "one bit at each tab's place");
+    assert!(page.drawn_by(0, false) && page.drawn_by(0, true), "a screen that names none draws everything");
+    assert!(!page.drawn_by(states, false), "the Overview is the program's");
     page.choose_tab(1);
-    assert!(page.drawn_by(&states, false));
-    assert!(!page.drawn_by(&states, true), "a question is the program's");
+    assert!(page.drawn_by(states, false) && page.drawn_by(states | Tab::Media.flag(), false));
+    assert!(!page.drawn_by(states, true), "a question is the program's");
     page.choose_tab(3);
     page.editing = true;
-    assert_eq!(page.tab_key(), None, "Edit Details is a deeper page");
-    assert!(!page.drawn_by(&["details".to_owned()], false));
+    assert_eq!(page.tab_drawn(), None, "Edit Details is a deeper page");
+    assert!(!page.drawn_by(Tab::Details.flag(), false));
 }
 
 #[test]

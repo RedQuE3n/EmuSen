@@ -63,7 +63,12 @@ Walkable {
             strokeColor: root.on ? root.onColour : root.ink
             fillColor: root.on ? root.onColour : "transparent"
             joinStyle: ShapePath.RoundJoin
-            PathSvg { path: "M12 20.5C5 15.5 3 12 3 8.8A4.8 4.8 0 0 1 12 6.6 4.8 4.8 0 0 1 21 8.8C21 12 19 15.5 12 20.5z" }
+            startX: 12
+            startY: 20.5
+            PathCubic { control1X: 5; control1Y: 15.5; control2X: 3; control2Y: 12; x: 3; y: 8.8 }
+            PathArc { x: 12; y: 6.6; radiusX: 4.8; radiusY: 4.8 }
+            PathArc { x: 21; y: 8.8; radiusX: 4.8; radiusY: 4.8 }
+            PathCubic { control1X: 21; control1Y: 12; control2X: 19; control2Y: 15.5; x: 12; y: 20.5 }
         }
     }
     Line {

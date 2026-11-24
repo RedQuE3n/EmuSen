@@ -31,7 +31,9 @@ Item {
     property real boxSide: 30
     property real boxRadius: 8
     property real boxPadding: 10
-    readonly property bool boxed: root.keyed || ([PadGlyph.PageUp, PadGlyph.PageDown, PadGlyph.First, PadGlyph.Last].indexOf(root.button) >= 0)
+    // Start drawn in the shoulders' box rather than a capsule (EclipseGameNoState:78).
+    property bool boxMenu: false
+    readonly property bool boxed: root.keyed || (root.boxMenu && root.button === PadGlyph.Menu) || ([PadGlyph.PageUp, PadGlyph.PageDown, PadGlyph.First, PadGlyph.Last].indexOf(root.button) >= 0)
     property color ring: Tokens.muted
     property color ink: Tokens.text
     property color leadFill: Tokens.accent

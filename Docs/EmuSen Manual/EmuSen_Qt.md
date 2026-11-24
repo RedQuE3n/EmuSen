@@ -953,10 +953,10 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only, the face tokens among them (1.3, `EmuSen_Kit.md` §7.117); `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown); from 1.7 `kind` (`all`, `favourites`, `recent`, `console`), `emptyWords`, `filters` (`key`, `name`, `count`) and `filter`, `sort`, `letters` (`letter`) and `letter`: the List card's listing, one state with it (§3.4.10); from 1.7 the focused game's facts, read off the GUI thread as the focus moves: `factsKey` (the game they are of, set last), `year`, `genre`, `players` (in words), `description`, `timePlayed` (in words) and `states`, each empty or 0 where the program holds none |
 | `Settings` | singleton | from 1.9, Settings as the program's `SettingsModel` holds it, read-only: `sections`, `section`, `trail`, `page` (the section's id, or the innermost page's kind and what it is of, `console:SNES`, `group:Scraping`, `players`; `settings_shown.rs`' `Page::key`), `rows` (`key`, `label`, `about`, `value`, `kind` = `RowKinds`' number, `isSwitch` and `switchOn`, a switch's state from its stored value, `held`, `marked`, `code`, a slider's `minimum`, `maximum`, `step`, `amount`, and a console row's `consoleName` (its stored name), `system` = the key `Library.consoles` takes, `games`, `engine`), `focused`, `count`, `help` (a `Help` kind, -1 for none), and the focused row's pane: `sentence`, `lines`, `muted`, `tones`, `preview`, `caption`, `meter`, `samples`; from 1.11, `sectionKeys`, each section's id in `sections`' order (decided 2026-11-23, R-20261123-30); a row's `about` is the board's short line where the description gives one, else its hint (decided 2026-11-23, R-20261123-31); from 1.11 also `title` (the screen's name), `heading` (the innermost page's name, else the section's), `aboutHeading` (the focused row's name), a row's `form` (a `SettingsForm`: `Settings.Choice`, `Switch`, `Door`, `Fact`), `Words.keyPair` ("◀ ▶"), `defaultable` (whether X restores the focused row's default) and `shot` (the newest screenshot as a file URL on a picture preview, empty for none) (decided 2026-11-23, R-20261123-30) |
-| `Page` | singleton | from 1.9, a game's page as the program's `GamePageModel` holds it, read-only: `ready`, `key` (the game's file), `title`, `facts`, `cover`, `hero`, `clip`, `actions` (`label`, `value`, `button`, `filled`, `stepped`, `stepLeft`, `stepRight`), `sections` (the tabs), `section`, `shows` (0 words, 1 cards, 2 rows), `words`, `picture`, `rows` (`key`, `label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`: a row, a state's card or a cover), `coverArt`, `focusedAction`, `focusedContent`, `help`, and the question: `asking`, `questionTitle`, `questionSentences`, `questionChoices`, `questionBack`; from 1.12 the game page as Eclipse's boards draw it (§3.4.12): `tabs` (the board's six in its order, Cheats only for a game with cheats) and `tab`, `kicker`, `line`, `pills` (`key`, `label`, `button`, `filled`, `heart`, `on`, `act`, the action `pageAct` takes, `row`, the card Resume loads or -1), `cards` (`key`, `label`, `line`, `picture`, `marked`, `badge`, `row`, the card's place among `rows` or -1 for the empty slot), `note`, `trail`, `trailSection`, `console` and `boardHelp` (a `Help` kind, -1 where the boards draw none) |
+| `Page` | singleton | from 1.9, a game's page as the program's `GamePageModel` holds it, read-only: `ready`, `key` (the game's file), `title`, `facts`, `cover`, `hero`, `clip`, `actions` (`label`, `value`, `button`, `filled`, `stepped`, `stepLeft`, `stepRight`), `sections` (the tabs), `section`, `shows` (0 words, 1 cards, 2 rows), `words`, `picture`, `rows` (`key`, `label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`: a row, a state's card or a cover), `coverArt`, `focusedAction`, `focusedContent`, `help`, and the question: `asking`, `questionTitle`, `questionSentences`, `questionChoices`, `questionBack`; from 1.12 the game page as Eclipse's boards draw it (§3.4.12): `tabs` (the board's six in its order, Cheats only for a game with cheats) and `tab`, `kicker`, `line`, `pills` (`key`, `label`, `button`, `filled`, `heart`, `on`, `act`, the action `pageAct` takes, `row`, the card Resume loads or -1), `cards` (`key`, `label`, `line`, `picture`, `marked`, `badge`, `row`, the card's place among `rows` or -1 for the empty slot), `note`, `trail`, `trailSection`, `console` and `boardHelp` (a `Help` kind, -1 where the boards draw none), and the enum `PageSection` (`Overview` … `Cheats`, `game_page::TABS`' order) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30); `FocusRing`, `PlanetMark`, `CoronaDisc`, `CoronaGlow`, `Backdrop`, `BackdropField`, `Glow`, `GroupGridLayout` and `MeasuredWalk` (1.9, the walk over rows of their own heights, `EmuSen_Kit.md` §7.122) are the later minors' (`CHANGELOG-theme-api.md`) |
-| `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`, and from 1.9 `Settings` and `Game`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()`; from 1.10 the splash's `entersHome` and `sound.source` (a WAV file of the theme's own, as its screen's file names it), and Home's `splashPlace` (§3.5.3); from 1.12 the game page's `pageSections`, the keys of the tabs the screen draws, the program drawing every other tab, deeper page and question (none named: all drawn) |
+| `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`, and from 1.9 `Settings` and `Game`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()`; from 1.10 the splash's `entersHome` and `sound.source` (a WAV file of the theme's own, as its screen's file names it), and Home's `splashPlace` (§3.5.3); from 1.12 the game page's `pageSections`, the tabs the screen draws as flags (`1 << Page.States`, `Page.PageSection`), the program drawing every other tab, deeper page and question (0: all drawn) |
 | `Splash` | singleton | from 1.10, a splash that enters Home: `shown`, and `time`, its moment in ms on the window's clock, which the splash and Home both draw from, and `ease`, the hand-over's length in ms from Home whole to the sound's last sample (decided 2026-11-23, R-20261123-24; §3.5.3) |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
@@ -1098,10 +1098,13 @@ checks every help kind's lists; the built-in themes' own tests run unchanged.
 **The game page's tabs a theme names (1.12, 2026-11-23).** Decided by the tester 2026-11-16 (R-20261116-27, -29): the
 game page is a screen a theme can supply, with the board's six tabs; a theme's game screen may draw some of the tabs and
 leave the rest to the program. As built:
-- `ThemeScreen.pageSections` lists the keys of the tabs the screen draws (`game_page::Tab::key`: `overview`, `states`,
-  `media`, `details`, `options`, `cheats`). `ThemeHost.qml` hands the list to `GamePageModel.themeSections`, and the model
-  answers `themeDraws` from `GamePage::drawn_by`: true where the list is empty, else only where the tab shown is named and
-  no deeper page (Edit Details, the crop, the package, Cover art) and no question, viewer or typing is open.
+- `ThemeScreen.pageSections` holds the tabs the screen draws as flags, one bit at each tab's place in `game_page::TABS`
+  (`Tab::flag`), written `1 << Page.States` with the `Page.PageSection` enum, whose names and order are `TABS`' (held by
+  theme-qt's `tests/page_sections.rs`); no words and no array, as the theme rules forbid both. `ThemeHost.qml` hands the
+  flags to `GamePageModel.themeSections`, and the model answers `themeDraws` from `GamePage::drawn_by`: true where they are
+  0, else only where the tab shown has its flag and no deeper page (Edit Details, the crop, the package, Cover art) and no
+  question, viewer or typing is open. A cxx-qt 0.10 enum takes no values of its own and belongs to a type, so the flags
+  are shifted places of `Page.PageSection` rather than an enum of flags.
 - The window shows the theme's screen while `themeDraws` holds and the program's own `PageScreen` otherwise
   (`ThemeHost.pageDrawn`, `Main.qml`'s `themed`), so the page's model and every answer stay the program's whichever draws.
 - `Page.tabs` are the board's six in its order (`game_page::TABS`), Cheats only for a game with cheats as its Options row
@@ -2333,7 +2336,7 @@ forms, the newest screenshot, and the program's own Settings bar beside Eclipse'
 Eclipse's `screens/Game.qml` draws the game page's frame and its States tab as two boards draw them: `EclipseGame.dc.html`
 (a game with states, slot 1 focused) and `EclipseGameNoState.dc.html` (a game never played). Decided by the tester
 2026-11-16 (R-20261116-27, -29, -30, -36) and 2026-11-23 (R-20261123-33 to -36). The screen names `pageSections:
-["states"]` (§3.2, 1.12): every other tab, every deeper page and every question is the program's own page until its piece
+1 << Page.States` (§3.2, 1.12): every other tab, every deeper page and every question is the program's own page until its piece
 lands, the page's model and its answers the program's whichever draws.
 
 As built:
@@ -2356,19 +2359,24 @@ As built:
   when-line is `game_page::state_when` (R-20261123-34). With no state the empty card rests in the board's dimmer colours
   and `Page.note` stands beside it. A on a card is `pageChoose`; X asks the program's Delete question, which the program's
   page opens only while it is shown (`GamePage.qml`), so one asked from Eclipse's card opens as the page appears and B
-  brings the focus back to the card; a state that fails to load is the program's notice (`session_model.rs`
+  brings the focus back to the card; a game's cards start the focus on the first state's card, else on the first button,
+  the tab shown again keeps the focus where it was, and the empty slot passes a focus it is handed to the card before it; the screen's QML keeps the theme rules
+  (no function, no array, no words: each neighbour is looked up in its key's handler); a state that fails to load is the program's notice (`session_model.rs`
   `start_from`).
 - The help line: `Page.boardHelp` where the boards draw one (a state's card: Load this state, Delete, Back; Start with no
   resume point: Start, Favourite, Back, Home), else `Page.help`; the shoulders' Section at the right with no glass.
 - Words whose boxes stack (the kicker, the line, the tabs, the cards' words) are Eclipse's `Line` with `boardLine`, the box
   the board's CSS gives the line; their table rows name the part `Line`, which `tests/eclipse_board/mod.rs` holds by that
   box.
-- A next tab costs its body only: its key added to `pageSections`, and an item shown for it beside the cards' row; the
+- A next tab costs its body only: its flag added to `pageSections`, and an item shown for it beside the cards' row; the
   frame, the tabs, the header, the column and the help are this screen's already.
 
 Not as the boards draw them, each for the tester: the states' pictures (a state's picture lies in the saves folder, which
 the host does not let a theme read, so the cards draw none); the mark (the board's crescent is not `Marks.crescent`); the
-never-played help line's Start (the board's START in a box of corner 8, drawn as Home's MENU capsule).
+never-played help line's Start word (the kit's name for Start in the Xbox family is MENU, drawn in the board's 30 px box
+of corner 8 and padding 10). The empty slot's dashed line is
+the kit's `Tokens.dashPattern` (kit 1.12), Eclipse's `"3 2"`: Chrome draws the board's 2 px dashed border 6 on and 4 off
+(measured 2026-11-23 in the board's render), which Qt's own `DashLine` (4 and 2 widths, 8 and 4 px) is not.
 
 Proof, measured 2026-11-23 on the software backend: `qt-app/tests/eclipse_game.rs` holds every row of
 `tests/eclipse/game.tsv` at each of the gate's sizes in the program, with the board's words, help line and glyphs;

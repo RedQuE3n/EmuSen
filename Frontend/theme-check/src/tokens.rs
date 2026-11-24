@@ -6,7 +6,7 @@ use emusen_theme_manifest::{Manifest, TokenOverride, TokenValue, Variant};
 use crate::Finding;
 
 /// The kit's committed registry (rule Q): its `Tokens` singleton's read-only properties are the tokens and their types.
-const REGISTRY: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.11.qmltypes");
+const REGISTRY: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.12.qmltypes");
 
 /// A token's type as the registry declares it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +17,8 @@ pub enum TokenType {
     Switch,
     /// A face's family, one the kit bundles (EmuSen_Kit.md §7.117).
     Face,
+    /// A dashed line's dash and gap in widths of the line, two positive numbers apart by a space (1.12, EmuSen_Kit.md §7.2).
+    Pattern,
 }
 
 /// Every token of the registry's `Tokens`, in its order: the read-only properties, with their types.
@@ -41,6 +43,8 @@ pub fn registry_tokens() -> Vec<(String, TokenType)> {
                     "int" => Some(TokenType::Whole),
                     "bool" => Some(TokenType::Switch),
                     "QString" => Some(TokenType::Face),
+                    // A list QML reads is a QVariant in the registry, as the kit's figures' are; the one such token is dashPattern.
+                    "QVariant" => Some(TokenType::Pattern),
                     _ => None,
                 };
                 if let Some(t) = typed {
@@ -90,6 +94,7 @@ fn type_words(t: TokenType) -> String {
         TokenType::Number => "a number".to_owned(),
         TokenType::Whole => "a whole number".to_owned(),
         TokenType::Switch => "true or false".to_owned(),
+        TokenType::Pattern => "a dash and a gap in widths of the line, two positive numbers apart by a space".to_owned(),
     }
 }
 
@@ -100,6 +105,7 @@ fn holds(t: TokenType, value: &TokenValue) -> bool {
         (TokenType::Whole, TokenValue::Number(n)) => n.is_finite() && n.fract() == 0.0 && n.abs() <= i32::MAX as f64,
         (TokenType::Switch, TokenValue::Switch(_)) => true,
         (TokenType::Face, TokenValue::Text(s)) => is_bundled(s),
+        (TokenType::Pattern, TokenValue::Text(s)) => emusen_kit_core::tokens::dash_pattern(s).is_some(),
         _ => false,
     }
 }

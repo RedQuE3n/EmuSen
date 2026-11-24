@@ -126,7 +126,7 @@ fn qt_3_4_12_the_states_no_board_draws_are_as_the_tester_ruled() {
         let tree = scene.tree();
         let unit: f64 = eclipse_board::read(&tree, "gameCanvas", "unit").parse().unwrap();
         let k = DESIGN_HEIGHT / 1200.0;
-        let drawn = |name: &str| tree.nodes.iter().rev().find(|n| n.name == name && n.ty != "QQuickText").map(|n| (n.visible, n.x / unit, n.w / unit));
+        let drawn = |name: &str| tree.nodes.iter().rev().filter(|n| n.name == name && n.ty != "QQuickText").max_by_key(|n| n.visible).map(|n| (n.visible, n.x / unit, n.w / unit));
         let (seen, x, w) = drawn("card.8").expect("the last card");
         assert!(seen && (w - 316.0 * k).abs() < 1e-6, "the last card drawn at the board's width: {seen} {w}");
         assert!(x + w <= 1280.0 / unit - 96.0 * k + 1e-6, "the last card inside the right margin: {}", x + w);
@@ -169,8 +169,17 @@ fn qt_3_4_12_the_states_no_board_draws_are_as_the_tester_ruled() {
         // (5) A state gone since the page read it: its card starts the game from it as the program's page does (R-20261123-36).
         let slot1 = state_file(&world, 1);
         reopen(&mut scene, &world);
-        scene.pad(UiButton::Right);
-        scene.wait(120);
+        // The same game's page shown again keeps the focus where it was; the walk along the row to slot 1.
+        game::until(&mut scene, "the focus on a card", 2000, |s| focused(s).starts_with("card."));
+        for _ in 0..9 {
+            let at: usize = focused(&mut scene).trim_start_matches("card.").parse().unwrap_or(0);
+            if at == 1 {
+                break;
+            }
+            scene.pad(if at > 1 { UiButton::Left } else { UiButton::Right });
+            scene.wait(120);
+        }
+        assert_eq!(focused(&mut scene), "card.1");
         assert_eq!(eclipse_board::read(&scene.tree(), "cardName.1", "text"), "Slot 1");
         std::fs::remove_file(&slot1).unwrap();
         scene.pad(UiButton::Accept);

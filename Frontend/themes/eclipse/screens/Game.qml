@@ -9,10 +9,10 @@ ThemeScreen {
     objectName: "gameScreen"
     role: ThemeScreen.Game
     // The tabs this screen draws; the program draws the others, every deeper page and every question (1.12).
-    pageSections: ["states"]
+    pageSections: 1 << Page.States
     // Where the focus starts: the first state's card, else the first button.
     focusItems: [
-        root.cardAt(0) ?? root.pillAt(0)
+        (cards.currentItem as CardSlot)?.walk ?? (cards.itemAtIndex(0) as CardSlot)?.walk ?? (pills.itemAt(0) as PillSlot)?.walk ?? null
     ]
     NormalizedCanvas {
         id: canvas
@@ -26,40 +26,6 @@ ThemeScreen {
             readonly property real px: design.unit
             // The board's left margin, a constant of the design (EclipseGame:26, 42, 55, 64, 86).
             readonly property real margin: 96 * root.px
-            // The button and the card at a place, looked up as a key is pressed, since the rows are made again at each feed; the empty card is never reached.
-            function pillAt(i: int): Item { return (pills.itemAt(i) as PillSlot)?.walk ?? null }
-            function cardAt(i: int): Item { return (cards.itemAtIndex(i) as CardSlot)?.walk ?? null }
-            // A move of the pad to `target`, taken whether or not there is one, so a press at an edge leaves the focus where it is.
-            function go(target: Item, event: KeyEvent) {
-                target?.forceActiveFocus(Qt.TabFocusReason)
-                event.accepted = true
-            }
-            // The focus starts on the first state's card, else on the first button; shown again after the program's question, on the card it was on.
-            property string startedFor
-            property bool asked: false
-            function start() {
-                const again = root.asked && Page.key === root.startedFor
-                root.asked = false
-                root.startedFor = Page.key
-                const at = again ? Math.min(cards.currentIndex, cards.count - 1) : 0
-                cards.currentIndex = at
-                cards.positionViewAtIndex(at, ListView.Contain)
-                const first = root.cardAt(at) ?? root.cardAt(0) ?? root.pillAt(0)
-                first?.forceActiveFocus(Qt.OtherFocusReason)
-            }
-            onVisibleChanged: {
-                if (root.visible)
-                    Qt.callLater(root.start)
-                else
-                    root.asked = Page.asking
-            }
-            Connections {
-                target: Page
-                function onShown() {
-                    if (root.visible && Page.key !== root.startedFor)
-                        Qt.callLater(root.start)
-                }
-            }
             // The help in the boards' words where they draw it, else the program's for the focus.
             readonly property int helpKind: Page.boardHelp >= 0 ? Page.boardHelp : Page.help
             Board {
@@ -164,7 +130,7 @@ ThemeScreen {
                         x: brand.x + brand.width + 28 * root.px
                         y: 80 * root.px - height / 2
                         onChosen: (index) => index === 0 ? Actions.openSection(Page.trailSection) : Actions.openConsole(Page.console)
-                        onDownward: root.pillAt(0)?.forceActiveFocus(Qt.TabFocusReason)
+                        onDownward: (pills.itemAt(0) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason)
                     }
                     Status {
                         objectName: "gameStatus"
@@ -288,6 +254,7 @@ ThemeScreen {
                         weight: Tokens.weightSentence
                     }
                     HelpLine {
+                        id: helpLine
                         unit: root.px
                         controller: frame.controller
                         model: Help.entries(root.helpKind)
@@ -305,6 +272,21 @@ ThemeScreen {
                             // No glass: the box is the shoulders' own, 34 high (EclipseGame:92-94).
                             tall: 34
                             wordsColor: ink.help
+                        }
+                    }
+                    // The never-played board draws Start in the shoulders' box rather than Home's capsule (EclipseGameNoState:78).
+                    Binding {
+                        target: helpLine.bar
+                        property: "glyph"
+                        value: gameGlyph
+                    }
+                    Component {
+                        id: gameGlyph
+                        Glyph {
+                            unit: root.px
+                            side: helpLine.glyphSide
+                            ink: ink.help
+                            boxMenu: true
                         }
                     }
                 }
@@ -325,7 +307,7 @@ ThemeScreen {
                 height: slot.walk.height
                 Pill {
                     id: lead
-                    objectName: slot.filled ? "pill." + slot.index : ""
+                    objectName: "pill." + slot.index
                     visible: slot.filled
                     enabled: slot.filled
                     unit: root.px
@@ -345,14 +327,22 @@ ThemeScreen {
                     // Resume chooses the resume point's card; the others are their actions (R-20261123-35).
                     onActivated: slot.row >= 0 ? Actions.pageChoose(slot.row) : Actions.pageAct(slot.act)
                     onActiveFocusChanged: if (lead.activeFocus) Actions.pageFocus(slot.act, 0)
-                    Keys.onLeftPressed: (event) => root.go(root.pillAt(slot.index - 1), event)
-                    Keys.onRightPressed: (event) => root.go(root.pillAt(slot.index + 1), event)
-                    Keys.onUpPressed: (event) => root.go(trail.lastLink(), event)
-                    Keys.onDownPressed: (event) => root.go(root.cardAt(0), event)
+                    Keys.onLeftPressed: (event) => { (pills.itemAt(slot.index - 1) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
+                    Keys.onRightPressed: (event) => { (pills.itemAt(slot.index + 1) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
+                    Keys.onUpPressed: (event) => { (trail.links.itemAt(trail.links.count - 2) as Row)?.children[0]?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
+                    Keys.onDownPressed: (event) => {
+                        if (cards.count > 0) {
+                            cards.currentIndex = 0
+                            cards.positionViewAtIndex(0, ListView.Contain)
+                            const first = (cards.currentItem as CardSlot)?.walk
+                            first?.forceActiveFocus(Qt.TabFocusReason)
+                        }
+                        event.accepted = true
+                    }
                 }
                 WordPill {
                     id: word
-                    objectName: slot.filled ? "" : "pill." + slot.index
+                    objectName: "pill." + slot.index
                     visible: !slot.filled
                     enabled: !slot.filled
                     unit: root.px
@@ -366,10 +356,18 @@ ThemeScreen {
                     onColour: ink.rose
                     onActivated: slot.row >= 0 ? Actions.pageChoose(slot.row) : Actions.pageAct(slot.act)
                     onActiveFocusChanged: if (word.activeFocus) Actions.pageFocus(slot.act, 0)
-                    Keys.onLeftPressed: (event) => root.go(root.pillAt(slot.index - 1), event)
-                    Keys.onRightPressed: (event) => root.go(root.pillAt(slot.index + 1), event)
-                    Keys.onUpPressed: (event) => root.go(trail.lastLink(), event)
-                    Keys.onDownPressed: (event) => root.go(root.cardAt(0), event)
+                    Keys.onLeftPressed: (event) => { (pills.itemAt(slot.index - 1) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
+                    Keys.onRightPressed: (event) => { (pills.itemAt(slot.index + 1) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
+                    Keys.onUpPressed: (event) => { (trail.links.itemAt(trail.links.count - 2) as Row)?.children[0]?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
+                    Keys.onDownPressed: (event) => {
+                        if (cards.count > 0) {
+                            cards.currentIndex = 0
+                            cards.positionViewAtIndex(0, ListView.Contain)
+                            const first = (cards.currentItem as CardSlot)?.walk
+                            first?.forceActiveFocus(Qt.TabFocusReason)
+                        }
+                        event.accepted = true
+                    }
                 }
             }
             // A card of the States tab: a state's (parts/StateCard.qml), reached and loaded, or the empty slot's, shown only (parts/EmptyCard.qml).
@@ -384,13 +382,29 @@ ThemeScreen {
                 required property int row
                 readonly property Item walk: card.row >= 0 ? state : null
                 readonly property bool resting: Page.note.length > 0
+                // The focus starts on the first state's card, else, with no state, on the first button, as the cards are made for a game.
+                Component.onCompleted: if (card.index === 0 && !cards.activeFocus && cards.currentIndex <= 0) { cards.currentIndex = 0; (card.row >= 0 ? state : (pills.itemAt(0) as PillSlot)?.walk)?.forceActiveFocus() }
+                // The empty slot is never reached: a focus the row hands it (a state deleted beside it) goes to the card before it, else to the first button.
+                onActiveFocusChanged: {
+                    if (!card.activeFocus || card.row >= 0)
+                        return
+                    if (card.index > 0) {
+                        cards.currentIndex = card.index - 1
+                        cards.positionViewAtIndex(card.index - 1, ListView.Contain)
+                        const prior = (cards.currentItem as CardSlot)?.walk
+                        prior?.forceActiveFocus()
+                    } else {
+                        const first = (pills.itemAt(0) as PillSlot)?.walk
+                        first?.forceActiveFocus()
+                    }
+                }
                 width: card.row >= 0 ? state.width : empty.width
                 height: card.row >= 0 ? state.height : empty.height
                 // Whole inside the row's window, or not drawn, as Home's Recent row leaves a tile out.
                 visible: card.x - cards.contentX >= -0.5 && card.x - cards.contentX + card.width <= cards.width + 0.5
                 StateCard {
                     id: state
-                    objectName: card.row >= 0 ? "card." + card.index : ""
+                    objectName: "card." + card.index
                     visible: card.row >= 0
                     enabled: card.row >= 0
                     unit: root.px
@@ -413,14 +427,35 @@ ThemeScreen {
                         Actions.pageFocus(-1, card.row)
                     }
                     focus: true
-                    Keys.onLeftPressed: (event) => root.go(root.cardAt(card.index - 1), event)
-                    Keys.onRightPressed: (event) => root.go(root.cardAt(card.index + 1), event)
-                    Keys.onUpPressed: (event) => root.go(root.pillAt(0), event)
+                    Keys.onLeftPressed: (event) => {
+                        if (card.index > 0) {
+                            cards.currentIndex = card.index - 1
+                            cards.positionViewAtIndex(card.index - 1, ListView.Contain)
+                            const prev = (cards.currentItem as CardSlot)?.walk
+                            prev?.forceActiveFocus(Qt.TabFocusReason)
+                        }
+                        event.accepted = true
+                    }
+                    Keys.onRightPressed: (event) => {
+                        if (card.index + 1 < cards.count) {
+                            const prior = cards.currentIndex
+                            cards.currentIndex = card.index + 1
+                            const next = (cards.currentItem as CardSlot)?.walk
+                            if (next) {
+                                cards.positionViewAtIndex(card.index + 1, ListView.Contain)
+                                next.forceActiveFocus(Qt.TabFocusReason)
+                            } else {
+                                cards.currentIndex = prior
+                            }
+                        }
+                        event.accepted = true
+                    }
+                    Keys.onUpPressed: (event) => { (pills.itemAt(0) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
                     Keys.onDownPressed: (event) => event.accepted = true
                 }
                 EmptyCard {
                     id: empty
-                    objectName: card.row < 0 ? "card." + card.index : ""
+                    objectName: "card." + card.index
                     visible: card.row < 0
                     unit: root.px
                     label: card.label

@@ -109,4 +109,5 @@ QtObject {
     readonly property int breathPeriod: Kit.Tokens.breathPeriod
     readonly property real breathLow: Kit.Tokens.breathLow
     readonly property bool breathes: Kit.Tokens.breathes
+    readonly property var dashPattern: Kit.Tokens.dashPattern
 }

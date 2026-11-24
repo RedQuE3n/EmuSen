@@ -18,7 +18,7 @@ FocusScope {
     readonly property Sound sound: Sound {}
     // 1.10: on Home, the item a splash that enters Home is placed in, between what Home draws under it and over it.
     property Item splashPlace: null
-    // 1.12: on the game page, the keys of the tabs this screen draws (Page.tabs' keys, as "states"); the program draws every other tab, deeper page and question. None names them all.
-    property list<string> pageSections
+    // 1.12: on the game page, the tabs this screen draws as flags, 1 << Page.States and so on (Page.PageSection); the program draws every other tab, deeper page and question. 0 names them all.
+    property int pageSections: 0
     signal finished()
 }

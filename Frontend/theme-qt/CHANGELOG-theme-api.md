@@ -9,9 +9,9 @@ Decided 2026-11-16 by the tester (R-20261116-27, -29, -30, -36) and 2026-11-23 (
 game page as its board does, six tabs in the board's order and the States tab's cards, and the program draws every tab
 and deeper page the theme does not.
 
-- **`ThemeScreen.pageSections`**: on the game page, the keys of the tabs the screen draws (`overview`, `states`, `media`,
-  `details`, `options`, `cheats`); the program draws every other tab, every deeper page and every question. A screen
-  that names none draws them all, as in 1.9.
+- **`ThemeScreen.pageSections`** and **`Page.PageSection`**: on the game page, the tabs the screen draws as flags, one bit
+  at each tab's place, written `1 << Page.States` (the enum's names and order are qt-models' `game_page::TABS`); the program
+  draws every other tab, every deeper page and every question. 0, the default, draws them all, as in 1.9.
 - **`Page.tabs`** and **`Page.tab`**: the board's six tabs in its order, Cheats only for a game with cheats, and the one
   shown; **`Actions.pageTab(i)`** chooses one (Cheats opens Options' Cheats, as its row does).
 - **`Page.kicker`** and **`Page.line`**: console · year · genre, and last played, time played and players, each part the

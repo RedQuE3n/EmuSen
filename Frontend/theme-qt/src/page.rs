@@ -20,6 +20,18 @@ pub mod qobject {
         type ThemeRows = crate::rows::qobject::ThemeRows;
     }
 
+    /// 1.12: the game page's tabs in the board's order, qt-models' `game_page::TABS`, a theme naming the ones it draws as the
+    /// flags `1 << Page.States` and so on (`ThemeScreen.pageSections`); held to `TABS` by tests/page_sections.rs.
+    #[qenum(ThemePage)]
+    enum PageSection {
+        Overview,
+        States,
+        Media,
+        Details,
+        Options,
+        Cheats,
+    }
+
     extern "RustQt" {
         #[qobject]
         #[qml_element = "Page"]

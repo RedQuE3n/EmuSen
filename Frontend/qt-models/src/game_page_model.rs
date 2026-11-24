@@ -99,8 +99,8 @@ pub mod qobject {
         /// Cover art's title and the way back above it.
         #[qproperty(QString, cover_title, cxx_name = "coverTitle", READ, CONSTANT)]
         #[qproperty(QString, cover_trail, cxx_name = "coverTrail", READ, NOTIFY)]
-        /// The tabs a theme's game screen names as its own (`ThemeScreen.pageSections`); empty where it names none.
-        #[qproperty(QStringList, theme_sections, cxx_name = "themeSections")]
+        /// The tabs a theme's game screen draws, as flags (`ThemeScreen.pageSections`, `Tab::flag`); 0 where it names none.
+        #[qproperty(i32, theme_sections, cxx_name = "themeSections")]
         /// Whether the theme's screen draws the page as it stands; else the program's page is shown (EmuSen_Qt.md §3.2).
         #[qproperty(bool, theme_draws, cxx_name = "themeDraws", READ, NOTIFY)]
         type GamePageModel = super::GamePageModelRust;
@@ -498,7 +498,7 @@ pub struct GamePageModelRust {
     cover_chosen: bool,
     /// Set to ask the package's job running to stop.
     job_stop: Option<Arc<std::sync::atomic::AtomicBool>>,
-    theme_sections: QStringList,
+    theme_sections: i32,
     theme_draws: bool,
 }
 
@@ -562,7 +562,7 @@ impl Default for GamePageModelRust {
             typing_for: None,
             cover_chosen: false,
             job_stop: None,
-            theme_sections: QStringList::default(),
+            theme_sections: 0,
             theme_draws: true,
         }
     }
@@ -833,8 +833,7 @@ impl qobject::GamePageModel {
             self.as_mut().rust_mut().help = help;
             self.as_mut().help_changed();
         }
-        let named: Vec<String> = QList::<QString>::from(&self.theme_sections).iter().map(|s| s.to_string()).collect();
-        let draws = self.page.drawn_by(&named, self.asking || self.viewing || self.typing);
+        let draws = self.page.drawn_by(self.theme_sections, self.asking || self.viewing || self.typing);
         if self.theme_draws != draws {
             self.as_mut().rust_mut().theme_draws = draws;
             self.theme_draws_changed();
@@ -1363,17 +1362,7 @@ impl qobject::GamePageModel {
     /// The board's buttons, each with the place among the actions of the action it is (R-20261116-30), and for Resume the
     /// resume point's tile it chooses (R-20261123-35), else -1.
     pub fn pills(&self) -> Vec<(crate::game_page::Action, i32, i32)> {
-        let actions = self.page.actions();
-        let point = self.page.resume_point_row().map_or(-1, |r| r as i32);
-        self.page
-            .pills()
-            .into_iter()
-            .map(|p| {
-                let at = actions.iter().position(|a| a.key == p.key).map_or(-1, |i| i as i32);
-                let row = if p.key == crate::game_page::RESUME { point } else { -1 };
-                (p, at, row)
-            })
-            .collect()
+        self.page.placed_pills()
     }
 
     /// The board's trail and the game's console's id, which its second link opens.
@@ -1387,9 +1376,7 @@ impl qobject::GamePageModel {
 
     /// The state cards, each line written in the player's zone and clock form; pictures as URLs.
     pub fn cards(&self) -> Vec<crate::game_page::Card> {
-        let now = self.page.now;
-        let when = |at: i64| crate::game_page::state_when(crate::clock::local_day(at, 0), crate::clock::local_day(now, 0), crate::clock::local_day(now, 1), &crate::clock::short_time(at));
-        self.page.state_cards(&when).into_iter().map(|c| crate::game_page::Card { picture: cover_url(&c.picture), ..c }).collect()
+        self.page.cards_now().into_iter().map(|c| crate::game_page::Card { picture: cover_url(&c.picture), ..c }).collect()
     }
 
     /// The words beside the cards where the game has no state.

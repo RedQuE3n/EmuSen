@@ -89,12 +89,9 @@ fn qt_3_4_12_every_pill_tab_link_and_card_is_reached_and_acted_on_by_pad_and_poi
         game::until(&mut scene, "LB opening the Overview", 2000, |s| shown(s) == (0, false));
         scene.pad(UiButton::PageDown);
         game::until(&mut scene, "RB back to States", 2000, |s| shown(s) == (1, true));
-        game::until(&mut scene, "the focus back on a card", 2000, |s| focused(s).starts_with("card."));
+        game::until(&mut scene, "the focus back where it was, on Favourite", 2000, |s| focused(s) == "pill.2");
         // A on slot 1's card starts the game from slot 1.
-        while focused(&mut scene) != "card.1" {
-            let before = focused(&mut scene);
-            assert_ne!(press(&mut scene, if before == "card.0" { UiButton::Right } else { UiButton::Left }), before, "the walk to slot 1");
-        }
+        assert_eq!([UiButton::Down, UiButton::Right].map(|b| press(&mut scene, b)), ["card.0", "card.1"], "down to the cards and along to slot 1");
         scene.pad(UiButton::Accept);
         assert_eq!(started(&mut scene), file(1), "slot 1's card loads slot 1");
     }

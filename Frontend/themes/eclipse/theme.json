@@ -17,6 +17,7 @@
     ],
     "tokens": {
         "dark": {
+            "dashPattern": "3 2",
             "surface": "#07080F",
             "surfaceRaised": "#151826",
             "border": "#5E647B",

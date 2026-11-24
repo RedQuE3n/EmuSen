@@ -287,7 +287,7 @@ Item {
     Binding {
         target: themed.pageModel
         property: "themeSections"
-        value: themed.gameScreen?.pageSections ?? []
+        value: themed.gameScreen?.pageSections ?? 0
         when: themed.pageModel !== null
     }
     Slot {

@@ -5,6 +5,16 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.12: a dashed line's pattern as a token (2026-11-23)
+
+- **`Tokens.dashPattern`**: a dashed line's dash and gap in widths of the line, as `ShapePath.dashPattern` takes it (a
+  `QVariant` holding the two numbers, as the kit's other lists QML reads are, which qmllint can type);
+  kit-core's `DASH_PATTERN`, Qt's own `DashLine` default of 4 and 2, so nothing the kit or the reference theme draws
+  changes. A theme sets its own in `theme.json` as two numbers apart by a space (`"dashPattern": "3 2"`, read by
+  kit-core's `dash_pattern`, which theme-check holds a value to). Eclipse's empty slot draws the board's 6 on and 4 off at 2 px
+  (EclipseGame:79, measured in Chrome's render 2026-11-23) as `"3 2"`, as the theme rules forbid a pattern written in QML.
+  `EmuSen_Kit.md` §7.2.
+
 ## 1.11: the walk follows the host's row (2026-11-23)
 
 - **`MeasuredWalk.follows`**: a row the walk keeps focused, focused when it changes and whenever the rows are read, the

@@ -997,7 +997,7 @@ Module {
     }
     Component {
         file: "page.cxxqt.h"
-        lineNumber: 23
+        lineNumber: 25
         name: "ThemePage"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -1005,13 +1005,27 @@ Module {
         isCreatable: false
         isSingleton: true
         exportMetaObjectRevisions: [256]
+        Enum {
+            name: "PageSection"
+            isScoped: true
+            type: "int"
+            lineNumber: 65
+            values: [
+                "Overview",
+                "States",
+                "Media",
+                "Details",
+                "Options",
+                "Cheats"
+            ]
+        }
         Property {
             name: "ready"
             type: "bool"
             read: "getReady"
             notify: "shown"
             index: 0
-            lineNumber: 29
+            lineNumber: 31
             isReadonly: true
         }
         Property {
@@ -1020,7 +1034,7 @@ Module {
             read: "getKey"
             notify: "shown"
             index: 1
-            lineNumber: 30
+            lineNumber: 32
             isReadonly: true
         }
         Property {
@@ -1029,7 +1043,7 @@ Module {
             read: "getTitle"
             notify: "shown"
             index: 2
-            lineNumber: 31
+            lineNumber: 33
             isReadonly: true
         }
         Property {
@@ -1038,7 +1052,7 @@ Module {
             read: "getFacts"
             notify: "shown"
             index: 3
-            lineNumber: 32
+            lineNumber: 34
             isReadonly: true
         }
         Property {
@@ -1047,7 +1061,7 @@ Module {
             read: "getCover"
             notify: "shown"
             index: 4
-            lineNumber: 33
+            lineNumber: 35
             isReadonly: true
         }
         Property {
@@ -1056,7 +1070,7 @@ Module {
             read: "getHero"
             notify: "shown"
             index: 5
-            lineNumber: 34
+            lineNumber: 36
             isReadonly: true
         }
         Property {
@@ -1065,7 +1079,7 @@ Module {
             read: "getClip"
             notify: "shown"
             index: 6
-            lineNumber: 35
+            lineNumber: 37
             isReadonly: true
         }
         Property {
@@ -1074,7 +1088,7 @@ Module {
             isPointer: true
             read: "getActions"
             index: 7
-            lineNumber: 36
+            lineNumber: 38
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1084,7 +1098,7 @@ Module {
             read: "getSections"
             notify: "shown"
             index: 8
-            lineNumber: 37
+            lineNumber: 39
             isReadonly: true
         }
         Property {
@@ -1093,7 +1107,7 @@ Module {
             read: "getSection"
             notify: "shown"
             index: 9
-            lineNumber: 38
+            lineNumber: 40
             isReadonly: true
         }
         Property {
@@ -1102,7 +1116,7 @@ Module {
             read: "getShows"
             notify: "shown"
             index: 10
-            lineNumber: 39
+            lineNumber: 41
             isReadonly: true
         }
         Property {
@@ -1111,7 +1125,7 @@ Module {
             read: "getWords"
             notify: "shown"
             index: 11
-            lineNumber: 40
+            lineNumber: 42
             isReadonly: true
         }
         Property {
@@ -1120,7 +1134,7 @@ Module {
             read: "getPicture"
             notify: "shown"
             index: 12
-            lineNumber: 41
+            lineNumber: 43
             isReadonly: true
         }
         Property {
@@ -1129,7 +1143,7 @@ Module {
             isPointer: true
             read: "getRows"
             index: 13
-            lineNumber: 42
+            lineNumber: 44
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1139,7 +1153,7 @@ Module {
             read: "getCoverArt"
             notify: "shown"
             index: 14
-            lineNumber: 43
+            lineNumber: 45
             isReadonly: true
         }
         Property {
@@ -1148,7 +1162,7 @@ Module {
             read: "getFocusedAction"
             notify: "shown"
             index: 15
-            lineNumber: 44
+            lineNumber: 46
             isReadonly: true
         }
         Property {
@@ -1157,7 +1171,7 @@ Module {
             read: "getFocusedContent"
             notify: "shown"
             index: 16
-            lineNumber: 45
+            lineNumber: 47
             isReadonly: true
         }
         Property {
@@ -1166,7 +1180,7 @@ Module {
             read: "getHelp"
             notify: "shown"
             index: 17
-            lineNumber: 46
+            lineNumber: 48
             isReadonly: true
         }
         Property {
@@ -1175,7 +1189,7 @@ Module {
             read: "getAsking"
             notify: "shown"
             index: 18
-            lineNumber: 47
+            lineNumber: 49
             isReadonly: true
         }
         Property {
@@ -1184,7 +1198,7 @@ Module {
             read: "getQuestionTitle"
             notify: "shown"
             index: 19
-            lineNumber: 48
+            lineNumber: 50
             isReadonly: true
         }
         Property {
@@ -1193,7 +1207,7 @@ Module {
             read: "getQuestionSentences"
             notify: "shown"
             index: 20
-            lineNumber: 49
+            lineNumber: 51
             isReadonly: true
         }
         Property {
@@ -1202,7 +1216,7 @@ Module {
             read: "getQuestionChoices"
             notify: "shown"
             index: 21
-            lineNumber: 50
+            lineNumber: 52
             isReadonly: true
         }
         Property {
@@ -1211,7 +1225,7 @@ Module {
             read: "getQuestionBack"
             notify: "shown"
             index: 22
-            lineNumber: 51
+            lineNumber: 53
             isReadonly: true
         }
         Property {
@@ -1220,7 +1234,7 @@ Module {
             read: "getTabs"
             notify: "shown"
             index: 23
-            lineNumber: 52
+            lineNumber: 54
             isReadonly: true
         }
         Property {
@@ -1229,7 +1243,7 @@ Module {
             read: "getTab"
             notify: "shown"
             index: 24
-            lineNumber: 53
+            lineNumber: 55
             isReadonly: true
         }
         Property {
@@ -1238,7 +1252,7 @@ Module {
             read: "getKicker"
             notify: "shown"
             index: 25
-            lineNumber: 54
+            lineNumber: 56
             isReadonly: true
         }
         Property {
@@ -1247,7 +1261,7 @@ Module {
             read: "getLine"
             notify: "shown"
             index: 26
-            lineNumber: 55
+            lineNumber: 57
             isReadonly: true
         }
         Property {
@@ -1256,7 +1270,7 @@ Module {
             isPointer: true
             read: "getPills"
             index: 27
-            lineNumber: 56
+            lineNumber: 58
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1266,7 +1280,7 @@ Module {
             isPointer: true
             read: "getCards"
             index: 28
-            lineNumber: 57
+            lineNumber: 59
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1276,7 +1290,7 @@ Module {
             read: "getNote"
             notify: "shown"
             index: 29
-            lineNumber: 58
+            lineNumber: 60
             isReadonly: true
         }
         Property {
@@ -1285,7 +1299,7 @@ Module {
             read: "getBoardHelp"
             notify: "shown"
             index: 30
-            lineNumber: 59
+            lineNumber: 61
             isReadonly: true
         }
         Property {
@@ -1294,7 +1308,7 @@ Module {
             read: "getTrail"
             notify: "shown"
             index: 31
-            lineNumber: 60
+            lineNumber: 62
             isReadonly: true
         }
         Property {
@@ -1303,7 +1317,7 @@ Module {
             read: "getTrailSection"
             notify: "shown"
             index: 32
-            lineNumber: 61
+            lineNumber: 63
             isReadonly: true
         }
         Property {
@@ -1312,10 +1326,10 @@ Module {
             read: "getConsole"
             notify: "shown"
             index: 33
-            lineNumber: 62
+            lineNumber: 64
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 101 }
+        Signal { name: "shown"; lineNumber: 112 }
     }
     Component {
         file: "rows.cxxqt.h"

@@ -14,10 +14,8 @@ Item {
     // The words' size and the gap either side of a slash, in board pixels (EclipseGame:27, 29).
     property real size: 24
     property real gap: 14
-    // A link by its place, looked up as a key is pressed, since the words are made again at each feed; the page's own name is none.
-    function linkAt(i: int): Item { return i >= 0 && i < links.count - 1 ? (links.itemAt(i) as Row)?.children[0] ?? null : null }
-    // The last link, which the walk reaches from below.
-    function lastLink(): Item { return root.linkAt(links.count - 2) }
+    // The links' rows, each link its row's first child, looked up as a key is pressed, since the words are made again at each feed.
+    readonly property alias links: links
     signal chosen(int index)
     // Down from a link, which the screen sends where it goes.
     signal downward()
@@ -52,11 +50,11 @@ Item {
                         event.accepted = true
                     }
                     Keys.onLeftPressed: (event) => {
-                        root.linkAt(crumb.index - 1)?.forceActiveFocus(Qt.TabFocusReason)
+                        (crumb.index > 0 ? (links.itemAt(crumb.index - 1) as Row)?.children[0] : null)?.forceActiveFocus(Qt.TabFocusReason)
                         event.accepted = true
                     }
                     Keys.onRightPressed: (event) => {
-                        root.linkAt(crumb.index + 1)?.forceActiveFocus(Qt.TabFocusReason)
+                        (crumb.index + 2 < links.count ? (links.itemAt(crumb.index + 1) as Row)?.children[0] : null)?.forceActiveFocus(Qt.TabFocusReason)
                         event.accepted = true
                     }
                     Keys.onUpPressed: (event) => event.accepted = true

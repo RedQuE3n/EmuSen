@@ -23,7 +23,7 @@ Item {
     width: root.cardWidth * root.unit
     height: nameItem.y + nameItem.height
     Accessible.name: root.label
-    // The border drawn inside the box, dashed as Chrome dashes a 2 px border: dashes and gaps of three times its width.
+    // The border drawn inside the box, dashed as Chrome dashed the board's 2 px border, 6 on and 4 off (measured 2026-11-23): Eclipse's Tokens.dashPattern.
     Shape {
         id: box
         objectName: "emptyBox"
@@ -35,7 +35,7 @@ Item {
             strokeColor: root.line
             strokeWidth: root.lineWidth * root.unit
             strokeStyle: ShapePath.DashLine
-            dashPattern: [3, 3]
+            dashPattern: Tokens.dashPattern
             fillColor: "transparent"
             PathRectangle {
                 x: box.half
@@ -61,7 +61,11 @@ Item {
             strokeWidth: root.plusStroke * plus.width / 24
             capStyle: ShapePath.RoundCap
             fillColor: "transparent"
-            PathSvg { path: "M12 5v14M5 12h14" }
+            startX: 12
+            startY: 5
+            PathLine { x: 12; y: 19 }
+            PathMove { x: 5; y: 12 }
+            PathLine { x: 19; y: 12 }
         }
     }
     Line {

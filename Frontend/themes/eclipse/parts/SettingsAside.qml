@@ -13,6 +13,8 @@ FocusScope {
     property string heading
     // Scene pixels to a canvas unit, so the picture's glows blur at the pixels drawn.
     property real pixelScale: 1
+    // The focused row's short line, drawn under the folder count card (G:30).
+    property string focusedAbout
     // Settings.preview's numbers, the theme API's (EmuSen_Qt.md §3.2): 1 picture, 2 meter, 3 variants, 4 text sizes, 6 face buttons, 7 folder count, 8 eclipse mark, 9 scraping chips.
     readonly property bool pictured: Settings.preview === 1
     readonly property bool sampled: Settings.preview === 3 || Settings.preview === 4
@@ -93,10 +95,18 @@ FocusScope {
                 id: shown
                 required property int index
                 required property string value
+                required property string about
                 Binding {
                     target: meter
                     property: "value"
                     value: shown.value
+                    when: shown.index === Settings.focused
+                    restoreMode: Binding.RestoreNone
+                }
+                Binding {
+                    target: root
+                    property: "focusedAbout"
+                    value: shown.about
                     when: shown.index === Settings.focused
                     restoreMode: Binding.RestoreNone
                 }
@@ -173,7 +183,7 @@ FocusScope {
         unit: root.unit
         visible: text.length > 0
         width: root.width
-        text: Settings.sentence
+        text: Settings.preview === 7 ? root.focusedAbout : Settings.sentence
         color: ink.emptyAbout
         wrapMode: Text.WordWrap
         lineHeightMode: Text.FixedHeight

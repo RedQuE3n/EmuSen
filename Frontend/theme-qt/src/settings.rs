@@ -166,11 +166,6 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         })
         .collect();
     let mut pane = view.pane(focused.max(0) as usize);
-    if pane.preview == settings::Preview::Folder {
-        if let Some(about) = usize::try_from(focused).ok().and_then(|f| facets.get(f)).map(|f| &f.about) {
-            pane.sentence = about.clone();
-        }
-    }
     let about_heading = if pane.preview == settings::Preview::Chips {
         pane.sentence.clear();
         pane.caption.clone()

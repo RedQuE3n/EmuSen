@@ -3,6 +3,20 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.14, an addition: Eclipse's game page Overview, Details and Options (2026-11-23)
+
+Decided 2026-11-23 by the tester (R-20261111-20, R-20261116-14, -27, -29, -30, -32): Eclipse draws the game page's
+Overview, Details and Options tabs as their boards draw them.
+
+- **`Page.hasDescription`**: whether `Page.words` is the game's own description rather than the empty fallback.
+- **`Page.boardRows`** (`key`, `label`, `value`, `steps`, `opens`, `isSwitch`, `switchOn`, `sentence`, `row`): Details
+  and Options rows in the boards' words, aside hints and underlying indices (`Page.rows`).
+- **`Page.rowSentence`**, **`Page.rowPlace`** and **`Page.defaultable`**: the focused board row's aside sentence, its
+  place (`"2 of 5"`), and whether X (`default`) resets an Options override back to the console's default.
+- **`Help.PageResumeBoard`**, **`Help.PageOpen`**, **`Help.PageDetail`**, **`Help.PageOption`**, and `defaultable` in
+  `Help.entries(kind, { defaultable })`: the boards' help lines for Overview, Details and Options.
+- The module is 1.14 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.14.*`.
+
 ## 1.13, an addition: Eclipse's game page, its tabs and its States tab (2026-11-23)
 
 Decided 2026-11-16 by the tester (R-20261116-27, -29, -30, -36) and 2026-11-23 (R-20261123-33 to -36): Eclipse draws the

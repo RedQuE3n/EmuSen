@@ -11,7 +11,7 @@ Item {
     // The fill, which the tests read.
     readonly property color paint: root.ink
     // The box in board pixels and the path's own box, the boards' viewBox: constants of the design.
-    readonly property real side: 22
+    property real side: 22
     readonly property real box: 24
     width: root.side * root.unit
     height: width

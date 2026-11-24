@@ -1283,6 +1283,13 @@ impl qobject::GamePageModel {
                 let outcome = self.page.delete(self.focus.1);
                 self.did(outcome)
             }
+            crate::help::DEFAULT => {
+                if self.focus.0.is_some() {
+                    return false;
+                }
+                let outcome = self.page.to_default(self.focus.1);
+                self.did(outcome)
+            }
             crate::help::SET_COVER => match self.viewer.as_ref().and_then(|v| self.page.viewer_cover(v)) {
                 Some(kind) => self.did(Outcome::Changed(crate::game_page::Change::Cover(Some(kind)))),
                 None => false,
@@ -1387,6 +1394,26 @@ impl qobject::GamePageModel {
     /// The help as Eclipse's boards word it for the focus; none where they draw none.
     pub fn board_help_screen(&self) -> Option<crate::help::Screen> {
         self.page.board_help(self.focus.0, self.focus.1)
+    }
+
+    /// Whether the game has its own description rather than the empty fallback.
+    pub fn has_description(&self) -> bool {
+        self.page.has_description()
+    }
+
+    /// Eclipse's Details or Options rows for the tab shown.
+    pub fn board_rows(&self) -> Vec<crate::game_page::BoardRow> {
+        self.page.board_rows()
+    }
+
+    /// The focused board row's aside sentence and position ("2 of 5").
+    pub fn board_aside(&self) -> (String, String) {
+        self.page.board_aside(self.focus.0, self.focus.1)
+    }
+
+    /// Whether X on the focused Options row resets an override back to the console's default.
+    pub fn defaultable(&self) -> bool {
+        self.focus.0.is_none() && self.page.defaultable(self.focus.1)
     }
 
     /// Told while the page tells QML of a change, the focus is kept and applied once the telling has finished (EmuSen_Qt.md §7.8.1).

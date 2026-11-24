@@ -96,6 +96,11 @@ pub enum Screen {
     GamePageState,
     GamePageStart,
     GamePageSections,
+    /// Eclipse's boards for Overview (Resume), Details/Options doors, Details actions and Options stepped rows (R-20261116-30).
+    GamePageResumeBoard,
+    GamePageOpen,
+    GamePageDetail,
+    GamePageOption,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -295,6 +300,16 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::GamePageState => &[(UiButton::Accept, "Load this state", None), (UiButton::Screensaver, "Delete", Some(DELETE)), BACK],
         Screen::GamePageStart => &[(UiButton::Accept, "Start", None), PAGE_HEART, BACK, PAGE_HOME],
         Screen::GamePageSections => &[PAGE_SECTION],
+        Screen::GamePageResumeBoard => &[(UiButton::Accept, "Resume", None), PAGE_HEART, BACK, PAGE_HOME],
+        Screen::GamePageOpen => &[(UiButton::Accept, "Open", None), BACK, PAGE_HOME],
+        Screen::GamePageDetail => &[(UiButton::Accept, "Choose", None), BACK, PAGE_HOME],
+        Screen::GamePageOption => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Left, "Value", None),
+            (UiButton::Screensaver, "Back to the console's", Some(DEFAULT)),
+            BACK,
+            PAGE_HOME,
+        ],
     }
 }
 

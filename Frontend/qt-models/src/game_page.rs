@@ -1268,6 +1268,42 @@ pub struct Card {
     pub row: Option<usize>,
 }
 
+/// A row of Eclipse's Details or Options tab, carrying its aside hint and underlying content index.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BoardRow {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+    pub steps: bool,
+    pub opens: bool,
+    pub is_switch: bool,
+    pub switch_on: bool,
+    pub sentence: &'static str,
+    pub row: usize,
+}
+
+/// The plain core name without default or console suffixes (R-20261116-14).
+fn plain_core(text: &str) -> String {
+    for suffix in [" (default)", " (the console's)", " (the only one)"] {
+        if let Some(name) = text.strip_suffix(suffix) {
+            return name.to_owned();
+        }
+    }
+    text.to_owned()
+}
+
+/// The aside hint for a Details row, as board #79 and the owner set it.
+fn detail_sentence(key: &str) -> &'static str {
+    match key {
+        SCRAPE => "Fetch art and facts for this game from your scraping sources.",
+        EDIT => "The game's name, dates, people and counts, as the scraper found them or as typed here.",
+        COVER => "Which picture stands as this game's cover in the library.",
+        FOLDER => "Opens the folder holding this game's file in the file manager.",
+        HIDE => "Hides this game from the library without touching its file.",
+        _ => "",
+    }
+}
+
 /// A day of the calendar in the player's zone, as the when-lines count days: year, month (1 to 12) and day.
 pub type Day = (i32, u32, u32);
 
@@ -1413,17 +1449,109 @@ impl GamePage {
         if self.read.states.is_empty() { NO_STATES } else { "" }
     }
 
-    /// The help as Eclipse's boards word it for the focus (R-20261116-30): a state's card, and Start where the game has no
-    /// resume point; Resume's without the step Eclipse does not offer (R-20261123-35); none where the boards draw no line, so
-    /// the program's own is shown.
+    /// Whether the game has its own description rather than the empty fallback.
+    pub fn has_description(&self) -> bool {
+        !self.read.description.is_empty()
+    }
+
+    /// Eclipse's Details or Options rows with board wording, aside hints, and real content indices (R-20261111-20, -16-14, -16-29).
+    pub fn board_rows(&self) -> Vec<BoardRow> {
+        let Some(tab) = self.tab_drawn() else { return Vec::new() };
+        let Content::Rows(rows) = self.content() else { return Vec::new() };
+        match tab {
+            Tab::Details => rows
+                .into_iter()
+                .enumerate()
+                .map(|(row, r)| {
+                    let value = if (r.key == SCRAPE || r.key == HIDE) && r.value == "…" { String::new() } else { r.value };
+                    BoardRow {
+                        key: r.key.to_owned(),
+                        label: r.label,
+                        value,
+                        steps: r.steps,
+                        opens: r.opens,
+                        is_switch: false,
+                        switch_on: false,
+                        sentence: detail_sentence(r.key),
+                        row,
+                    }
+                })
+                .collect(),
+            Tab::Options => rows
+                .into_iter()
+                .enumerate()
+                .filter(|(_, r)| r.key != CHEATS)
+                .map(|(row, r)| {
+                    let (label, value, sentence) = match r.key {
+                        "engine" => (
+                            "Core".to_owned(),
+                            plain_core(&r.value),
+                            "The core this game runs on; the console's own unless one is chosen here. Cores lists them all.",
+                        ),
+                        "profile" => (r.label, if self.read.profile.is_none() { CONSOLES.to_owned() } else { r.value }, r.sentence),
+                        STANDARD => (r.label, if self.read.standard.is_none() { "The game's own".to_owned() } else { r.value }, r.sentence),
+                        _ => (r.label, r.value, r.sentence),
+                    };
+                    BoardRow { key: r.key.to_owned(), label, value, steps: r.steps, opens: r.opens, is_switch: false, switch_on: false, sentence, row }
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The focused board row's aside sentence and position ("2 of 5"); empty while a pill or trail link holds focus.
+    pub fn board_aside(&self, action: Option<usize>, content: usize) -> (String, String) {
+        if action.is_some() {
+            return (String::new(), String::new());
+        }
+        let rows = self.board_rows();
+        let Some(at) = rows.iter().position(|r| r.row == content) else { return (String::new(), String::new()) };
+        (rows[at].sentence.to_owned(), place(at, rows.len()))
+    }
+
+    /// X on an Options row: resets the game's override back to the console's default where one is set.
+    pub fn to_default(&self, index: usize) -> Outcome {
+        if self.tab_drawn() != Some(Tab::Options) {
+            return Outcome::Nothing;
+        }
+        let Content::Rows(rows) = self.content() else { return Outcome::Nothing };
+        match rows.get(index).map(|r| r.key) {
+            Some("engine") if self.read.engine.is_some() => Outcome::Changed(Change::Engine(None)),
+            Some("profile") if self.read.profile.is_some() => Outcome::Changed(Change::Profile(None)),
+            Some(STANDARD) if self.read.standard.is_some() => Outcome::Changed(Change::Standard(None)),
+            Some(CROP) if self.read.crop.as_ref().is_some_and(|c| c.own.is_some()) => Outcome::Changed(Change::Crop(None)),
+            _ => Outcome::Nothing,
+        }
+    }
+
+    /// Whether X on the Options row at `index` would reset an override back to the console's default.
+    pub fn defaultable(&self, index: usize) -> bool {
+        !matches!(self.to_default(index), Outcome::Nothing)
+    }
+
+    /// The help as Eclipse's boards word it for the focus (R-20261116-30); none where the program's own is shown.
     pub fn board_help(&self, action: Option<usize>, content: usize) -> Option<Screen> {
         let key = action.and_then(|i| self.actions().get(i).map(|a| a.key));
         match (action, key) {
             (Some(_), Some(PLAY)) if self.resume_point().is_none() => Some(Screen::GamePageStart),
-            (Some(_), Some(RESUME)) => Some(Screen::GamePageResume),
+            (Some(_), Some(RESUME)) => Some(Screen::GamePageResumeBoard),
             (Some(_), _) => None,
-            (None, _) if self.help(None, content) == Screen::GamePageLoad => Some(Screen::GamePageState),
-            (None, _) => None,
+            (None, _) => match self.tab_drawn() {
+                Some(Tab::Overview) => Some(if self.resume_point().is_some() { Screen::GamePageResumeBoard } else { Screen::GamePageStart }),
+                Some(Tab::States) if self.read.states.is_empty() => Some(Screen::GamePageStart),
+                Some(Tab::States) if self.help(None, content) == Screen::GamePageLoad => Some(Screen::GamePageState),
+                Some(Tab::Details) => match self.board_rows().iter().find(|r| r.row == content) {
+                    Some(r) if r.opens => Some(Screen::GamePageOpen),
+                    Some(_) => Some(Screen::GamePageDetail),
+                    None => None,
+                },
+                Some(Tab::Options) => match self.board_rows().iter().find(|r| r.row == content) {
+                    Some(r) if r.steps => Some(Screen::GamePageOption),
+                    Some(r) if r.opens => Some(Screen::GamePageOpen),
+                    _ => None,
+                },
+                _ => None,
+            },
         }
     }
 }

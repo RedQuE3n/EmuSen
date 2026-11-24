@@ -126,10 +126,16 @@ pub enum Preview {
     Heading,
     /// The help bar's face buttons as they are drawn now (from EmuSen.Theme 1.12).
     Buttons,
+    /// Library's ROM folder count block (from EmuSen.Theme 1.13, R-20261116-22).
+    Folder,
+    /// EmuSen's About eclipse mark (from EmuSen.Theme 1.13, R-20261116-22).
+    Mark,
+    /// Scraping's toggle chips in the About panel (from EmuSen.Theme 1.13, R-20261116-22).
+    Chips,
 }
 
 impl Preview {
-    /// Its number as the screens read it: 0 none, 1 picture, 2 meter, 3 variants, 4 sizes, 5 heading, 6 buttons.
+    /// Its number as the screens read it: 0 none, 1 picture, 2 meter, 3 variants, 4 sizes, 5 heading, 6 buttons, 7 folder, 8 mark, 9 chips.
     pub fn number(self) -> i32 {
         match self {
             Preview::None => 0,
@@ -139,6 +145,9 @@ impl Preview {
             Preview::Sizes => 4,
             Preview::Heading => 5,
             Preview::Buttons => 6,
+            Preview::Folder => 7,
+            Preview::Mark => 8,
+            Preview::Chips => 9,
         }
     }
 }
@@ -529,6 +538,17 @@ impl SettingsView {
                         }
                     }
                 }
+                if let Some(chips) = self.description["groups"][group.as_str()]["_chips"].as_array() {
+                    fn key_of(e: &Value) -> &str { e["row"].as_str().and_then(|r| r.split_once(' ')).map_or("", |(_, k)| k) }
+                    let order: Vec<&str> = chips.iter().filter_map(Value::as_str).collect();
+                    let mut main: Vec<Value> = rows.iter().filter(|e| !order.contains(&key_of(e))).cloned().collect();
+                    for k in &order {
+                        if let Some(found) = rows.iter().find(|e| key_of(e) == *k) {
+                            main.push(found.clone());
+                        }
+                    }
+                    return main;
+                }
                 rows
             }
             Some(page) => self.console_entries(page),
@@ -537,6 +557,16 @@ impl SettingsView {
             }
             None => self.description["sections"][self.section]["rows"].as_array().into_iter().flatten().filter(|e| self.controller_shown(e)).cloned().collect(),
         }
+    }
+
+    /// Index where a group page's aside chips begin (Scraping's 11 media kinds); none elsewhere (R-20261116-22).
+    pub fn chip_start(&self) -> Option<usize> {
+        let Some(Page::Group(group)) = self.page() else { return None };
+        let chips = self.description["groups"][group.as_str()]["_chips"].as_array()?;
+        let order: Vec<&str> = chips.iter().filter_map(Value::as_str).collect();
+        let entries = self.entries();
+        let start = entries.iter().position(|e| e["row"].as_str().and_then(|r| r.split_once(' ')).is_some_and(|(_, k)| order.contains(&k)))?;
+        Some(start)
     }
 
     /// The console a page is of.
@@ -815,6 +845,7 @@ impl SettingsView {
     fn fact(&self, name: &str) -> String {
         match name {
             "version" => words::version_line(),
+            "bare_version" => env!("EMUSEN_VERSION").to_owned(),
             "running" => match self.facts["running"].as_str() {
                 Some(t) if !t.is_empty() => t.to_owned(),
                 _ => self.word("last_game"),
@@ -985,6 +1016,9 @@ impl SettingsView {
             Some("variants") => Preview::Variants,
             Some("sizes") => Preview::Sizes,
             Some("buttons") => Preview::Buttons,
+            Some("folder") => Preview::Folder,
+            Some("mark") => Preview::Mark,
+            _ if self.chip_start().is_some() => Preview::Chips,
             _ => Preview::None,
         };
         let meter = match (chosen, count) {
@@ -995,14 +1029,33 @@ impl SettingsView {
             // Each size's scale is the kit's, which applies the text size to every screen.
             (Some(k), Preview::Sizes) => self.choices(&entry, k).into_iter().map(|(v, w)| (format!("{w} · {}", self.word("sample")), text_scale_of(&v))).collect(),
             (Some(k), Preview::Variants) => self.choices(&entry, k).into_iter().take(2).map(|(_, w)| (w, 1.0)).collect(),
+            (_, Preview::Folder) => {
+                let games = self.facts["games"].as_u64().unwrap_or(0) as usize;
+                let under = self.word(if games == 1 { "game_under" } else { "games_under" });
+                vec![(words::grouped(games), 1.0), (under, 1.0), (value.clone(), 1.0)]
+            }
             _ => Vec::new(),
+        };
+        let (caption, muted) = if let Some(start) = self.chip_start() {
+            let group = match self.page() {
+                Some(Page::Group(g)) => g.as_str(),
+                _ => "",
+            };
+            let entries = self.entries();
+            let chips = &entries[start..];
+            let on = chips.iter().filter(|e| self.keyed(e).is_some_and(|k| self.stored(&k).iter().all(|s| schema::is_on(s)))).count();
+            let heading = text_of(&self.description["groups"][group]["_heading"]);
+            let summary = text_of(&self.description["groups"][group]["_summary"]).replace("{on}", &on.to_string()).replace("{total}", &chips.len().to_string());
+            (heading, vec![summary])
+        } else {
+            (pane["caption"].as_str().map(fill).unwrap_or_default(), strings(&pane["muted"]).iter().map(|l| fill(l)).collect())
         };
         Pane {
             sentence: fill(&sentence),
             lines: strings(&pane["lines"]).iter().map(|l| fill(l)).collect(),
-            muted: strings(&pane["muted"]).iter().map(|l| fill(l)).collect(),
+            muted,
             preview,
-            caption: pane["caption"].as_str().map(fill).unwrap_or_default(),
+            caption,
             meter,
             samples,
             tones: Vec::new(),

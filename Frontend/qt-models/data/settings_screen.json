@@ -6,7 +6,9 @@
     "last_game": "The last game",
     "sample": "The quick brown fox",
     "game": "game",
-    "games": "games"
+    "games": "games",
+    "game_under": "game under",
+    "games_under": "games under"
   },
   "shaders": {
     "words": {"recent": "Recently used", "builtin": "Built into EmuSen", "pack": "The shader pack", "none": "This shader has no levers.", "own": "{value} is the shader's own value."},
@@ -125,19 +127,19 @@
       "rows": [
         {"id": "rom", "label": "ROM folder", "hint": "The folder the library lists, read in place and never moved.", "folder": "AppSettings RomDirectory",
          "value": {"from": "AppSettings RomDirectory", "code": true, "blank": "Not set"},
-         "pane": {"sentence": "{games} under {value}, read in place and never moved.",
-          "muted": ["A opens the folder picker; new games are found on the next start or with Check Again in the Library Manager."]}},
+         "pane": {"preview": "folder", "sentence": "The folder the library lists, read in place and never moved.",
+          "muted": ["A opens the folder picker. EmuSen reads this folder. It writes there only if you ask it to convert discs beside the originals."]}},
         {"id": "art", "label": "Artwork folder", "hint": "Box art, named like the game's file; blank keeps it beside the games.", "folder": "AppSettings ArtworkDirectory",
          "value": {"from": "AppSettings ArtworkDirectory", "code": true, "blank": "beside the games"}, "pane": {"lines": ["{value}"]}},
-        {"id": "themes", "label": "Themes", "hint": "The big picture's look: EmuSen's own, or an ES-DE theme's; A opens the themes and their options.", "door": "themes",
+        {"id": "themes", "label": "Themes", "about": "The big picture's look: EmuSen's own, or an ES-DE theme's.", "hint": "The big picture's look: EmuSen's own, or an ES-DE theme's; A opens the themes and their options.", "door": "themes",
          "value": {"from": "AppSettings EmuSenTheme", "blank": "EmuSen (built in)", "words": {"emusen": "EmuSen (built in)"}}},
         {"id": "scraping", "label": "Scraping", "hint": "Where art and facts come from, and what is fetched.", "page": "Scraping",
          "value": {"from": "AppSettings Scraping", "words": {"true": "ScreenScraper", "false": "Off"}}},
         {"id": "collections", "label": "Collections", "hint": "The automatic collections shown, your own, and how lists are sorted.", "page": "Collections"},
-        {"id": "hidden", "row": "AppSettings ShowHiddenGames"},
+        {"id": "hidden", "row": "AppSettings ShowHiddenGames", "about": "Games hidden from the library. Their files are never touched."},
         {"id": "viewer", "label": "Media viewer", "hint": "How X shows a game's videos, pictures and manual: the help's place, the media types, the video's settings.", "page": "Media viewer"},
         {"id": "cheats", "label": "Cheats", "hint": "The cheats of the game last played, turned on or off.", "door": "cheats", "needs": "lastCheats"},
-        {"id": "discs", "label": "Compressed discs", "hint": "The library's discs converted to CHD beside them, checked and listed; the library is only read.", "door": "compressed"},
+        {"id": "discs", "label": "Compressed discs", "about": "The library's discs converted to CHD beside them, checked and listed.", "hint": "The library's discs converted to CHD beside them, checked and listed; the library is only read.", "door": "compressed"},
         {"id": "media", "label": "ES-DE media folder", "hint": "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", "folder": "AppSettings EsdeMediaDirectory",
          "value": {"from": "AppSettings EsdeMediaDirectory", "code": true, "blank": "None"}, "pane": {"lines": ["{value}"]}},
         {"id": "themefolder", "label": "ES-DE theme folder", "hint": "A theme folder for ES-DE to read in place, which then joins the themes.", "folder": "AppSettings BigPictureTheme",
@@ -151,11 +153,17 @@
         {"id": "saves", "label": "Saves and states", "hint": "Where states go, what happens when a game starts again, and how play time is counted.", "page": "Saves and states",
          "pane": {"sentence": "States and saves are kept in EmuSen's own Saves folder, with one resume point per game.", "muted": ["Resume · {AppSettings ResumeOnLaunch}"]}},
         {"id": "background", "row": "AppSettings PauseInBackground"},
-        {"id": "about", "label": "About", "hint": "EmuSen's version.", "value": {"fact": "version", "code": true}}
+        {"id": "about", "label": "About", "hint": "EmuSen's version.", "value": {"fact": "bare_version", "code": true},
+         "pane": {"preview": "mark", "lines": ["{value}"]}}
       ]
     }
   ],
   "groups": {
+    "Scraping": {
+      "_chips": ["ScrapeCovers", "ScrapeScreenshots", "ScrapeMarquees", "ScrapeMiximages", "ScrapeTitleScreens", "ScrapeBackCovers", "ScrapePhysicalMedia", "ScrapeFanArt", "Scrape3DBoxes", "ScrapeManuals", "ScrapeVideos"],
+      "_heading": "What is fetched",
+      "_summary": "{on} of {total} kinds. Each is its own switch; move right from the rows to reach them."
+    },
     "Collections": {
       "BigPictureCollections.DefaultSortOrder": {"pane": {"muted": ["{choices}, each ascending or descending."]}}
     },

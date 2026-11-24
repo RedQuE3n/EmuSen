@@ -3,6 +3,12 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.13, an addition: Library's folder card, EmuSen's eclipse mark and Scraping's toggle chips (2026-11-23)
+
+- **`Settings.preview` 7, 8 and 9** (no new member): Library's ROM folder count block (7, `samples` carries count, label and path), EmuSen's About eclipse mark (8, `lines` carries the bare version) and Scraping's toggle chips (9) (R-20261116-22; EmuSen_Qt.md §3.4.11).
+- **`Settings.chips`** (roles `key`, `label`, `switchOn`, `row`), **`Settings.chipCount`** and **`Settings.total`**: Scraping's eleven media kinds as aside toggle chips with their model row index and total item count for `Words.place` (R-20261116-22).
+- The module is 1.13 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.13.*`.
+
 ## 1.12, an addition: the face buttons' preview (2026-11-23)
 
 - **`Settings.preview` 6** (no new member): the help bar's face buttons as they are drawn now, the preview of Controller

@@ -24,4 +24,7 @@ QtObject {
     // Controllers' picture's panel and its 1 px inset line (G:183).
     readonly property color facesGround: "#11131C"
     readonly property color facesLine: "#262A3A"
+    // EmuSen's About mark's two glows: rgba(246, 214, 200, 0.55) and rgba(240, 180, 196, 0.3) (EclipseSettingsEmuSen:68).
+    readonly property color markGlow: "#8CF6D6C8"
+    readonly property color markHalo: "#4DF0B4C4"
 }

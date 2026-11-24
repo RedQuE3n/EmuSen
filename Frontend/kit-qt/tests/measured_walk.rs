@@ -40,5 +40,13 @@ fn kit_7_122_the_walk_follows_rows_of_their_own_heights_in_a_scene() {
     assert!(scene.set_property("scene", "reads", "1"));
     scene.wait(20);
     assert_eq!(follower(&mut scene)[0], "4", "the rows read again keep the followed row");
+    // moved(row) fires only on press or focusRow, never on measure, follows or read (1.12).
+    assert_eq!(scene.property("scene", "walkMovedCount"), "3", "three Down presses moved walk");
+    assert_eq!(scene.property("scene", "walkMovedRow"), "3", "last press moved to row 3");
+    assert_eq!(scene.property("scene", "followerMovedCount"), "0", "measure, follows and read never emit moved");
+    assert!(scene.set_property("scene", "focusTarget", "1"));
+    scene.wait(20);
+    assert_eq!(scene.property("scene", "walkMovedCount"), "4", "focusRow moving current emits moved");
+    assert_eq!(scene.property("scene", "walkMovedRow"), "1", "focusRow moved to row 1");
     scene.assert_quiet();
 }

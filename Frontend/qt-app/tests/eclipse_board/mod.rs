@@ -12,6 +12,7 @@ use emusen_theme_qt::host;
 use std::collections::BTreeMap;
 
 /// One row of the table.
+#[derive(Clone)]
 pub struct Row {
     pub name: String,
     pub part: String,

@@ -5,6 +5,10 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.12: the walk tells only its own focus moves (2026-11-23)
+
+- **`MeasuredWalk.moved(row)`**: emitted only when a press (`RowOutcome::Moved`) or `focusRow` moves the walk's focus, never on `measure`, `read`, `follows`, `window`, `gap` or `scrollTo`, so a theme screen binds `onMoved` without a QML guard (`EmuSen_Kit.md` §7.122).
+
 ## 1.11: the walk follows the host's row (2026-11-23)
 
 - **`MeasuredWalk.follows`**: a row the walk keeps focused, focused when it changes and whenever the rows are read, the

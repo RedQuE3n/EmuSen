@@ -119,7 +119,7 @@ Walkable {
             y: (shown.height - height) / 2
             text: root.value
             color: root.choice || root.isSwitch ? Tokens.text : Tokens.muted
-            family: root.code ? Tokens.faceCode : Tokens.faceText
+            family: Tokens.faceText
             elide: Text.ElideRight
             size: 22
         }

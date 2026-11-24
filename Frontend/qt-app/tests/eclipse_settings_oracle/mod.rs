@@ -143,19 +143,45 @@ pub fn settle(scene: &mut Scene<'_>) {
 
 /// What a row's own action does to it, undone again, by `act` (a press or a click); the differences pushed.
 pub fn acted(scene: &mut Scene<'_>, page: &str, i: usize, how: &str, differences: &mut Vec<String>, mut act: impl FnMut(&mut Scene<'_>, i32), back: &mut dyn FnMut(&mut Scene<'_>)) {
-    let kind = settings(scene).shown_rows()[i].kind;
+    let row = settings(scene).shown_rows()[i].clone();
     let before = state(scene, i);
-    match kind {
+    if row.held {
+        act(scene, 0);
+        settle(scene);
+        if at(scene) != (i as i32, page.to_owned()) || scene.property("screens", "shown") != "Settings" {
+            differences.push(format!("{how}: row {i}, held, moved to {:?} on {}", at(scene), scene.property("screens", "shown")));
+        }
+        return;
+    }
+    match row.kind {
         RowKind::Opens | RowKind::Asks => {
             act(scene, 0);
             settle(scene);
-            if at(scene).1 == page {
+            if scene.property("folders", "waiting") == "true" {
+                assert!(scene.set_property("folders", "cancel", "true"));
+                wait_for(scene, "folders", "waiting", "false", 1000);
+                assert!(scene.set_property("folders", "cancel", "false"));
+                settle(scene);
+            } else if scene.property("screens", "shown") != "Settings" {
+                back(scene);
+                wait_for(scene, "screens", "shown", "Settings", 2000);
+                settle(scene);
+            } else if at(scene).1 != page {
+                back(scene);
+                settle(scene);
+            } else {
                 differences.push(format!("{how}: row {i}'s door opened nothing"));
+                return;
             }
-            back(scene);
-            settle(scene);
             if at(scene) != (i as i32, page.to_owned()) {
                 differences.push(format!("{how}: B from row {i}'s page left {:?}", at(scene)));
+            }
+        }
+        RowKind::Action => {
+            act(scene, 0);
+            settle(scene);
+            if at(scene) != (i as i32, page.to_owned()) || scene.property("screens", "shown") != "Settings" {
+                differences.push(format!("{how}: row {i}, an action, left {:?} on {}", at(scene), scene.property("screens", "shown")));
             }
         }
         _ if before.1.is_some() => {
@@ -178,7 +204,7 @@ pub fn acted(scene: &mut Scene<'_>, page: &str, i: usize, how: &str, differences
                 differences.push(format!("{how}: row {i} stepped {before:?} → {stepped:?} → {:?}", state(scene, i)));
             }
         }
-        _ => differences.push(format!("{how}: row {i} is a {kind:?}, which {page} has none of")),
+        kind => differences.push(format!("{how}: row {i} is a {kind:?}, which {page} has none of")),
     }
 }
 
@@ -301,8 +327,8 @@ fn display(mut scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, backend: &str
             ("battery".to_owned(), "82%".to_owned()),
             ("settingsPlace".to_owned(), format!("2 of {count}")),
             ("asideHeading".to_owned(), "CRT shader".to_owned()),
-            ("asideSentence".to_owned(), s.sentence().to_string()),
-            ("asideCaption".to_owned(), s.caption().to_string()),
+            ("asideSentence".to_owned(), "Off: the console's pixels as they are, with no television.".to_owned()),
+            ("asideCaption".to_owned(), "The last game · Off CRT".to_owned()),
             ("asideMuted.0".to_owned(), "For every console that had a television. A console can choose its own in Consoles.".to_owned()),
         ];
         if sections != ["Controllers", "Display", "Sound", "Consoles", "Library", "EmuSen"] {

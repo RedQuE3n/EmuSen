@@ -339,6 +339,8 @@ struct Sink {
     feed: Rc<Cell<*mut qobject::ThemeFeed>>,
     /// The game the theme's focus is on, which the help's Y turns a favourite.
     in_hand: String,
+    /// The Settings row to return to when leaving a page's aside chips (Scraping, R-20261116-22).
+    chip_return: i32,
 }
 
 impl ActionSink for Sink {
@@ -399,12 +401,25 @@ impl ActionSink for Sink {
         let page = feed.taken(Role::Game).then(|| unsafe { feed.page.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
         let within = |at: i32, count: usize| usize::try_from(at).is_ok_and(|at| at < count);
         match (action, settings, page) {
-            (ScreenAction::SettingsStep(row, by), Some(s), _) => s.step(*row, *by),
+            (ScreenAction::SettingsStep(row, by), Some(s), _) => {
+                if let Some(start) = s.view().chip_start().filter(|&st| *row >= 0 && (*row as usize) < st) {
+                    if s.view().facets().get(*row as usize).is_some_and(|f| f.switch.is_some()) {
+                        if *by > 0 {
+                            self.chip_return = *row;
+                            s.set_focused(start as i32);
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+                s.step(*row, *by)
+            }
             (ScreenAction::SettingsChoose(row), Some(s), _) => s.choose(*row),
             (ScreenAction::SettingsSlide(row, amount), Some(s), _) => s.slide(*row, *amount),
             (ScreenAction::SettingsSection(section), Some(s), _) => {
                 let took = within(*section, s.sections().iter().count());
                 if took {
+                    self.chip_return = 0;
                     s.set_section(*section);
                 }
                 took
@@ -412,12 +427,22 @@ impl ActionSink for Sink {
             (ScreenAction::SettingsFocus(row), Some(s), _) => {
                 let took = within(*row, s.shown_rows().len());
                 if took {
+                    if s.view().chip_start().is_some_and(|st| (*row as usize) < st) {
+                        self.chip_return = *row;
+                    }
                     s.set_focused(*row);
                 }
                 took
             }
             (ScreenAction::SettingsShoulder(by), Some(s), _) => s.shoulder(*by),
-            (ScreenAction::SettingsBack, Some(s), _) => s.back(),
+            (ScreenAction::SettingsBack, Some(s), _) => {
+                if let Some(start) = s.view().chip_start().filter(|&st| *s.focused() >= st as i32) {
+                    s.set_focused(self.chip_return.clamp(0, start.saturating_sub(1) as i32));
+                    return true;
+                }
+                self.chip_return = 0;
+                s.back()
+            }
             (ScreenAction::PageSection(section), _, Some(p)) => {
                 let took = within(*section, p.sections().iter().count());
                 if took {
@@ -778,7 +803,7 @@ impl qobject::ThemeFeed {
     }
 
     pub fn attach(self: Pin<&mut Self>) {
-        let sink = Sink { feed: self.me.clone(), in_hand: String::new() };
+        let sink = Sink { feed: self.me.clone(), in_hand: String::new(), chip_return: 0 };
         if let Some(actions) = self.engine().and_then(host::actions) {
             actions.set_sink(Some(Box::new(sink)));
         }

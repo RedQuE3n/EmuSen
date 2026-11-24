@@ -155,6 +155,11 @@ ThemeScreen {
                         width: 820 * design.unit
                         height: root.rowsFoot * design.unit - y
                         focus: true
+                        Binding {
+                            target: rowsScope
+                            property: "focus"
+                            value: Settings.chipCount === 0 || Settings.focused < Settings.count
+                        }
                         // The rows' grammar first; on a page under a section the shoulders are the page's, the next console, as the program's are.
                         Keys.onPressed: (event) => event.accepted = walk.key(event.key, event.modifiers) || (event.key === Qt.Key_PageUp && Actions.settingsShoulder(-1)) || (event.key === Qt.Key_PageDown && Actions.settingsShoulder(1))
                         MeasuredWalk {
@@ -172,11 +177,7 @@ ThemeScreen {
                             onSlid: (row, amount) => Actions.settingsSlide(row, amount)
                             onChosen: (row) => Actions.settingsChoose(row)
                             onSectionChosen: (section) => Actions.settingsSection(section)
-                            // Only a walk that has read the program's rows tells its focus: a page's rows arrive before the walk reads them.
-                            onWalked: {
-                                if (walk.count === Settings.count && walk.current >= 0 && walk.current !== Settings.focused)
-                                    Actions.settingsFocus(walk.current)
-                            }
+                            onMoved: (row) => Actions.settingsFocus(row)
                         }
                         // The program's rows changed: the walk reads them again, on the model's focus.
                         Connections {
@@ -209,7 +210,11 @@ ThemeScreen {
                                     required property int form
                                     width: list.width
                                     height: row.height
-                                    focus: slot.index === Settings.focused
+                                    Binding {
+                                        target: slot
+                                        property: "focus"
+                                        value: slot.index === Settings.focused
+                                    }
                                     onHeightChanged: walk.measure(slot.index, slot.height)
                                     SettingsRow {
                                         id: row
@@ -230,7 +235,7 @@ ThemeScreen {
                                         // A row wholly in the window is drawn; one the window has scrolled past is not.
                                         visible: slot.y - walk.offset > -0.5 && slot.y + slot.height - walk.offset < rowsScope.height + 0.5
                                         onActiveFocusChanged: {
-                                            if (row.activeFocus && Settings.focused !== slot.index)
+                                            if (row.activeFocus)
                                                 Actions.settingsFocus(slot.index)
                                         }
                                         onActivated: walk.key(Qt.Key_Return, 0)
@@ -245,11 +250,18 @@ ThemeScreen {
                         }
                     }
                     SettingsAside {
+                        id: aside
                         unit: design.unit
+                        controller: frame.controller
                         pixelScale: canvas.unit
                         heading: Settings.aboutHeading
                         x: parent.width - 96 * design.unit - width
                         y: 236 * design.unit
+                        Binding {
+                            target: aside
+                            property: "focus"
+                            value: Settings.chipCount > 0 && Settings.focused >= Settings.count
+                        }
                     }
                     HelpLine {
                         objectName: "settingsHelp"
@@ -263,8 +275,8 @@ ThemeScreen {
                         Line {
                             objectName: "settingsPlace"
                             unit: design.unit
-                            visible: Settings.count > 0
-                            text: Words.place(Settings.focused, Settings.count)
+                            visible: Settings.total > 0
+                            text: Words.place(Settings.focused, Settings.total)
                             color: Tokens.muted
                             size: 21
                         }

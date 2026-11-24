@@ -5,6 +5,10 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.13: the walk tells only its own focus moves (2026-11-23)
+
+- **`MeasuredWalk.moved(row)`**: emitted only when a press (`RowOutcome::Moved`) or `focusRow` moves the walk's focus, never on `measure`, `read`, `follows`, `window`, `gap` or `scrollTo`, so a theme screen binds `onMoved` without a QML guard (`EmuSen_Kit.md` §7.122).
+
 ## 1.12: a dashed line's pattern as a token (2026-11-23)
 
 - **`Tokens.dashPattern`**: a dashed line's dash and gap in widths of the line, as `ShapePath.dashPattern` takes it (a

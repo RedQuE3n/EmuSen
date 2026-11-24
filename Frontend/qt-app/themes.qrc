@@ -16,6 +16,7 @@
         <file alias="theme.json">../themes/emusen/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/eclipse">
+        <file alias="assets/check.svg">../themes/eclipse/assets/check.svg</file>
         <file alias="assets/sections.svg">../themes/eclipse/assets/sections.svg</file>
         <file alias="parts/ArtHues.qml">../themes/eclipse/parts/ArtHues.qml</file>
         <file alias="parts/Board.qml">../themes/eclipse/parts/Board.qml</file>
@@ -42,8 +43,11 @@
         <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>
         <file alias="parts/Limb.qml">../themes/eclipse/parts/Limb.qml</file>
         <file alias="parts/SettingsAside.qml">../themes/eclipse/parts/SettingsAside.qml</file>
+        <file alias="parts/SettingsChips.qml">../themes/eclipse/parts/SettingsChips.qml</file>
         <file alias="parts/SettingsFaces.qml">../themes/eclipse/parts/SettingsFaces.qml</file>
+        <file alias="parts/SettingsFolder.qml">../themes/eclipse/parts/SettingsFolder.qml</file>
         <file alias="parts/SettingsInk.qml">../themes/eclipse/parts/SettingsInk.qml</file>
+        <file alias="parts/SettingsMark.qml">../themes/eclipse/parts/SettingsMark.qml</file>
         <file alias="parts/SettingsMeter.qml">../themes/eclipse/parts/SettingsMeter.qml</file>
         <file alias="parts/SettingsNav.qml">../themes/eclipse/parts/SettingsNav.qml</file>
         <file alias="parts/SettingsRow.qml">../themes/eclipse/parts/SettingsRow.qml</file>

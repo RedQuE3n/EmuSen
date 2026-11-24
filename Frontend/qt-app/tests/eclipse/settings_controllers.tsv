@@ -96,6 +96,38 @@ rowValue.8	32	its value, 24 px in from the right	the row's value form	Row	-	mid:
 rowLess.8	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.8:0	mid:row.8	22	22	-	Tokens.accent	-	built	-
 rowWords.8	36	the value, 14 px after it; its line box and baseline in the page's lines table	the row's value	Text	after:rowLess.8:14	-	-	-	-	Tokens.text	22	built	400 0 none
 rowMore.8	38	▶, 14 px after the value	Chevron	Chevron	after:rowWords.8:14	mid:row.8	22	22	-	Tokens.accent	-	built	-
+row.9	27	row 9, Only the first controller, 84 high at least, held when scrolled into the window	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.8:10	820	84	20	-	-	built	-
+rowFill.9	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.9:0	top:row.9:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.9	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.9:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.9	30	its short line; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.9:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.9	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.9	inright:row.9:24	-	-	-	-	built	-
+rowWords.9	36	"Off"; its line box and baseline in the page's lines table	the row's value	Text	in:rowValue.9:0	-	-	-	-	Tokens.text	22	built	400 0 none
+rowSwitch.9	41	the switch, 68 by 38 inside its 2 px line #5A6076, off	Settings.rows' switchOn	Rectangle	after:rowWords.9:14	mid:row.9	68	38	19	#00000000	-	built	line 2 #FF5A6076
+rowKnob.9	41	its knob, 26, at the left end 4 px in, muted	switchOn	Rectangle	in:rowSwitch.9:6	mid:row.9	26	26	13	Tokens.muted	-	built	-
+row.10	27	row 10, Controller notices, 84 high at least, held when scrolled into the window	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.9:10	820	84	20	-	-	built	-
+rowFill.10	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.10:0	top:row.10:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.10	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.10:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.10	30	its short line, cut at the value as the board cuts it; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.10:24	-	before:rowValue.10:24	-	-	Tokens.muted	17	built	400 0 none
+rowValue.10	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.10	inright:row.10:24	-	-	-	-	built	-
+rowWords.10	36	"On"; its line box and baseline in the page's lines table	the row's value	Text	in:rowValue.10:0	-	-	-	-	Tokens.text	22	built	400 0 none
+rowSwitch.10	41	the switch, 68 by 38 inside its 2 px line, on	Settings.rows' switchOn	Rectangle	after:rowWords.10:14	mid:row.10	68	38	19	Tokens.accent	-	built	line 2 #FFF6E7D8
+rowKnob.10	41	its knob, 26, at the right end 4 px in	switchOn	Rectangle	in:rowSwitch.10:36	mid:row.10	26	26	13	Tokens.overAccent	-	built	-
+row.11	27	row 11, Left stick as the D-pad, 84 high at least, held when scrolled into the window	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.10:10	820	84	20	-	-	built	-
+rowFill.11	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.11:0	top:row.11:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.11	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.11:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.11	30	its short line, cut at the value as the board cuts it; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.11:24	-	before:rowValue.11:24	-	-	Tokens.muted	17	built	400 0 none
+rowValue.11	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.11	inright:row.11:24	-	-	-	-	built	-
+rowWords.11	36	"On"; its line box and baseline in the page's lines table	the row's value	Text	in:rowValue.11:0	-	-	-	-	Tokens.text	22	built	400 0 none
+rowSwitch.11	41	the switch, 68 by 38 inside its 2 px line, on	Settings.rows' switchOn	Rectangle	after:rowWords.11:14	mid:row.11	68	38	19	Tokens.accent	-	built	line 2 #FFF6E7D8
+rowKnob.11	41	its knob, 26, at the right end 4 px in	switchOn	Rectangle	in:rowSwitch.11:36	mid:row.11	26	26	13	Tokens.overAccent	-	built	-
+row.12	27	row 12, Stick deadzone, 84 high at least, held when scrolled into the window	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.11:10	820	84	20	-	-	built	-
+rowFill.12	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.12:0	top:row.12:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.12	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.12:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.12	30	its short line; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.12:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.12	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.12	inright:row.12:24	-	-	-	-	built	-
+rowLess.12	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.12:0	mid:row.12	22	22	-	Tokens.accent	-	built	-
+rowWords.12	36	the value, 14 px after it; its line box and baseline in the page's lines table	the row's value	Text	after:rowLess.12:14	-	-	-	-	Tokens.text	22	built	400 0 none
+rowMore.12	38	▶, 14 px after the value	Chevron	Chevron	after:rowWords.12:14	mid:row.12	22	22	-	Tokens.accent	-	built	-
 rowRing	63	the focused row's ring: 3 px of #07080F, 3 px of the accent, 40 px of glow 8 px out at rgba(240, 180, 196, 0.4)	the kit's FocusRing	FocusRing	-	-	-	-	-	-	-	built	ring 3 3 40 8 26 #66F0B4C4 #FF07080F #FFF6E7D8
 settingsAside	139	the About panel, 424 wide, 96 px from the right	SettingsAside	SettingsAside	-	236	right:96	-	-	-	-	built	-
 asideFaces	183	the picture's panel, 424 by 132, corner 22, #11131C, its 1 px inset line #262A3A	SettingsFaces, Settings.preview 6	SettingsFaces	in:settingsAside:0	top:settingsAside:0	424	132	22	#FF11131C	-	built	line 1 #FF262A3A

@@ -1,0 +1,125 @@
+# Eclipse's Settings, the Library page, against its board, EclipseSettingsLibrary.dc.html (1920 by 1200), one row an element (EmuSen_Qt.md §3.4.11).
+# board_height: 1200
+# Read from the board in Chrome after document.fonts.ready, with Sora and JetBrains Mono (measured 2026-11-23); the rules are settings_display.tsv's (tests/eclipse_board/mod.rs).
+# The state held is the board's: Library shown, ROM folder focused; the program holds 11 rows (Media viewer at 6, ES-DE theme folder at 10, R-20261116-21), so the window holds rows 0 to 8 and rows 9 to 10 are held when scrolled in.
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground, #07080F	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
+backdropField.0	19	the page's glow: a 900 px disc of #1FA890, blurred 150 px at 0.4	the kit's BackdropField, SettingsInk.pageGlow	-	right:-280	60	900	900	-	opacity:0.4	blur:150	built	field 0 -1 #1FA890 0
+backdropField.1	20	the limb's glow: 0 0 40px 6px rgba(246, 214, 200, 0.35)	the kit's BackdropField, SettingsInk.limbGlow	-	-1566	-706	2012	2612	-	opacity:0.35	blur:20	built	field 0 -1 #F6D6C8 0
+limbRim	20	the limb's 2 px rim, rgba(246, 231, 216, 0.75)	Eclipse's Limb, SettingsInk.limbRim	Limb	-1562	-702	2004	2604	-	#BFF6E7D8	-	built	-
+limb	20	the limb, a 2000 by 2600 ellipse of #0B0D16	Eclipse's Limb, SettingsInk.limb	Limb	-1560	-700	2000	2600	-	#FF0B0D16	-	built	-
+mark	24	the crescent mark, 34	Marks.crescent, Eclipse's Brand part unnamed	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+settingsTitle	25	"Settings", 20 px after the mark	Settings.title	Text	after:mark:20	mid:80	-	-	-	Tokens.text	34	built	600 0 none
+battery	27	"82%"	Device.battery as Words.percent gives it	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	27	"9:41 PM"	Device.shortTime	Text	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
+section.0	32	section link 0, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	170	300	66	16	#00000000	-	built	-
+sectionWords.0	34	its words, 20 + 28 + 16 px in	Settings.sections	Text	in:section.0:64	mid:section.0	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.0	33	its icon, 28 px	SettingsNav	Item	in:section.0:20	mid:section.0	28	28	-	#FFD8DBE6	-	built	-
+section.1	32	section link 1	Settings.sections, SettingsNav	Rectangle	72	below:section.0:6	300	66	16	#00000000	-	built	-
+sectionWords.1	34	its words	Settings.sections	Text	in:section.1:64	mid:section.1	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.1	33	its icon, 28 px	SettingsNav	Item	in:section.1:20	mid:section.1	28	28	-	#FFD8DBE6	-	built	-
+section.2	32	section link 2	Settings.sections, SettingsNav	Rectangle	72	below:section.1:6	300	66	16	#00000000	-	built	-
+sectionWords.2	34	its words	Settings.sections	Text	in:section.2:64	mid:section.2	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.2	33	its icon, 28 px	SettingsNav	Item	in:section.2:20	mid:section.2	28	28	-	#FFD8DBE6	-	built	-
+section.3	32	section link 3	Settings.sections, SettingsNav	Rectangle	72	below:section.2:6	300	66	16	#00000000	-	built	-
+sectionWords.3	34	its words	Settings.sections	Text	in:section.3:64	mid:section.3	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.3	33	its icon, 28 px	SettingsNav	Item	in:section.3:20	mid:section.3	28	28	-	#FFD8DBE6	-	built	-
+section.4	32	section link 4, filled: Library shown	Settings.sections, SettingsNav	Rectangle	72	below:section.3:6	300	66	16	Tokens.accent	-	built	-
+sectionWords.4	34	its words	Settings.sections	Text	in:section.4:64	mid:section.4	-	-	-	Tokens.overAccent	23	built	600 0 none
+sectionIcon.4	33	its icon, 28 px	SettingsNav	Item	in:section.4:20	mid:section.4	28	28	-	Tokens.overAccent	-	built	-
+section.5	32	section link 5	Settings.sections, SettingsNav	Rectangle	72	below:section.4:6	300	66	16	#00000000	-	built	-
+sectionWords.5	34	its words	Settings.sections	Text	in:section.5:64	mid:section.5	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.5	33	its icon, 28 px	SettingsNav	Item	in:section.5:20	mid:section.5	28	28	-	#FFD8DBE6	-	built	-
+settingsHeading	40	"Library", the page's heading	Settings.heading	Text	500	-	-	-	-	Tokens.text	44	built	600 0 none
+settingsRows	39	the rows, 22 px under the heading, at 228	MeasuredWalk's window	FocusScope	500	228	820	-	-	-	-	built	-
+row.0	42	row 0, ROM folder, focused	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	top:settingsRows:0	820	84	20	-	-	built	-
+rowFill.0	42	its fill and no line, focused	Tokens.surfaceRaised	Rectangle	in:row.0:0	top:row.0:0	820	84	20	Tokens.surfaceRaised	-	built	line 0 -
+rowName.0	44	"ROM folder"	the row's label	Text	in:row.0:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.0	45	its short line	the row's about	Text	in:row.0:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.0	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.0	inright:row.0:24	-	-	-	-	built	-
+rowWords.0	51	the ROM path, muted, Sora 22	the row's value	Text	in:rowValue.0:0	-	-	-	-	Tokens.muted	22	built	400 0 none
+rowDoor.0	59	›, 22 px, muted, 14 px after the value	Chevron	Chevron	after:rowWords.0:14	mid:row.0	inright:rowValue.0:0	22	-	Tokens.muted	-	built	-
+row.1	42	row 1, Artwork folder	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.0:10	820	84	20	-	-	built	-
+rowFill.1	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.1:0	top:row.1:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.1	44	"Artwork folder"	the row's label	Text	in:row.1:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.1	45	its short line, cut at the value as the board cuts it	the row's about	Text	in:row.1:24	-	before:rowValue.1:24	-	-	Tokens.muted	17	built	400 0 none
+rowValue.1	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.1	inright:row.1:24	-	-	-	-	built	-
+rowWords.1	51	"beside the games", muted	the row's value	Text	in:rowValue.1:0	-	-	-	-	Tokens.muted	22	built	400 0 none
+rowDoor.1	59	›, 22 px, muted	Chevron	Chevron	after:rowWords.1:14	mid:row.1	inright:rowValue.1:0	22	-	Tokens.muted	-	built	-
+row.2	42	row 2, Themes	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.1:10	820	84	20	-	-	built	-
+rowFill.2	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.2:0	top:row.2:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.2	44	"Themes"	the row's label	Text	in:row.2:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.2	45	its short line (R-20261116-20)	the row's about	Text	in:row.2:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.2	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.2	inright:row.2:24	-	-	-	-	built	-
+rowWords.2	51	the theme name, muted	the row's value	Text	in:rowValue.2:0	-	-	-	-	Tokens.muted	22	built	400 0 none
+rowDoor.2	59	›, 22 px, muted	Chevron	Chevron	after:rowWords.2:14	mid:row.2	inright:rowValue.2:0	22	-	Tokens.muted	-	built	-
+row.3	42	row 3, Scraping	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.2:10	820	84	20	-	-	built	-
+rowFill.3	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.3:0	top:row.3:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.3	44	"Scraping"	the row's label	Text	in:row.3:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.3	45	its short line	the row's about	Text	in:row.3:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.3	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.3	inright:row.3:24	-	-	-	-	built	-
+rowWords.3	51	"ScreenScraper", muted	the row's value	Text	in:rowValue.3:0	-	-	-	-	Tokens.muted	22	built	400 0 none
+rowDoor.3	59	›, 22 px, muted	Chevron	Chevron	after:rowWords.3:14	mid:row.3	inright:rowValue.3:0	22	-	Tokens.muted	-	built	-
+row.4	42	row 4, Collections	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.3:10	820	84	20	-	-	built	-
+rowFill.4	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.4:0	top:row.4:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.4	44	"Collections"	the row's label	Text	in:row.4:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.4	45	its short line	the row's about	Text	in:row.4:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.4	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.4	inright:row.4:24	-	-	-	-	built	-
+rowDoor.4	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.4	inright:rowValue.4:0	22	-	Tokens.muted	-	built	-
+row.5	42	row 5, Hidden games	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.4:10	820	84	20	-	-	built	-
+rowFill.5	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.5:0	top:row.5:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.5	44	"Hidden games"	the row's label	Text	in:row.5:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.5	45	its short line (R-20261116-20)	the row's about	Text	in:row.5:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.5	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.5	inright:row.5:24	-	-	-	-	built	-
+rowLess.5	49	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.5:0	mid:row.5	22	22	-	Tokens.accent	-	built	-
+rowWords.5	51	"Not listed", 14 px after it	the row's value	Text	after:rowLess.5:14	-	-	-	-	Tokens.text	22	built	400 0 none
+rowMore.5	53	▶, 14 px after the value	Chevron	Chevron	after:rowWords.5:14	mid:row.5	22	22	-	Tokens.accent	-	built	-
+row.6	42	row 6, Media viewer (program-only, R-20261116-21)	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.5:10	820	84	20	-	-	built	-
+rowFill.6	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.6:0	top:row.6:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.6	44	"Media viewer"	the row's label	Text	in:row.6:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.6	45	its hint, cut at the value (R-20261123-31)	the row's about	Text	in:row.6:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.6	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.6	inright:row.6:24	-	-	-	-	built	-
+rowDoor.6	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.6	inright:rowValue.6:0	22	-	Tokens.muted	-	built	-
+row.7	42	row 7, Cheats	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.6:10	820	84	20	-	-	built	-
+rowFill.7	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.7:0	top:row.7:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.7	44	"Cheats"	the row's label	Text	in:row.7:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.7	45	its short line (R-20261123-16)	the row's about	Text	in:row.7:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.7	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.7	inright:row.7:24	-	-	-	-	built	-
+rowDoor.7	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.7	inright:rowValue.7:0	22	-	Tokens.muted	-	built	-
+row.8	42	row 8, Compressed discs	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.7:10	820	84	20	-	-	built	-
+rowFill.8	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.8:0	top:row.8:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.8	44	"Compressed discs"	the row's label	Text	in:row.8:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.8	45	its short line (R-20261116-20)	the row's about	Text	in:row.8:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.8	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.8	inright:row.8:24	-	-	-	-	built	-
+rowDoor.8	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.8	inright:rowValue.8:0	22	-	Tokens.muted	-	built	-
+row.9	42	row 9, ES-DE media folder, held when scrolled in	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.8:10	820	84	20	-	-	built	-
+rowFill.9	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.9:0	top:row.9:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.9	44	"ES-DE media folder"	the row's label	Text	in:row.9:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.9	45	its short line, cut at the value as the board cuts it	the row's about	Text	in:row.9:24	-	before:rowValue.9:24	-	-	Tokens.muted	17	built	400 0 none
+rowValue.9	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.9	inright:row.9:24	-	-	-	-	built	-
+rowWords.9	51	"None", muted	the row's value	Text	in:rowValue.9:0	-	-	-	-	Tokens.muted	22	built	400 0 none
+rowDoor.9	59	›, 22 px, muted	Chevron	Chevron	after:rowWords.9:14	mid:row.9	inright:rowValue.9:0	22	-	Tokens.muted	-	built	-
+rowRing	42	the focused row's ring: 3 px of #07080F, 3 px of the accent, 40 px glow 8 px out	the kit's FocusRing	FocusRing	-	-	-	-	-	-	-	built	ring 3 3 40 8 26 #66F0B4C4 #FF07080F #FFF6E7D8
+settingsAside	66	the About panel, 424 wide, 96 px from the right	SettingsAside	SettingsAside	-	236	right:96	-	-	-	-	built	-
+asideFolder	67	the ROM folder count card, 424 wide, corner 22, #11131C, 1 px inset #262A3A	SettingsFolder, Settings.preview 7	SettingsFolder	in:settingsAside:0	top:settingsAside:0	424	-	22	#FF11131C	-	built	line 1 #FF262A3A
+asideFolderCount	68	the grouped game count, 64 px, weight 600, -0.02 em	Settings.samples[0]	Text	in:asideFolder:28	-	-	-	-	Tokens.text	64	built	600 -0.02 none
+asideFolderUnder	69	"games under" or "game under", 20 px, muted, 10 under count	Settings.samples[1]	Text	in:asideFolder:28	-	-	-	-	Tokens.muted	20	built	400 0 none
+asideFolderPath	70	the ROM folder path, JetBrains Mono 20 px, accent, 10 under label	Settings.samples[2]	Text	in:asideFolder:28	-	-	-	-	Tokens.accent	20	built	400 0 none
+asideHeading	72	"ROM folder", 22 under the count card	Settings.aboutHeading	Text	in:settingsAside:0	below:asideFolder:22	-	-	-	Tokens.text	26	built	600 0 none
+asideSentence	73	the paragraph, two lines at 30	Settings.sentence	Text	in:settingsAside:0	below:asideHeading:22	-	60	-	#FFC9CDDB	20	built	300 0 none
+asideMuted.0	74	the small line (R-20261123-17)	Settings.muted	Text	in:settingsAside:0	below:asideSentence:22	424	-	-	Tokens.muted	18	built	400 0 none
+help	77	the help line's entries, 34 px apart, middle at 1141	Help.entries(Settings.help, {settings: true, defaultable})	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Change	79	"◀ ▶" in a 2 px box, 30 px inside	Eclipse's Glyph	-	in:help:0	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Change	79	"Change", 10 px after its key	Eclipse's HelpLine	Text	after:ownGlyph-Change:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Choose or open	80	A, filled, 34 px	Eclipse's Glyph	-	after:helpWords-Change:34	mid:help	34	34	-	-	-	built	glyph 17 700
+helpWords-Choose or open	80	"Choose or open"	Eclipse's HelpLine	Text	after:ownGlyph-Choose or open:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Back to the default	81	X in a 2 px ring, 34 px inside	Eclipse's Glyph	-	after:helpWords-Choose or open:34	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back to the default	81	"Back to the default"	Eclipse's HelpLine	Text	after:ownGlyph-Back to the default:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Back	82	B in a 2 px ring, 34 px inside	Eclipse's Glyph	-	after:helpWords-Back to the default:34	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back	82	"Back"	Eclipse's HelpLine	Text	after:ownGlyph-Back:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Section	77	not on the board: LB (R-20261123-20)	Eclipse's Glyph	-	after:helpWords-Back:34	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Section	77	not on the board: RB (R-20261123-20)	Eclipse's Glyph	-	after:ownGlyph-Section:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Section	77	not on the board: "Section" (R-20261123-20)	Eclipse's HelpLine	Text	after:ownGlyph2-Section:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Home	77	not on the board: Start (R-20261123-20)	Eclipse's Glyph	-	after:helpWords-Section:34	mid:help	-	38	-	-	-	built	word 15 400
+helpWords-Home	77	not on the board: "Home" (R-20261123-20)	Eclipse's HelpLine	Text	after:ownGlyph-Home:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+settingsPlace	84	"1 of 11" (R-20261116-21)	Words.place(Settings.focused, Settings.total)	Text	-	mid:help	right:96	-	-	Tokens.muted	21	built	400 0 none

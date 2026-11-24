@@ -99,6 +99,10 @@ pub mod qobject {
         /// Cover art's title and the way back above it.
         #[qproperty(QString, cover_title, cxx_name = "coverTitle", READ, CONSTANT)]
         #[qproperty(QString, cover_trail, cxx_name = "coverTrail", READ, NOTIFY)]
+        /// The tabs a theme's game screen draws, as flags (`ThemeScreen.pageSections`, `Tab::flag`); 0 where it names none.
+        #[qproperty(i32, theme_sections, cxx_name = "themeSections")]
+        /// Whether the theme's screen draws the page as it stands; else the program's page is shown (EmuSen_Qt.md §3.2).
+        #[qproperty(bool, theme_draws, cxx_name = "themeDraws", READ, NOTIFY)]
         type GamePageModel = super::GamePageModelRust;
     }
 
@@ -137,6 +141,11 @@ pub mod qobject {
         /// Left or Right on a row of the content: whether it did anything.
         #[qinvokable]
         fn step(self: Pin<&mut GamePageModel>, index: i32, by: i32) -> bool;
+
+        /// One of Eclipse's tabs chosen, by its place among `tabs` (R-20261116-29): whether there was one.
+        #[qinvokable]
+        #[cxx_name = "chooseTab"]
+        fn choose_tab(self: Pin<&mut GamePageModel>, index: i32) -> bool;
 
         /// A help bar's declared action: the page answers Y, the heart, itself, and passes every other on.
         #[qinvokable]
@@ -489,6 +498,8 @@ pub struct GamePageModelRust {
     cover_chosen: bool,
     /// Set to ask the package's job running to stop.
     job_stop: Option<Arc<std::sync::atomic::AtomicBool>>,
+    theme_sections: i32,
+    theme_draws: bool,
 }
 
 impl Default for GamePageModelRust {
@@ -551,6 +562,8 @@ impl Default for GamePageModelRust {
             typing_for: None,
             cover_chosen: false,
             job_stop: None,
+            theme_sections: 0,
+            theme_draws: true,
         }
     }
 }
@@ -585,6 +598,7 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
                 model.refresh();
             })
             .release();
+        self.as_mut().on_theme_sections_changed(|model| model.helped()).release();
         self.on_section_changed(|mut model| {
             let section = model.section.max(0) as usize;
             if model.page.section != section {
@@ -817,7 +831,12 @@ impl qobject::GamePageModel {
         let help = shown_screen(self.page.help(action, content));
         if self.help != help {
             self.as_mut().rust_mut().help = help;
-            self.help_changed();
+            self.as_mut().help_changed();
+        }
+        let draws = self.page.drawn_by(self.theme_sections, self.asking || self.viewing || self.typing);
+        if self.theme_draws != draws {
+            self.as_mut().rust_mut().theme_draws = draws;
+            self.theme_draws_changed();
         }
     }
 
@@ -1302,6 +1321,72 @@ impl qobject::GamePageModel {
             }
         });
         asked
+    }
+
+    pub fn choose_tab(mut self: Pin<&mut Self>, index: i32) -> bool {
+        let Ok(index) = usize::try_from(index) else { return false };
+        if !self.as_mut().rust_mut().page.choose_tab(index) {
+            return false;
+        }
+        self.as_mut().rust_mut().focus = (Some(0), 0);
+        let section = self.page.section as i32;
+        self.as_mut().telling(|mut model| {
+            if model.section != section {
+                model.as_mut().rust_mut().section = section;
+                model.as_mut().section_changed();
+            }
+            model.shown(true);
+        });
+        true
+    }
+
+    /// Eclipse's tabs' words, in the board's order (R-20261116-29).
+    pub fn tabs(&self) -> Vec<String> {
+        self.page.tabs().iter().map(|t| t.name().to_owned()).collect()
+    }
+
+    /// The tab shown, by its place among `tabs`.
+    pub fn tab(&self) -> i32 {
+        self.page.tab() as i32
+    }
+
+    /// The board's line over the title and the line under it.
+    pub fn kicker(&self) -> String {
+        self.page.kicker()
+    }
+
+    pub fn line(&self) -> String {
+        self.page.line()
+    }
+
+    /// The board's buttons, each with the place among the actions of the action it is (R-20261116-30), and for Resume the
+    /// resume point's tile it chooses (R-20261123-35), else -1.
+    pub fn pills(&self) -> Vec<(crate::game_page::Action, i32, i32)> {
+        self.page.placed_pills()
+    }
+
+    /// The board's trail and the game's console's id, which its second link opens.
+    pub fn trail(&self) -> Vec<String> {
+        self.page.trail()
+    }
+
+    pub fn console(&self) -> &str {
+        self.file.system.as_deref().unwrap_or_default()
+    }
+
+    /// The state cards, each line written in the player's zone and clock form; pictures as URLs.
+    pub fn cards(&self) -> Vec<crate::game_page::Card> {
+        self.page.cards_now().into_iter().map(|c| crate::game_page::Card { picture: cover_url(&c.picture), ..c }).collect()
+    }
+
+    /// The words beside the cards where the game has no state.
+    pub fn cards_note(&self) -> &'static str {
+        self.page.cards_note()
+    }
+
+    /// The help as Eclipse's boards word it for the focus; none where they draw none.
+    pub fn board_help_screen(&self) -> Option<crate::help::Screen> {
+        self.page.board_help(self.focus.0, self.focus.1)
     }
 
     /// Told while the page tells QML of a change, the focus is kept and applied once the telling has finished (EmuSen_Qt.md §7.8.1).

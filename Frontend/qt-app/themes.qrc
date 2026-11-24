@@ -37,6 +37,9 @@
         <file alias="parts/Blend.qml">../themes/eclipse/parts/Blend.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
         <file alias="parts/Chevron.qml">../themes/eclipse/parts/Chevron.qml</file>
+        <file alias="parts/EmptyCard.qml">../themes/eclipse/parts/EmptyCard.qml</file>
+        <file alias="parts/GameInk.qml">../themes/eclipse/parts/GameInk.qml</file>
+        <file alias="parts/Horizon.qml">../themes/eclipse/parts/Horizon.qml</file>
         <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>
         <file alias="parts/Limb.qml">../themes/eclipse/parts/Limb.qml</file>
         <file alias="parts/SettingsAside.qml">../themes/eclipse/parts/SettingsAside.qml</file>
@@ -48,7 +51,12 @@
         <file alias="parts/SettingsMeter.qml">../themes/eclipse/parts/SettingsMeter.qml</file>
         <file alias="parts/SettingsNav.qml">../themes/eclipse/parts/SettingsNav.qml</file>
         <file alias="parts/SettingsRow.qml">../themes/eclipse/parts/SettingsRow.qml</file>
+        <file alias="parts/StateCard.qml">../themes/eclipse/parts/StateCard.qml</file>
+        <file alias="parts/Tabs.qml">../themes/eclipse/parts/Tabs.qml</file>
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>
+        <file alias="parts/Trail.qml">../themes/eclipse/parts/Trail.qml</file>
+        <file alias="parts/WordPill.qml">../themes/eclipse/parts/WordPill.qml</file>
+        <file alias="screens/Game.qml">../themes/eclipse/screens/Game.qml</file>
         <file alias="screens/Games.qml">../themes/eclipse/screens/Games.qml</file>
         <file alias="screens/Consoles.qml">../themes/eclipse/screens/Consoles.qml</file>
         <file alias="screens/Home.qml">../themes/eclipse/screens/Home.qml</file>

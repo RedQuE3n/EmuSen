@@ -134,6 +134,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pageBack"]
         fn page_back(self: Pin<&mut ThemeActions>) -> bool;
+        /// One of `Page.tabs` chosen by its place (1.13).
+        #[qinvokable]
+        #[cxx_name = "pageTab"]
+        fn page_tab(self: Pin<&mut ThemeActions>, tab: i32) -> bool;
     }
 }
 
@@ -180,6 +184,7 @@ pub enum ScreenAction {
     PageDeclared(String),
     PageAnswer(i32),
     PageBack,
+    PageTab(i32),
 }
 
 /// The host's side: takes an action, or declines it, and says which.
@@ -276,6 +281,10 @@ impl qobject::ThemeActions {
 
     pub fn page_back(self: Pin<&mut Self>) -> bool {
         self.call(ScreenAction::PageBack)
+    }
+
+    pub fn page_tab(self: Pin<&mut Self>, tab: i32) -> bool {
+        self.call(ScreenAction::PageTab(tab))
     }
 
     pub fn play(self: Pin<&mut Self>, game: &QString) -> bool {

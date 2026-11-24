@@ -1,14 +1,15 @@
 import QtQuick
 import EmuSen.Theme
 
-// The help line's LB RB Sections on its glass at the line's right, Help.sections in the kit's HelpBar with the boards' boxed glyphs (Main:99-103; EmuSen_Qt.md §3.4.8).
+// The help line's LB RB Sections on its glass at the line's right, Help.sections in the kit's HelpBar with the boards' boxed glyphs (Main:99-103; EmuSen_Qt.md §3.4.8); the game page's Section with no glass (EclipseGame:92-96).
 Rectangle {
     id: root
     // A board pixel in canvas units, Board.unit.
     required property real unit
     required property var controller
-    // The words' colour, the help line's.
+    // The words' colour, the help line's, and the entries: Help.sections, or a page's Section (EclipseGame:92-96).
     property color wordsColor: "transparent"
+    property alias model: bar.model
     // The glass's height and side padding, the words' size, the gap between the glyphs and the words, and a ringed glyph's side, in board pixels (Main:99-103).
     property real tall: 46
     property real pad: 18

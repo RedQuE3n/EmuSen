@@ -126,11 +126,11 @@ pub enum Preview {
     Heading,
     /// The help bar's face buttons as they are drawn now (from EmuSen.Theme 1.12).
     Buttons,
-    /// Library's ROM folder count block (from EmuSen.Theme 1.13, R-20261116-22).
+    /// Library's ROM folder count block (from EmuSen.Theme 1.14, R-20261116-22).
     Folder,
-    /// EmuSen's About eclipse mark (from EmuSen.Theme 1.13, R-20261116-22).
+    /// EmuSen's About eclipse mark (from EmuSen.Theme 1.14, R-20261116-22).
     Mark,
-    /// Scraping's toggle chips in the About panel (from EmuSen.Theme 1.13, R-20261116-22).
+    /// Scraping's toggle chips in the About panel (from EmuSen.Theme 1.14, R-20261116-22).
     Chips,
 }
 

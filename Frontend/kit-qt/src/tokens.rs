@@ -4,7 +4,7 @@ use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
 
-use cxx_qt_lib::{QColor, QString};
+use cxx_qt_lib::{QColor, QList, QString, QVariant};
 use emusen_kit_core::motion::MotionToken as M;
 use emusen_kit_core::tokens::{self as core_tokens, ColourToken as C, FaceRole, WeightRole};
 
@@ -21,6 +21,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
+        include!("cxx-qt-lib/qvariant.h");
+        type QVariant = cxx_qt_lib::QVariant;
         include!("bundled_faces.h");
         fn bundled_families() -> QStringList;
         fn platform_family() -> QString;
@@ -140,6 +142,8 @@ pub mod qobject {
         #[qproperty(i32, weight_title, READ, NOTIFY)]
         #[qproperty(i32, weight_sentence, READ, NOTIFY)]
         #[qproperty(i32, weight_wordmark, READ, NOTIFY)]
+        /// A dashed line's dash and gap in widths of the line, as `ShapePath.dashPattern` takes it (1.12, EmuSen_Kit.md §7.2).
+        #[qproperty(QVariant, dash_pattern, cxx_name = "dashPattern", READ, NOTIFY)]
         type Tokens = super::TokensRust;
     }
 
@@ -260,6 +264,7 @@ pub struct TokensRust {
     breath_period: i32,
     breath_low: f64,
     breathes: bool,
+    dash_pattern: QVariant,
     // A theme's overrides per variant, a `Tokens` property and its value as theme.json writes it; set by the host on the theme's
     // engine and, for the chosen theme, on the program's (decided by the tester, 2026-11-13).
     overrides: Vec<(core_tokens::Variant, String, String)>,
@@ -371,6 +376,7 @@ impl Default for TokensRust {
             breath_period: 0,
             breath_low: 1.0,
             breathes: true,
+            dash_pattern: QVariant::default(),
             overrides: Vec::new(),
         };
         tokens.apply(&Column::compute(kinds::token_form(tokens.form), kinds::token_variant(tokens.variant), 1.0, false, &crate::type_size::caps));
@@ -479,6 +485,7 @@ impl TokensRust {
         self.breath_period = c.breath_period;
         self.breath_low = c.breath_low;
         self.breathes = c.breathes;
+        self.dash_pattern = QVariant::from(&QList::from(&c.dash.to_vec()));
     }
 }
 
@@ -641,5 +648,6 @@ impl qobject::Tokens {
         self.as_mut().breath_period_changed();
         self.as_mut().breath_low_changed();
         self.as_mut().breathes_changed();
+        self.as_mut().dash_pattern_changed();
     }
 }

@@ -1,0 +1,67 @@
+# Eclipse's game page for a game never played, against its board, EclipseGameNoState.dc.html (design project, "Eclipse theme, game page, a game never played", 1920 by 1200), one row an element (EmuSen_Qt.md §3.4.12).
+# board_height: 1200
+# Read from the board in Chrome after document.fonts.ready (measured 2026-11-23); the columns, rules, sizes, types and colours are eclipse_home.tsv's and game.tsv's, held by tests/eclipse_board/mod.rs.
+# The rows the two boards share are game.tsv's, numbered by EclipseGame's lines (this board's from line 47 on are one fewer); the rest are this board's. The note's two lines are 1.45 × 22 = 31.9 each, which Chrome's 64ths read 63.781 together.
+# The page as the board draws it: Aurora Drift, never played, no state, not a favourite; the words are held by tests/eclipse_game_never.rs beside the table.
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground	the kit's Backdrop, its ground: the board's own colour (Ink.ground)	Rectangle	0	0	right:0	1200	-	#FF0A1024	-	built	-
+backdropField.0	19	a colour field: #1FC9A8, an ellipse, blurred 90 px at 0.85	the kit's BackdropField: the board's saturation, lightness and alpha with the game's first art hue (Library.artHues)	-	980	-160	980	800	-	opacity:0.85	blur:90	built	field 0 -1 #1FC9A8 0
+backdropField.1	20	a colour field: #6A4CF0, an ellipse, blurred 110 px at 0.9	the kit's BackdropField, the game's second art hue	-	1340	260	760	700	-	opacity:0.9	blur:110	built	field 0 -1 #6A4CF0 1
+backdropField.2	21	a colour field: #B8FFE9, a bar turned -18 degrees, blurred 22 px at 0.55	the kit's BackdropField, the game's first art hue	-	1180	210	640	46	-	opacity:0.55	blur:22	built	field -18 40 #B8FFE9 0
+gameDisc	22	the eclipse's disc	the kit's CoronaDisc, its corona the game's first hue at the look's rim's saturation and lightness (R-20261115-27)	CoronaDisc	-760	-1500	2900	2900	-	Tokens.surface	-	built	-
+coronaRim	22	its rim, 2 px	the corona	Rectangle	in:gameDisc:-2	top:gameDisc:-2	2904	2904	-	-	-	built	-
+coronaGlow.0	22	its glow, 44 px blur, 8 px spread, 0.55	the corona at the board's strength	-	in:gameDisc:0	top:gameDisc:0	2900	2900	-	-	-	built	corona 44 8 0.55
+coronaGlow.1	22	its halo, 170 px blur, 46 px spread, 0.25	the corona at the board's strength	-	in:gameDisc:0	top:gameDisc:0	2900	2900	-	-	-	built	corona 170 46 0.25
+gameGround	23	the lower ground from 620 down	none: the surface token	Rectangle	0	620	right:0	580	-	Tokens.surface	-	built	-
+gameHorizon	24	the horizon, 2 px, clear at both ends	none: the board's own colours (GameInk.horizon)	Rectangle	0	619	right:0	2	-	-	-	built	-
+mark	28	the crescent mark	Marks.crescent, Eclipse's Brand with no name	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+trail	29	the trail, 28 px after the mark	Page.trail (qt-models/src/game_page.rs trail)	Trail	after:mark:28	mid:80	-	-	-	-	-	built	-
+trailLink.0	30	"Consoles", a link	Actions.openSection(Page.trailSection)	Walkable	in:trail:0	mid:80	-	-	-	-	-	built	-
+trailWords.0	30	"Consoles", muted	words::CONSOLES_SECTION	Text	in:trailLink.0:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.0	31	the slash, 14 px either side	Words.crumb	Text	after:trailLink.0:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailLink.1	32	"Super Nintendo", a link	Actions.openConsole(Page.console)	Walkable	after:trailSlash.0:14	mid:80	-	-	-	-	-	built	-
+trailWords.1	32	the console's name, muted	the game's console (Read.console)	Text	in:trailLink.1:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.1	33	the slash	Words.crumb	Text	after:trailLink.1:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailWords.2	34	the game's title, semi-bold	Page.title	Text	after:trailSlash.1:14	mid:80	-	-	-	Tokens.text	24	built	600 0 none
+status	37	the status glass	none: the board's own colour (Ink.glass)	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
+battery	38	"82%", the level alone, no picture	Device.battery	Text	in:status:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	38	"9:41 PM"	Device.shortTime	Text	after:battery:22	mid:80	inright:status:22	-	-	Tokens.text	22	built	600 0 none
+gameKicker	43	"SUPER NINTENDO · 1994 · ACTION"	Page.kicker (qt-models/src/game_page.rs kicker)	Line	96	190	-	-	-	#FFF3C9D2	20	built	600 0.22 upper
+gameTitleLine	44	the title's line box, 106.08 px at the board's line height of 1.02	the title's line height, times its lines	Item	96	below:gameKicker:22	900	106.08	-	-	-	built	-
+gameTitle	44	"Aurora Drift", the face's own height about the line box's middle	Page.title	Text	96	mid:gameTitleLine	-	-	-	Tokens.textStrong	104	built	600 -0.02 none
+tabs	55	the tabs, 40 px apart	Page.tabs (qt-models/src/game_page.rs tabs)	Tabs	96	656	-	-	-	-	-	built	-
+tab.0	56	"Overview", its words 10 px over a 3 px line	Actions.pageTab(0)	Item	in:tabs:0	top:tabs:0	-	43	-	-	-	built	-
+tabWords.0	56	"Overview", muted	the tab's name	Line	in:tab.0:0	top:tab.0:0	-	-	-	Tokens.muted	24	built	400 0 none
+tab.1	57	"States", the tab shown	Page.tab	Item	after:tab.0:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.1	57	"States", white and semi-bold	the tab's name	Line	in:tab.1:0	top:tab.1:0	-	-	-	#FFFFFFFF	24	built	600 0 none
+tabUnderline.1	57	the 3 px underline	none: the accent token	Rectangle	in:tab.1:0	foot:tab.1	fit:tab.1:0	3	-	Tokens.accent	-	built	-
+tab.2	58	"Media"	Actions.pageTab(2)	Item	after:tab.1:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.2	58	"Media", muted	the tab's name	Line	in:tab.2:0	top:tab.2:0	-	-	-	Tokens.muted	24	built	400 0 none
+tab.3	59	"Details"	Actions.pageTab(3)	Item	after:tab.2:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.3	59	"Details", muted	the tab's name	Line	in:tab.3:0	top:tab.3:0	-	-	-	Tokens.muted	24	built	400 0 none
+tab.4	60	"Options"	Actions.pageTab(4)	Item	after:tab.3:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.4	60	"Options", muted	the tab's name	Line	in:tab.4:0	top:tab.4:0	-	-	-	Tokens.muted	24	built	400 0 none
+tab.5	61	"Cheats", the game having cheats	Actions.pageTab(5)	Item	after:tab.4:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.5	61	"Cheats", muted	the tab's name	Line	in:tab.5:0	top:tab.5:0	-	-	-	Tokens.muted	24	built	400 0 none
+gameLine	45	"Never played · 1 to 2 players"	Page.line, game_page::NEVER_PLAYED (qt-models/src/game_page.rs line)	Line	96	below:gameTitleLine:22	-	-	-	Tokens.muted	24	built	300 0 none
+pill.0	47	Start, filled, 14 px before the glyph and 34 after the words	Page.pills where the game has no resume point (R-20261123-36)	Pill	96	below:gameLine:32	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built	-
+buttonGlyph.0	47	the A disc, 46 px	Eclipse's Glyph: the kit's letter for Device.family in the face	Glyph	in:pill.0:14	mid:pill.0	46	46	-	-	-	built	glyph 22 600
+buttonLabel.0	47	"Start"	the pill's label	Text	after:buttonGlyph.0:16	mid:pill.0	-	-	-	Tokens.overAccent	26	built	600 0 none
+pill.1	48	"Favourite", outlined, not a favourite, 22 px before the heart and 28 after the words	Page.pills, the second, its heart Read.favourite	WordPill	after:pill.0:16	foot:pill.0	fit:pillLabel.1:30	72	-	-	-	built	-
+pillLine.1	48	its 2 px line	none: the board's own colour (Ink.pillLine)	Rectangle	in:pill.1:0	foot:pill.1	fit:pill.1:0	72	36	-	-	built	line 2 #FF5A6076
+pillHeart.1	49	the heart, 26 px, its outline in the words' colour	the board's path	Shape	in:pill.1:24	mid:pill.1	26	26	-	Tokens.text	-	built	-
+pillLabel.1	49	"Favourite", 12 px after the heart	the pill's label	Text	after:pillHeart.1:12	mid:pill.1	-	-	-	Tokens.text	24	built	400 0 none
+card.0	64	the empty slot's card, at rest, never pressed (R-20261116-36)	Page.cards, the empty slot alone	EmptyCard	96	748	316	239	-	-	-	built	-
+emptyBox	65	its dashed 2 px line, radius 18	none: the board's own colour (GameInk.restLine)	Shape	in:card.0:0	top:card.0:0	316	198	-	#FF3A3F55	-	built	-
+emptyPlus	66	the plus, 44 px at the box's middle	the board's path	Shape	in:card.0:136	top:card.0:77	44	44	-	#FF8E94AB	-	built	-
+emptyName	68	"Empty slot"	game_page::EMPTY_SLOT	Line	in:card.0:0	below:emptyBox:14	-	-	-	#FF8E94AB	22	built	600 0 none
+gameNote	70	"No states yet. A state is saved from the Pause Card while the game runs.", 60 down and 24 after the row's gap, two lines	Page.note, game_page::NO_STATES	Text	after:card.0:48	top:card.0:60	620	63.8	-	Tokens.muted	22	built	300 0 none
+help	73	the help line's entries, 40 above the foot	Page.boardHelp, Help.PageStart (qt-models/src/help.rs GamePageStart), the kit's HelpBar	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Start	75	the help line's A, a filled disc of 34	Eclipse's Glyph, lead	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Favourite	76	Y, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Back	77	B, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Home	78	Start in a 2 px capsule, 30 inside, corner 8, padding 10	Eclipse's Glyph, named: the kit's name for Start in the pad's family	-	-	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpSections	80	the shoulders' Section at the right, no glass	Help.PageSections (qt-models/src/help.rs GamePageSections), Eclipse's SectionsHelp part	SectionsHelp	-	mid:help	right:96	34	-	-	-	built	-
+ownGlyph-Section	81	LB in a 2 px box, 30 px inside, corner 8, padding 10	the kit's named glyph through Eclipse's Glyph part	-	in:helpSections:0	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Section	82	RB, the pair's second	the kit's HelpBar's pair	-	after:ownGlyph-Section:10	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
+helpSectionsWords	83	"Section"	the entry's label, help.rs PAGE_SECTION	Text	after:ownGlyph2-Section:10	mid:helpSections	inright:helpSections:0	-	-	#FFD8DBE6	21	built	400 0 none

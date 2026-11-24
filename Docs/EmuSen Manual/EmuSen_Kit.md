@@ -328,7 +328,9 @@ focus marks (`ringThickness`, `ringOffset`, `barWidth`, `tileScale`, `hoverBorde
 milliseconds with reduced motion applied (`instant`, `quick`, `enter`, `exit`, `pan`, `reel`, `fade`, `poster`), the
 fade of each (`quickFade` … `posterFade`; `fade` itself is the Fade token's fade, 120 ms under reduced motion) and each
 token's curve as `QEasingCurve::Type`'s number so QML binds `easing.type` to it (Linear 0, InQuad 1, OutQuad 2, OutCubic
-6); and the breath (`breathDelay`, `breathPeriod`, `breathLow`, `breathes`). The properties are read-only on purpose:
+6); the breath (`breathDelay`, `breathPeriod`, `breathLow`, `breathes`); and from 1.12 `dashPattern`, a dashed line's
+dash and gap in widths of the line as `ShapePath.dashPattern` takes it, kit-core's `DASH_PATTERN` (Qt's `DashLine` default,
+4 and 2) unless a theme writes its own as two numbers apart by a space (`dash_pattern`). The properties are read-only on purpose:
 a theme overrides token values through §3.4's mechanism, never by writing the singleton.
 
 Three tokens are renamed from the design's table: OnAccent, OnArt and OnArtScrim are `overAccent`, `overArt` and
@@ -4490,7 +4492,7 @@ slider's `minimum`, `maximum`, `step` and `amount` as `SettingsLayout` reads the
 both), takes `window` and `gap`, a row's height by `measure(row, height)`, and the pad and the keys by `press` and `key`;
 from 1.11 `follows`, a row it keeps focused whenever that changes and whenever the rows are read, the window kept
 around it (-1, the default, none; kit-core's `follow`); it gives `current`, `first`, `offset` (the scroll to the first row shown), `marked` and `count`, and raises `stepped`,
-`slid`, `chosen` and `sectionChosen` as `SettingsLayout` does. Settings became a screen a theme can supply (decided
+`slid`, `chosen` and `sectionChosen` as `SettingsLayout` does, and from 1.13 `moved(row)`, emitted only when a press or `focusRow` moves the walk's focus (never on `measure`, `read`, `follows`, `window`, `gap` or `scrollTo`). Settings became a screen a theme can supply (decided
 2026-11-16 by the tester, R-20261116-19); a walk that takes each row's height from the screen that draws it, rather than
 one height for every row, is this piece's own technical choice, so a theme's rows may be of any height. Exported to themes
 in EmuSen.Theme 1.9. Tests: kit-core's `measured.rs`, five tests: rows of 84, 120, 84, 160 and 84 with a gap of 10 in a

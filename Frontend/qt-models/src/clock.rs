@@ -84,6 +84,12 @@ pub fn clock_time(at: i64) -> String {
     QDateTime::from_secs_since_epoch(at, &QTimeZone::system_time_zone()).time().format(&QString::from("hh:mm")).to_string()
 }
 
+/// The day of a moment in the machine's zone, and the day before it: year, month and day, as Eclipse's when-lines count days.
+pub fn local_day(at: i64, before: i64) -> crate::game_page::Day {
+    let date = QDateTime::from_secs_since_epoch(at, &QTimeZone::system_time_zone()).date().add_days(-before);
+    (date.year(), date.month() as u32, date.day() as u32)
+}
+
 /// A moment, in seconds since 1970, in the machine's zone and its locale's short time form, `QLocale::ShortFormat`:
 /// "9:41 PM" under en_US, "21:41" under de_DE.
 pub fn short_time(at: i64) -> String {

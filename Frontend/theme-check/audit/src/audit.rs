@@ -200,6 +200,11 @@ fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, ove
         host_of.show()?;
         host::actions(object(screen)).ok_or("no Actions")?.set_sink(Some(Box::new(host_of)));
     }
+    if fed.screen == Screen::Game {
+        let host_of = GameHost::of(screen, fed.session);
+        host_of.show()?;
+        host::actions(object(screen)).ok_or("no Actions")?.set_sink(Some(Box::new(host_of)));
+    }
     let mut kit = tokens(screen).ok_or("the kit's Tokens are not in the theme's engine")?;
     kit.as_mut().set_form(kinds::form_of(WalkForm::BigScreen));
     kit.as_mut().set_reduced_motion(fed.reduced);
@@ -272,6 +277,85 @@ impl emusen_theme_qt::actions::ActionSink for SettingsHost {
                 }
                 None => false,
             },
+            _ => return false,
+        };
+        let shown = self.show().is_ok();
+        taken && shown
+    }
+}
+
+/// The game page as the program's host holds it for a theme: the suspended game with its resume point and three slots, two
+/// cheats and its details, at its States tab, and the theme's calls answered as the program's model answers them, the
+/// screen fed again after each (qt-app/src/theme.rs feed_page; EmuSen_Qt.md §3.4.12).
+struct GameHost {
+    screen: u64,
+    page: emusen_qt_models::game_page::GamePage,
+    focus: (Option<usize>, usize),
+}
+
+impl GameHost {
+    fn of(screen: u64, session: &SessionFacts) -> GameHost {
+        use emusen_qt_models::game_page::{Detail, GamePage, Read, Slot, State};
+        let now = words::now();
+        let state = |slot, ago: i64| State { path: format!("{}.state{ago}", session.key), slot, picture: String::new(), when: now - ago };
+        let read = Read {
+            title: session.title.clone(),
+            console: session.console.clone(),
+            year: "1994".into(),
+            played_seconds: 12_000,
+            last_played: Some(now - 30 * 3600),
+            favourite: true,
+            states: vec![state(Slot::Auto, 600), state(Slot::Number(1), 3600), state(Slot::Number(2), 15 * 86_400), state(Slot::Number(3), 21 * 86_400)],
+            cheats: ["Infinite lives", "Moon jump"].map(|d| emusen_qt_models::cheats::Switch { description: d.into(), on: false }).to_vec(),
+            details: vec![Detail { field: "genre", value: "Action".into(), edited: false }, Detail { field: "players", value: "1-2".into(), edited: false }],
+            ..Read::default()
+        };
+        let mut page = GamePage::new(read, now);
+        page.choose_tab(1);
+        GameHost { screen, page, focus: (None, 0) }
+    }
+
+    fn show(&self) -> Result<(), String> {
+        use emusen_theme_qt::page::{card_rows, pill_rows, PageFacts};
+        let kind = |s: emusen_qt_models::help::Screen| emusen_theme_qt::help::kind_of(s).map_or(-1, |k| k.repr);
+        let facts = PageFacts {
+            ready: true,
+            key: self.page.read.title.clone(),
+            title: self.page.read.title.clone(),
+            tabs: self.page.tabs().iter().map(|t| t.name().to_owned()).collect(),
+            tab: self.page.tab() as i32,
+            kicker: self.page.kicker(),
+            line: self.page.line(),
+            pills: pill_rows(&self.page.placed_pills()),
+            cards: card_rows(&self.page.cards_now()),
+            note: self.page.cards_note().to_owned(),
+            trail: self.page.trail(),
+            trail_section: emusen_qt_models::screens::CONSOLES_KEY.to_owned(),
+            help: kind(self.page.help(self.focus.0, self.focus.1)),
+            board_help: self.page.board_help(self.focus.0, self.focus.1).map_or(-1, kind),
+            focused: (self.focus.0.map_or(-1, |a| a as i32), self.focus.1 as i32),
+            ..PageFacts::default()
+        };
+        host::page(object(self.screen)).ok_or("no Page")?.show(&facts);
+        Ok(())
+    }
+}
+
+impl emusen_theme_qt::actions::ActionSink for GameHost {
+    fn act(&mut self, _action: &emusen_theme_qt::actions::Action) -> bool {
+        false
+    }
+
+    fn screen(&mut self, action: &emusen_theme_qt::actions::ScreenAction) -> bool {
+        use emusen_theme_qt::actions::ScreenAction as A;
+        let taken = match *action {
+            A::PageFocus(a, c) => {
+                self.focus = (usize::try_from(a).ok(), usize::try_from(c).unwrap_or(0));
+                true
+            }
+            A::PageTab(t) => usize::try_from(t).is_ok_and(|t| self.page.choose_tab(t)),
+            // A press that would start the game or open the program's page leaves the audited screen as it is.
+            A::PageAct(_) | A::PageChoose(_) | A::PageDeclared(_) => true,
             _ => return false,
         };
         let shown = self.show().is_ok();

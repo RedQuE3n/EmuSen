@@ -67,7 +67,7 @@ pub mod qobject {
         #[qproperty(QString, about_heading, cxx_name = "aboutHeading", READ, NOTIFY = shown)]
         #[qproperty(QString, shot, READ, NOTIFY = shown)]
         #[qproperty(bool, defaultable, READ, NOTIFY = shown)]
-        /// From 1.13 (R-20261116-22): a page's aside toggle chips (Scraping's 11 media kinds), their count, and total items (rows + chips).
+        /// From 1.14 (R-20261116-22): a page's aside toggle chips (Scraping's 11 media kinds), their count, and total items (rows + chips).
         #[qproperty(*mut ThemeRows, chips, READ, CONSTANT)]
         #[qproperty(i32, chip_count, cxx_name = "chipCount", READ, NOTIFY = shown)]
         #[qproperty(i32, total, READ, NOTIFY = shown)]
@@ -89,7 +89,7 @@ pub const SETTINGS_ROW_ROLES: [&str; 19] = [
     "system", "games", "engine", "form",
 ];
 
-/// `Settings.chips`' roles (from 1.13, R-20261116-22): Scraping's aside toggle chips and their model row index.
+/// `Settings.chips`' roles (from 1.14, R-20261116-22): Scraping's aside toggle chips and their model row index.
 pub const SETTINGS_CHIP_ROLES: [&str; 4] = ["key", "label", "switchOn", "row"];
 
 /// Everything the singleton shows, as the host reads it from the program's model.

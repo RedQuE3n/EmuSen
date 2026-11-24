@@ -9,7 +9,7 @@ pub use colour::Colour;
 pub use faces::{BUNDLED, FaceRole, WeightRole, is_bundled};
 pub use metrics::{
     legible_header, legible_text, legible_type,
-    Corona, FocusMarks, Insets, MAX_TEXT_SCALE, SAFE_AREA_FRACTION, Shadow, Spacing, TEXT_SIZES, TypeScale, base_type, clamp_text_scale,
+    Corona, DASH_PATTERN, FocusMarks, dash_pattern, Insets, MAX_TEXT_SCALE, SAFE_AREA_FRACTION, Shadow, Spacing, TEXT_SIZES, TypeScale, base_type, clamp_text_scale,
     corona, focus_marks, header_base, header_of, header_size, raised_shadow, safe_area_of, scaled_text, spacing, text_scale_of, type_scale,
 };
 pub use palette::{ColourToken, ContrastPair, GRAPHIC_FLOOR, TEXT_FLOOR, colour, contrast_pairs, on_art_over};

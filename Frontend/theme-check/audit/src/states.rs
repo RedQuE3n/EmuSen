@@ -120,6 +120,6 @@ mod tests {
         assert_eq!(two, ["nogame", "splash-3s"]);
         assert!(chosen("nocovers").unwrap_err().contains("nocovers is not a state"));
         assert_eq!(listed().lines().count(), STATES.len());
-        assert!(listed().starts_with("default\tHome,Consoles,Games,Splash,Settings\t"), "{}", listed());
+        assert!(listed().starts_with("default\tHome,Consoles,Games,Splash,Settings,Game\t"), "{}", listed());
     }
 }

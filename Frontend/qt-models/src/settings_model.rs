@@ -513,8 +513,14 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
             .on_open_changed(|mut model| {
                 if model.open {
                     model.read_if_named();
-                } else if std::mem::take(&mut model.as_mut().rust_mut().saved_since_open) {
-                    model.saved();
+                } else {
+                    if model.view.consoles_with_games() {
+                        model.as_mut().rust_mut().view.reset_consoles_filter();
+                        model.as_mut().shown(true);
+                    }
+                    if std::mem::take(&mut model.as_mut().rust_mut().saved_since_open) {
+                        model.saved();
+                    }
                 }
             })
             .release();
@@ -668,6 +674,22 @@ impl qobject::SettingsModel {
         self.outcome(outcome)
     }
 
+    /// Y on Consoles: toggles the has-games filter and resets focus to the first row (board #27).
+    pub fn toggle_consoles_with_games(mut self: Pin<&mut Self>) -> bool {
+        if !self.as_mut().rust_mut().view.toggle_consoles_with_games() {
+            return false;
+        }
+        self.shown(true);
+        true
+    }
+
+    /// LT/RT on Consoles: jumps focus to the first console of the previous or next starting letter (board #27).
+    pub fn jump_console_letter(self: Pin<&mut Self>, by: i32) -> bool {
+        let Some(to) = self.view.jump_console_letter(self.focused.max(0) as usize, by) else { return false };
+        self.set_focused(to as i32);
+        true
+    }
+
     pub fn choose(mut self: Pin<&mut Self>, row: i32) -> bool {
         let outcome = self.as_mut().rust_mut().view.choose(row.max(0) as usize);
         self.outcome(outcome)
@@ -756,7 +778,11 @@ impl qobject::SettingsModel {
             Outcome::Door(name) => self.door(QString::from(name.as_str())),
             Outcome::OpenFolder(path) => self.open_folder(QString::from(path.as_str())),
             Outcome::ChooseFolder { key, start } => self.choose_folder(QString::from(key.as_str()), QString::from(start.as_str())),
-            Outcome::Set { .. } | Outcome::NewCard(_) | Outcome::Cards { .. } if !self.world.is_empty() => self.shown(false),
+            Outcome::Set { .. } if !self.world.is_empty() => {
+                let page_changed = list(self.view.trail().into_iter()) != self.trail;
+                self.shown(page_changed);
+            }
+            Outcome::NewCard(_) | Outcome::Cards { .. } if !self.world.is_empty() => self.shown(false),
             Outcome::Cards { op, args } => {
                 let (done, words) = match ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()) {
                     Ok(c) => c.cards_change(op, &args),
@@ -769,8 +795,9 @@ impl qobject::SettingsModel {
             Outcome::Set { console, key, value } => {
                 let set = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.set(&console, &key, value.as_deref()));
                 let failed = set.is_err();
+                let page_changed = list(self.view.trail().into_iter()) != self.trail;
                 self.as_mut().said(set.err().map(|e| format!("The console's setting could not be stored: {e}")).unwrap_or_default());
-                self.as_mut().shown(false);
+                self.as_mut().shown(page_changed);
                 // The engine chosen changes the schema the page draws, a refusal leaves the stored value as it was, and a
                 // read begun before this store would bring the old value back.
                 if failed || key == crate::consoles::ENGINE_KEY || self.reading {

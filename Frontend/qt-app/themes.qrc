@@ -17,6 +17,9 @@
     </qresource>
     <qresource prefix="/emusen/themes/eclipse">
         <file alias="assets/check.svg">../themes/eclipse/assets/check.svg</file>
+        <file alias="assets/checkerboard-48.svg">../themes/eclipse/assets/checkerboard-48.svg</file>
+        <file alias="assets/checkerboard-92.svg">../themes/eclipse/assets/checkerboard-92.svg</file>
+        <file alias="assets/firmware-check.svg">../themes/eclipse/assets/firmware-check.svg</file>
         <file alias="assets/sections.svg">../themes/eclipse/assets/sections.svg</file>
         <file alias="parts/ArtHues.qml">../themes/eclipse/parts/ArtHues.qml</file>
         <file alias="parts/Board.qml">../themes/eclipse/parts/Board.qml</file>
@@ -33,6 +36,7 @@
         <file alias="parts/Ease.qml">../themes/eclipse/parts/Ease.qml</file>
         <file alias="parts/Encore.qml">../themes/eclipse/parts/Encore.qml</file>
         <file alias="parts/PlanetInk.qml">../themes/eclipse/parts/PlanetInk.qml</file>
+        <file alias="parts/PlanetSphere.qml">../themes/eclipse/parts/PlanetSphere.qml</file>
         <file alias="parts/SplashCorona.qml">../themes/eclipse/parts/SplashCorona.qml</file>
         <file alias="parts/Blend.qml">../themes/eclipse/parts/Blend.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
@@ -45,7 +49,10 @@
         <file alias="parts/Limb.qml">../themes/eclipse/parts/Limb.qml</file>
         <file alias="parts/SettingsAside.qml">../themes/eclipse/parts/SettingsAside.qml</file>
         <file alias="parts/SettingsChips.qml">../themes/eclipse/parts/SettingsChips.qml</file>
+        <file alias="parts/SettingsConsoleCard.qml">../themes/eclipse/parts/SettingsConsoleCard.qml</file>
+        <file alias="parts/SettingsConsoles.qml">../themes/eclipse/parts/SettingsConsoles.qml</file>
         <file alias="parts/SettingsFaces.qml">../themes/eclipse/parts/SettingsFaces.qml</file>
+        <file alias="parts/SettingsFirmwareCard.qml">../themes/eclipse/parts/SettingsFirmwareCard.qml</file>
         <file alias="parts/SettingsFolder.qml">../themes/eclipse/parts/SettingsFolder.qml</file>
         <file alias="parts/SettingsInk.qml">../themes/eclipse/parts/SettingsInk.qml</file>
         <file alias="parts/SettingsMark.qml">../themes/eclipse/parts/SettingsMark.qml</file>

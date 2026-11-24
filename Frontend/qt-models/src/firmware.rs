@@ -267,3 +267,62 @@ fn first_sentence(text: Option<&str>) -> Option<String> {
         None => text.to_owned(),
     })
 }
+
+/// The Firmware About panel's small note on how files are found (R-20261123-15).
+pub const CONTENT_NOTE: &str = "A file with a known checksum is found by its content, even renamed; others by name and size. Your folder is only ever read.";
+
+/// The status of one firmware file in Eclipse's Firmware About panel (board #29).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileState {
+    Found = 0,
+    Optional = 1,
+    Missing = 2,
+    WrongSize = 3,
+}
+
+/// One row of Eclipse's Firmware About panel file card (board #29).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileStatus {
+    pub label: String,
+    pub status: String,
+    pub state: FileState,
+}
+
+/// Every deduplicated firmware file of a console with its found count and status row (R-20261123-14, -27).
+pub fn file_statuses(files: &[(String, FirmwareFile)], overview: &[FirmwareItem]) -> (usize, usize, Vec<FileStatus>) {
+    let mut seen: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+    let mut found = 0usize;
+    for (_, file) in files {
+        if seen.iter().any(|s| s.eq_ignore_ascii_case(&file.file)) {
+            continue;
+        }
+        seen.push(file.file.clone());
+        let label = if file.label.is_empty() { file.file.clone() } else { file.label.clone() };
+        let item = overview.iter().find(|i| i.file.eq_ignore_ascii_case(&file.file));
+        let (state, status) = if file.present() {
+            found += 1;
+            let folder = item.and_then(|i| i.found_in.as_deref());
+            (FileState::Found, folder.map_or_else(|| "Found".to_owned(), |f| format!("Found in {f}")))
+        } else if item.is_some_and(|i| i.wrong_size) {
+            let folder = item.and_then(|i| i.wrong_size_in.as_deref()).unwrap_or("EmuSen's folder");
+            (FileState::WrongSize, format!("Wrong size in {folder}"))
+        } else if file.missing() {
+            (FileState::Missing, "Not found".to_owned())
+        } else {
+            (FileState::Optional, "Not found · open replacement".to_owned())
+        };
+        out.push(FileStatus { label, status, state });
+    }
+    let total = out.len();
+    (found, total, out)
+}
+
+/// The "Found, N of M" firmware count for Console's Firmware row or Firmware's About heading (R-20261123-14, -27).
+pub fn count_value(found: usize, total: usize, heading: bool) -> String {
+    if total == 0 {
+        (if heading { "No firmware needed" } else { "None needed" }).to_owned()
+    } else {
+        format!("Found, {found} of {total}")
+    }
+}

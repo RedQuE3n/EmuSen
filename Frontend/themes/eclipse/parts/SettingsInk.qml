@@ -5,8 +5,8 @@ import EmuSen.Theme
 QtObject {
     // The section shown, by its place in the program's sections, which the boards order as gen_settings.py:7-14 does.
     property int section: Settings.section
-    // The glow behind a section's page and every page under it, each section its own (G:163, 178, 195, 299, 329); Consoles' board draws none.
-    readonly property color pageGlow: section === 0 ? "#2A6FD6" : section === 1 ? "#3B4AA8" : section === 2 ? "#7A3FA8" : section === 4 ? "#1FA890" : section === 5 ? "#B0487A" : "transparent"
+    // The glow behind a section's page and every page under it, each section its own (G:163, 178, 195, 299, 329); Consoles uses the focused console's planet shade.
+    readonly property color pageGlow: Settings.pageGlow.length > 0 ? Settings.pageGlow : (section === 0 ? "#2A6FD6" : section === 1 ? "#3B4AA8" : section === 2 ? "#7A3FA8" : section === 4 ? "#1FA890" : section === 5 ? "#B0487A" : "transparent")
     // The limb's fill, its 2 px rim at rgba(246, 231, 216, 0.75) and its glow at rgba(246, 214, 200, 0.35) (G:91).
     readonly property color limb: "#0B0D16"
     readonly property color limbRim: "#BFF6E7D8"
@@ -27,4 +27,8 @@ QtObject {
     // EmuSen's About mark's two glows: rgba(246, 214, 200, 0.55) and rgba(240, 180, 196, 0.3) (EclipseSettingsEmuSen:68).
     readonly property color markGlow: "#8CF6D6C8"
     readonly property color markHalo: "#4DF0B4C4"
+    // Consoles' libretro checkerboard dark cell, hollow outline ring, and unsupported console name (EclipseSettingsConsoles:78).
+    readonly property color checkerDark: "#2A2E40"
+    readonly property color ringMuted: "#5A6076"
+    readonly property color unsupportedName: "#8E94AB"
 }

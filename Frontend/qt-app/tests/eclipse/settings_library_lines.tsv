@@ -1,0 +1,30 @@
+# The words of Library's rows and folder card against their board, EclipseSettingsLibrary.dc.html: each line's box and baseline in board pixels.
+# Measured 2026-11-23 in Chrome after document.fonts.ready with Sora and JetBrains Mono (s3-boards/library.json).
+element	line top	line height	baseline
+rowName.0	14.5	30	37.5
+rowAbout.0	48.5	21	64.5
+rowWords.0	28.5	27	49.5
+rowName.1	14.5	30	37.5
+rowAbout.1	48.5	21	64.5
+rowWords.1	28.5	27	49.5
+rowName.2	14.5	30	37.5
+rowAbout.2	48.5	21	64.5
+rowWords.2	28.5	27	49.5
+rowName.3	14.5	30	37.5
+rowAbout.3	48.5	21	64.5
+rowWords.3	28.5	27	49.5
+rowName.4	14.5	30	37.5
+rowAbout.4	48.5	21	64.5
+rowName.5	14.5	30	37.5
+rowAbout.5	48.5	21	64.5
+rowWords.5	28.5	27	49.5
+rowName.7	14.5	30	37.5
+rowAbout.7	48.5	21	64.5
+rowName.8	14.5	30	37.5
+rowAbout.8	48.5	21	64.5
+rowName.9	14.5	30	37.5
+rowAbout.9	48.5	21	64.5
+rowWords.9	28.5	27	49.5
+asideFolderCount	28	81	90	asideFolder
+asideFolderUnder	119	25	138	asideFolder
+settingsHeading	150	56	193	settingsCanvas

@@ -1,7 +1,8 @@
-//! The oracle of Eclipse's Settings on Sound, Controllers, Collections and Saves and states, each at its board's state, by pad and pointer (EmuSen_Qt.md §3.4.11).
+//! The oracle of Eclipse's Settings on Sound, Controllers, Collections, Saves and states, Library, Scraping and EmuSen, each at its board's state, by pad and pointer (EmuSen_Qt.md §3.4.11).
 #![allow(dead_code)]
 
-use crate::eclipse_board::{boxes, held, read, rows, same};
+use crate::common::wait_for;
+use crate::eclipse_board::{boxes, held, read, rows, same, Row};
 use crate::eclipse_pad::{focused, press};
 use crate::eclipse_settings_oracle::{acted, at, centre, help_line, lines_held, pictures, settings, settle, shown, state, with_settings};
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
@@ -26,26 +27,35 @@ pub struct Page {
     pub key: &'static str,
     pub heading: &'static str,
     pub crumb: &'static str,
-    /// The row the board focuses, and how many rows its window draws there.
+    /// The row the board focuses, and how many left-hand rows its window draws there.
     pub focus: usize,
     pub drawn: usize,
-    /// The rows the board draws: the program's row, its name, its short line and whether the board cuts it.
-    pub board: &'static [(usize, &'static str, &'static str, bool)],
+    /// The rows the board draws: program row index, board name, board short line, and whether the board cuts it (None when the value is a test-world path of variable length).
+    pub board: &'static [(usize, &'static str, &'static str, Option<bool>)],
+    /// Program-only rows the board does not draw (R-20261116-21): index and name.
+    pub program_only: &'static [(usize, &'static str)],
     /// Rows the board draws that an earlier ruling hides, by name.
     pub hidden: &'static [&'static str],
     pub glow: &'static str,
-    /// The About panel's heading, and its small lines as the board's state gives them.
+    /// The About panel's heading, literal sentence (empty when hidden), and small lines as the board's state gives them.
     pub about: &'static str,
+    pub sentence: &'static str,
     pub muted: &'static [&'static str],
     /// The help line's words in order.
     pub help: &'static [&'static str],
 }
 
-/// The lines table's rows of the rows `drawn` holds, and every row naming no row.
+/// The program row index named by a row element (`row.N`, `rowFill.N`, `rowName.N`, etc.).
+fn row_index(name: &str) -> Option<usize> {
+    let (head, tail) = name.rsplit_once('.')?;
+    head.starts_with("row").then(|| tail.parse::<usize>().ok()).flatten()
+}
+
+/// The lines table's rows of the left rows `drawn` holds, and every non-row element.
 fn lines_of(lines: &str, drawn: impl Fn(usize) -> bool) -> String {
     lines
         .lines()
-        .filter(|l| l.starts_with('#') || l.starts_with("element\t") || l.split('\t').next().and_then(|n| n.rsplit_once('.')).and_then(|(_, i)| i.parse::<usize>().ok()).is_none_or(&drawn))
+        .filter(|l| l.starts_with('#') || l.starts_with("element\t") || l.split('\t').next().and_then(row_index).is_none_or(&drawn))
         .map(|l| format!("{l}\n"))
         .collect()
 }
@@ -84,11 +94,11 @@ fn reach(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page) {
 }
 
 /// Each drawn row's short line ends 24 px before its value at the latest, cut there and only there (G:30, R-20261123-31); a board row cut as the board cuts it.
-fn lines_cut(scene: &mut Scene<'_>, page: &Page, k: f64, at_size: &str, differences: &mut Vec<String>) {
+fn lines_cut(scene: &mut Scene<'_>, page: &Page, left_count: usize, k: f64, at_size: &str, differences: &mut Vec<String>) {
     let tree = scene.tree();
     let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
     let got = boxes(&tree, unit);
-    for i in 0..settings(scene).shown_rows().len() {
+    for i in 0..left_count {
         if !shown(scene, &format!("row.{i}")) || !shown(scene, &format!("rowAbout.{i}")) {
             continue;
         }
@@ -97,7 +107,7 @@ fn lines_cut(scene: &mut Scene<'_>, page: &Page, k: f64, at_size: &str, differen
         if line.right() > value.x - 24.0 * k + 1e-6 || (cut && line.right() < value.x - 24.0 * k - 1e-6) {
             differences.push(format!("{at_size}: row {i}'s short line ends at {} with the value at {}, cut {cut}", line.right(), value.x));
         }
-        if let Some((_, _, _, board_cut)) = page.board.iter().find(|b| b.0 == i) {
+        if let Some((_, _, _, Some(board_cut))) = page.board.iter().find(|b| b.0 == i) {
             if cut != *board_cut {
                 differences.push(format!("{at_size}: row {i}'s short line cut {cut} where the board's is cut {board_cut}"));
             }
@@ -111,8 +121,11 @@ pub fn oracle(page: &Page, backend: &str, extra: &dyn Fn(&mut Scene<'_>, &Sdl, &
 }
 
 fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend: &str, extra: &dyn Fn(&mut Scene<'_>, &Sdl, &VirtualPad, &mut Vec<String>)) {
+    assert!(scene.set_property("folders", "catching", "true"));
     reach(scene, sdl, pad, page);
     let count = settings(scene).shown_rows().len();
+    let left_count = settings(scene).view().chip_start().unwrap_or(count);
+    assert_eq!(page.board.len() + page.program_only.len(), left_count, "{}: every left row is accounted for by board or program_only", page.name);
     let mut differences = Vec::new();
     for name in page.hidden {
         if settings(scene).shown_rows().iter().any(|r| r.label == *name) {
@@ -120,6 +133,7 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         }
     }
     let (board_height, table) = rows(page.table);
+    let initial: Vec<Row> = table.iter().filter(|r| row_index(&r.name).is_none_or(|i| i < page.drawn)).cloned().collect();
     let k = DESIGN_HEIGHT / board_height;
     for (width, height) in SIZES {
         scene.resize(width, height);
@@ -129,22 +143,23 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
         let screen: u64 = tree.nodes[tree.find_named("settingsScreen").expect("Eclipse's Settings") as usize].id.parse().unwrap();
         let tokens = crate::eclipse_board::tokens(screen);
-        held(&tree, &table, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
+        held(&tree, &initial, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
         lines_held(&tree, &lines_of(page.lines, |i| i < page.drawn), k, &at_size, &mut differences);
         if Colour::parse(&read(&tree, "backdropField.0", "paint")) != Colour::parse(page.glow) {
             differences.push(format!("{at_size}: the page's glow is {} where the board gives {}", read(&tree, "backdropField.0", "paint"), page.glow));
         }
-        let s = settings(scene);
-        let model_rows = s.shown_rows().to_vec();
-        let facets = s.view().facets();
-        let sentence = s.view().pane(page.focus).sentence;
+        // Every board row's name, short line and About panel sentence held against the board's literal words, not the model's own.
         let mut words = vec![
             ("settingsTitle".to_owned(), "Settings".to_owned()),
             ("settingsHeading".to_owned(), page.heading.to_owned()),
             ("settingsPlace".to_owned(), format!("{} of {count}", page.focus + 1)),
             ("asideHeading".to_owned(), page.about.to_owned()),
-            ("asideSentence".to_owned(), sentence),
         ];
+        if !page.sentence.is_empty() {
+            words.push(("asideSentence".to_owned(), page.sentence.to_owned()));
+        } else if shown(scene, "asideSentence") {
+            differences.push(format!("{at_size}: asideSentence is drawn where the board has none"));
+        }
         if !page.crumb.is_empty() {
             words.push(("settingsCrumb".to_owned(), page.crumb.to_owned()));
         } else if shown(scene, "settingsCrumb") {
@@ -157,10 +172,11 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
             words.push((format!("rowName.{i}"), name.to_string()));
             words.push((format!("rowAbout.{i}"), about.to_string()));
         }
-        for (i, row) in model_rows.iter().enumerate() {
-            words.push((format!("rowName.{i}"), row.label.clone()));
-            words.push((format!("rowAbout.{i}"), facets[i].about.clone()));
-            words.push((format!("rowWords.{i}"), row.value.clone()));
+        for (i, name) in page.program_only {
+            words.push((format!("rowName.{i}"), name.to_string()));
+            if read(&tree, &format!("rowAbout.{i}"), "text").is_empty() {
+                differences.push(format!("{at_size}: program-only row {i} ({name}) has no short line"));
+            }
         }
         for (name, want) in words {
             let have = read(&tree, &name, "text");
@@ -168,31 +184,28 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
                 differences.push(format!("{at_size}: {name} says {have:?} where {want:?}"));
             }
         }
-        for i in 0..count {
+        for i in 0..left_count {
             if shown(scene, &format!("row.{i}")) != (i < page.drawn) {
                 differences.push(format!("{at_size}: row {i} drawn {}", i >= page.drawn));
             }
         }
-        lines_cut(scene, page, k, &at_size, &mut differences);
+        lines_cut(scene, page, left_count, k, &at_size, &mut differences);
     }
     scene.resize(1920, 1200);
     scene.wait(300);
     let defaultable = settings(scene).view().defaultable(page.focus);
-    let mut line: Vec<String> = page.help.iter().map(|w| w.to_string()).collect();
-    if !defaultable {
-        line.retain(|w| w != "Back to the default");
-    }
-    if help_line(scene).0 != line {
-        differences.push(format!("the help line is {:?} where the board's is {:?}", help_line(scene).0, page.help));
+    let line: Vec<String> = page.help.iter().map(|w| w.to_string()).collect();
+    if help_line(scene) != (line, defaultable.to_string()) {
+        differences.push(format!("the help line is {:?} where the board's is {:?} (defaultable {defaultable})", help_line(scene), page.help));
     }
     pictures(scene, backend, page.name);
     extra(scene, sdl, pad, &mut differences);
 
-    // The pad: Up to the first row, Down through every row to the last, each focused, drawn and counted, then past the last.
-    for _ in 0..count {
+    // The pad: Up to the first row, Down through every left row to the last, each focused, drawn and counted, then past the last.
+    for _ in 0..left_count {
         press(scene, sdl, pad, PadControl::Up);
     }
-    for i in 0..count {
+    for i in 0..left_count {
         if i > 0 {
             press(scene, sdl, pad, PadControl::Down);
         }
@@ -203,24 +216,42 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         if read(&scene.tree(), "settingsPlace", "text") != format!("{} of {count}", i + 1) {
             differences.push(format!("row {i}: the place reads {:?}", read(&scene.tree(), "settingsPlace", "text")));
         }
-        if read(&scene.tree(), "asideHeading", "text") != settings(scene).shown_rows()[i].label {
-            differences.push(format!("row {i}: the About panel names {:?}", read(&scene.tree(), "asideHeading", "text")));
+        let want_about = if left_count < count { page.about.to_owned() } else { settings(scene).shown_rows()[i].label.clone() };
+        if read(&scene.tree(), "asideHeading", "text") != want_about {
+            differences.push(format!("row {i}: the About panel names {:?} where {want_about:?}", read(&scene.tree(), "asideHeading", "text")));
         }
     }
     press(scene, sdl, pad, PadControl::Down);
     settle(scene);
-    if at(scene).0 != count as i32 - 1 {
+    if at(scene).0 != left_count as i32 - 1 {
         differences.push("Down past the last row moved the focus".to_owned());
     }
-    lines_cut(scene, page, k, "the last row focused", &mut differences);
+    // Board rows scrolled into view past the initial window held by their table rows at every gate size.
+    if table.iter().any(|r| row_index(&r.name).is_some_and(|i| i >= page.drawn)) {
+        for (width, height) in SIZES {
+            scene.resize(width, height);
+            scene.wait(300);
+            let tree = scene.tree();
+            let at_size = format!("{width}x{height}, the last row focused");
+            let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
+            let screen: u64 = tree.nodes[tree.find_named("settingsScreen").expect("Eclipse's Settings") as usize].id.parse().unwrap();
+            let tokens = crate::eclipse_board::tokens(screen);
+            let in_window: Vec<bool> = (0..left_count).map(|i| shown(scene, &format!("row.{i}"))).collect();
+            let scrolled: Vec<Row> = table.iter().filter(|r| row_index(&r.name).is_some_and(|i| i >= page.drawn && in_window.get(i) == Some(&true))).cloned().collect();
+            held(&tree, &scrolled, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
+        }
+        scene.resize(1920, 1200);
+        scene.wait(300);
+    }
+    lines_cut(scene, page, left_count, k, "the last row focused", &mut differences);
     let tree = scene.tree();
-    let in_window: Vec<bool> = (0..count).map(|i| shown(scene, &format!("row.{i}"))).collect();
+    let in_window: Vec<bool> = (0..left_count).map(|i| shown(scene, &format!("row.{i}"))).collect();
     lines_held(&tree, &lines_of(page.lines, |i| in_window.get(i) == Some(&true)).lines().filter(|l| !l.starts_with("aside")).map(|l| format!("{l}\n")).collect::<String>(), k, "the last row focused", &mut differences);
 
     // Each row acted on by the pad from the last: Right then Left, A twice, or A and B; then X.
     let mut opened = Vec::new();
-    for i in (0..count).rev() {
-        if i + 1 < count {
+    for i in (0..left_count).rev() {
+        if i + 1 < left_count {
             press(scene, sdl, pad, PadControl::Up);
             settle(scene);
         }
@@ -230,11 +261,28 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         }
         let row = settings(scene).shown_rows()[i].clone();
         if matches!(row.kind, RowKind::Opens | RowKind::Asks) {
-            press(scene, sdl, pad, PadControl::South);
-            settle(scene);
-            opened.push(format!("{}: {}", row.label, at(scene).1));
-            press(scene, sdl, pad, PadControl::East);
-            settle(scene);
+            if row.held {
+                opened.push(format!("{}: held", row.label));
+            } else {
+                press(scene, sdl, pad, PadControl::South);
+                settle(scene);
+                if scene.property("folders", "waiting") == "true" {
+                    opened.push(format!("{}: folder picker ({})", row.label, scene.property("folders", "asked")));
+                    assert!(scene.set_property("folders", "cancel", "true"));
+                    wait_for(scene, "folders", "waiting", "false", 1000);
+                    assert!(scene.set_property("folders", "cancel", "false"));
+                    settle(scene);
+                } else if scene.property("screens", "shown") != "Settings" {
+                    opened.push(format!("{}: screen {}", row.label, scene.property("screens", "shown")));
+                    press(scene, sdl, pad, PadControl::East);
+                    wait_for(scene, "screens", "shown", "Settings", 2000);
+                    settle(scene);
+                } else {
+                    opened.push(format!("{}: {}", row.label, at(scene).1));
+                    press(scene, sdl, pad, PadControl::East);
+                    settle(scene);
+                }
+            }
         }
         // Swap A and B in menus swaps the very buttons that turn it (and X with Y): turned on by South, off again by East, X then North.
         if row.id == "swap" {
@@ -247,15 +295,6 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
             }
             if before.1 != Some(false) || went[1].1 != Some(true) || went[2] != before || went[3] != before || went[4].1 != Some(true) || went[5] != before || at(scene) != (i as i32, page.key.to_owned()) {
                 differences.push(format!("the pad on {}: {went:?}, left {:?}", row.label, at(scene)));
-            }
-            continue;
-        }
-        // An action with no value does its work in place: A opens nothing and leaves the focus on its row.
-        if row.kind == RowKind::Action && row.value.is_empty() {
-            press(scene, sdl, pad, PadControl::South);
-            settle(scene);
-            if at(scene) != (i as i32, page.key.to_owned()) || scene.property("screens", "shown") != "Settings" {
-                differences.push(format!("A on {}, an action, left {:?} on {}", row.label, at(scene), scene.property("screens", "shown")));
             }
             continue;
         }
@@ -275,15 +314,15 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
                 differences.push(format!("X on row {i}: {default:?} → {changed:?} → {:?}", state(scene, i)));
             }
         } else if at(scene) != (i as i32, page.key.to_owned()) {
-            differences.push(format!("X on row {i}, a door, left {:?}", at(scene)));
+            differences.push(format!("X on row {i}, non-defaultable, left {:?}", at(scene)));
         }
     }
     println!("{}: the doors open {opened:?}", page.name);
     assert!(differences.is_empty(), "{} differences by the pad:\n{}", differences.len(), differences.join("\n"));
 
     // The pointer: each row focused where it is drawn, the wheel bringing later rows in; chevrons step, a click turns a switch or opens a door.
-    for i in 0..count {
-        for _ in 0..count {
+    for i in 0..left_count {
+        for _ in 0..left_count {
             if shown(scene, &format!("row.{i}")) {
                 break;
             }
@@ -301,15 +340,6 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         settle(scene);
         if at(scene).0 != i as i32 {
             differences.push(format!("the pointer on row {i} focused {:?}, the row drawn {}, the window from row {}", at(scene), shown(scene, &format!("row.{i}")), scene.property("settingsWalk", "first")));
-            continue;
-        }
-        if settings(scene).shown_rows()[i].kind == RowKind::Action && settings(scene).shown_rows()[i].value.is_empty() {
-            let (x, y) = centre(scene, &format!("rowName.{i}"));
-            scene.click(x, y);
-            settle(scene);
-            if at(scene) != (i as i32, page.key.to_owned()) {
-                differences.push(format!("a click on row {i}, an action, left {:?}", at(scene)));
-            }
             continue;
         }
         acted(
@@ -341,7 +371,7 @@ fn run(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, page: &Page, backend:
         assert!(!shown(scene, "settingsCrumb"), "no trail over a section's heading");
     }
     press(scene, sdl, pad, PadControl::East);
-    crate::common::wait_for(scene, "screens", "shown", "Home", 2000);
+    wait_for(scene, "screens", "shown", "Home", 2000);
     scene.assert_quiet();
 }
 
@@ -444,14 +474,16 @@ pub const SOUND: Page = Page {
     focus: 0,
     drawn: 4,
     board: &[
-        (0, "Volume", "The game's volume.", false),
-        (1, "Navigation sounds", "The sounds for moving, choosing and going back, on a stream of their own beside the game's.", true),
-        (2, "Sound volume", "How loud the navigation sounds are, beside the game's own volume.", false),
-        (3, "Output", "Where the game's sound and the interface's sounds play.", false),
+        (0, "Volume", "The game's volume.", Some(false)),
+        (1, "Navigation sounds", "The sounds for moving, choosing and going back, on a stream of their own beside the game's.", Some(true)),
+        (2, "Sound volume", "How loud the navigation sounds are, beside the game's own volume.", Some(false)),
+        (3, "Output", "Where the game's sound and the interface's sounds play.", Some(false)),
     ],
+    program_only: &[],
     hidden: &[],
     glow: "#7A3FA8",
     about: "Volume",
+    sentence: "The game's volume. On the handheld this row defers to the device's quick menu.",
     // R-20261123-12's words for the board's line.
     muted: &["The ring fills as the volume rises; the next sound plays at the level you chose."],
     help: &["Change", "Choose or open", "Back to the default", "Back", "Section", "Home"],
@@ -495,19 +527,29 @@ pub const CONTROLLERS: Page = Page {
     focus: 8,
     drawn: 9,
     board: &[
-        (3, "Rumble", "The motors in your controller, where the console's games drive them.", false),
-        (4, "Swap A and B in menus", "A and B trade what they do in the library, the menus and every sheet, and so do X and Y.", true),
-        (5, "Guide chords", "Guide held with Up saves, with Down loads, with R1 takes a screenshot.", false),
-        (8, "Controller type", "Which buttons the help bar draws.", false),
-        (9, "Only the first controller", "Only the first controller connected steers the menus.", false),
-        (10, "Controller notices", "A notice at the top of the screen when a controller is connected or disconnected.", true),
-        (11, "Left stick as the D-pad", "In games whose console has no stick, the left stick also presses the D-pad.", true),
-        (12, "Stick deadzone", "How far a stick must travel before it counts as a direction.", false),
+        (3, "Rumble", "The motors in your controller, where the console's games drive them.", Some(false)),
+        (4, "Swap A and B in menus", "A and B trade what they do in the library, the menus and every sheet, and so do X and Y.", Some(true)),
+        (5, "Guide chords", "Guide held with Up saves, with Down loads, with R1 takes a screenshot.", Some(false)),
+        (8, "Controller type", "Which buttons the help bar draws.", Some(false)),
+        (9, "Only the first controller", "Only the first controller connected steers the menus.", Some(false)),
+        (10, "Controller notices", "A notice at the top of the screen when a controller is connected or disconnected.", Some(true)),
+        (11, "Left stick as the D-pad", "In games whose console has no stick, the left stick also presses the D-pad.", Some(true)),
+        (12, "Stick deadzone", "How far a stick must travel before it counts as a direction.", Some(false)),
+    ],
+    program_only: &[
+        (0, "Players"),
+        (1, "Controller bindings"),
+        (2, "Profiles"),
+        (6, "Keyboard keys"),
+        (7, "Hotkeys"),
+        (13, "Mirror player 1 to player 2"),
+        (14, "Reset every binding"),
     ],
     // R-20261112-13: the On-screen keyboard row waits for the Steam keyboard call.
     hidden: &["On-screen keyboard"],
     glow: "#2A6FD6",
     about: "Controller type",
+    sentence: "Which buttons the help bar draws. Automatic follows the controller last pressed; only the pictures change.",
     muted: &["Automatic · Xbox · PlayStation · Nintendo · Generic"],
     help: &["Change", "Choose or open", "Back to the default", "Back", "Section", "Home"],
 };
@@ -551,17 +593,19 @@ pub const COLLECTIONS: Page = Page {
     focus: 4,
     drawn: 7,
     board: &[
-        (0, "Group your collections", "If unthemed puts a collection the theme has no folder for inside Collections.", true),
-        (1, "Favourites on top", "Favourite games sorted above the rest.", false),
-        (2, "Favourites on top in your collections", "The same, in your own collections.", false),
-        (3, "Stars in your collections", "A star beside a favourite in your own collections.", false),
-        (4, "Default sort order", "A list's own choice in its options lasts until EmuSen closes.", true),
-        (5, "Folders on top", "A console's folders above its games, as ES-DE sorts them.", false),
-        (6, "Random entry button", "Either thumbstick pressed in jumps to a random game, or console.", true),
+        (0, "Group your collections", "If unthemed puts a collection the theme has no folder for inside Collections.", Some(true)),
+        (1, "Favourites on top", "Favourite games sorted above the rest.", Some(false)),
+        (2, "Favourites on top in your collections", "The same, in your own collections.", Some(false)),
+        (3, "Stars in your collections", "A star beside a favourite in your own collections.", Some(false)),
+        (4, "Default sort order", "A list's own choice in its options lasts until EmuSen closes.", Some(true)),
+        (5, "Folders on top", "A console's folders above its games, as ES-DE sorts them.", Some(false)),
+        (6, "Random entry button", "Either thumbstick pressed in jumps to a random game, or console.", Some(true)),
     ],
+    program_only: &[],
     hidden: &[],
     glow: "#1FA890",
     about: "Default sort order",
+    sentence: "A list's own choice in its options lasts until EmuSen closes.",
     muted: &["Name · Rating · Release date · Developer · Publisher · Genre · Players · Last played · Times played · Play time, each ascending or descending."],
     help: &["Change", "Choose or open", "Back to the default", "Back", "Home"],
 };
@@ -584,12 +628,14 @@ pub const SAVES: Page = Page {
     focus: 0,
     drawn: 2,
     board: &[
-        (0, "Continue where you left off", "Every game is saved when it is closed; this is what happens the next time it starts.", true),
-        (1, "Play time counted up to", "A launch longer than this adds nothing to the game's play time.", false),
+        (0, "Continue where you left off", "Every game is saved when it is closed; this is what happens the next time it starts.", Some(true)),
+        (1, "Play time counted up to", "A launch longer than this adds nothing to the game's play time.", Some(false)),
     ],
+    program_only: &[],
     hidden: &[],
     glow: "#B0487A",
     about: "Continue where you left off",
+    sentence: "Every game is saved when it is closed; this is what happens the next time it starts.",
     // R-20261123-37: the third choice is the board's word.
     muted: &["Ask each time · Always resume · Always restart"],
     help: &["Change", "Choose or open", "Back to the default", "Back", "Home"],
@@ -598,4 +644,284 @@ pub const SAVES: Page = Page {
 /// The Saves and states page's oracle, and a trail of three levels, on `backend`.
 pub fn saves(backend: &str) {
     oracle(&SAVES, backend, &|scene, sdl, pad, differences| three_levels(scene, sdl, pad, &SAVES, backend, differences));
+}
+
+/// Board #30 (EclipseSettingsLibrary.dc.html): Library section, ROM folder focused with the count card in the About panel, 11 rows in the program (R-20261116-21).
+pub const LIBRARY: Page = Page {
+    name: "library",
+    table: include_str!("../eclipse/settings_library.tsv"),
+    lines: include_str!("../eclipse/settings_library_lines.tsv"),
+    section: "library",
+    opens: None,
+    key: "library",
+    heading: "Library",
+    crumb: "",
+    focus: 0,
+    drawn: 9,
+    board: &[
+        (0, "ROM folder", "The folder the library lists, read in place and never moved.", None),
+        (1, "Artwork folder", "Box art, named like the game's file; blank keeps it beside the games.", Some(true)),
+        (2, "Themes", "The big picture's look: EmuSen's own, or an ES-DE theme's.", Some(false)),
+        (3, "Scraping", "Where art and facts come from, and what is fetched.", Some(false)),
+        (4, "Collections", "The automatic collections shown, your own, and how lists are sorted.", Some(false)),
+        (5, "Hidden games", "Games hidden from the library. Their files are never touched.", Some(false)),
+        (7, "Cheats", "The cheats of the game last played, turned on or off.", Some(false)),
+        (8, "Compressed discs", "The library's discs converted to CHD beside them, checked and listed.", Some(false)),
+        (9, "ES-DE media folder", "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", Some(true)),
+    ],
+    program_only: &[
+        (6, "Media viewer"),
+        (10, "ES-DE theme folder"),
+    ],
+    hidden: &[],
+    glow: "#1FA890",
+    about: "ROM folder",
+    sentence: "The folder the library lists, read in place and never moved.",
+    muted: &["A opens the folder picker. EmuSen reads this folder. It writes there only if you ask it to convert discs beside the originals."],
+    help: &["Change", "Choose or open", "Back to the default", "Back", "Section", "Home"],
+};
+
+/// The Library page's oracle on `backend`.
+pub fn library(backend: &str) {
+    oracle(&LIBRARY, backend, &|scene, sdl, pad, differences| {
+        let tree = scene.tree();
+        let rom_dir = settings(scene).shown_rows()[0].value.clone();
+        if !shown(scene, "asideFolder") {
+            differences.push("ROM folder: the count card is not drawn".to_owned());
+        }
+        for (name, want) in [("asideFolderCount", "1"), ("asideFolderUnder", "game under"), ("asideFolderPath", rom_dir.as_str())] {
+            let have = read(&tree, name, "text");
+            if have != want {
+                differences.push(format!("ROM folder: {name} says {have:?} where {want:?}"));
+            }
+        }
+        // Monospace path in the aside; Sora on the row's value (owner ruling 3c).
+        if !read(&tree, "asideFolderPath", "font").contains("JetBrains Mono") {
+            differences.push(format!("ROM folder: asideFolderPath font is {:?}, not JetBrains Mono", read(&tree, "asideFolderPath", "font")));
+        }
+        if !read(&tree, "rowWords.0", "font").contains("Sora") {
+            differences.push(format!("ROM folder: rowWords.0 font is {:?}, not Sora", read(&tree, "rowWords.0", "font")));
+        }
+        // Moving to Artwork folder hides the count card; back to ROM folder restores it.
+        press(scene, sdl, pad, PadControl::Down);
+        settle(scene);
+        if shown(scene, "asideFolder") {
+            differences.push("Artwork folder draws the ROM folder count card".to_owned());
+        }
+        press(scene, sdl, pad, PadControl::Up);
+        settle(scene);
+        if !shown(scene, "asideFolder") {
+            differences.push("ROM folder lost its count card after returning".to_owned());
+        }
+    });
+}
+
+/// Board #31 (EclipseSettingsScraping.dc.html): Scraping under Library, 7 left rows and 11 media-kind chips in the About panel (R-20261116-22).
+pub const SCRAPING: Page = Page {
+    name: "scraping",
+    table: include_str!("../eclipse/settings_scraping.tsv"),
+    lines: include_str!("../eclipse/settings_scraping_lines.tsv"),
+    section: "library",
+    opens: Some("scraping"),
+    key: "group:Scraping",
+    heading: "Scraping",
+    crumb: "Library",
+    focus: 0,
+    drawn: 7,
+    board: &[
+        (0, "Use ScreenScraper", "Art and facts from ScreenScraper, for the games the Scraper is asked to fetch.", Some(true)),
+        (1, "Region", "Whose box art and names come first.", Some(false)),
+        (2, "Other regions after", "Else world, USA, Europe, Japan, then any.", Some(false)),
+        (3, "Language", "The language of descriptions and names.", Some(false)),
+        (4, "ScreenScraper's names", "Show the names ScreenScraper gives rather than the files'.", Some(false)),
+        (5, "Refresh what is kept", "Fetch again what a game already has.", Some(false)),
+        (6, "OpenEmu's sources", "OpenVGDB and libretro's thumbnails when ScreenScraper has nothing.", Some(false)),
+    ],
+    program_only: &[],
+    hidden: &[],
+    glow: "#1FA890",
+    about: "What is fetched",
+    sentence: "",
+    muted: &["9 of 11 kinds. Each is its own switch; move right from the rows to reach them."],
+    help: &["Change", "Choose or open", "Back to the default", "Back", "Home"],
+};
+
+/// The Scraping page's oracle on `backend`, including Right into the 11 chips, flow navigation, A toggle, X default, Left/B return, and pointer clicks.
+pub fn scraping(backend: &str) {
+    oracle(&SCRAPING, backend, &|scene, sdl, pad, differences| {
+        let chip_labels = ["Covers", "Screenshots", "Marquees", "Mix images", "Title screens", "Back covers", "Physical media", "Fan art", "3D boxes", "Manuals", "Videos"];
+        let tree = scene.tree();
+        for (i, want) in chip_labels.iter().enumerate() {
+            let have = read(&tree, &format!("chipWords.{i}"), "text");
+            if have != *want {
+                differences.push(format!("chip {i} says {have:?} where {want:?}"));
+            }
+            let on = i < 9;
+            if shown(scene, &format!("chipCheck.{i}")) != on || shown(scene, &format!("chipDot.{i}")) != !on {
+                differences.push(format!("chip {i} ({want}): check {}, dot {} where on={on}", shown(scene, &format!("chipCheck.{i}")), shown(scene, &format!("chipDot.{i}"))));
+            }
+        }
+        // Right from a switch row enters chip 0 with standard Eclipse FocusRing (owner decisions 2a, 2b).
+        press(scene, sdl, pad, PadControl::Right);
+        settle(scene);
+        if at(scene) != (7, "group:Scraping".to_owned()) || focused(scene) != "chip.0" {
+            differences.push(format!("Right from Use ScreenScraper left {:?} focused {:?}", at(scene), focused(scene)));
+        }
+        if read(&scene.tree(), "settingsPlace", "text") != "8 of 18" {
+            differences.push(format!("chip 0 place reads {:?}", read(&scene.tree(), "settingsPlace", "text")));
+        }
+        if !shown(scene, "chipRing") {
+            differences.push("focused chip 0 draws no FocusRing".to_owned());
+        } else {
+            let tree = scene.tree();
+            let unit: f64 = read(&tree, "settingsCanvas", "unit").parse().expect("the canvas's unit");
+            let screen: u64 = tree.nodes[tree.find_named("settingsScreen").expect("Eclipse's Settings") as usize].id.parse().unwrap();
+            let tokens = crate::eclipse_board::tokens(screen);
+            let ring_row = Row {
+                name: "chipRing".to_owned(),
+                part: "FocusRing".to_owned(),
+                x: "-".to_owned(),
+                y: "-".to_owned(),
+                w: "-".to_owned(),
+                h: "-".to_owned(),
+                radius: "-".to_owned(),
+                colour: "-".to_owned(),
+                size: "-".to_owned(),
+                status: "built".to_owned(),
+                kind: "ring 3 3 40 8 33 #66F0B4C4 #FF07080F #FFF6E7D8".to_owned(),
+            };
+            held(&tree, &[ring_row], DESIGN_HEIGHT / 1200.0, unit, 1920.0 / unit, &tokens, "chip 0 focused", &|_, _, _| false, differences);
+        }
+        // Walk the wrapped flow: Right -> chip 1, Down -> chip 3, Left -> chip 2, Up -> chip 0; toggle chip 0 with A and reset with X.
+        for (ctl, want_row, want_focus) in [(PadControl::Right, 8, "chip.1"), (PadControl::Down, 10, "chip.3"), (PadControl::Left, 9, "chip.2"), (PadControl::Up, 7, "chip.0")] {
+            press(scene, sdl, pad, ctl);
+            settle(scene);
+            if at(scene).0 != want_row || focused(scene) != want_focus {
+                differences.push(format!("chip walk {ctl:?}: got {:?} / {:?}, want {want_row} / {want_focus}", at(scene), focused(scene)));
+            }
+        }
+        press(scene, sdl, pad, PadControl::South);
+        settle(scene);
+        if read(&scene.tree(), "asideMuted.0", "text") != "8 of 11 kinds. Each is its own switch; move right from the rows to reach them." {
+            differences.push(format!("after turning Covers off, summary reads {:?}", read(&scene.tree(), "asideMuted.0", "text")));
+        }
+        press(scene, sdl, pad, PadControl::West);
+        settle(scene);
+        if read(&scene.tree(), "asideMuted.0", "text") != "9 of 11 kinds. Each is its own switch; move right from the rows to reach them." {
+            differences.push(format!("after X on Covers, summary reads {:?}", read(&scene.tree(), "asideMuted.0", "text")));
+        }
+        // Walk to chip 10 (Videos) and toggle on/off; Left from leftmost chip returns to row 0.
+        for ctl in [PadControl::Down, PadControl::Down, PadControl::Down, PadControl::Down, PadControl::Right, PadControl::Down] {
+            press(scene, sdl, pad, ctl);
+            settle(scene);
+        }
+        if at(scene).0 != 17 || focused(scene) != "chip.10" || read(&scene.tree(), "settingsPlace", "text") != "18 of 18" {
+            differences.push(format!("walk to chip 10 left {:?} / {:?} / {:?}", at(scene), focused(scene), read(&scene.tree(), "settingsPlace", "text")));
+        }
+        press(scene, sdl, pad, PadControl::South);
+        settle(scene);
+        if read(&scene.tree(), "asideMuted.0", "text") != "10 of 11 kinds. Each is its own switch; move right from the rows to reach them." {
+            differences.push(format!("after turning Videos on, summary reads {:?}", read(&scene.tree(), "asideMuted.0", "text")));
+        }
+        press(scene, sdl, pad, PadControl::West);
+        settle(scene);
+        press(scene, sdl, pad, PadControl::Left);
+        settle(scene);
+        if at(scene) != (0, "group:Scraping".to_owned()) || focused(scene) != "row.0" {
+            differences.push(format!("Left from leftmost chip left {:?} / {:?}", at(scene), focused(scene)));
+        }
+        // From another switch row (row 4), Right enters chips and B returns to that remembered row without leaving Scraping.
+        for _ in 0..4 {
+            press(scene, sdl, pad, PadControl::Down);
+        }
+        settle(scene);
+        press(scene, sdl, pad, PadControl::Right);
+        settle(scene);
+        if at(scene).0 != 7 || focused(scene) != "chip.0" {
+            differences.push(format!("Right from row 4 left {:?} / {:?}", at(scene), focused(scene)));
+        }
+        press(scene, sdl, pad, PadControl::East);
+        settle(scene);
+        if at(scene) != (4, "group:Scraping".to_owned()) || focused(scene) != "row.4" {
+            differences.push(format!("B from chips left {:?} / {:?}, want row 4", at(scene), focused(scene)));
+        }
+        // Pointer click on chip 10 toggles Videos on and back off; return to row 0 for the main walk.
+        let (cx, cy) = centre(scene, "chip.10");
+        scene.click(cx, cy);
+        settle(scene);
+        if read(&scene.tree(), "asideMuted.0", "text") != "10 of 11 kinds. Each is its own switch; move right from the rows to reach them." {
+            differences.push(format!("pointer click on Videos left {:?}", read(&scene.tree(), "asideMuted.0", "text")));
+        }
+        scene.click(cx, cy);
+        settle(scene);
+        let (hx, hy) = centre(scene, "settingsHeading");
+        scene.hover(hx, hy);
+        press(scene, sdl, pad, PadControl::East);
+        settle(scene);
+        for _ in 0..4 {
+            press(scene, sdl, pad, PadControl::Up);
+        }
+        settle(scene);
+    });
+}
+
+/// Board #32 (EclipseSettingsEmuSen.dc.html): EmuSen section, 3 rows (Big picture, Logging, Shell hidden per rulings), About focused with the eclipse mark.
+pub const EMUSEN: Page = Page {
+    name: "emusen",
+    table: include_str!("../eclipse/settings_emusen.tsv"),
+    lines: include_str!("../eclipse/settings_emusen_lines.tsv"),
+    section: "emusen",
+    opens: None,
+    key: "emusen",
+    heading: "EmuSen",
+    crumb: "",
+    focus: 2,
+    drawn: 3,
+    board: &[
+        (0, "Saves and states", "Where states go, what happens when a game starts again, and how play time is counted.", Some(true)),
+        (1, "Pause in the background", "A game paused because another window came to the front starts again when this one comes back.", Some(true)),
+        (2, "About", "EmuSen's version.", Some(false)),
+    ],
+    program_only: &[],
+    hidden: &["Big picture", "Logging", "Shell"],
+    glow: "#B0487A",
+    about: "About",
+    sentence: "EmuSen's version.",
+    muted: &[],
+    help: &["Change", "Choose or open", "Back to the default", "Back", "Section", "Home"],
+};
+
+/// The EmuSen page's oracle on `backend`.
+pub fn emusen(backend: &str) {
+    oracle(&EMUSEN, backend, &|scene, sdl, pad, differences| {
+        let tree = scene.tree();
+        let version = emusen_qt_models::words::version_line().strip_prefix("EmuSen ").unwrap_or("").to_owned();
+        if !shown(scene, "asideMark") {
+            differences.push("About: the eclipse mark card is not drawn".to_owned());
+        }
+        if read(&tree, "rowWords.2", "text") != version || read(&tree, "asideLine.0", "text") != version {
+            differences.push(format!("About version reads {:?} / {:?} where {version:?}", read(&tree, "rowWords.2", "text"), read(&tree, "asideLine.0", "text")));
+        }
+        // Monospace version in the aside; Sora on the row's value (owner ruling 3c).
+        if !read(&tree, "asideLine.0", "font").contains("JetBrains Mono") {
+            differences.push(format!("About: asideLine.0 font is {:?}, not JetBrains Mono", read(&tree, "asideLine.0", "font")));
+        }
+        if !read(&tree, "rowWords.2", "font").contains("Sora") {
+            differences.push(format!("About: rowWords.2 font is {:?}, not Sora", read(&tree, "rowWords.2", "font")));
+        }
+        // Saves and states row carries R-20261123-19's About sentence and hides the eclipse mark.
+        press(scene, sdl, pad, PadControl::Up);
+        press(scene, sdl, pad, PadControl::Up);
+        settle(scene);
+        if shown(scene, "asideMark") {
+            differences.push("Saves and states draws the eclipse mark".to_owned());
+        }
+        let saves_sentence = read(&scene.tree(), "asideSentence", "text");
+        if saves_sentence != "States and saves are kept in EmuSen's own Saves folder, with one resume point per game." {
+            differences.push(format!("Saves and states About sentence says {saves_sentence:?}"));
+        }
+        press(scene, sdl, pad, PadControl::Down);
+        press(scene, sdl, pad, PadControl::Down);
+        settle(scene);
+    });
 }

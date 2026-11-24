@@ -225,6 +225,7 @@ fn flag(text: &str) -> bool {
 /// A walk's Qt type as an outcome tells it: `SettingsLayout` and `MeasuredWalk` alike.
 pub(crate) trait Told {
     fn sync(self: Pin<&mut Self>);
+    fn moved(self: Pin<&mut Self>, _row: i32) {}
     fn sync_section(self: Pin<&mut Self>);
     fn stepped(self: Pin<&mut Self>, row: i32, by: i32);
     fn slid(self: Pin<&mut Self>, row: i32, amount: f64);
@@ -235,7 +236,10 @@ pub(crate) trait Told {
 /// A press's outcome told through the walk's properties and signals; false where the press was not the walk's.
 pub(crate) fn tell<T: Told>(mut this: Pin<&mut T>, outcome: RowOutcome) -> bool {
     match outcome {
-        RowOutcome::Moved(_) => this.as_mut().sync(),
+        RowOutcome::Moved(row) => {
+            this.as_mut().sync();
+            this.as_mut().moved(row as i32);
+        }
         RowOutcome::Stepped { row, by } => this.as_mut().stepped(row as i32, by),
         RowOutcome::Slid { row, amount } => this.as_mut().slid(row as i32, amount),
         RowOutcome::Chosen(row) => {

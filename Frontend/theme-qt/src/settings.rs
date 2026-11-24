@@ -67,6 +67,10 @@ pub mod qobject {
         #[qproperty(QString, about_heading, cxx_name = "aboutHeading", READ, NOTIFY = shown)]
         #[qproperty(QString, shot, READ, NOTIFY = shown)]
         #[qproperty(bool, defaultable, READ, NOTIFY = shown)]
+        /// From 1.14 (R-20261116-22): a page's aside toggle chips (Scraping's 11 media kinds), their count, and total items (rows + chips).
+        #[qproperty(*mut ThemeRows, chips, READ, CONSTANT)]
+        #[qproperty(i32, chip_count, cxx_name = "chipCount", READ, NOTIFY = shown)]
+        #[qproperty(i32, total, READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -85,6 +89,9 @@ pub const SETTINGS_ROW_ROLES: [&str; 19] = [
     "system", "games", "engine", "form",
 ];
 
+/// `Settings.chips`' roles (from 1.14, R-20261116-22): Scraping's aside toggle chips and their model row index.
+pub const SETTINGS_CHIP_ROLES: [&str; 4] = ["key", "label", "switchOn", "row"];
+
 /// Everything the singleton shows, as the host reads it from the program's model.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SettingsFacts {
@@ -99,6 +106,7 @@ pub struct SettingsFacts {
     pub trail_line: String,
     pub page: String,
     pub rows: Vec<Row>,
+    pub chips: Vec<Row>,
     pub focused: i32,
     /// The help bar's kind for what is shown (`Help.entries`' kind), -1 where none is the screen's (a bindings page, listening).
     pub help: i32,
@@ -111,19 +119,20 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
     if facets.len() != rows.len() {
         return Err(format!("{} rows told and {} in the view", rows.len(), facets.len()));
     }
+    let chip_start = view.chip_start().unwrap_or(rows.len()).min(rows.len());
     let (range, unset) = (SliderRange::default(), WalkRow::default());
-    let cells = rows
+    let cells = rows[..chip_start]
         .iter()
-        .zip(facets)
+        .zip(&facets[..chip_start])
         .enumerate()
         .map(|(i, (r, facet))| {
             let slider = if r.kind == RowKind::Slider { view.slider(i) } else { None };
             let [minimum, maximum, step, amount] = slider.unwrap_or([range.minimum, range.maximum, range.step, unset.amount]);
-            let tile = facet.tile.unwrap_or_default();
+            let tile = facet.tile.clone().unwrap_or_default();
             vec![
                 Cell::Text(r.id.clone()),
                 Cell::Text(r.label.clone()),
-                Cell::Text(facet.about),
+                Cell::Text(facet.about.clone()),
                 Cell::Text(r.value.clone()),
                 Cell::Whole(r.kind.index() as i32),
                 Cell::Flag(facet.switch.is_some()),
@@ -143,21 +152,42 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
             ]
         })
         .collect();
+    let chips = rows[chip_start..]
+        .iter()
+        .zip(&facets[chip_start..])
+        .enumerate()
+        .map(|(offset, (r, facet))| {
+            vec![
+                Cell::Text(r.id.clone()),
+                Cell::Text(r.label.clone()),
+                Cell::Flag(facet.switch.unwrap_or(false)),
+                Cell::Whole((chip_start + offset) as i32),
+            ]
+        })
+        .collect();
+    let mut pane = view.pane(focused.max(0) as usize);
+    let about_heading = if pane.preview == settings::Preview::Chips {
+        pane.sentence.clear();
+        pane.caption.clone()
+    } else {
+        usize::try_from(focused).ok().and_then(|f| rows.get(f)).map(|r| r.label.clone()).unwrap_or_default()
+    };
     Ok(SettingsFacts {
         sections: view.sections(),
         section_keys: view.section_keys(),
         title: view.title(),
         heading: view.heading(),
-        about_heading: usize::try_from(focused).ok().and_then(|f| rows.get(f)).map(|r| r.label.clone()).unwrap_or_default(),
+        about_heading,
         defaultable: usize::try_from(focused).is_ok_and(|f| view.defaultable(f)),
         section: view.section as i32,
         trail: view.trail(),
         trail_line: view.trail_line(),
         page: view.page_key(),
         rows: cells,
+        chips,
         focused,
         help: kind_of(view.help()).map_or(-1, |k| k.repr),
-        pane: view.pane(focused.max(0) as usize),
+        pane,
     })
 }
 
@@ -190,8 +220,11 @@ pub struct ThemeSettingsRust {
     trail_line: QString,
     page: QString,
     rows: *mut ThemeRows,
+    chips: *mut ThemeRows,
     focused: i32,
     count: i32,
+    chip_count: i32,
+    total: i32,
     help: i32,
     sentence: QString,
     lines: QStringList,
@@ -220,8 +253,11 @@ impl Default for ThemeSettingsRust {
             trail_line: QString::default(),
             page: QString::default(),
             rows: std::ptr::null_mut(),
+            chips: std::ptr::null_mut(),
             focused: 0,
             count: 0,
+            chip_count: 0,
+            total: 0,
             help: -1,
             sentence: QString::default(),
             lines: QStringList::default(),
@@ -244,7 +280,14 @@ impl cxx_qt::Initialize for qobject::ThemeSettings {
         if let Some(rows) = unsafe { list.as_mut() } {
             unsafe { Pin::new_unchecked(rows) }.set_roles(&SETTINGS_ROW_ROLES);
         }
-        self.as_mut().rust_mut().rows = list;
+        let chips_list = ffi::new_rows(self.as_mut().upcast_pin());
+        // Safety: the chips list was just made, a child of this singleton.
+        if let Some(chips) = unsafe { chips_list.as_mut() } {
+            unsafe { Pin::new_unchecked(chips) }.set_roles(&SETTINGS_CHIP_ROLES);
+        }
+        let mut me = self.as_mut().rust_mut();
+        me.rows = list;
+        me.chips = chips_list;
     }
 }
 
@@ -254,9 +297,12 @@ impl qobject::ThemeSettings {
         if self.last == *facts {
             return;
         }
-        // Safety: the list is the singleton's child, made in `initialize`.
+        // Safety: the lists are the singleton's children, made in `initialize`.
         if let Some(rows) = unsafe { self.rows.as_mut() } {
             unsafe { Pin::new_unchecked(rows) }.replace(facts.rows.clone());
+        }
+        if let Some(chips) = unsafe { self.chips.as_mut() } {
+            unsafe { Pin::new_unchecked(chips) }.replace(facts.chips.clone());
         }
         let pane = &facts.pane;
         let mut tones = QList::<i32>::default();
@@ -275,6 +321,8 @@ impl qobject::ThemeSettings {
         me.page = QString::from(facts.page.as_str());
         me.focused = facts.focused;
         me.count = facts.rows.len() as i32;
+        me.chip_count = facts.chips.len() as i32;
+        me.total = (facts.rows.len() + facts.chips.len()) as i32;
         me.help = facts.help;
         me.sentence = QString::from(pane.sentence.as_str());
         me.lines = list(&pane.lines);

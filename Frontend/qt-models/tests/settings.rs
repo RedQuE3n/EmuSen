@@ -168,17 +168,27 @@ fn qt_7_7_doors_open_pages_and_screens_and_b_closes_a_page_first() {
     assert_eq!(rows[5], ("Hidden games".into(), "Not listed".into()));
     assert_eq!(rows[6].0, "Media viewer", "the viewer's settings, a page of their own (EmuSen_Qt.md §4.14)");
     assert_eq!(view.rows()[0].kind, RowKind::Opens);
-    assert_eq!(view.pane(0).sentence, "3 games under /games, read in place and never moved.");
+    let rom_pane = view.pane(0);
+    assert_eq!(rom_pane.preview, Preview::Folder);
+    assert_eq!(rom_pane.samples, [("3".to_string(), 1.0), ("games under".to_string(), 1.0), ("/games".to_string(), 1.0)]);
+    assert_eq!(rom_pane.sentence, "3 games under /games, read in place and never moved.");
+    assert_eq!(rom_pane.muted, ["A opens the folder picker. EmuSen reads this folder. It writes there only if you ask it to convert discs beside the originals."]);
     assert_eq!(view.choose(index(&view, "themes")), Outcome::Door("themes".into()));
     // A folder cut on its row shows whole in the pane once focused.
     view.read.app["ArtworkDirectory"] = json!("/a/folder/long/enough/to/be/cut/on/its/row/of/seven/hundred/and/four/units/Art");
     assert_eq!(view.pane(1).lines, ["/a/folder/long/enough/to/be/cut/on/its/row/of/seven/hundred/and/four/units/Art"]);
-    assert!(view.pane(0).sentence.contains("/games"));
 
     let index_of_scraping = index(&view, "scraping");
     assert_eq!(view.choose(index_of_scraping), Outcome::Opened);
     assert_eq!(view.trail(), ["Library", "Scraping"]);
     assert_eq!(view.rows()[0].label, "Use ScreenScraper");
+    assert_eq!(view.chip_start(), Some(7));
+    let chip_labels: Vec<String> = view.rows()[7..].iter().map(|r| r.label.clone()).collect();
+    assert_eq!(chip_labels, ["Covers", "Screenshots", "Marquees", "Mix images", "Title screens", "Back covers", "Physical media", "Fan art", "3D boxes", "Manuals", "Videos"]);
+    let scraping_pane = view.pane(0);
+    assert_eq!(scraping_pane.preview, Preview::Chips);
+    assert_eq!(scraping_pane.caption, "What is fetched");
+    assert_eq!(scraping_pane.muted, ["9 of 11 kinds. Each is its own switch; move right from the rows to reach them."]);
     assert!(view.rows().iter().all(|r| r.kind == RowKind::Steps));
     view.choose(0);
     assert_eq!(view.read.app["Scraping"], json!(false));
@@ -199,7 +209,10 @@ fn qt_7_7_emusens_panes_and_values_name_other_keys_and_the_version() {
     // Big Picture is the program on every machine (the tester decided, 2026-11-13): no Big picture row, whatever the base holds.
     let labels: Vec<String> = shown(&view).into_iter().map(|(label, _)| label).collect();
     assert_eq!(labels, ["Saves and states", "Pause in the background", "About"]);
-    assert_eq!(view.rows()[2].value, emusen_qt_models::words::version_line());
+    assert_eq!(view.rows()[2].value, env!("EMUSEN_VERSION"));
+    let about_pane = view.pane(2);
+    assert_eq!(about_pane.preview, Preview::Mark);
+    assert_eq!(about_pane.lines, [env!("EMUSEN_VERSION")]);
     assert_eq!(view.rows()[2].kind, RowKind::Action);
     assert_eq!(view.choose(2), Outcome::Nothing);
 }

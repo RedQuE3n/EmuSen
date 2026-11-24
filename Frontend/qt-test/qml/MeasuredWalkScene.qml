@@ -17,8 +17,14 @@ Window {
     property int followed: -1
     // Each change reads the follower's rows again, as a screen does when its model's rows change.
     property int reads: 0
+    // A row focused directly by focusRow, and each walk's moved signal count and last row (1.12).
+    property int focusTarget: -1
+    property int walkMovedCount: 0
+    property int walkMovedRow: -1
+    property int followerMovedCount: 0
     onReadsChanged: follower.read()
     onPressesChanged: walk.press(Kit.Pad.Down)
+    onFocusTargetChanged: walk.focusRow(scene.focusTarget)
     ListModel {
         id: rows
         ListElement { kind: 1; tall: 84 }
@@ -33,6 +39,7 @@ Window {
         model: rows
         window: 300
         gap: 10
+        onMoved: (row) => { scene.walkMovedCount += 1; scene.walkMovedRow = row }
     }
     Kit.MeasuredWalk {
         id: follower
@@ -41,6 +48,7 @@ Window {
         window: 300
         gap: 10
         follows: scene.followed
+        onMoved: () => { scene.followerMovedCount += 1 }
     }
     Column {
         spacing: walk.gap

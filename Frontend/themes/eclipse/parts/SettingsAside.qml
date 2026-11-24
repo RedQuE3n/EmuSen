@@ -3,27 +3,35 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Theme
 
-// The About panel beside the rows, as the boards draw it: the preview and its caption, the focused row's name, the program's sentence and its further and muted lines, 22 apart (G:138-151; EmuSen_Qt.md §3.4.11).
-Column {
+// The About panel beside the rows, as the boards draw it: the preview and its caption, the focused row's name, the program's sentence, further and muted lines, and chips, 22 apart (G:138-151; EmuSen_Qt.md §3.4.11).
+FocusScope {
     id: root
     // A board pixel in canvas units, Board.unit.
     required property real unit
+    required property var controller
     // The focused row's name, the panel's heading (G:162).
     property string heading
     // Scene pixels to a canvas unit, so the picture's glows blur at the pixels drawn.
     property real pixelScale: 1
-    // Settings.preview's numbers, the theme API's (EmuSen_Qt.md §3.2): 1 the picture, 2 the meter, 3 the variants, 4 the text sizes, 6 the face buttons.
+    // The focused row's short line, drawn under the folder count card (G:30).
+    property string focusedAbout
+    // Settings.preview's numbers, the theme API's (EmuSen_Qt.md §3.2): 1 picture, 2 meter, 3 variants, 4 text sizes, 6 face buttons, 7 folder count, 8 eclipse mark, 9 scraping chips.
     readonly property bool pictured: Settings.preview === 1
     readonly property bool sampled: Settings.preview === 3 || Settings.preview === 4
+    readonly property bool marked: Settings.preview === 8
     objectName: "settingsAside"
     width: 424 * root.unit
-    spacing: 22 * root.unit
+    height: column.height
     Ink {
         id: ink
     }
     SettingsInk {
         id: own
     }
+    Column {
+        id: column
+        width: root.width
+        spacing: 22 * root.unit
     // The picture, 318 high at a corner of 22 inside its 2 px rim and its 60 px glow (G:146): the paused game's own frame, none while no game is paused (R-20261116-25).
     Item {
         id: picture
@@ -87,10 +95,18 @@ Column {
                 id: shown
                 required property int index
                 required property string value
+                required property string about
                 Binding {
                     target: meter
                     property: "value"
                     value: shown.value
+                    when: shown.index === Settings.focused
+                    restoreMode: Binding.RestoreNone
+                }
+                Binding {
+                    target: root
+                    property: "focusedAbout"
+                    value: shown.about
                     when: shown.index === Settings.focused
                     restoreMode: Binding.RestoreNone
                 }
@@ -108,6 +124,18 @@ Column {
     SettingsFaces {
         unit: root.unit
         visible: Settings.preview === 6
+    }
+    SettingsFolder {
+        unit: root.unit
+        visible: Settings.preview === 7
+        countText: Settings.samples[0] ?? ""
+        underText: Settings.samples[1] ?? ""
+        pathText: Settings.samples[2] ?? ""
+    }
+    SettingsMark {
+        unit: root.unit
+        pixelScale: root.pixelScale
+        visible: root.marked
     }
     Line {
         objectName: "asideCaption"
@@ -155,7 +183,7 @@ Column {
         unit: root.unit
         visible: text.length > 0
         width: root.width
-        text: Settings.sentence
+        text: Settings.preview === 7 ? root.focusedAbout : Settings.sentence
         color: ink.emptyAbout
         wrapMode: Text.WordWrap
         lineHeightMode: Text.FixedHeight
@@ -172,12 +200,14 @@ Column {
             unit: root.unit
             width: root.width
             text: modelData
-            color: ink.emptyAbout
+            color: root.marked ? Tokens.accent : ink.emptyAbout
+            family: root.marked ? Tokens.faceCode : Tokens.faceText
+            boardLine: root.marked
             wrapMode: Text.WordWrap
-            lineHeightMode: Text.FixedHeight
-            lineHeight: 1.5 * 20
+            lineHeightMode: root.marked ? Text.ProportionalHeight : Text.FixedHeight
+            lineHeight: root.marked ? 1 : 1.5 * 20
             size: 20
-            weight: Tokens.weightSentence
+            weight: root.marked ? Font.Normal : Tokens.weightSentence
         }
     }
     Repeater {
@@ -195,5 +225,13 @@ Column {
             lineHeight: 1.5 * 18
             size: 18
         }
+    }
+    SettingsChips {
+        unit: root.unit
+        controller: root.controller
+        pixelScale: root.pixelScale
+        visible: Settings.preview === 9
+        focus: Settings.preview === 9
+    }
     }
 }

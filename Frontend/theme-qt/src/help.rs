@@ -56,7 +56,7 @@ pub mod qobject {
         PageState,
         PageStart,
         PageSections,
-        /// 1.14: Eclipse's boards for Overview (Resume), Details/Options doors, Details actions and Options stepped rows.
+        /// 1.15: Eclipse's boards for Overview (Resume), Details/Options doors, Details actions and Options stepped rows.
         PageResumeBoard,
         PageOpen,
         PageDetail,
@@ -210,7 +210,7 @@ pub struct ThemeHelpRust {
     sections: *mut qobject::ThemeHelpEntries,
     /// From 1.11: each kind's list as Eclipse's Settings boards name it, X drawn declined (0) or taken (1).
     settings: [[*mut qobject::ThemeHelpEntries; 2]; KINDS.len()],
-    /// From 1.14: each kind's own list with X's default reset drawn declined (38%).
+    /// From 1.15: each kind's own list with X's default reset drawn declined (38%).
     declined: [*mut qobject::ThemeHelpEntries; KINDS.len()],
 }
 

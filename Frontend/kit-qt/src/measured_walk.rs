@@ -51,6 +51,9 @@ pub mod qobject {
         /// The focus, the window or the mark moved, or the rows were read again.
         #[qsignal]
         fn walked(self: Pin<&mut MeasuredWalk>);
+        /// The walk itself moved its focus (a press or `focusRow`), never on `measure`, `read`, `follows` or `scrollTo` (1.12).
+        #[qsignal]
+        fn moved(self: Pin<&mut MeasuredWalk>, row: i32);
         /// Left (-1) or Right (+1) stepped a value or a slider.
         #[qsignal]
         fn stepped(self: Pin<&mut MeasuredWalk>, row: i32, by: i32);
@@ -179,7 +182,8 @@ impl qobject::MeasuredWalk {
     pub fn focus_row(mut self: Pin<&mut Self>, row: i32) {
         let moved = usize::try_from(row).is_ok_and(|row| self.as_mut().rust_mut().walk.focus(row));
         if moved {
-            self.sync();
+            self.as_mut().sync();
+            self.moved(row);
         }
     }
 
@@ -230,6 +234,9 @@ impl qobject::MeasuredWalk {
 impl Told for qobject::MeasuredWalk {
     fn sync(self: Pin<&mut Self>) {
         qobject::MeasuredWalk::sync(self)
+    }
+    fn moved(self: Pin<&mut Self>, row: i32) {
+        qobject::MeasuredWalk::moved(self, row)
     }
     fn sync_section(self: Pin<&mut Self>) {
         qobject::MeasuredWalk::sync_section(self)

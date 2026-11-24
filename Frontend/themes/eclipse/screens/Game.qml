@@ -8,7 +8,7 @@ ThemeScreen {
     id: screen
     objectName: "gameScreen"
     role: ThemeScreen.Game
-    // The tabs this screen draws; the program draws Media, Cheats, every deeper page and every question (1.14).
+    // The tabs this screen draws; the program draws Media, Cheats, every deeper page and every question (1.15).
     pageSections: (1 << Page.Overview) | (1 << Page.States) | (1 << Page.Details) | (1 << Page.Options)
     // Where the focus starts: the tab's content (cards or rows), else the first button.
     focusItems: [

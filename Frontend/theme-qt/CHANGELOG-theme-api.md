@@ -3,7 +3,7 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
-## 1.14, an addition: Eclipse's game page Overview, Details and Options (2026-11-23)
+## 1.15, an addition: Eclipse's game page Overview, Details and Options (2026-11-23)
 
 Decided 2026-11-23 by the tester (R-20261111-20, R-20261116-14, -27, -29, -30, -32): Eclipse draws the game page's
 Overview, Details and Options tabs as their boards draw them.
@@ -15,6 +15,12 @@ Overview, Details and Options tabs as their boards draw them.
   place (`"2 of 5"`), and whether X (`default`) resets an Options override back to the console's default.
 - **`Help.PageResumeBoard`**, **`Help.PageOpen`**, **`Help.PageDetail`**, **`Help.PageOption`**, and `defaultable` in
   `Help.entries(kind, { defaultable })`: the boards' help lines for Overview, Details and Options.
+- The module is 1.15 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.15.*`.
+
+## 1.14, an addition: Library's folder card, EmuSen's eclipse mark and Scraping's toggle chips (2026-11-23)
+
+- **`Settings.preview` 7, 8 and 9** (no new member): Library's ROM folder count block (7, `samples` carries count, label and path), EmuSen's About eclipse mark (8, `lines` carries the bare version) and Scraping's toggle chips (9) (R-20261116-22; EmuSen_Qt.md §3.4.11).
+- **`Settings.chips`** (roles `key`, `label`, `switchOn`, `row`), **`Settings.chipCount`** and **`Settings.total`**: Scraping's eleven media kinds as aside toggle chips with their model row index and total item count for `Words.place` (R-20261116-22).
 - The module is 1.14 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.14.*`.
 
 ## 1.13, an addition: Eclipse's game page, its tabs and its States tab (2026-11-23)

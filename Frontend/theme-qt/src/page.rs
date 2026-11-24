@@ -73,7 +73,7 @@ pub mod qobject {
         #[qproperty(QStringList, trail, READ, NOTIFY = shown)]
         #[qproperty(QString, trail_section, cxx_name = "trailSection", READ, NOTIFY = shown)]
         #[qproperty(QString, console, READ, NOTIFY = shown)]
-        /// 1.14: Eclipse's Overview, Details and Options tabs: description flag, board rows, aside hint, place, and defaultable.
+        /// 1.15: Eclipse's Overview, Details and Options tabs: description flag, board rows, aside hint, place, and defaultable.
         #[qproperty(bool, has_description, cxx_name = "hasDescription", READ, NOTIFY = shown)]
         #[qproperty(*mut ThemeRows, board_rows, cxx_name = "boardRows", READ, CONSTANT)]
         #[qproperty(QString, row_sentence, cxx_name = "rowSentence", READ, NOTIFY = shown)]
@@ -102,7 +102,7 @@ pub const PAGE_ROW_ROLES: [&str; 8] = ["key", "label", "value", "line", "picture
 pub const PAGE_PILL_ROLES: [&str; 8] = ["key", "label", "button", "filled", "heart", "on", "act", "row"];
 /// `Page.cards`' roles: a state card or the empty one, its badge's words, and `row`, its tile among `rows`, -1 for the empty card (1.13).
 pub const PAGE_CARD_ROLES: [&str; 7] = ["key", "label", "line", "picture", "marked", "badge", "row"];
-/// `Page.boardRows`' roles: a Details or Options row, its value form, aside sentence, and real index among `rows` (1.14).
+/// `Page.boardRows`' roles: a Details or Options row, its value form, aside sentence, and real index among `rows` (1.15).
 pub const PAGE_BOARD_ROW_ROLES: [&str; 9] = ["key", "label", "value", "steps", "opens", "isSwitch", "switchOn", "sentence", "row"];
 
 /// Everything the singleton shows, as the host reads it from the program's model.

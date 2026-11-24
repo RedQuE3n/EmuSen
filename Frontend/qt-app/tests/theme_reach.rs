@@ -185,10 +185,10 @@ fn qt_3_5_1_the_chosen_theme_s_tokens_draw_the_program_s_screens_and_none_gives_
 }
 
 
-/// The package a program screen is judged under for a theme's colours: the theme, or for a screen it draws itself (Eclipse's Settings, and the notice over it) the reference's screens with its tokens.
+/// The package a program screen is judged under for a theme's colours: the theme, or for a screen it draws itself (Eclipse's Settings, GamePage, and the notice over Settings) the reference's screens with its tokens.
 fn package(theme: &str, screen: &str) -> String {
     match (theme, screen) {
-        ("eclipse", "Settings" | "Notice") => eclipse_reference().display().to_string(),
+        ("eclipse", "Settings" | "Notice" | "GamePage") => eclipse_reference().display().to_string(),
         _ => format!("{THEMES}/{theme}"),
     }
 }

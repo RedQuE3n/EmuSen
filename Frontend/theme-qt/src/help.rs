@@ -56,6 +56,11 @@ pub mod qobject {
         PageState,
         PageStart,
         PageSections,
+        /// 1.15: Eclipse's boards for Overview (Resume), Details/Options doors, Details actions and Options stepped rows.
+        PageResumeBoard,
+        PageOpen,
+        PageDetail,
+        PageOption,
     }
 
     extern "RustQt" {
@@ -103,7 +108,7 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 26] = [
+pub const KINDS: [HelpKind; 30] = [
     HelpKind::Continue,
     HelpKind::Game,
     HelpKind::Console,
@@ -130,6 +135,10 @@ pub const KINDS: [HelpKind; 26] = [
     HelpKind::PageState,
     HelpKind::PageStart,
     HelpKind::PageSections,
+    HelpKind::PageResumeBoard,
+    HelpKind::PageOpen,
+    HelpKind::PageDetail,
+    HelpKind::PageOption,
 ];
 
 /// The help bar a kind shows (EmuSen_Qt.md §3.2, `Help`).
@@ -160,6 +169,10 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::PageState => Screen::GamePageState,
         HelpKind::PageStart => Screen::GamePageStart,
         HelpKind::PageSections => Screen::GamePageSections,
+        HelpKind::PageResumeBoard => Screen::GamePageResumeBoard,
+        HelpKind::PageOpen => Screen::GamePageOpen,
+        HelpKind::PageDetail => Screen::GamePageDetail,
+        HelpKind::PageOption => Screen::GamePageOption,
         _ => Screen::Home,
     }
 }
@@ -197,7 +210,9 @@ pub struct ThemeHelpRust {
     sections: *mut qobject::ThemeHelpEntries,
     /// From 1.11: each kind's list as Eclipse's Settings boards name it, X drawn declined (0) or taken (1).
     settings: [[*mut qobject::ThemeHelpEntries; 2]; KINDS.len()],
-    /// From 1.15: Eclipse's Settings Consoles list, indexed by [filtered][filterable] (board #27).
+    /// From 1.15: each kind's own list with X's default reset drawn declined (38%).
+    declined: [*mut qobject::ThemeHelpEntries; KINDS.len()],
+    /// From 1.16: Eclipse's Settings Consoles list, indexed by [filtered][filterable] (board #27).
     consoles: [[*mut qobject::ThemeHelpEntries; 2]; 2],
 }
 
@@ -207,6 +222,7 @@ impl Default for ThemeHelpRust {
             lists: [[std::ptr::null_mut(); 192]; KINDS.len()],
             sections: std::ptr::null_mut(),
             settings: [[std::ptr::null_mut(); 2]; KINDS.len()],
+            declined: [std::ptr::null_mut(); KINDS.len()],
             consoles: [[std::ptr::null_mut(); 2]; 2],
         }
     }
@@ -231,6 +247,12 @@ impl cxx_qt::Initialize for qobject::ThemeHelp {
                 }
                 self.as_mut().rust_mut().settings[i][d] = list;
             }
+            let list = ffi::new_help_entries(self.as_mut().upcast_pin());
+            // Safety: as above.
+            if let Some(entries) = unsafe { list.as_mut() } {
+                unsafe { Pin::new_unchecked(entries) }.show_declined(screen_of(kind));
+            }
+            self.as_mut().rust_mut().declined[i] = list;
         }
         for (fl, filtered) in [false, true].into_iter().enumerate() {
             for (en, filterable) in [false, true].into_iter().enumerate() {
@@ -263,6 +285,9 @@ impl qobject::ThemeHelp {
                 return self.consoles[usize::from(flag("filtered", false))][usize::from(flag("filterable", true))];
             }
             return KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.settings[i][usize::from(flag("defaultable", true))]);
+        }
+        if !flag("defaultable", true) {
+            return KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.declined[i]);
         }
         let group = flag("group", false).then_some(if flag("triggers", false) { help::MAKER } else { help::GROUP });
         let names = if flag("card", false) {
@@ -340,6 +365,14 @@ impl qobject::ThemeHelpEntries {
         self.as_mut().rust_mut().defaultable = defaultable;
         self.as_mut().rust_mut().list = list;
         self.as_mut().rust_mut().action_lines = QString::from(lines.as_str());
+    }
+
+    /// The screen's own list with X's default reset drawn declined, set once when it is made.
+    fn show_declined(mut self: Pin<&mut Self>, screen: Screen) {
+        self.as_mut().rust_mut().screen = screen;
+        self.as_mut().rust_mut().defaultable = false;
+        self.as_mut().rust_mut().list = help::entries(screen).to_vec();
+        self.as_mut().rust_mut().action_lines = QString::from(action_lines(screen).as_str());
     }
 
     /// Eclipse's Settings Consoles list (`help::consoles_settings_named`), set once when it is made.

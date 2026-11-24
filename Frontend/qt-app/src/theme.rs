@@ -17,7 +17,7 @@ use emusen_theme_qt::actions::{Action, ActionSink, ScreenAction};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::host;
-use emusen_theme_qt::page::{action_rows, card_rows, content_rows, pill_rows, PageFacts};
+use emusen_theme_qt::page::{action_rows, board_row_rows, card_rows, content_rows, pill_rows, PageFacts};
 use emusen_theme_qt::session::SessionFacts;
 use emusen_theme_qt::view;
 use std::cell::Cell;
@@ -689,6 +689,7 @@ impl qobject::ThemeFeed {
         }
         let text = |t: &QString| t.to_string();
         let words = |l: &QStringList| QList::<QString>::from(l).iter().map(|w| w.to_string()).collect::<Vec<_>>();
+        let (row_sentence, row_place) = page.board_aside();
         let facts = PageFacts {
             ready: *page.ready(),
             key: page.game_key().to_owned(),
@@ -723,6 +724,11 @@ impl qobject::ThemeFeed {
             trail_section: emusen_qt_models::screens::CONSOLES_KEY.to_owned(),
             console: page.console().to_owned(),
             board_help: page.board_help_screen().and_then(emusen_theme_qt::help::kind_of).map_or(-1, |k| k.repr),
+            has_description: page.has_description(),
+            board_rows: board_row_rows(&page.board_rows()),
+            row_sentence,
+            row_place,
+            defaultable: page.defaultable(),
         };
         if let Some(view) = self.engine().and_then(host::page) {
             view.show(&facts);

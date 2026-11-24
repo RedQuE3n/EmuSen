@@ -2,23 +2,31 @@
 //! with the states asked for, the program under Eclipse with its page opened, and the board's table held at every size.
 #![allow(dead_code)]
 
-use crate::common::{sandbox, wait_for};
+use crate::common::{draw_covers, sandbox, wait_for};
 use crate::eclipse_board::{held, object, read, rows, tokens, Row};
+use cxx_qt::casting::Upcast;
 use cxx_qt_lib::QString;
 use emusen_client_fixture::library;
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::input::UiButton;
-use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_CHEAT_FILE, SAVE_RESUME_STATE, SAVE_STATE};
+use emusen_platform_client::bindings::consts::PROFILES;
+use emusen_platform_client::galaxia::consts::{
+    DIR_PACKAGES, FILE_GAMES, MODEL_APP_SETTINGS, MODEL_CHEAT_FILE, SAVE_PACKAGE_RESUME_STATE, SAVE_PACKAGE_STATE, SAVE_RESUME_STATE, SAVE_STATE,
+};
+use emusen_platform_client::packages::Roots;
 use emusen_platform_client::library::Library;
+use emusen_platform_client::tools::{Step, ToolJob};
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
+use emusen_qt_models::game_page_model::qobject::GamePageModel;
+use emusen_qt_models::library_model::qobject::QAbstractListModel;
 use emusen_qt_models::words;
 use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::{Harness, Scene};
 use emusen_theme_qt::host;
 use serde_json::json;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub const ECLIPSE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes/eclipse");
 /// The board's game (EclipseGame:34).
@@ -173,8 +181,24 @@ pub fn started(scene: &mut Scene<'_>) -> String {
 /// The program under Eclipse at 1280 by 800, its library read, Home placed, the clock held at today's 9:41 PM, one pad of
 /// the family whose letters the board draws, and the machine's battery at the board's 82% (EclipseGame:38).
 pub fn program<'a>(harness: &'a mut Harness) -> Scene<'a> {
+    program_with(harness, None, None)
+}
+
+/// As `program`, naming a media store whose scraped pictures the theme may draw.
+pub fn program_with_media<'a>(harness: &'a mut Harness, media: Option<&Path>) -> Scene<'a> {
+    program_with(harness, media, None)
+}
+
+/// As `program`, naming an optional media store and an optional cores folder.
+pub fn program_with<'a>(harness: &'a mut Harness, media: Option<&Path>, cores: Option<&Path>) -> Scene<'a> {
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
+    if let Some(dir) = media {
+        assert!(scene.set_property("program", "coverStores", dir.to_str().unwrap()));
+    }
+    if let Some(dir) = cores {
+        assert!(scene.set_property("library", "cores", dir.to_str().unwrap()));
+    }
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     assert!(scene.set_property("program", "theme", &std::fs::canonicalize(ECLIPSE).unwrap().display().to_string()));
     wait_for(&mut scene, "library", "loading", "false", 10000);
@@ -186,6 +210,103 @@ pub fn program<'a>(harness: &'a mut Harness) -> Scene<'a> {
     assert!(scene.set_property("theme", "battery", "82"));
     scene.wait(300);
     scene
+}
+
+/// The board's description saved as an edit for Aurora Drift (EclipseGameOverview:88).
+pub const BOARD_DESCRIPTION: &str = "Aurora Drift is a game invented for EmuSen's tests. It has no story and no pictures of its own; every image shown for it is a flat colour with its name written on it.";
+
+pub fn set_description(world: &emusen_client_fixture::World, text: &str) {
+    let platform = Platform::load(library()).unwrap();
+    let path = rom(world).to_string_lossy().into_owned();
+    let games = records(&platform);
+    games.change(&json!({ "op": "save_edits", "path": path, "changes": { "description": text }, "at": "2026-11-09T00:00:00Z" })).unwrap();
+}
+
+/// Draws cover and screenshot PNGs into the world's ES-DE media store and registers the folder in appsettings.json.
+pub fn add_media(harness: &mut Harness, world: &emusen_client_fixture::World, folders: &[&str]) -> PathBuf {
+    let platform = Platform::load(library()).unwrap();
+    let media = world.dir("EsdeMedia");
+    let pictures: Vec<_> = folders.iter().enumerate().map(|(i, f)| (media.join("snes").join(f).join(format!("{TITLE}.png")), (560, 315), i, String::new())).collect();
+    draw_covers(harness, &world.root, &pictures, |_| {});
+    let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
+    settings["EsdeMediaDirectory"] = json!(media.to_str().unwrap());
+    settings["OpenEmuFallback"] = json!(false);
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    media
+}
+
+/// Sets up Options board data: two SNES core sidecars with Venus override, two controller profiles, and a 2-layer package.
+pub fn add_options(world: &emusen_client_fixture::World) -> PathBuf {
+    let platform = Platform::load(library()).unwrap();
+    let cores = world.dir("Cores");
+    for (engine, name, hash) in [("VenusRT (Rust)", "VenusRT", "01"), ("Snes9x (Rust)", "Snes9x", "02")] {
+        let systems = [json!({ "id": "snes", "name": "snes", "extensions": [], "regions": ["ntsc"], "controllers": [], "firmware": [] })];
+        let sidecar = json!({ "sidecar": 1, "library": format!("lib{}.so", name.to_lowercase()), "sha256": hash, "abi": "1.19", "capabilities": 0,
+            "info": { "abi": "1.19", "id": name.to_lowercase(), "name": name, "display_name": engine, "version": "0.1.0", "license": "GPL-3.0-or-later",
+                "authors": ["EmuSen"], "description": "", "systems": systems, "capabilities": [], "host_requires": [], "deterministic": true }, "settings": [] });
+        std::fs::write(cores.join(format!("lib{}.so.core.json", name.to_lowercase())), sidecar.to_string()).unwrap();
+    }
+    let rt = Runtime::new(&Api::load(library()).unwrap(), &Config { cores: Some(vec![cores.to_str().unwrap().into()]), ..Config::default() }).unwrap();
+    let snes = rt.systems().unwrap().into_iter().find(|s| s.id == "snes").expect("the SNES");
+    drop(rt);
+    let path = rom(world).to_string_lossy().into_owned();
+    let games = records(&platform);
+    games.change(&json!({ "op": "save_edits", "path": path, "changes": { emusen_qt_models::edits::ALT_EMULATOR: "VenusRT (Rust)" }, "at": "2026-11-09T00:00:00Z" })).unwrap();
+    drop(games);
+    let mut profiles = platform.bindings_load(PROFILES, &[snes.console.as_str()]).unwrap_or_else(|_| json!({}));
+    profiles[snes.console.as_str()] = json!({
+        "Default": null,
+        "Profiles": { "Fighter": { "1": {} }, "Arcade": { "1": {} } },
+        "Games": {}
+    });
+    platform.bindings_save(PROFILES, &profiles).unwrap();
+    let run_job = |req: serde_json::Value| {
+        let job = ToolJob::start(&platform, &req).unwrap();
+        loop {
+            match job.next(1000).unwrap() {
+                Step::Ended => break,
+                _ => {}
+            }
+        }
+    };
+    let rel = format!("SNES/{TITLE}.sfc");
+    run_job(json!({ "op": "pkg-make", "paths": [&rel] }));
+    let patch_dir = world.dir("Patches");
+    for (name, byte) in [("layer1.ips", 0x41u8), ("layer2.ips", 0x42u8)] {
+        let p = patch_dir.join(name);
+        std::fs::write(&p, [b'P', b'A', b'T', b'C', b'H', 0, 0, 0x10, 0, 1, byte, b'E', b'O', b'F']).unwrap();
+        run_job(json!({ "op": "pkg-patch-add", "paths": [&rel], "patch": p.to_str().unwrap() }));
+    }
+    let packages = platform.directory(DIR_PACKAGES).unwrap().unwrap();
+    let library_dir = world.root.join("Roms");
+    let compressed = world.dir("Compressed");
+    let index = platform
+        .package_index(Roots {
+            packages: packages.to_str().unwrap(),
+            library: Some(library_dir.to_str().unwrap()),
+            compressed: compressed.to_str().unwrap(),
+        })
+        .unwrap();
+    if let Some(folder) = index["packages"].as_array().and_then(|a| a.first()).and_then(|p| p["folder"].as_str()) {
+        for (slot, at) in board_states() {
+            let (kind, n) = if slot == RESUME { (SAVE_PACKAGE_RESUME_STATE, 0) } else { (SAVE_PACKAGE_STATE, slot) };
+            let file = platform.save_path(kind, folder, None, n).unwrap();
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(&file, b"state").unwrap();
+            let f = std::fs::File::options().write(true).open(&file).unwrap();
+            f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(at as u64)).unwrap();
+        }
+    }
+    cores
+}
+
+/// The tab currently shown by the page's model (0 Overview, 1 States, 2 Media, 3 Details, 4 Options, 5 Cheats).
+pub fn page_tab(scene: &mut Scene<'_>) -> i32 {
+    let object = scene.object("pageModel");
+    assert!(!object.is_null(), "the page's model");
+    // Safety: the window's model of that name is a GamePageModel, alive while the window is.
+    let page = unsafe { &*GamePageModel::from_base_ptr(object as *const QAbstractListModel) };
+    page.tab()
 }
 
 /// The name of the item holding the focus.
@@ -224,14 +345,22 @@ pub fn open_page(scene: &mut Scene<'_>, world: &emusen_client_fixture::World) {
     scene.wait(300);
 }
 
-/// The States tab opened by the right shoulder from the Overview, the program's, and Eclipse's screen shown for it.
+/// The States tab opened by the right shoulder from Overview, and Eclipse's screen shown for it.
 pub fn states_tab(scene: &mut Scene<'_>) {
     scene.pad(UiButton::PageDown);
-    until(scene, "Eclipse's screen drawing the States tab", 3000, |s| s.property("theme", "pageDrawn") == "true");
+    until(scene, "Eclipse's screen drawing the States tab", 3000, |s| page_tab(s) == 1 && s.property("theme", "pageDrawn") == "true");
     until(scene, "a card or a pill holding the focus", 3000, |s| {
         let f = focused(s);
         f.starts_with("card.") || f.starts_with("pill.")
     });
+    scene.wait(300);
+}
+
+/// Opens a tab drawn by Eclipse (0 Overview, 1 States, 3 Details, 4 Options) by tapping it.
+pub fn open_tab(scene: &mut Scene<'_>, tab: i32) {
+    let (x, y) = centre(scene, &format!("tab.{tab}"));
+    scene.click(x, y);
+    until(scene, &format!("Eclipse drawing tab {tab}"), 3000, |s| page_tab(s) == tab && s.property("theme", "pageDrawn") == "true");
     scene.wait(300);
 }
 

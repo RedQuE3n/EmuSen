@@ -3,11 +3,25 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
-## 1.15, an addition: Settings Consoles grid, one console, Core and Firmware boards (2026-11-24)
+## 1.16, an addition: Settings Consoles grid, one console, Core and Firmware boards (2026-11-24)
 
 - **`Settings.rows` additive board roles** (`boardLabel`, `boardAbout`, `boardValue`, `boardForm`, `planet`, `subtitle`, `chip`, `chipAttention`, `runs`): board-word projections and console card metadata (`PlanetInk` index, libretro checkerboard, hollow ring, firmware/unsupported chips) without changing the reference theme's mirrored roles (R-20261111-20, R-20261116-20, -21, -22, R-20261123-13, -14, -27).
 - **`Settings.boardHeading`**, **`boardAboutHeading`**, **`boardSentence`**, **`boardMuted`**, **`consolesSubtitle`**, **`consolesFiltered`**, **`hasConsolesWithGames`**, **`pageGlow`**, **`cardPlanet`**, **`cardTitle`**, **`cardSubtitle`**, **`firmwareFiles`** (roles `label`, `status`, `state`), and **`firmwareCount`**: Consoles' filter/subtitle, dynamic planet page glow, Console's Core planet card, Core's About panel, and Firmware's `"Found, N of M"` file status card (R-20261123-13, -14, -15, -21, -27).
 - **`Help.entries(kind, {settings: true, consoles: true, filtered, filterable})`** and **`Actions.act("consolesFilter" | "consolesLetterBack" | "consolesLetterOn")`** (no new method): Consoles' `LT`/`RT` letter jump and `Y` consoles-with-games filter (R-20261116-22, R-20261123-20).
+- The module is 1.16 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.16.*`.
+
+## 1.15, an addition: Eclipse's game page Overview, Details and Options (2026-11-23)
+
+Decided 2026-11-23 by the tester (R-20261111-20, R-20261116-14, -27, -29, -30, -32): Eclipse draws the game page's
+Overview, Details and Options tabs as their boards draw them.
+
+- **`Page.hasDescription`**: whether `Page.words` is the game's own description rather than the empty fallback.
+- **`Page.boardRows`** (`key`, `label`, `value`, `steps`, `opens`, `isSwitch`, `switchOn`, `sentence`, `row`): Details
+  and Options rows in the boards' words, aside hints and underlying indices (`Page.rows`).
+- **`Page.rowSentence`**, **`Page.rowPlace`** and **`Page.defaultable`**: the focused board row's aside sentence, its
+  place (`"2 of 5"`), and whether X (`default`) resets an Options override back to the console's default.
+- **`Help.PageResumeBoard`**, **`Help.PageOpen`**, **`Help.PageDetail`**, **`Help.PageOption`**, and `defaultable` in
+  `Help.entries(kind, { defaultable })`: the boards' help lines for Overview, Details and Options.
 - The module is 1.15 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.15.*`.
 
 ## 1.14, an addition: Library's folder card, EmuSen's eclipse mark and Scraping's toggle chips (2026-11-23)

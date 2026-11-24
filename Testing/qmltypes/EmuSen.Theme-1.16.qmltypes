@@ -683,7 +683,11 @@ Module {
                 "PageCoverArt",
                 "PageState",
                 "PageStart",
-                "PageSections"
+                "PageSections",
+                "PageResumeBoard",
+                "PageOpen",
+                "PageDetail",
+                "PageOption"
             ]
         }
         Property {
@@ -701,7 +705,7 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 63
+            lineNumber: 67
             Parameter { name: "kind"; type: "HelpKind" }
         }
         Method {
@@ -709,14 +713,14 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 64
+            lineNumber: 68
             Parameter { name: "kind"; type: "HelpKind" }
             Parameter { name: "flags"; type: "QMap_QString_QVariant" }
         }
     }
     Component {
         file: "help.cxxqt.h"
-        lineNumber: 85
+        lineNumber: 89
         name: "ThemeHelpEntries"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -728,7 +732,7 @@ Module {
             type: "QString"
             read: "getActionLines"
             index: 0
-            lineNumber: 91
+            lineNumber: 95
             isReadonly: true
             isPropertyConstant: true
         }
@@ -736,7 +740,7 @@ Module {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 97
+            lineNumber: 101
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -744,13 +748,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 98
+            lineNumber: 102
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 99
+            lineNumber: 103
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }
@@ -1009,7 +1013,7 @@ Module {
             name: "PageSection"
             isScoped: true
             type: "int"
-            lineNumber: 65
+            lineNumber: 70
             values: [
                 "Overview",
                 "States",
@@ -1329,7 +1333,53 @@ Module {
             lineNumber: 64
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 112 }
+        Property {
+            name: "hasDescription"
+            type: "bool"
+            read: "getHasDescription"
+            notify: "shown"
+            index: 34
+            lineNumber: 65
+            isReadonly: true
+        }
+        Property {
+            name: "boardRows"
+            type: "ThemeRows"
+            isPointer: true
+            read: "getBoardRows"
+            index: 35
+            lineNumber: 66
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "rowSentence"
+            type: "QString"
+            read: "getRowSentence"
+            notify: "shown"
+            index: 36
+            lineNumber: 67
+            isReadonly: true
+        }
+        Property {
+            name: "rowPlace"
+            type: "QString"
+            read: "getRowPlace"
+            notify: "shown"
+            index: 37
+            lineNumber: 68
+            isReadonly: true
+        }
+        Property {
+            name: "defaultable"
+            type: "bool"
+            read: "getDefaultable"
+            notify: "shown"
+            index: 38
+            lineNumber: 69
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 122 }
     }
     Component {
         file: "rows.cxxqt.h"
@@ -1488,7 +1538,7 @@ Module {
             name: "SettingsForm"
             isScoped: true
             type: "int"
-            lineNumber: 58
+            lineNumber: 71
             values: ["Choice", "Switch", "Door", "Fact"]
         }
         Property {
@@ -1736,7 +1786,125 @@ Module {
             lineNumber: 57
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 96 }
+        Property {
+            name: "boardHeading"
+            type: "QString"
+            read: "getBoardHeading"
+            notify: "shown"
+            index: 27
+            lineNumber: 58
+            isReadonly: true
+        }
+        Property {
+            name: "boardAboutHeading"
+            type: "QString"
+            read: "getBoardAboutHeading"
+            notify: "shown"
+            index: 28
+            lineNumber: 59
+            isReadonly: true
+        }
+        Property {
+            name: "boardSentence"
+            type: "QString"
+            read: "getBoardSentence"
+            notify: "shown"
+            index: 29
+            lineNumber: 60
+            isReadonly: true
+        }
+        Property {
+            name: "boardMuted"
+            type: "QStringList"
+            read: "getBoardMuted"
+            notify: "shown"
+            index: 30
+            lineNumber: 61
+            isReadonly: true
+        }
+        Property {
+            name: "consolesSubtitle"
+            type: "QString"
+            read: "getConsolesSubtitle"
+            notify: "shown"
+            index: 31
+            lineNumber: 62
+            isReadonly: true
+        }
+        Property {
+            name: "consolesFiltered"
+            type: "bool"
+            read: "getConsolesFiltered"
+            notify: "shown"
+            index: 32
+            lineNumber: 63
+            isReadonly: true
+        }
+        Property {
+            name: "hasConsolesWithGames"
+            type: "bool"
+            read: "getHasConsolesWithGames"
+            notify: "shown"
+            index: 33
+            lineNumber: 64
+            isReadonly: true
+        }
+        Property {
+            name: "pageGlow"
+            type: "QString"
+            read: "getPageGlow"
+            notify: "shown"
+            index: 34
+            lineNumber: 65
+            isReadonly: true
+        }
+        Property {
+            name: "cardPlanet"
+            type: "int"
+            read: "getCardPlanet"
+            notify: "shown"
+            index: 35
+            lineNumber: 66
+            isReadonly: true
+        }
+        Property {
+            name: "cardTitle"
+            type: "QString"
+            read: "getCardTitle"
+            notify: "shown"
+            index: 36
+            lineNumber: 67
+            isReadonly: true
+        }
+        Property {
+            name: "cardSubtitle"
+            type: "QString"
+            read: "getCardSubtitle"
+            notify: "shown"
+            index: 37
+            lineNumber: 68
+            isReadonly: true
+        }
+        Property {
+            name: "firmwareFiles"
+            type: "ThemeRows"
+            isPointer: true
+            read: "getFirmwareFiles"
+            index: 38
+            lineNumber: 69
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "firmwareCount"
+            type: "int"
+            read: "getFirmwareCount"
+            notify: "shown"
+            index: 39
+            lineNumber: 70
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 122 }
     }
     Component {
         file: "splash.cxxqt.h"

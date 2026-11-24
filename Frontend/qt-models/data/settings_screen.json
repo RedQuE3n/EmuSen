@@ -127,7 +127,7 @@
       "rows": [
         {"id": "rom", "label": "ROM folder", "hint": "The folder the library lists, read in place and never moved.", "folder": "AppSettings RomDirectory",
          "value": {"from": "AppSettings RomDirectory", "code": true, "blank": "Not set"},
-         "pane": {"preview": "folder", "sentence": "The folder the library lists, read in place and never moved.",
+         "pane": {"preview": "folder", "sentence": "{games} under {value}, read in place and never moved.",
           "muted": ["A opens the folder picker. EmuSen reads this folder. It writes there only if you ask it to convert discs beside the originals."]}},
         {"id": "art", "label": "Artwork folder", "hint": "Box art, named like the game's file; blank keeps it beside the games.", "folder": "AppSettings ArtworkDirectory",
          "value": {"from": "AppSettings ArtworkDirectory", "code": true, "blank": "beside the games"}, "pane": {"lines": ["{value}"]}},

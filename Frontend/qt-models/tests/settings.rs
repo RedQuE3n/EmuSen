@@ -171,7 +171,7 @@ fn qt_7_7_doors_open_pages_and_screens_and_b_closes_a_page_first() {
     let rom_pane = view.pane(0);
     assert_eq!(rom_pane.preview, Preview::Folder);
     assert_eq!(rom_pane.samples, [("3".to_string(), 1.0), ("games under".to_string(), 1.0), ("/games".to_string(), 1.0)]);
-    assert_eq!(rom_pane.sentence, "The folder the library lists, read in place and never moved.");
+    assert_eq!(rom_pane.sentence, "3 games under /games, read in place and never moved.");
     assert_eq!(rom_pane.muted, ["A opens the folder picker. EmuSen reads this folder. It writes there only if you ask it to convert discs beside the originals."]);
     assert_eq!(view.choose(index(&view, "themes")), Outcome::Door("themes".into()));
     // A folder cut on its row shows whole in the pane once focused.

@@ -1,0 +1,11 @@
+# The words of One save on a card (Tower Set) against its board, EclipseSettingsCardSave.dc.html: each line's box and baseline in board pixels.
+# Measured 2026-11-24 in Chrome after document.fonts.ready with Sora and JetBrains Mono (s5-boards/card_save.json); CSS line-height 1.35 * 17 = 22.95.
+element	line top	line height	baseline
+settingsCrumb	150	25	169	settingsCanvas
+settingsHeading	191	56	234	settingsCanvas
+rowName.0	13.525	30	36.525
+rowAbout.0	47.525	22.95	63.525
+rowWords.0	28.5	27	49.5
+rowName.1	25	30	48
+rowName.2	25	30	48
+rowName.3	25	30	48

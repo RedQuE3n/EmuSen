@@ -17,6 +17,8 @@ Item {
     property real middle: 1137
     // Left and Right drawn as one key, as the Settings boards draw them (G:24).
     property bool keyPairs: false
+    // Start drawn in the shoulders' rounded box rather than a capsule (EclipseSettingsCards:77).
+    property bool boxMenu: false
     property real inset: 96
     default property alias side: sideSlot.data
     readonly property Item bar: bar
@@ -59,6 +61,7 @@ Item {
                 side: root.glyphSide
                 ink: root.ink
                 keyPairs: root.keyPairs
+                boxMenu: root.boxMenu
             }
         }
     }

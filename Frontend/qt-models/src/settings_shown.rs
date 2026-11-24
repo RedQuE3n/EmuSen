@@ -71,6 +71,8 @@ pub struct BoardAside {
     pub card_title: String,
     pub card_subtitle: String,
     pub firmware_files: Vec<firmware::FileStatus>,
+    pub wrap_about: bool,
+    pub cards_help: bool,
 }
 
 /// What a row shows beyond its words: its about line, a switch's state (none for a row of another kind), a console's tile.
@@ -284,12 +286,51 @@ impl SettingsView {
                     out.about = "Whether the console's open replacement runs in place of firmware of your own.".to_owned();
                 }
             }
+            Some(Page::Cards(_)) => {
+                if let Some(card_row) = self.card_row(entry) {
+                    if let Some(m) = console.media.iter().find(|m| m.medium == card_row.medium) {
+                        let noun = m.noun_in_text();
+                        out.about = match card_row.part {
+                            cards::Part::Mode => format!("Per game, shared by every game as the console's were, or a drawer of named {noun}s."),
+                            cards::Part::Slot(_) => format!("The {noun} in this slot when a game starts."),
+                            cards::Part::Drawer => format!("Every {noun} in the drawer, and the saves on each."),
+                            cards::Part::Saves => format!("Each {noun}'s saves, copied, moved or deleted."),
+                            cards::Part::New => format!("A blank {noun} in the drawer, named for you."),
+                        };
+                    }
+                }
+            }
+            Some(Page::Drawer(_, _)) => {
+                out.about = cards::DRAWER_CARD.to_owned();
+                out.form = Form::Fact;
+            }
+            Some(Page::Saves(_, _)) => {
+                if let Some(m) = self.saves_medium() {
+                    if entry.get("savescard").is_some() {
+                        out.about = format!("Left and Right step every {}, the drawer's and each game's own.", m.noun_in_text());
+                    } else if let Some(save) = entry["save"].as_str().and_then(|id| self.save(id)) {
+                        let unit = m.unit.as_deref().unwrap_or_default();
+                        let blocks = words::counted(save.units as usize, unit, &format!("{unit}s"));
+                        out.about = "Choose a save to copy, move or delete it.".to_owned();
+                        out.value = if save.damaged { format!("{blocks} · damaged") } else { blocks };
+                    } else if entry.get("import").is_some() {
+                        out.about = "Every save on every game's own card copied onto the chosen card, all or none; each game's own card stays as it is.".to_owned();
+                    }
+                }
+            }
+            Some(Page::Save(_, _, _)) => {
+                if entry["saveop"] == "target" {
+                    if let Some(m) = self.saves_medium() {
+                        out.about = format!("The {} the save is copied or moved to.", m.noun_in_text());
+                    }
+                }
+            }
             _ => {}
         }
         out
     }
 
-    /// Eclipse's board-exact page heading, glow, About panel, core card and firmware list (boards #27, #28, #57, #29).
+    /// Eclipse's board-exact page heading, glow, About panel, core card and firmware list (boards #27-#29, #57, #58, #63, #64).
     pub fn board_aside(&self, focused: usize, rows: &[Row], board_rows: &[BoardRow], pane: &Pane) -> BoardAside {
         let on_consoles = self.section_keys().get(self.section).map(String::as_str) == Some("consoles");
         let heading = match self.page() {
@@ -311,6 +352,7 @@ impl SettingsView {
         } else {
             String::new()
         };
+        let cards_page = matches!(self.page(), Some(Page::Cards(_) | Page::Drawer(..) | Page::Saves(..) | Page::Save(..) | Page::Delete(..)));
         let mut out = BoardAside {
             heading,
             about_heading: if pane.preview == crate::settings::Preview::Chips {
@@ -326,6 +368,8 @@ impl SettingsView {
             card_title: String::new(),
             card_subtitle: String::new(),
             firmware_files: Vec::new(),
+            wrap_about: cards_page,
+            cards_help: cards_page,
         };
         let Some(console) = self.console() else { return out };
         let other_cores = |chosen: &str| -> Vec<String> {
@@ -389,6 +433,52 @@ impl SettingsView {
                 out.sentence.clear();
                 out.muted = vec![firmware::CONTENT_NOTE.to_owned()];
                 out.firmware_files = files;
+            }
+            Some(Page::Saves(..)) => {
+                if let Some(m) = self.saves_medium() {
+                    out.sentence = m.mode_text();
+                    let mut muted = Vec::new();
+                    if let Some(card) = self.chosen() {
+                        out.about_heading = card.label.clone();
+                        let unit = m.unit.as_deref().unwrap_or_default();
+                        match (m.opened(&card.path), m.capacity) {
+                            (None, _) => muted.push("No card of this medium is in the drawer or a game's yet.".to_owned()),
+                            (Some(o), None) => muted.push(format!("{} bytes. No format module reads this medium yet, so its saves are not listed; a new card can still be made.", words::grouped(o.length as usize))),
+                            (Some(o), Some(capacity)) if o.formatted => {
+                                let saves = words::counted(o.saves.len(), "save", "saves");
+                                let units = if capacity == 1 { unit.to_owned() } else { format!("{unit}s") };
+                                muted.push(format!("{saves}, {} of {capacity} {units} free.", o.free));
+                            }
+                            (Some(o), Some(_)) => {
+                                if let Some(problem) = &o.problem {
+                                    if !problem.is_empty() {
+                                        muted.push(problem.clone());
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(holder) = &card.held_by {
+                            muted.push(format!("In use by {holder}, which is running: its saves can be looked at, and changed when the game is closed."));
+                        }
+                        if let Some(id) = rows.get(focused).and_then(|r| r.id.strip_prefix("save:")) {
+                            if let Some(game) = self.save(id).and_then(|s| s.game.clone()) {
+                                muted.push(game);
+                            }
+                        }
+                    } else {
+                        muted.push("No card of this medium is in the drawer or a game's yet.".to_owned());
+                    }
+                    if !self.said.is_empty() {
+                        muted.push(self.said.clone());
+                    }
+                    out.muted = muted;
+                }
+            }
+            Some(Page::Save(..)) => {
+                out.about_heading = self.page_save().and_then(|id| self.save(&id)).map(|s| s.title.clone()).unwrap_or_else(|| self.heading());
+            }
+            Some(Page::Delete(..)) => {
+                out.about_heading = self.heading();
             }
             _ => {}
         }

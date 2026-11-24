@@ -34,7 +34,7 @@ Item {
     readonly property real boardBox: root.boardLineHeight > 0 ? root.boardLineHeight : root.boardAscent + root.boardDescent
     readonly property real boardBaseline: root.boardAscent + Math.floor((root.boardBox - root.boardAscent - root.boardDescent) / 2)
     implicitWidth: words.implicitWidth * root.unit
-    implicitHeight: (root.boardLine ? root.boardBox : words.implicitHeight) * root.unit
+    implicitHeight: (root.boardLine ? root.boardBox * Math.max(1, words.lineCount) : words.implicitHeight) * root.unit
     FontMetrics {
         id: metrics
         font: words.font

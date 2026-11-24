@@ -1538,7 +1538,7 @@ Module {
             name: "SettingsForm"
             isScoped: true
             type: "int"
-            lineNumber: 71
+            lineNumber: 73
             values: ["Choice", "Switch", "Door", "Fact"]
         }
         Property {
@@ -1904,7 +1904,25 @@ Module {
             lineNumber: 70
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 122 }
+        Property {
+            name: "boardWrapAbout"
+            type: "bool"
+            read: "getBoardWrapAbout"
+            notify: "shown"
+            index: 40
+            lineNumber: 71
+            isReadonly: true
+        }
+        Property {
+            name: "cardsHelp"
+            type: "bool"
+            read: "getCardsHelp"
+            notify: "shown"
+            index: 41
+            lineNumber: 72
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 126 }
     }
     Component {
         file: "splash.cxxqt.h"

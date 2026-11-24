@@ -27,7 +27,7 @@ ThemeScreen {
             // The foot of the board's ninth row, where the rows' window ends (G:67-69: 150 + 56 + 12 + 9 × 84 + 8 × 10).
             readonly property real rowsFoot: 1064
             // The help line's entries as the boards name them, X drawn declined on a row with no default (1.11, 1.15).
-            readonly property var help: Settings.help >= 0 ? Help.entries(Settings.help, { settings: true, consoles: root.isConsoles, filtered: Settings.consolesFiltered, filterable: Settings.hasConsolesWithGames, defaultable: Settings.defaultable }) : null
+            readonly property var help: Settings.help >= 0 ? Help.entries(Settings.help, { settings: true, consoles: root.isConsoles, cards: Settings.cardsHelp, filtered: Settings.consolesFiltered, filterable: Settings.hasConsolesWithGames, defaultable: Settings.defaultable }) : null
             Board {
                 id: design
                 designHeight: canvas.designHeight
@@ -246,6 +246,7 @@ ThemeScreen {
                                         switchOn: slot.switchOn
                                         code: slot.code
                                         form: slot.boardForm
+                                        wrapAbout: Settings.boardWrapAbout
                                         width: slot.width
                                         focus: true
                                         // A row wholly in the window is drawn; one the window has scrolled past is not.
@@ -287,6 +288,7 @@ ThemeScreen {
                         model: root.help
                         ink: ink.help
                         keyPairs: true
+                        boxMenu: Settings.cardsHelp
                         // The boards' foot: its row 40 px over the bottom, 38 px tall for a ringed glyph (G:114).
                         middle: 1141
                         Line {

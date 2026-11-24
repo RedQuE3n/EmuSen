@@ -85,6 +85,9 @@ pub mod qobject {
         #[qproperty(QString, card_subtitle, cxx_name = "cardSubtitle", READ, NOTIFY = shown)]
         #[qproperty(*mut ThemeRows, firmware_files, cxx_name = "firmwareFiles", READ, CONSTANT)]
         #[qproperty(i32, firmware_count, cxx_name = "firmwareCount", READ, NOTIFY = shown)]
+        /// From 1.17 (boards #58, #63, #64): whether row short lines wrap at 1.35 line-height and whether Memory cards' help bar is shown.
+        #[qproperty(bool, board_wrap_about, cxx_name = "boardWrapAbout", READ, NOTIFY = shown)]
+        #[qproperty(bool, cards_help, cxx_name = "cardsHelp", READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -140,6 +143,8 @@ pub struct SettingsFacts {
     pub card_planet: i32,
     pub card_title: String,
     pub card_subtitle: String,
+    pub board_wrap_about: bool,
+    pub cards_help: bool,
 }
 
 /// The facts of a view whose rows were last told as `rows`; an error where those are not the view's rows.
@@ -248,6 +253,8 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         card_planet: aside.card_planet,
         card_title: aside.card_title,
         card_subtitle: aside.card_subtitle,
+        board_wrap_about: aside.wrap_about,
+        cards_help: aside.cards_help,
     })
 }
 
@@ -308,6 +315,8 @@ pub struct ThemeSettingsRust {
     card_planet: i32,
     card_title: QString,
     card_subtitle: QString,
+    board_wrap_about: bool,
+    cards_help: bool,
     last: SettingsFacts,
 }
 
@@ -354,6 +363,8 @@ impl Default for ThemeSettingsRust {
             card_planet: -3,
             card_title: QString::default(),
             card_subtitle: QString::default(),
+            board_wrap_about: false,
+            cards_help: false,
             last: SettingsFacts { help: -1, card_planet: -3, ..SettingsFacts::default() },
         }
     }
@@ -442,6 +453,8 @@ impl qobject::ThemeSettings {
         me.card_planet = facts.card_planet;
         me.card_title = QString::from(facts.card_title.as_str());
         me.card_subtitle = QString::from(facts.card_subtitle.as_str());
+        me.board_wrap_about = facts.board_wrap_about;
+        me.cards_help = facts.cards_help;
         me.last = facts.clone();
         drop(me);
         self.shown();

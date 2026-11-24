@@ -732,7 +732,7 @@ impl SettingsView {
         matches!(self.page(), Some(Page::Saves(..) | Page::Save(..) | Page::Delete(..)))
     }
 
-    fn card_row(&self, entry: &Value) -> Option<cards::Row> {
+    pub(crate) fn card_row(&self, entry: &Value) -> Option<cards::Row> {
         let console = self.console()?;
         let at = entry["card"].as_u64()? as usize;
         cards::rows(&console.media, &console.schema, &|k| console.value(k), false).into_iter().nth(at)

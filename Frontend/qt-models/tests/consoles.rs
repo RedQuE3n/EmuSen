@@ -639,3 +639,82 @@ fn qt_3_4_11_eclipse_consoles_console_core_and_firmware_boards() {
     let snes_cards = index(&view, "cards");
     assert_eq!((snes_rows[snes_cards].form, snes_rows[snes_cards].value.as_str(), snes_rows[snes_cards].about.as_str()), (Form::Fact, "", "The Super Nintendo's games keep their saves in the cartridge."));
 }
+
+#[test]
+fn qt_3_4_11_eclipse_memory_cards_saves_and_one_save_boards() {
+    use emusen_qt_models::help;
+    use emusen_qt_models::settings_shown::Form;
+
+    let world = World::new();
+    let mut view = view(&world);
+    open(&mut view, "PlayStation");
+
+    let board = |v: &SettingsView, at: usize| {
+        let rows = v.rows();
+        let facets = v.facets();
+        let pane = v.pane(at);
+        let brows = v.board_rows(&rows, &facets);
+        let aside = v.board_aside(at, &rows, &brows, &pane);
+        (rows, brows, aside)
+    };
+
+    // #58 Memory cards: board short lines, help flags, wrap flag, and PlayStation glow.
+    assert_eq!(view.choose(index(&view, "cards")), Outcome::Opened);
+    let (_, brows, aside) = board(&view, 0);
+    assert_eq!(brows.len(), 6);
+    assert_eq!(brows[0].about, "Per game, shared by every game as the console's were, or a drawer of named cards.");
+    assert_eq!(brows[1].about, "The card in this slot when a game starts.");
+    assert_eq!(brows[2].about, "The card in this slot when a game starts.");
+    assert_eq!(brows[3].about, "Every card in the drawer, and the saves on each.");
+    assert_eq!(brows[4].about, "Each card's saves, copied, moved or deleted.");
+    assert_eq!(brows[5].about, "A blank card in the drawer, named for you.");
+    assert_eq!((brows[0].form, brows[3].form, brows[4].form, brows[5].form), (Form::Choice, Form::Door, Form::Door, Form::Door));
+    assert_eq!((aside.heading.as_str(), aside.about_heading.as_str(), aside.page_glow.as_str()), ("Memory cards", "Mode", "#4A7890"));
+    assert!(aside.wrap_about && aside.cards_help);
+    assert_eq!(help::cards_settings_named().iter().map(|e| e.1).collect::<Vec<_>>(), ["Value", "Change", "Back", "Home"]);
+
+    // Drawer page keeps console glow and draws cards as Fact rows without door chevrons.
+    assert_eq!(view.choose(3), Outcome::Opened);
+    let (_, d_rows, d_aside) = board(&view, 0);
+    assert_eq!((d_rows[0].label.as_str(), d_rows[0].about.as_str(), d_rows[0].form), ("Card 1", "A card in the drawer.", Form::Fact));
+    assert_eq!((d_aside.page_glow.as_str(), d_aside.wrap_about, d_aside.cards_help), ("#4A7890", true, true));
+    view.back();
+
+    // #63 Saves on the cards: proper singular/plural block values, card aside even on save rows, and game muted line.
+    assert_eq!(view.choose(4), Outcome::Opened);
+    let (_, s_rows, s_aside) = board(&view, 1);
+    assert_eq!(s_rows[0].about, "Left and Right step every card, the drawer's and each game's own.");
+    assert_eq!((s_rows[1].value.as_str(), s_rows[1].about.as_str(), s_rows[1].form), ("1 block", "Choose a save to copy, move or delete it.", Form::Door));
+    assert_eq!(s_rows[2].value, "3 blocks");
+    assert_eq!(s_rows[3].about, "Every save on every game's own card copied onto the chosen card, all or none; each game's own card stays as it is.");
+    assert_eq!((s_aside.heading.as_str(), s_aside.about_heading.as_str(), s_aside.page_glow.as_str()), ("Memory Card", "Card 1", "#4A7890"));
+    assert_eq!(s_aside.sentence, "Shared: Card 1 in Slot 1, Card 2 in Slot 2.");
+    assert_eq!(s_aside.muted, ["2 saves, 11 of 15 blocks free."]);
+    assert!(s_aside.wrap_about && s_aside.cards_help);
+    let (_, _, game_aside) = board(&view, 2);
+    assert_eq!(game_aside.muted, ["2 saves, 11 of 15 blocks free.", "Tomb Raider II"]);
+
+    // Stepping to the game's own card shows proper damaged formatting and singular save count.
+    view.step(0, 1);
+    let (_, own_rows, own_aside) = board(&view, 1);
+    assert_eq!(own_rows[1].value, "1 block · damaged");
+    assert_eq!(own_aside.about_heading, "a");
+    assert_eq!(own_aside.muted, ["1 save, 14 of 15 blocks free."]);
+    view.step(0, -1);
+
+    // #64 One save on a card: target short line, empty action short lines, save title aside heading.
+    assert_eq!(view.choose(1), Outcome::Opened);
+    let (_, one_rows, one_aside) = board(&view, 0);
+    assert_eq!(one_rows[0].about, "The card the save is copied or moved to.");
+    assert!(one_rows[1].about.is_empty() && one_rows[2].about.is_empty() && one_rows[3].about.is_empty());
+    assert_eq!((one_rows[0].form, one_rows[1].form, one_rows[2].form, one_rows[3].form), (Form::Choice, Form::Door, Form::Door, Form::Door));
+    assert_eq!((one_aside.heading.as_str(), one_aside.about_heading.as_str(), one_aside.sentence.as_str(), one_aside.page_glow.as_str()), ("DRACULA X CHRONICLE SAVE", "DRACULA X CHRONICLE SAVE", "DRACULA X CHRONICLE SAVE on Card 1.", "#4A7890"));
+    assert!(one_aside.wrap_about && one_aside.cards_help);
+
+    // Delete confirmation page keeps console glow, heading, and question sentence.
+    assert_eq!(view.choose(3), Outcome::Opened);
+    let (_, del_rows, del_aside) = board(&view, 0);
+    assert_eq!(del_rows.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["No", "Yes"]);
+    assert_eq!((del_aside.heading.as_str(), del_aside.about_heading.as_str(), del_aside.sentence.as_str(), del_aside.page_glow.as_str()), ("Delete Save", "Delete Save", "Delete DRACULA X CHRONICLE SAVE from Card 1? It cannot be brought back.", "#4A7890"));
+    assert!(del_aside.wrap_about && del_aside.cards_help);
+}

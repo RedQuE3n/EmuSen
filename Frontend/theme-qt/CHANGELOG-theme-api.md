@@ -3,6 +3,12 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.17, an addition: Settings Memory cards and card saves boards (2026-11-24)
+
+- **`Settings.boardWrapAbout`** and **`Settings.cardsHelp`**: whether rows wrap their short line at 1.35 line-height (`SettingsRow`) and whether the Memory cards help bar (`◀ ▶ Value`, `A Change`, `B Back`, `START Home`) is shown on Memory cards, Drawer, Saves on the cards, One save and Delete pages (boards #58, #63, #64; R-20261116-20, R-20261123-32).
+- **`Help.entries(kind, {settings: true, cards: true})`** (no new method): Memory cards' help bar in the boards' wording and order (`help::cards_settings_named`).
+- The module is 1.17 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.17.*`.
+
 ## 1.16, an addition: Settings Consoles grid, one console, Core and Firmware boards (2026-11-24)
 
 - **`Settings.rows` additive board roles** (`boardLabel`, `boardAbout`, `boardValue`, `boardForm`, `planet`, `subtitle`, `chip`, `chipAttention`, `runs`): board-word projections and console card metadata (`PlanetInk` index, libretro checkerboard, hollow ring, firmware/unsupported chips) without changing the reference theme's mirrored roles (R-20261111-20, R-20261116-20, -21, -22, R-20261123-13, -14, -27).

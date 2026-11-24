@@ -1,0 +1,102 @@
+{
+ "systems": [
+  {
+   "id": "psx",
+   "name": "Sony PlayStation",
+   "console": "PlayStation",
+   "display_name": "PlayStation",
+   "release_year": 1994,
+   "firmware_name": "PlayStation BIOS",
+   "engines": ["Diamond"],
+   "starts_empty": true
+  }
+ ],
+ "cores": [],
+ "schema": {
+  "PlayStation": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "Diamond", "choices": ["Diamond"], "choice_labels": []},
+   {"key": "Cards", "label": "Memory cards", "hint": "Shared cards or one per game.", "kind": "choice", "default": "shared", "choices": ["shared", "game", "named"], "choice_labels": ["Shared", "Per game", "Named"]},
+   {"key": "Card1", "label": "Slot 1", "hint": "The card in this slot when a game starts.", "kind": "choice", "default": "Card 1", "choices": ["Card 1", "Card 2", "Card 3"], "choice_labels": [], "shown_with": {"key": "Cards", "value": "named"}},
+   {"key": "Card2", "label": "Slot 2", "hint": "The card in this slot when a game starts.", "kind": "choice", "default": "Card 2", "choices": ["Card 1", "Card 2", "Card 3"], "choice_labels": [], "shown_with": {"key": "Cards", "value": "named"}}
+  ]
+ },
+ "settings": {
+  "PlayStation": {
+   "Cards": "named"
+  }
+ },
+ "firmware": {
+  "psx": []
+ },
+ "overview": [],
+ "cards": {
+  "PlayStation": [
+   {
+    "medium": "psx.card",
+    "title": "Memory Card",
+    "noun": "Card",
+    "noun_in_text": "card",
+    "extension": ".mcr",
+    "kind": "removable",
+    "capacity": 15,
+    "unit": "block",
+    "mode": "shared",
+    "mode_key": "Cards",
+    "next_name": "Card 4",
+    "import_due": false,
+    "slots": [
+     {"label": "Slot 1", "name": "Card 1", "path": "/saves/PlayStation/Cards/Card 1.mcr"},
+     {"label": "Slot 2", "name": "Card 2", "path": "/saves/PlayStation/Cards/Card 2.mcr"}
+    ],
+    "cards": [
+     {"path": "/saves/PlayStation/Cards/Card 1.mcr", "name": "Card 1", "label": "Card 1", "games_own": false, "held_by": null},
+     {"path": "/saves/PlayStation/Cards/Card 2.mcr", "name": "Card 2", "label": "Card 2", "games_own": false, "held_by": null},
+     {"path": "/saves/PlayStation/Cards/Card 3.mcr", "name": "Card 3", "label": "Card 3", "games_own": false, "held_by": null},
+     {"path": "/saves/PlayStation/One.mcr", "name": "One", "label": "One", "games_own": true, "held_by": null}
+    ]
+   }
+  ]
+ },
+ "opened": {
+  "/saves/PlayStation/Cards/Card 1.mcr": {
+   "exists": true,
+   "length": 131072,
+   "formatted": true,
+   "free": 11,
+   "problem": null,
+   "saves": [
+    {"id": "BASLUS-00101", "title": "Tower Set", "units": 1, "game": null, "damaged": false},
+    {"id": "BASLUS-00102", "title": "Glass Orchard", "units": 2, "game": null, "damaged": false},
+    {"id": "BASLUS-00103", "title": "Ninth Lantern", "units": 1, "game": null, "damaged": true}
+   ]
+  },
+  "/saves/PlayStation/Cards/Card 2.mcr": {
+   "exists": true,
+   "length": 131072,
+   "formatted": true,
+   "free": 14,
+   "problem": null,
+   "saves": [
+    {"id": "BASLUS-00201", "title": "Amber Signal", "units": 1, "game": null, "damaged": false}
+   ]
+  },
+  "/saves/PlayStation/Cards/Card 3.mcr": {
+   "exists": true,
+   "length": 131072,
+   "formatted": true,
+   "free": 15,
+   "problem": null,
+   "saves": []
+  },
+  "/saves/PlayStation/One.mcr": {
+   "exists": true,
+   "length": 131072,
+   "formatted": true,
+   "free": 14,
+   "problem": null,
+   "saves": [
+    {"id": "BASLUS-00901", "title": "Solo Mark", "units": 1, "game": "One", "damaged": false}
+   ]
+  }
+ }
+}

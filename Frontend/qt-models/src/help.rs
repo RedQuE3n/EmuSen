@@ -426,6 +426,16 @@ pub fn consoles_settings_lines(list: &[Entry]) -> String {
     format!("{}{CONSOLES_LETTER_ON} {:?}\n", lines_of(Screen::Settings, list), UiButton::Last)
 }
 
+/// Settings Memory cards' help entries as boards #58, #63 and #64 name and order them.
+pub fn cards_settings_named() -> Vec<Entry> {
+    vec![
+        (UiButton::Left, "Value", None),
+        (UiButton::Accept, "Change", None),
+        (UiButton::Back, "Back", None),
+        (UiButton::Menu, "Home", Some(HOME)),
+    ]
+}
+
 /// A Settings list as Eclipse's boards name and order it, X added where a value steps and Home kept (EmuSen_Qt.md §3.4.11, R-20261123-20).
 pub fn settings_named(list: Vec<Entry>) -> Vec<Entry> {
     const ORDER: [UiButton; 6] = [UiButton::Left, UiButton::Accept, UiButton::Screensaver, UiButton::Back, UiButton::PageUp, UiButton::Menu];

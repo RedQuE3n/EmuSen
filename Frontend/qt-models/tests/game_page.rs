@@ -783,7 +783,7 @@ fn qt_3_4_12_the_help_in_the_boards_words_on_a_state_and_on_start() {
     assert_eq!(page.board_help(None, s1), Some(Screen::GamePageState));
     assert_eq!(page.board_help(None, empty), None, "an empty slot has the program's");
     assert_eq!(page.board_help(Some(0), 0), None, "Play with a resume point: the boards draw none");
-    assert_eq!(page.board_help(Some(1), 0), Some(Screen::GamePageResume), "Resume without its step");
+    assert_eq!(page.board_help(Some(1), 0), Some(Screen::GamePageResumeBoard), "Resume without duplicate Section");
     let mut none = read();
     none.states.clear();
     let page = GamePage::new(none, NOW);
@@ -792,5 +792,80 @@ fn qt_3_4_12_the_help_in_the_boards_words_on_a_state_and_on_start() {
     let words = |s: Screen| emusen_qt_models::help::entries(s).iter().map(|e| e.1).collect::<Vec<_>>();
     assert_eq!(words(Screen::GamePageState), ["Load this state", "Delete", "Back"]);
     assert_eq!(words(Screen::GamePageStart), ["Start", "Favourite", "Back", "Home"]);
+    assert_eq!(words(Screen::GamePageResumeBoard), ["Resume", "Favourite", "Back", "Home"]);
+    assert_eq!(words(Screen::GamePageOpen), ["Open", "Back", "Home"]);
+    assert_eq!(words(Screen::GamePageDetail), ["Choose", "Back", "Home"]);
+    assert_eq!(words(Screen::GamePageOption), ["Change", "Value", "Back to the console's", "Back", "Home"]);
     assert_eq!(words(Screen::GamePageSections), ["Section"]);
+}
+
+#[test]
+fn qt_3_4_12_overview_details_and_options_board_rows_aside_and_defaults() {
+    let mut r = covered();
+    r.description = "A test game.".into();
+    r.profiles = Some(vec![
+        Choice { value: None, text: "Console's (Default)".into() },
+        Choice { value: Some("Fight".into()), text: "Fight".into() },
+    ]);
+    r.standards = Some(standard_choices(&["ntsc".into(), "pal".into()]));
+    r.package = Package::Linked;
+    r.layers = 2;
+    r.package_job = Some(PackageJob { key: CHECK, request: serde_json::json!({ "op": "pkg-check" }) });
+    let mut page = GamePage::new(r, NOW);
+    assert!(page.has_description());
+    assert_eq!(page.board_help(None, 0), Some(Screen::GamePageResumeBoard));
+    assert!(page.board_rows().is_empty(), "Overview has no board rows");
+
+    // Details: idle ellipses omitted, all 5 aside sentences present, doors vs actions help.
+    page.choose_tab(3);
+    let details = page.board_rows();
+    let shown: Vec<_> = details.iter().map(|r| (r.label.as_str(), r.value.as_str(), r.opens)).collect();
+    assert_eq!(
+        shown,
+        [
+            ("Scrape This Game", "", false),
+            ("Edit Details", "", true),
+            ("Cover Art", "Its own", true),
+            ("Open Folder", "", false),
+            ("Hide from Library", "", false),
+        ]
+    );
+    assert_eq!(page.board_aside(None, details[1].row), ("The game's name, dates, people and counts, as the scraper found them or as typed here.".into(), "2 of 5".into()));
+    assert_eq!(page.board_aside(Some(0), details[1].row), (String::new(), String::new()), "aside hidden on pill focus");
+    assert_eq!(page.board_help(None, details[0].row), Some(Screen::GamePageDetail));
+    assert_eq!(page.board_help(None, details[1].row), Some(Screen::GamePageOpen));
+    assert_eq!(page.board_help(None, details[2].row), Some(Screen::GamePageOpen));
+    assert_eq!(page.board_help(None, details[4].row), Some(Screen::GamePageDetail));
+
+    // Options: Core (plain name), Cheats omitted, Package keeps its real index past Cheats, X resets overrides.
+    page.choose_tab(4);
+    let options = page.board_rows();
+    let shown: Vec<_> = options.iter().map(|r| (r.label.as_str(), r.value.as_str(), r.steps, r.opens, r.row)).collect();
+    assert_eq!(
+        shown,
+        [
+            ("Core", "Venus", true, false, 0),
+            ("Controller profile", "Console's", true, false, 1),
+            ("Display crop", "Console's", false, true, 2),
+            ("Television standard", "The game's own", true, false, 3),
+            ("Package", "Linked · 2 layers", false, true, 5),
+        ]
+    );
+    assert_eq!(page.board_aside(None, 0), ("The core this game runs on; the console's own unless one is chosen here. Cores lists them all.".into(), "1 of 5".into()));
+    assert_eq!(page.board_aside(None, 5).1, "5 of 5", "Package stands 5th of 5 despite underlying row 5");
+    assert_eq!(page.board_help(None, 0), Some(Screen::GamePageOption));
+    assert_eq!(page.board_help(None, 2), Some(Screen::GamePageOpen));
+    assert_eq!(page.board_help(None, 5), Some(Screen::GamePageOpen));
+    assert!(!page.defaultable(0), "at console default");
+    assert_eq!(page.to_default(0), Outcome::Nothing);
+    page.changed(&Change::Engine(Some("snes9x".into())));
+    assert!(page.defaultable(0));
+    assert_eq!(page.to_default(0), Outcome::Changed(Change::Engine(None)));
+    page.changed(&Change::Profile(Some("Fight".into())));
+    assert_eq!(page.to_default(1), Outcome::Changed(Change::Profile(None)));
+    page.changed(&Change::Crop(Some(Crop::default())));
+    assert_eq!(page.to_default(2), Outcome::Changed(Change::Crop(None)));
+    page.changed(&Change::Standard(Some("pal".into())));
+    assert_eq!(page.to_default(3), Outcome::Changed(Change::Standard(None)));
+    assert!(!page.defaultable(5), "Package has no console default");
 }

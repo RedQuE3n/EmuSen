@@ -257,14 +257,24 @@ impl GamePageSource for ClientSource {
         let Some(s) = system else { return Ok(read) };
         // The engines: the console's own first, then each it may run on (Mistress's IGamePageHost.Engines).
         let cores = self.runtime.cores().map_err(words)?;
-        let stored = self.runtime.settings_get(0, Scope::Console, Some(crate::consoles::settings_console(s)), crate::consoles::ENGINE_KEY).map_err(words)?;
-        let own = stored.filter(|e| !e.is_empty()).or_else(|| s.engines.first().cloned());
+        let console = crate::consoles::settings_console(s);
+        let schema_engines: Vec<String> = self
+            .runtime
+            .settings_schema(0, Some(console), None)
+            .unwrap_or_default()
+            .into_iter()
+            .find(|r| r.key == crate::consoles::ENGINE_KEY)
+            .and_then(|r| r.choices)
+            .unwrap_or_default();
+        let engines = if schema_engines.len() > s.engines.len() { &schema_engines } else { &s.engines };
+        let stored = self.runtime.settings_get(0, Scope::Console, Some(console), crate::consoles::ENGINE_KEY).map_err(words)?;
+        let own = stored.filter(|e| !e.is_empty()).or_else(|| engines.first().cloned());
         let name = |id: &str| engine_shown(id, &cores).name;
-        read.engines = match (&own, s.engines.len()) {
+        read.engines = match (&own, engines.len()) {
             (None, _) => Vec::new(),
             (Some(own), 0 | 1) => vec![Choice { value: None, text: format!("{} (the only one)", name(own)) }],
             (Some(own), _) => std::iter::once(Choice { value: None, text: format!("{} (default)", name(own)) })
-                .chain(s.engines.iter().map(|e| Choice {
+                .chain(engines.iter().map(|e| Choice {
                     value: Some(e.clone()),
                     text: if e == own { format!("{} (the console's)", name(e)) } else { name(e) },
                 }))
@@ -352,7 +362,12 @@ impl GamePageSource for ClientSource {
                 if !games.is_object() {
                     *games = json!({});
                 }
-                games[title_of(path)] = profile.as_ref().map_or(Value::Null, |p| json!(p));
+                let key = title_of(path);
+                if let Some(p) = profile {
+                    games[&key] = json!(p);
+                } else if let Some(m) = games.as_object_mut() {
+                    m.remove(&key);
+                }
                 self.platform.bindings_save(PROFILES, &model).map_err(words)
             }
         }

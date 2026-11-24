@@ -73,6 +73,12 @@ pub mod qobject {
         #[qproperty(QStringList, trail, READ, NOTIFY = shown)]
         #[qproperty(QString, trail_section, cxx_name = "trailSection", READ, NOTIFY = shown)]
         #[qproperty(QString, console, READ, NOTIFY = shown)]
+        /// 1.15: Eclipse's Overview, Details and Options tabs: description flag, board rows, aside hint, place, and defaultable.
+        #[qproperty(bool, has_description, cxx_name = "hasDescription", READ, NOTIFY = shown)]
+        #[qproperty(*mut ThemeRows, board_rows, cxx_name = "boardRows", READ, CONSTANT)]
+        #[qproperty(QString, row_sentence, cxx_name = "rowSentence", READ, NOTIFY = shown)]
+        #[qproperty(QString, row_place, cxx_name = "rowPlace", READ, NOTIFY = shown)]
+        #[qproperty(bool, defaultable, READ, NOTIFY = shown)]
         type ThemePage = super::ThemePageRust;
     }
 
@@ -96,6 +102,8 @@ pub const PAGE_ROW_ROLES: [&str; 8] = ["key", "label", "value", "line", "picture
 pub const PAGE_PILL_ROLES: [&str; 8] = ["key", "label", "button", "filled", "heart", "on", "act", "row"];
 /// `Page.cards`' roles: a state card or the empty one, its badge's words, and `row`, its tile among `rows`, -1 for the empty card (1.13).
 pub const PAGE_CARD_ROLES: [&str; 7] = ["key", "label", "line", "picture", "marked", "badge", "row"];
+/// `Page.boardRows`' roles: a Details or Options row, its value form, aside sentence, and real index among `rows` (1.15).
+pub const PAGE_BOARD_ROW_ROLES: [&str; 9] = ["key", "label", "value", "steps", "opens", "isSwitch", "switchOn", "sentence", "row"];
 
 /// Everything the singleton shows, as the host reads it from the program's model.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -136,6 +144,11 @@ pub struct PageFacts {
     pub trail: Vec<String>,
     pub trail_section: String,
     pub console: String,
+    pub has_description: bool,
+    pub board_rows: Vec<Row>,
+    pub row_sentence: String,
+    pub row_place: String,
+    pub defaultable: bool,
 }
 
 /// The board's buttons' rows: each with the place among the actions of the action it is.
@@ -170,6 +183,25 @@ pub fn card_rows(cards: &[emusen_qt_models::game_page::Card]) -> Vec<Row> {
                 Cell::Flag(c.marked),
                 Cell::Text(c.badge.clone()),
                 Cell::Whole(c.row.map_or(-1, |r| r as i32)),
+            ]
+        })
+        .collect()
+}
+
+/// Eclipse's Details and Options rows.
+pub fn board_row_rows(rows: &[emusen_qt_models::game_page::BoardRow]) -> Vec<Row> {
+    rows.iter()
+        .map(|r| {
+            vec![
+                Cell::Text(r.key.clone()),
+                Cell::Text(r.label.clone()),
+                Cell::Text(r.value.clone()),
+                Cell::Flag(r.steps),
+                Cell::Flag(r.opens),
+                Cell::Flag(r.is_switch),
+                Cell::Flag(r.switch_on),
+                Cell::Text(r.sentence.to_owned()),
+                Cell::Whole(r.row as i32),
             ]
         })
         .collect()
@@ -253,6 +285,11 @@ pub struct ThemePageRust {
     trail: QStringList,
     trail_section: QString,
     console: QString,
+    has_description: bool,
+    board_rows: *mut ThemeRows,
+    row_sentence: QString,
+    row_place: QString,
+    defaultable: bool,
     last: PageFacts,
 }
 
@@ -293,6 +330,11 @@ impl Default for ThemePageRust {
             trail: QStringList::default(),
             trail_section: QString::default(),
             console: QString::default(),
+            has_description: false,
+            board_rows: std::ptr::null_mut(),
+            row_sentence: QString::default(),
+            row_place: QString::default(),
+            defaultable: false,
             last: PageFacts { focused: (-1, 0), help: -1, board_help: -1, ..PageFacts::default() },
         }
     }
@@ -312,10 +354,12 @@ impl cxx_qt::Initialize for qobject::ThemePage {
         let rows = made(self.as_mut(), &PAGE_ROW_ROLES);
         let pills = made(self.as_mut(), &PAGE_PILL_ROLES);
         let cards = made(self.as_mut(), &PAGE_CARD_ROLES);
+        let board_rows = made(self.as_mut(), &PAGE_BOARD_ROW_ROLES);
         self.as_mut().rust_mut().actions = actions;
         self.as_mut().rust_mut().rows = rows;
         self.as_mut().rust_mut().pills = pills;
         self.as_mut().rust_mut().cards = cards;
+        self.as_mut().rust_mut().board_rows = board_rows;
     }
 }
 
@@ -337,6 +381,7 @@ impl qobject::ThemePage {
         fill(self.rows, &facts.rows);
         fill(self.pills, &facts.pills);
         fill(self.cards, &facts.cards);
+        fill(self.board_rows, &facts.board_rows);
         let text = |t: &str| QString::from(t);
         let mut me = self.as_mut().rust_mut();
         me.ready = facts.ready;
@@ -368,6 +413,10 @@ impl qobject::ThemePage {
         me.trail = list(&facts.trail);
         me.trail_section = text(&facts.trail_section);
         me.console = text(&facts.console);
+        me.has_description = facts.has_description;
+        me.row_sentence = text(&facts.row_sentence);
+        me.row_place = text(&facts.row_place);
+        me.defaultable = facts.defaultable;
         me.last = facts.clone();
         drop(me);
         self.shown();

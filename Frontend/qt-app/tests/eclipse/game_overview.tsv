@@ -1,0 +1,69 @@
+# Eclipse's game page, its Overview tab, against its board, EclipseGameOverview.dc.html (1920 by 1200), one row an element (EmuSen_Qt.md §3.4.12).
+# board_height: 1200
+# Read from EclipseGameOverview.dc.html in Chrome after document.fonts.ready (g2-boards/overview.json); held by tests/eclipse_board/mod.rs.
+# The page as the board draws it: Aurora Drift on the Super Nintendo, a favourite, with description and screenshot; words held by tests/eclipse_game_overview.rs.
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground	the kit's Backdrop, its ground: the board's own colour (Ink.ground)	Rectangle	0	0	right:0	1200	-	#FF0A1024	-	built	-
+backdropField.0	19	a colour field: #1FC9A8, an ellipse, blurred 90 px at 0.85	the kit's BackdropField: the board's saturation, lightness and alpha with the game's first art hue	-	980	-160	980	800	-	opacity:0.85	blur:90	built	field 0 -1 #1FC9A8 0
+backdropField.1	20	a colour field: #6A4CF0, an ellipse, blurred 110 px at 0.9	the kit's BackdropField, the game's second art hue	-	1340	260	760	700	-	opacity:0.9	blur:110	built	field 0 -1 #6A4CF0 1
+backdropField.2	21	a colour field: #B8FFE9, a bar turned -18 degrees, blurred 22 px at 0.55	the kit's BackdropField, the game's first art hue	-	1180	210	640	46	-	opacity:0.55	blur:22	built	field -18 40 #B8FFE9 0
+gameDisc	22	the eclipse's disc	the kit's CoronaDisc, its corona the game's first hue at the look's rim's saturation and lightness (R-20261115-27)	CoronaDisc	-760	-1500	2900	2900	-	Tokens.surface	-	built	-
+coronaRim	22	its rim, 2 px	the corona	Rectangle	in:gameDisc:-2	top:gameDisc:-2	2904	2904	-	-	-	built	-
+coronaGlow.0	22	its glow, 44 px blur, 8 px spread, 0.55	the corona at the board's strength	-	in:gameDisc:0	top:gameDisc:0	2900	2900	-	-	-	built	corona 44 8 0.55
+coronaGlow.1	22	its halo, 170 px blur, 46 px spread, 0.25	the corona at the board's strength	-	in:gameDisc:0	top:gameDisc:0	2900	2900	-	-	-	built	corona 170 46 0.25
+gameGround	23	the lower ground from 620 down	none: the surface token	Rectangle	0	620	right:0	580	-	Tokens.surface	-	built	-
+gameHorizon	24	the horizon, 2 px, clear at both ends	none: the board's own colours (GameInk.horizon)	Rectangle	0	619	right:0	2	-	-	-	built	-
+mark	28	the crescent mark	Marks.crescent, Eclipse's Brand with no name	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+trail	29	the trail, 28 px after the mark	Page.trail	Trail	after:mark:28	mid:80	-	-	-	-	-	built	-
+trailLink.0	30	"Consoles", a link	Actions.openSection(Page.trailSection)	Walkable	in:trail:0	mid:80	-	-	-	-	-	built	-
+trailWords.0	30	"Consoles", muted	words::CONSOLES_SECTION	Text	in:trailLink.0:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.0	31	the slash, 14 px either side	Words.crumb	Text	after:trailLink.0:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailLink.1	32	"Super Nintendo", a link	Actions.openConsole(Page.console)	Walkable	after:trailSlash.0:14	mid:80	-	-	-	-	-	built	-
+trailWords.1	32	the console's name, muted	Read.console	Text	in:trailLink.1:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.1	33	the slash	Words.crumb	Text	after:trailLink.1:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailWords.2	34	the game's title, semi-bold	Page.title	Text	after:trailSlash.1:14	mid:80	-	-	-	Tokens.text	24	built	600 0 none
+status	37	the status glass	Ink.glass	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
+battery	38	"82%", the level alone	Device.battery	Text	in:status:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	38	"9:41 PM"	Device.shortTime	Text	after:battery:22	mid:80	inright:status:22	-	-	Tokens.text	22	built	600 0 none
+gameKicker	43	"SUPER NINTENDO · 1994 · ACTION"	Page.kicker	Line	96	190	-	-	-	#FFF3C9D2	20	built	600 0.22 upper
+gameTitleLine	44	the title's line box, 106.08 px	the title's line height	Item	96	below:gameKicker:22	900	106.08	-	-	-	built	-
+gameTitle	44	"Aurora Drift"	Page.title	Text	96	mid:gameTitleLine	-	-	-	Tokens.textStrong	104	built	600 -0.02 none
+gameLine	45	"Last played yesterday · 3 h 20 min played · 1 to 2 players"	Page.line	Line	96	below:gameTitleLine:22	-	-	-	Tokens.muted	24	built	300 0 none
+pill.0	47	Resume, filled	Page.pills, the first	Pill	96	below:gameLine:32	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built	-
+buttonGlyph.0	47	the A disc, 46 px	Eclipse's Glyph	Glyph	in:pill.0:14	mid:pill.0	46	46	-	-	-	built	glyph 22 600
+buttonLabel.0	47	"Resume"	the pill's label	Text	after:buttonGlyph.0:16	mid:pill.0	-	-	-	Tokens.overAccent	26	built	600 0 none
+pill.1	48	"Start from the beginning", outlined	Page.pills, the second	WordPill	after:pill.0:16	foot:pill.0	fit:pillLabel.1:32	72	-	-	-	built	-
+pillLine.1	48	its 2 px line	Ink.pillLine	Rectangle	in:pill.1:0	foot:pill.1	fit:pill.1:0	72	36	-	-	built	line 2 #FF5A6076
+pillLabel.1	48	"Start from the beginning"	the pill's label	Text	in:pill.1:32	mid:pill.1	-	-	-	Tokens.text	24	built	400 0 none
+pill.2	49	"Favourite", outlined in the rose while on	Page.pills, the third	WordPill	after:pill.1:16	foot:pill.0	fit:pillLabel.2:30	72	-	-	-	built	-
+pillLine.2	49	its 2 px line in the rose	Ink.rose	Rectangle	in:pill.2:0	foot:pill.2	fit:pill.2:0	72	36	-	-	built	line 2 #FFF3C9D2
+pillHeart.2	50	the heart, 26 px, filled in the rose	the board's path	Shape	in:pill.2:24	mid:pill.2	26	26	-	#FFF3C9D2	-	built	-
+pillLabel.2	50	"Favourite", 12 px after the heart	the pill's label	Text	after:pillHeart.2:12	mid:pill.2	-	-	-	Tokens.text	24	built	400 0 none
+tabs	55	the tabs, 40 px apart	Page.tabs	Tabs	96	656	-	-	-	-	-	built	-
+tab.0	56	"Overview", the tab shown	Page.tab	Item	in:tabs:0	top:tabs:0	-	43	-	-	-	built	-
+tabWords.0	56	"Overview", white and semi-bold	the tab's name	Line	in:tab.0:0	top:tab.0:0	-	-	-	#FFFFFFFF	24	built	600 0 none
+tabUnderline.0	56	the 3 px underline	Tokens.accent	Rectangle	in:tab.0:0	foot:tab.0	fit:tab.0:0	3	-	Tokens.accent	-	built	-
+tab.1	57	"States"	Actions.pageTab(1)	Item	after:tab.0:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.1	57	"States", muted	the tab's name	Line	in:tab.1:0	top:tab.1:0	-	-	-	Tokens.muted	24	built	400 0 none
+tab.2	58	"Media"	Actions.pageTab(2)	Item	after:tab.1:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.2	58	"Media", muted	the tab's name	Line	in:tab.2:0	top:tab.2:0	-	-	-	Tokens.muted	24	built	400 0 none
+tab.3	59	"Details"	Actions.pageTab(3)	Item	after:tab.2:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.3	59	"Details", muted	the tab's name	Line	in:tab.3:0	top:tab.3:0	-	-	-	Tokens.muted	24	built	400 0 none
+tab.4	60	"Options"	Actions.pageTab(4)	Item	after:tab.3:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.4	60	"Options", muted	the tab's name	Line	in:tab.4:0	top:tab.4:0	-	-	-	Tokens.muted	24	built	400 0 none
+tab.5	61	"Cheats", the game having cheats	Actions.pageTab(5)	Item	after:tab.4:40	top:tabs:0	-	43	-	-	-	built	-
+tabWords.5	61	"Cheats", muted	the tab's name	Line	in:tab.5:0	top:tab.5:0	-	-	-	Tokens.muted	24	built	400 0 none
+gameOverview	64	the overview section	Page.words and Page.picture	Item	96	748	1524	315	-	-	-	built	-
+gameOverviewWords	65	the description, 900 wide, 3 lines at 36 px	Page.words	Text	96	748	900	108	-	#FFD8DBE6	24	built	300 0 none
+gameOverviewArt	66	the screenshot's box, 64 px after the description	Page.picture	Item	1060	748	560	315	-	-	-	built	-
+gameOverviewShadow	66	the screenshot's shadow, 0 8 px 24 px	the kit's Glow	Glow	in:gameOverviewArt:0	top:gameOverviewArt:0	560	315	18	#73000000	-	built	glow 24 0 0 8
+gameOverviewPicture	66	the screenshot at radius 18	the kit's RoundPicture	RoundPicture	in:gameOverviewArt:0	top:gameOverviewArt:0	560	315	18	-	-	built	-
+help	69	the help line's entries, 40 above the foot	Page.boardHelp, Help.PageResumeBoard	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Resume	71	the help line's A, a filled disc of 34	Eclipse's Glyph, lead	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Favourite	72	Y, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Back	73	B, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Home	74	Start in a 2 px box, 30 inside, corner 8, padding 10	Eclipse's Glyph, named	-	-	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpSections	76	the shoulders' Section at the right, no glass	Help.PageSections	SectionsHelp	-	mid:help	right:96	34	-	-	-	built	-
+ownGlyph-Section	77	LB in a 2 px box, 30 inside, corner 8, padding 10	Eclipse's Glyph	-	in:helpSections:0	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Section	78	RB, the pair's second	the kit's HelpBar's pair	-	after:ownGlyph-Section:10	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
+helpSectionsWords	79	"Section"	help.rs PAGE_SECTION	Text	after:ownGlyph2-Section:10	mid:helpSections	inright:helpSections:0	-	-	#FFD8DBE6	21	built	400 0 none

@@ -284,6 +284,10 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageState => HelpScreen::GamePageLoad,
         Screen::GamePageStart => HelpScreen::GamePage,
         Screen::GamePageSections => HelpScreen::GamePageNone,
+        Screen::GamePageResumeBoard => HelpScreen::GamePageResume,
+        Screen::GamePageOpen => HelpScreen::GamePageChoose,
+        Screen::GamePageDetail => HelpScreen::GamePageChoose,
+        Screen::GamePageOption => HelpScreen::GamePageChange,
     };
     shown.repr
 }

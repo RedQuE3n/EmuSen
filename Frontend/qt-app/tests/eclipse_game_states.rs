@@ -188,21 +188,22 @@ fn qt_3_4_12_the_states_no_board_draws_are_as_the_tester_ruled() {
         // runs the game (qt-models/src/session_model.rs start_from); no core runs the synthetic image here, so it is not held.
     }
 
-    // (6) Every tab Eclipse does not name opens the program's page; States is Eclipse's again (EmuSen_Qt.md §3.2, 1.13).
+    // (6) Every tab Eclipse names (Overview, States, Details, Options) is Eclipse's; Media and Cheats open the program's page (1.14).
     let mut scene = program(&mut harness);
     open_page(&mut scene, &world);
     states_tab(&mut scene);
     let screen = game::theme_object(&mut scene, "gameScreen");
     for tab in [0, 2, 3, 4, 5, 1] {
+        let eclipse = matches!(tab, 0 | 1 | 3 | 4);
         assert!(
             emusen_theme_qt::host::actions(eclipse_board::object(screen)).expect("Actions").page_tab(tab),
-            "Actions.pageTab({tab}) taken on Eclipse's States"
+            "Actions.pageTab({tab}) taken on Eclipse's page"
         );
         game::until(&mut scene, &format!("tab {tab}"), 2000, |s| model(s).tab() == tab);
-        let want = if tab == 1 { "true" } else { "false" };
+        let want = if eclipse { "true" } else { "false" };
         game::until(&mut scene, &format!("tab {tab} drawn by the right page"), 2000, |s| s.property("theme", "pageDrawn") == want);
-        assert_eq!(scene.property("gamePage", "visible"), (tab != 1).to_string(), "tab {tab}: the program's page shown where Eclipse draws none");
-        if tab != 1 {
+        assert_eq!(scene.property("gamePage", "visible"), (!eclipse).to_string(), "tab {tab}: the program's page shown where Eclipse draws none");
+        if !eclipse {
             back_to_states(&mut scene);
         }
     }
@@ -213,13 +214,18 @@ fn words_now() -> i64 {
     emusen_qt_models::words::now()
 }
 
-/// From a tab the program draws back to States, Eclipse's, by the theme's own call while it is not shown: refused, so
-/// through the program's page's shoulders.
+/// From a tab the program draws back to States, Eclipse's, through the program's page's shoulders or B.
 fn back_to_states(scene: &mut Scene<'_>) {
     for _ in 0..8 {
         let tab = model(scene).tab();
         if tab == 1 && scene.property("theme", "pageDrawn") == "true" {
             return;
+        }
+        if scene.property("theme", "pageDrawn") == "true" {
+            let screen = game::theme_object(scene, "gameScreen");
+            assert!(emusen_theme_qt::host::actions(eclipse_board::object(screen)).expect("Actions").page_tab(1));
+            scene.wait(200);
+            continue;
         }
         scene.pad(if tab == 5 {
             UiButton::Back

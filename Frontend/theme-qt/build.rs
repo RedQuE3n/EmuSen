@@ -1,6 +1,6 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
-// EmuSen.Theme 1.14, what a theme sees, each file at the minor it was added in (EmuSen_Qt.md §3.2, rule T).
+// EmuSen.Theme 1.15, what a theme sees, each file at the minor it was added in (EmuSen_Qt.md §3.2, rule T).
 fn main() {
     let qml = [
         QmlFile::from("qml/ThemeScreen.qml").version(1, 0),
@@ -33,7 +33,7 @@ fn main() {
         QmlFile::from("qml/GroupGridLayout.qml").version(1, 5),
         QmlFile::from("qml/MeasuredWalk.qml").version(1, 9),
     ];
-    CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 14).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
+    CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 15).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([
             "src/rows.rs",
             "src/library.rs",

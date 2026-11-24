@@ -19,7 +19,7 @@ fn qt_3_4_12_eclipse_s_game_page_is_its_board_at_every_size() {
     let world = world("qt-app-eclipse-game", &states, true, true);
     let mut scene = program(&mut harness);
     open_page(&mut scene, &world);
-    assert_eq!(scene.property("theme", "pageDrawn"), "false", "the Overview is the program's");
+    assert_eq!(scene.property("theme", "pageDrawn"), "true", "Overview is Eclipse's");
     states_tab(&mut scene);
     assert_eq!(focused(&mut scene), "card.0", "the resume point's card takes the focus");
     scene.pad(UiButton::Right);

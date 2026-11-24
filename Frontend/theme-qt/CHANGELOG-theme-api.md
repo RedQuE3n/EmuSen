@@ -3,7 +3,7 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
-## 1.12, an addition: Eclipse's game page, its tabs and its States tab (2026-11-23)
+## 1.13, an addition: Eclipse's game page, its tabs and its States tab (2026-11-23)
 
 Decided 2026-11-16 by the tester (R-20261116-27, -29, -30, -36) and 2026-11-23 (R-20261123-33 to -36): Eclipse draws the
 game page as its board does, six tabs in the board's order and the States tab's cards, and the program draws every tab
@@ -25,6 +25,15 @@ and deeper page the theme does not.
   first link opens and the console the second opens.
 - **`Page.boardHelp`** and the `Help` kinds **`PageState`**, **`PageStart`** and **`PageSections`**: the help in the
   boards' words for a state's card and for Start, -1 where the boards draw none and `Page.help` is shown.
+- **`Tokens.dashPattern`**: mirrors the kit's 1.12 `Tokens.dashPattern`.
+- The module is 1.13 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.13.*`.
+
+## 1.12, an addition: the face buttons' preview (2026-11-23)
+
+- **`Settings.preview` 6** (no new member): the help bar's face buttons as they are drawn now, the preview of Controller
+  type's row, which Eclipse's Controllers board draws as four faces (R-20261116-22; EmuSen_Qt.md §3.4.11).
+- **`Settings.trailLine`**: every level above the page shown, joined by "  ›  " as the boards join them
+  (gen_settings.py:272; `words::TRAIL_BETWEEN`), empty on a section's own page (decided 2026-11-23, R-20261123-39).
 - The module is 1.12 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.12.*`.
 
 ## 1.11, an addition: what Eclipse's Settings boards draw (2026-11-23)

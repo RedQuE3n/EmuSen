@@ -1,6 +1,6 @@
 import QtQuick
 
-// The root of a theme's screen (EmuSen_Qt.md §3.2): which screen it is, the walk's first role, the items a free arrangement walks in order, for the splash its length, whether it is drawn still, its end, and from 1.10 whether it enters Home and its sound, for Home where such a splash is placed, and from 1.12 the game page's tabs it draws.
+// The root of a theme's screen (EmuSen_Qt.md §3.2): which screen it is, the walk's first role, the items a free arrangement walks in order, for the splash its length, whether it is drawn still, its end, and from 1.10 whether it enters Home and its sound, for Home where such a splash is placed, and from 1.13 the game page's tabs it draws.
 FocusScope {
     enum Kind { Home, Consoles, Games, Splash, Settings, Game }
     enum Walk { Navigation, Content, Detail, Actions, Search }
@@ -18,7 +18,7 @@ FocusScope {
     readonly property Sound sound: Sound {}
     // 1.10: on Home, the item a splash that enters Home is placed in, between what Home draws under it and over it.
     property Item splashPlace: null
-    // 1.12: on the game page, the tabs this screen draws as flags, 1 << Page.States and so on (Page.PageSection); the program draws every other tab, deeper page and question. 0 names them all.
+    // 1.13: on the game page, the tabs this screen draws as flags, 1 << Page.States and so on (Page.PageSection); the program draws every other tab, deeper page and question. 0 names them all.
     property int pageSections: 0
     signal finished()
 }

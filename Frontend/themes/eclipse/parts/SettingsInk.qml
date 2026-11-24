@@ -17,4 +17,11 @@ QtObject {
     readonly property color rowLine: "#22263A"
     // The picture's glow, rgba(120, 140, 255, 0.25) (G:146).
     readonly property color pictureGlow: "#40788CFF"
+    // Sound's ring: the fill's end, the track and its glow, rgba(240, 180, 196, 0.22) (G:166).
+    readonly property color ringEnd: "#F3C9D2"
+    readonly property color ringTrack: "#262A3A"
+    readonly property color ringGlow: "#38F0B4C4"
+    // Controllers' picture's panel and its 1 px inset line (G:183).
+    readonly property color facesGround: "#11131C"
+    readonly property color facesLine: "#262A3A"
 }

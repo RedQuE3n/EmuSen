@@ -124,10 +124,12 @@ pub enum Preview {
     Sizes,
     /// The focused control's name, large, as the bindings page's pane begins (its words are the caption).
     Heading,
+    /// The help bar's face buttons as they are drawn now (from EmuSen.Theme 1.12).
+    Buttons,
 }
 
 impl Preview {
-    /// Its number as the screens read it: 0 none, 1 picture, 2 meter, 3 variants, 4 sizes, 5 heading.
+    /// Its number as the screens read it: 0 none, 1 picture, 2 meter, 3 variants, 4 sizes, 5 heading, 6 buttons.
     pub fn number(self) -> i32 {
         match self {
             Preview::None => 0,
@@ -136,6 +138,7 @@ impl Preview {
             Preview::Variants => 3,
             Preview::Sizes => 4,
             Preview::Heading => 5,
+            Preview::Buttons => 6,
         }
     }
 }
@@ -350,6 +353,18 @@ fn strings(value: &Value) -> Vec<String> {
     value.as_array().map(|a| a.iter().map(text_of).collect()).unwrap_or_default()
 }
 
+/// A pane's `{choices}`: each choice's words up to a comma, each once, joined by " · " (EmuSen_Qt.md §3.4.11).
+pub fn choice_heads(choices: &[(String, String)]) -> String {
+    let mut heads: Vec<&str> = Vec::new();
+    for (_, words) in choices {
+        let head = words.split(", ").next().unwrap_or_default();
+        if !heads.contains(&head) {
+            heads.push(head);
+        }
+    }
+    heads.join(" · ")
+}
+
 /// A step through `n` values from `at` by `by`, round from either end.
 pub(crate) fn wrapped(at: usize, by: i32, n: usize) -> usize {
     (at as i64 + i64::from(by)).rem_euclid(n as i64) as usize
@@ -416,6 +431,12 @@ impl SettingsView {
     }
 
     /// The pages' trail: empty on a section, else the section's name and each page's.
+    /// The trail's line over a page's heading: every level above the page, joined as the boards join them; empty on a section (R-20261123-39).
+    pub fn trail_line(&self) -> String {
+        let trail = self.trail();
+        trail[..trail.len().saturating_sub(1)].join(crate::words::TRAIL_BETWEEN)
+    }
+
     pub fn trail(&self) -> Vec<String> {
         if self.pages.is_empty() {
             return Vec::new();
@@ -499,7 +520,12 @@ impl SettingsView {
                 if let Some(models) = self.read.rows.as_object() {
                     for (model, list) in models {
                         for row in list.as_array().into_iter().flatten().filter(|r| r["group"] == group.as_str()) {
-                            rows.push(json!({ "id": text_of(&row["key"]).to_lowercase(), "row": format!("{model} {}", text_of(&row["key"])) }));
+                            let mut entry = json!({ "id": text_of(&row["key"]).to_lowercase(), "row": format!("{model} {}", text_of(&row["key"])) });
+                            // The description's own words for a group's row, its short line and its pane (EmuSen_Qt.md §3.4.11).
+                            if let Some(own) = self.description["groups"][group.as_str()][text_of(&row["key"])].as_object() {
+                                own.iter().for_each(|(k, v)| entry[k] = v.clone());
+                            }
+                            rows.push(entry);
                         }
                     }
                 }
@@ -948,7 +974,8 @@ impl SettingsView {
         let keyed = self.keyed(&entry);
         let (value, chosen, count) = self.value(&entry);
         let pane = &entry["pane"];
-        let fill = |line: &str| self.fill(line, &value);
+        let choices = keyed.as_ref().map(|k| choice_heads(&self.choices(&entry, k))).unwrap_or_default();
+        let fill = |line: &str| self.fill(&line.replace("{choices}", &choices), &value);
         let hint = keyed.as_ref().map_or_else(|| text_of(&entry["hint"]), |k| text_of(&k.row["hint"]));
         let by_value = pane["by_value"].get(&value).or_else(|| pane["by_value"].get("*"));
         let sentence = by_value.or(pane.get("sentence")).map_or(hint, text_of);
@@ -957,6 +984,7 @@ impl SettingsView {
             Some("meter") => Preview::Meter,
             Some("variants") => Preview::Variants,
             Some("sizes") => Preview::Sizes,
+            Some("buttons") => Preview::Buttons,
             _ => Preview::None,
         };
         let meter = match (chosen, count) {

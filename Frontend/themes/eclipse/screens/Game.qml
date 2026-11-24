@@ -8,7 +8,7 @@ ThemeScreen {
     id: screen
     objectName: "gameScreen"
     role: ThemeScreen.Game
-    // The tabs this screen draws; the program draws the others, every deeper page and every question (1.12).
+    // The tabs this screen draws; the program draws the others, every deeper page and every question (1.13).
     pageSections: 1 << Page.States
     // Where the focus starts: the first state's card, else the first button.
     focusItems: [

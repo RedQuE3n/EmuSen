@@ -95,6 +95,9 @@ pub const CRUMB: &str = "/";
 
 /// Left with Right named as one key, as the Settings boards' help line draws it (gen_settings.py:24).
 pub const KEY_PAIR: &str = "◀ ▶";
+
+/// Between the levels of a Settings page's trail over its heading, as the boards join them (gen_settings.py:272).
+pub const TRAIL_BETWEEN: &str = "  ›  ";
 /// A, which plays the focused game, as Eclipse's games view names it (EclipseLibrary:51, 85).
 pub const START: &str = "Start";
 

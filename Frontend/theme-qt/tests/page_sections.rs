@@ -1,10 +1,10 @@
 //! `Page.PageSection` is qt-models' `game_page::TABS`, name for name and place for place, so a theme's `pageSections` flags
-//! are the model's `Tab::flag` (EmuSen_Qt.md §3.2, 1.12).
+//! are the model's `Tab::flag` (EmuSen_Qt.md §3.2, 1.13).
 
 use emusen_qt_models::game_page::TABS;
 use emusen_theme_qt::page::qobject::PageSection;
 
-const TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.12.qmltypes");
+const TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.13.qmltypes");
 
 #[test]
 fn qt_3_2_the_page_sections_are_the_models_tabs_in_their_order() {

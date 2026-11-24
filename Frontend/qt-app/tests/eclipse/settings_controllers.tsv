@@ -1,0 +1,123 @@
+# Eclipse's Settings, the Controllers page, against its board, EclipseSettingsControllers.dc.html (design project, 1920 by 1200, written by gen_settings.py:180-195), one row an element (EmuSen_Qt.md §3.4.11).
+# board_height: 1200
+# Read from the board in Chrome after document.fonts.ready, with the program's own Sora files (measured 2026-11-23); the rules are settings_display.tsv's (tests/eclipse_board/mod.rs).
+# The state held is the board's: Controllers shown, Controller type focused; the program's order puts it ninth of fifteen, so the window holds rows 0 to 8 (R-20261116-21).
+# A row's line is gen_settings.py's; G:27 is the row's markup, G:91 the limb, G:114 the foot; the frame's rows are settings_display.tsv's.
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	88	the ground, #07080F	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
+backdropField.0	195	the page's glow: a 900 px disc of the section's colour, blurred 150 px at 0.4, its left 620 px short of the board's right edge	the kit's BackdropField, its colour SettingsInk.pageGlows by Settings.page	-	right:-280	60	900	900	-	opacity:0.4	blur:150	built	field 0 -1 #2A6FD6 0
+backdropField.1	91	the limb's glow: 0 0 40px 6px rgba(246, 214, 200, 0.35), the ellipse grown by 6 and blurred by half of 40	the kit's BackdropField, SettingsInk.limbGlow	-	-1566	-706	2012	2612	-	opacity:0.35	blur:20	built	field 0 -1 #F6D6C8 0
+limbRim	91	the limb's 2 px rim, rgba(246, 231, 216, 0.75): the ellipse grown by 2	Eclipse's Limb, SettingsInk.limbRim	Limb	-1562	-702	2004	2604	-	#BFF6E7D8	-	built	-
+limb	91	the limb, a 2000 by 2600 ellipse of #0B0D16	Eclipse's Limb, SettingsInk.limb	Limb	-1560	-700	2000	2600	-	#FF0B0D16	-	built	-
+mark	95	the crescent mark, 34	Marks.crescent, Eclipse's Brand part unnamed	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+settingsTitle	96	"Settings", 20 px after the mark	Library.places' name for the settings place (qt-models/src/words.rs HOME_PLACES)	Text	after:mark:20	mid:80	-	-	-	Tokens.text	34	built	600 0 none
+battery	98	"82%"	Device.battery as Words.percent gives it, Eclipse's Status part	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	98	"9:41 PM"	Device.shortTime, Eclipse's Status part	Text	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
+section.0	103	section link 0, 300 by 66 at a corner of 16, filled: the section shown	Settings.sections, SettingsNav	Rectangle	72	170	300	66	16	Tokens.accent	-	built	-
+sectionWords.0	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.0:64	mid:section.0	-	-	-	Tokens.overAccent	23	built	600 0 none
+sectionIcon.0	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.0:20	mid:section.0	28	28	-	Tokens.overAccent	-	built	-
+section.1	103	section link 1, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.0:6	300	66	16	#00000000	-	built	-
+sectionWords.1	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.1:64	mid:section.1	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.1	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.1:20	mid:section.1	28	28	-	#FFD8DBE6	-	built	-
+section.2	103	section link 2, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.1:6	300	66	16	#00000000	-	built	-
+sectionWords.2	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.2:64	mid:section.2	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.2	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.2:20	mid:section.2	28	28	-	#FFD8DBE6	-	built	-
+section.3	103	section link 3, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.2:6	300	66	16	#00000000	-	built	-
+sectionWords.3	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.3:64	mid:section.3	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.3	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.3:20	mid:section.3	28	28	-	#FFD8DBE6	-	built	-
+section.4	103	section link 4, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.3:6	300	66	16	#00000000	-	built	-
+sectionWords.4	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.4:64	mid:section.4	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.4	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.4:20	mid:section.4	28	28	-	#FFD8DBE6	-	built	-
+section.5	103	section link 5, 300 by 66 at a corner of 16	Settings.sections, SettingsNav	Rectangle	72	below:section.4:6	300	66	16	#00000000	-	built	-
+sectionWords.5	105	its words, 20 + 28 + 16 px in	the section's name, Settings.sections	Text	in:section.5:64	mid:section.5	-	-	-	#FFD8DBE6	23	built	400 0 none
+sectionIcon.5	104	its icon, 28 px, stroked 1.7 in the words' colour, 20 px in (G:7-14)	SettingsInk.sectionIcons by Settings.sectionKeys (1.11)	Item	in:section.5:20	mid:section.5	28	28	-	#FFD8DBE6	-	built	-
+settingsHeading	68	"Controllers", the page's heading; its line box and baseline in the lines table	Settings.heading	Text	500	-	-	-	-	Tokens.text	44	built	600 0 none
+settingsRows	67	the rows, 22 px under the heading (its 12 px margin and the 10 px gap), at 228	MeasuredWalk's window, to the ninth row's foot	FocusScope	500	228	820	-	-	-	-	built	-
+row.0	27	row 0, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	top:settingsRows:0	820	84	20	-	-	built	-
+rowFill.0	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.0:0	top:row.0:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.0	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.0:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.0	30	the program's hint, cut at the value where it is too long (R-20261123-31); its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.0:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.0	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.0	inright:row.0:24	-	-	-	-	built	-
+rowWords.0	36	the value, muted, as the board colours a door's; its line box and baseline in the page's lines table	the row's value	Text	in:rowValue.0:0	-	-	-	-	Tokens.muted	22	built	400 0 none
+rowDoor.0	44	›, 22 px, muted, 14 px after the value	Chevron	Chevron	after:rowWords.0:14	mid:row.0	inright:rowValue.0:0	22	-	Tokens.muted	-	built	-
+row.1	27	row 1, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.0:10	820	84	20	-	-	built	-
+rowFill.1	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.1:0	top:row.1:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.1	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.1:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.1	30	the program's hint, cut at the value where it is too long (R-20261123-31); its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.1:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.1	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.1	inright:row.1:24	-	-	-	-	built	-
+rowDoor.1	44	›, 22 px, muted, 14 px after the empty value	Chevron	Chevron	-	mid:row.1	inright:rowValue.1:0	22	-	Tokens.muted	-	built	-
+row.2	27	row 2, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.1:10	820	84	20	-	-	built	-
+rowFill.2	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.2:0	top:row.2:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.2	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.2:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.2	30	the program's hint, cut at the value where it is too long (R-20261123-31); its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.2:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.2	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.2	inright:row.2:24	-	-	-	-	built	-
+rowDoor.2	44	›, 22 px, muted, 14 px after the empty value	Chevron	Chevron	-	mid:row.2	inright:rowValue.2:0	22	-	Tokens.muted	-	built	-
+row.3	27	row 3, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.2:10	820	84	20	-	-	built	-
+rowFill.3	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.3:0	top:row.3:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.3	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.3:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.3	30	its short line; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.3:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.3	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.3	inright:row.3:24	-	-	-	-	built	-
+rowWords.3	36	"On"; its line box and baseline in the page's lines table	the row's value	Text	in:rowValue.3:0	-	-	-	-	Tokens.text	22	built	400 0 none
+rowSwitch.3	41	the switch, 68 by 38 inside its 2 px line, on	Settings.rows' switchOn	Rectangle	after:rowWords.3:14	mid:row.3	68	38	19	Tokens.accent	-	built	line 2 #FFF6E7D8
+rowKnob.3	41	its knob, 26, at the right end 4 px in	switchOn	Rectangle	in:rowSwitch.3:36	mid:row.3	26	26	13	Tokens.overAccent	-	built	-
+row.4	27	row 4, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.3:10	820	84	20	-	-	built	-
+rowFill.4	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.4:0	top:row.4:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.4	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.4:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.4	30	its short line, cut at the value as the board cuts it; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.4:24	-	before:rowValue.4:24	-	-	Tokens.muted	17	built	400 0 none
+rowValue.4	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.4	inright:row.4:24	-	-	-	-	built	-
+rowWords.4	36	"Off"; its line box and baseline in the page's lines table	the row's value	Text	in:rowValue.4:0	-	-	-	-	Tokens.text	22	built	400 0 none
+rowSwitch.4	41	the switch, 68 by 38 inside its 2 px line #5A6076, off	Settings.rows' switchOn	Rectangle	after:rowWords.4:14	mid:row.4	68	38	19	#00000000	-	built	line 2 #FF5A6076
+rowKnob.4	41	its knob, 26, at the left end 4 px in, muted	switchOn	Rectangle	in:rowSwitch.4:6	mid:row.4	26	26	13	Tokens.muted	-	built	-
+row.5	27	row 5, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.4:10	820	84	20	-	-	built	-
+rowFill.5	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.5:0	top:row.5:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.5	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.5:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.5	30	its short line; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.5:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.5	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.5	inright:row.5:24	-	-	-	-	built	-
+rowLess.5	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.5:0	mid:row.5	22	22	-	Tokens.accent	-	built	-
+rowWords.5	36	the value, 14 px after it; its line box and baseline in the page's lines table	the row's value	Text	after:rowLess.5:14	-	-	-	-	Tokens.text	22	built	400 0 none
+rowMore.5	38	▶, 14 px after the value	Chevron	Chevron	after:rowWords.5:14	mid:row.5	22	22	-	Tokens.accent	-	built	-
+row.6	27	row 6, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.5:10	820	84	20	-	-	built	-
+rowFill.6	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.6:0	top:row.6:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.6	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.6:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.6	30	the program's hint, cut at the value where it is too long (R-20261123-31); its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.6:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.6	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.6	inright:row.6:24	-	-	-	-	built	-
+rowDoor.6	44	›, 22 px, muted, 14 px after the empty value	Chevron	Chevron	-	mid:row.6	inright:rowValue.6:0	22	-	Tokens.muted	-	built	-
+row.7	27	row 7, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.6:10	820	84	20	-	-	built	-
+rowFill.7	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.7:0	top:row.7:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.7	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.7:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.7	30	the program's hint, cut at the value where it is too long (R-20261123-31); its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.7:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.7	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.7	inright:row.7:24	-	-	-	-	built	-
+rowDoor.7	44	›, 22 px, muted, 14 px after the empty value	Chevron	Chevron	-	mid:row.7	inright:rowValue.7:0	22	-	Tokens.muted	-	built	-
+row.8	27	row 8, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.7:10	820	84	20	-	-	built	-
+rowFill.8	27	its fill and no line, focused	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.8:0	top:row.8:0	820	84	20	Tokens.surfaceRaised	-	built	line 0 -
+rowName.8	29	its name; its line box and baseline in the page's lines table	the row's label	Text	in:row.8:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.8	30	its short line; its line box and baseline in the page's lines table	the row's about (qt-models/data/settings_screen.json, else its hint)	Text	in:row.8:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowValue.8	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.8	inright:row.8:24	-	-	-	-	built	-
+rowLess.8	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.8:0	mid:row.8	22	22	-	Tokens.accent	-	built	-
+rowWords.8	36	the value, 14 px after it; its line box and baseline in the page's lines table	the row's value	Text	after:rowLess.8:14	-	-	-	-	Tokens.text	22	built	400 0 none
+rowMore.8	38	▶, 14 px after the value	Chevron	Chevron	after:rowWords.8:14	mid:row.8	22	22	-	Tokens.accent	-	built	-
+rowRing	63	the focused row's ring: 3 px of #07080F, 3 px of the accent, 40 px of glow 8 px out at rgba(240, 180, 196, 0.4)	the kit's FocusRing	FocusRing	-	-	-	-	-	-	-	built	ring 3 3 40 8 26 #66F0B4C4 #FF07080F #FFF6E7D8
+settingsAside	139	the About panel, 424 wide, 96 px from the right	SettingsAside	SettingsAside	-	236	right:96	-	-	-	-	built	-
+asideFaces	183	the picture's panel, 424 by 132, corner 22, #11131C, its 1 px inset line #262A3A	SettingsFaces, Settings.preview 6	SettingsFaces	in:settingsAside:0	top:settingsAside:0	424	132	22	#FF11131C	-	built	line 1 #FF262A3A
+asideFace.0	183	A, filled, 64 px, 34 in, the four centred 18 apart	Eclipse's Glyph, PadGlyph.Accept in the pad's family	Glyph	in:asideFaces:57	top:asideFaces:34	64	64	-	-	-	built	glyph 26 700
+asideFace.1	183	B in a 2 px ring, 64 px with it	Eclipse's Glyph, PadGlyph.Back	Glyph	after:asideFace.0:18	top:asideFaces:34	64	64	-	-	-	built	-
+asideFace.2	183	X in a 2 px ring	Eclipse's Glyph, PadGlyph.Screensaver	Glyph	after:asideFace.1:18	top:asideFaces:34	64	64	-	-	-	built	-
+asideFace.3	183	Y in a 2 px ring	Eclipse's Glyph, PadGlyph.Search	Glyph	after:asideFace.2:18	top:asideFaces:34	64	64	-	-	-	built	-
+asideHeading	194	the focused row's name, "Controller type", 22 under the picture	Settings.aboutHeading	Text	in:settingsAside:0	below:asideFaces:22	-	-	-	Tokens.text	26	built	600 0 none
+asideSentence	194	the paragraph, three lines at 30	Settings.sentence, the row's hint	Text	in:settingsAside:0	below:asideHeading:22	-	90	-	#FFC9CDDB	20	built	300 0 none
+asideMuted.0	194	"Automatic · Xbox · PlayStation · Nintendo · Generic", two lines at 27	Settings.muted, {choices} of the row	Text	in:settingsAside:0	below:asideSentence:22	424	54	-	Tokens.muted	18	built	400 0 none
+help	114	the help line's entries, 34 px apart, its middle 40 + 19 px over the foot	Help.entries(Settings.help, {settings: true, defaultable}) (1.11), Eclipse's HelpLine	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Change	24	"◀ ▶" in a 2 px box, 30 px inside, corner 8, padding 10, the words 15 px (G:19)	Eclipse's Glyph through the kit's HelpBar, drawing the pair as one key (drawsPair)	-	in:help:0	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Change	24	"Change", 10 px after its key	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph-Change:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Choose or open	24	A, filled, 34 px (G:15)	Eclipse's Glyph through the kit's HelpBar, A filled on this line	-	after:helpWords-Change:34	mid:help	34	34	-	-	-	built	glyph 17 700
+helpWords-Choose or open	24	"Choose or open"	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph-Choose or open:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Back to the default	24	X in a 2 px ring, 34 px inside (G:17)	Eclipse's Glyph through the kit's HelpBar	-	after:helpWords-Choose or open:34	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back to the default	24	"Back to the default"	the entry's label, help.rs settings_named, Eclipse's HelpLine (R-20261116-22)	Text	after:ownGlyph-Back to the default:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Back	24	B in a 2 px ring, 34 px inside (G:17)	Eclipse's Glyph through the kit's HelpBar	-	after:helpWords-Back to the default:34	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back	24	"Back"	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph-Back:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Section	24	not on the board: LB in the board's box for a named button, after its four (R-20261123-20)	Eclipse's Glyph through the kit's HelpBar	-	after:helpWords-Back:34	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Section	24	not on the board: RB, the pair's second, in the same box	Eclipse's Glyph through the kit's HelpBar	-	after:ownGlyph-Section:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Section	24	not on the board: "Section" (R-20261123-20)	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph2-Section:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Home	24	not on the board: Start named in a 2 px capsule, 34 inside, the kit's name in the pad's family (R-20261123-20)	Eclipse's Glyph through the kit's HelpBar	-	after:helpWords-Section:34	mid:help	-	38	-	-	-	built	word 15 400
+helpWords-Home	24	not on the board: "Home" (R-20261123-20)	the entry's label, help.rs settings_named, Eclipse's HelpLine	Text	after:ownGlyph-Home:10	mid:help	-	-	-	#FFD8DBE6	21	built	400 0 none
+settingsPlace	118	"4 of 10" on the board: the focused row among the page's	Words.place(Settings.focused, Settings.count) (R-20261116-21)	Text	-	mid:help	right:96	-	-	Tokens.muted	21	built	400 0 none

@@ -25,6 +25,7 @@ Item {
     property real letterSize: 16
     property real leadLetterSize: 17
     property int leadWeight: Font.Bold
+    property int letterWeight: Font.Normal
     property real wordSize: 15
     property real padding: 12
     // The shoulders' and triggers' box: its height inside the line, its corner and its padding (EclipseConsoles:103).
@@ -73,7 +74,7 @@ Item {
         font.family: Tokens.faceText
         // The board's size in board pixels; the shape below is scaled by the board's measure, as a font's whole pixel size cannot hold it in canvas units.
         font.pixelSize: root.named ? root.wordSize : (root.filled ? root.leadLetterSize : root.letterSize)
-        font.weight: root.filled ? root.leadWeight : Font.Normal
+        font.weight: root.filled ? root.leadWeight : root.letterWeight
         text: root.named ? root.word : root.letter
     }
     // The letter or the name drawn as the kit draws a glyph's letter, a path of the face's outline centred on the glyph.

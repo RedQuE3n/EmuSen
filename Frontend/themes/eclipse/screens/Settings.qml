@@ -119,12 +119,28 @@ ThemeScreen {
                         x: 72 * design.unit
                         y: 170 * design.unit
                     }
+                    // A page's trail over its heading, every level above the page (G:66, R-20261123-39).
+                    Line {
+                        id: crumb
+                        objectName: "settingsCrumb"
+                        unit: design.unit
+                        boardLine: true
+                        visible: text.length > 0
+                        x: 500 * design.unit
+                        y: 150 * design.unit
+                        text: Settings.trailLine
+                        color: Tokens.muted
+                        size: 20
+                    }
                     Line {
                         id: heading
                         objectName: "settingsHeading"
                         unit: design.unit
                         x: 500 * design.unit
-                        y: 150 * design.unit
+                        // Under the trail by its 6 px margin and the column's 10 px gap (G:66-68).
+                        y: crumb.visible ? crumb.y + crumb.height + (6 + 10) * design.unit : 150 * design.unit
+                        // Its box the board's line box, its words on the board's baseline, as the rows' are (G:68).
+                        boardLine: true
                         text: Settings.heading
                         color: Tokens.text
                         size: 44
@@ -156,8 +172,9 @@ ThemeScreen {
                             onSlid: (row, amount) => Actions.settingsSlide(row, amount)
                             onChosen: (row) => Actions.settingsChoose(row)
                             onSectionChosen: (section) => Actions.settingsSection(section)
+                            // Only a walk that has read the program's rows tells its focus: a page's rows arrive before the walk reads them.
                             onWalked: {
-                                if (walk.current >= 0 && walk.current !== Settings.focused)
+                                if (walk.count === Settings.count && walk.current >= 0 && walk.current !== Settings.focused)
                                     Actions.settingsFocus(walk.current)
                             }
                         }

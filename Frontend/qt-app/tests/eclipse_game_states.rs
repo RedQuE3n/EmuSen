@@ -188,7 +188,7 @@ fn qt_3_4_12_the_states_no_board_draws_are_as_the_tester_ruled() {
         // runs the game (qt-models/src/session_model.rs start_from); no core runs the synthetic image here, so it is not held.
     }
 
-    // (6) Every tab Eclipse does not name opens the program's page; States is Eclipse's again (EmuSen_Qt.md §3.2, 1.12).
+    // (6) Every tab Eclipse does not name opens the program's page; States is Eclipse's again (EmuSen_Qt.md §3.2, 1.13).
     let mut scene = program(&mut harness);
     open_page(&mut scene, &world);
     states_tab(&mut scene);

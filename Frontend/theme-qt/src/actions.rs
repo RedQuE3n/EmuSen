@@ -134,7 +134,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pageBack"]
         fn page_back(self: Pin<&mut ThemeActions>) -> bool;
-        /// One of `Page.tabs` chosen by its place (1.12).
+        /// One of `Page.tabs` chosen by its place (1.13).
         #[qinvokable]
         #[cxx_name = "pageTab"]
         fn page_tab(self: Pin<&mut ThemeActions>, tab: i32) -> bool;

@@ -52,7 +52,7 @@ pub mod qobject {
         PageNone,
         PageEdit,
         PageCoverArt,
-        /// 1.12: Eclipse's page in its boards' words, a state's card, Start with no state, and the shoulders' Section.
+        /// 1.13: Eclipse's page in its boards' words, a state's card, Start with no state, and the shoulders' Section.
         PageState,
         PageStart,
         PageSections,

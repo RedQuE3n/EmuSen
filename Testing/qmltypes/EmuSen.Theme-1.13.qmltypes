@@ -1488,7 +1488,7 @@ Module {
             name: "SettingsForm"
             isScoped: true
             type: "int"
-            lineNumber: 54
+            lineNumber: 55
             values: ["Choice", "Switch", "Door", "Fact"]
         }
         Property {
@@ -1655,12 +1655,21 @@ Module {
             isReadonly: true
         }
         Property {
+            name: "trailLine"
+            type: "QString"
+            read: "getTrailLine"
+            notify: "shown"
+            index: 18
+            lineNumber: 49
+            isReadonly: true
+        }
+        Property {
             name: "title"
             type: "QString"
             read: "getTitle"
             notify: "shown"
-            index: 18
-            lineNumber: 49
+            index: 19
+            lineNumber: 50
             isReadonly: true
         }
         Property {
@@ -1668,8 +1677,8 @@ Module {
             type: "QString"
             read: "getHeading"
             notify: "shown"
-            index: 19
-            lineNumber: 50
+            index: 20
+            lineNumber: 51
             isReadonly: true
         }
         Property {
@@ -1677,8 +1686,8 @@ Module {
             type: "QString"
             read: "getAboutHeading"
             notify: "shown"
-            index: 20
-            lineNumber: 51
+            index: 21
+            lineNumber: 52
             isReadonly: true
         }
         Property {
@@ -1686,8 +1695,8 @@ Module {
             type: "QString"
             read: "getShot"
             notify: "shown"
-            index: 21
-            lineNumber: 52
+            index: 22
+            lineNumber: 53
             isReadonly: true
         }
         Property {
@@ -1695,11 +1704,11 @@ Module {
             type: "bool"
             read: "getDefaultable"
             notify: "shown"
-            index: 22
-            lineNumber: 53
+            index: 23
+            lineNumber: 54
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 88 }
+        Signal { name: "shown"; lineNumber: 90 }
     }
     Component {
         file: "splash.cxxqt.h"

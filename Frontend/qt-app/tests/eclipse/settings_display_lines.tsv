@@ -1,4 +1,4 @@
-# The words of Display's rows against their board, EclipseSettings.dc.html (gen_settings.py:152-163): each line's box (its top under its row's and its height) and its baseline under its row's top, in board pixels.
+# The words of Display's rows against their board, EclipseSettings.dc.html (gen_settings.py:152-163): each line's box (its top under its row's, or under the element a fifth column names, and its height) and its baseline, in board pixels.
 # Measured 2026-11-23 in Chrome after document.fonts.ready with the program's own Sora files (measure_board.py, a zero-size inline-block at each text's start giving its baseline); the rows' boxes are settings_display.tsv's.
 element	line top	line height	baseline
 rowName.0	14.5	30	37.5
@@ -26,3 +26,4 @@ rowWords.7	28.5	27	49.5
 rowName.8	14.5	30	37.5
 rowAbout.8	48.5	21	64.5
 rowWords.8	28.5	27	49.5
+settingsHeading	150	56	193	settingsCanvas

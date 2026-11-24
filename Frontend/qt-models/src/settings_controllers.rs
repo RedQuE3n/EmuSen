@@ -497,6 +497,8 @@ impl SettingsView {
             Some("profiles") if self.pad_console().is_some() => return Some(self.open(Page::Profiles, label, index)),
             Some("hotkeys") => return Some(self.open(Page::Hotkeys, label, index)),
             Some("reset") => return Some(Outcome::Bindings(self.read.bindings.reset_all())),
+            // Rumble is a Galaxia switch shown only where a console shakes: A turns it as A turns every switch.
+            Some("rumble") => {}
             Some(_) => return Some(Outcome::Nothing),
             None => {}
         }

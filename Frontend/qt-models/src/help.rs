@@ -101,6 +101,14 @@ pub enum Screen {
     GamePageOpen,
     GamePageDetail,
     GamePageOption,
+    /// Eclipse's boards for Media, Cheats (on/off) and Package (check/make/stop/info) (R-20261116-30).
+    GamePageMedia,
+    GamePageCheatOn,
+    GamePageCheatOff,
+    GamePagePackageCheck,
+    GamePagePackageMake,
+    GamePagePackageStop,
+    GamePagePackageInfo,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -310,6 +318,13 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             BACK,
             PAGE_HOME,
         ],
+        Screen::GamePageMedia => &[(UiButton::Accept, "View", None), (UiButton::Screensaver, "Set as cover", Some(SET_COVER)), BACK, PAGE_HOME],
+        Screen::GamePageCheatOn => &[(UiButton::Accept, "Turn off", None), (UiButton::Screensaver, "All cheats", Some(ALL_CHEATS)), BACK, PAGE_HOME],
+        Screen::GamePageCheatOff => &[(UiButton::Accept, "Turn on", None), (UiButton::Screensaver, "All cheats", Some(ALL_CHEATS)), BACK, PAGE_HOME],
+        Screen::GamePagePackageCheck => &[(UiButton::Accept, "Check", None), (UiButton::Back, "Options", None), PAGE_HOME],
+        Screen::GamePagePackageMake => &[(UiButton::Accept, "Make", None), (UiButton::Back, "Options", None), PAGE_HOME],
+        Screen::GamePagePackageStop => &[(UiButton::Accept, "Stop", None), (UiButton::Back, "Options", None), PAGE_HOME],
+        Screen::GamePagePackageInfo => &[(UiButton::Back, "Options", None), PAGE_HOME],
     }
 }
 
@@ -496,6 +511,8 @@ pub const FAVOURITE: &str = "favourite";
 pub const DELETE: &str = "delete";
 /// X in a game's page's media viewer (EmuSen_Interface.md §18.2): the picture shown made the game's cover.
 pub const SET_COVER: &str = "setCover";
+/// X on Eclipse's Cheats tab: opens the Cheats tool (EclipseGameCheats:86).
+pub const ALL_CHEATS: &str = crate::home_card::CHEATS;
 pub const RANDOM: &str = "random";
 /// Y on Eclipse's Choose a console: the next order of the consoles, which the theme keeps.
 pub const SORT: &str = "sort";

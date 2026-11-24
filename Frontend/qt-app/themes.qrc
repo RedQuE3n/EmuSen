@@ -39,6 +39,7 @@
         <file alias="parts/Chevron.qml">../themes/eclipse/parts/Chevron.qml</file>
         <file alias="parts/EmptyCard.qml">../themes/eclipse/parts/EmptyCard.qml</file>
         <file alias="parts/GameInk.qml">../themes/eclipse/parts/GameInk.qml</file>
+        <file alias="parts/MediaCard.qml">../themes/eclipse/parts/MediaCard.qml</file>
         <file alias="parts/PageRow.qml">../themes/eclipse/parts/PageRow.qml</file>
         <file alias="parts/Horizon.qml">../themes/eclipse/parts/Horizon.qml</file>
         <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>

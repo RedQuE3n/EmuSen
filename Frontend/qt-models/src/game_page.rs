@@ -769,7 +769,7 @@ impl GamePage {
         self.read.media.iter().map(|m| label(m.kind)).collect()
     }
 
-    fn media_tiles(&self) -> Vec<Tile> {
+    pub fn media_tiles(&self) -> Vec<Tile> {
         let r = &self.read;
         // A clip's tile shows the hero, a manual's the cover.
         let picture = |m: &Media| match m.kind {
@@ -1216,6 +1216,29 @@ pub const NO_STATES: &str = "No states yet. A state is saved from the Pause Card
 pub const RESUMES_HERE: &str = "Resumes here";
 /// The empty card's key: no state's file, and no content row behind it.
 pub const EMPTY_CARD: &str = "empty";
+/// The words shown on Eclipse's Media tab when the game has no media.
+pub const NO_MEDIA: &str = "No media yet. Details ▸ Scrape This Game fetches pictures, videos and manuals.";
+/// Cheats tab's aside sentence (EclipseGameCheats:79).
+pub const CHEATS_SENTENCE: &str = "The game's cheats, on or off; the same switches the Pause Card shows.";
+/// Package inner page's heading and subtitle (EclipseGamePackage:38-39).
+pub const PACKAGE_TITLE: &str = "Package";
+pub const PACKAGE_SUBTITLE: &str = "The game's package and its layers, from Packages.";
+
+/// A deeper page of the game page that a theme may draw (`ThemeScreen.pageSubpages`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Subpage {
+    None,
+    Package,
+}
+
+impl Subpage {
+    pub fn flag(self) -> i32 {
+        match self {
+            Subpage::None => 0,
+            Subpage::Package => 1 << 1,
+        }
+    }
+}
 
 /// The page's tabs as Eclipse's board draws them (EclipseGame:55-62, R-20261116-29).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1345,6 +1368,26 @@ impl GamePage {
         drawn == 0 || (!asking && self.tab_drawn().is_some_and(|t| drawn & t.flag() != 0))
     }
 
+    /// The deeper page open if one is, else `Subpage::None`.
+    pub fn subpage(&self) -> Subpage {
+        if self.packaging { Subpage::Package } else { Subpage::None }
+    }
+
+    /// Whether a theme whose `pageSections` is `drawn` and `pageSubpages` is `subpages` draws the page as it stands.
+    pub fn drawn_by_subpages(&self, drawn: i32, subpages: i32, asking: bool) -> bool {
+        if drawn == 0 {
+            return true;
+        }
+        if asking {
+            return false;
+        }
+        if let Some(tab) = self.tab_drawn() {
+            return drawn & tab.flag() != 0;
+        }
+        let sub = self.subpage();
+        sub != Subpage::None && (subpages & sub.flag() != 0)
+    }
+
     /// The board's line over the title (EclipseGame:43): console · year · genre, each the game has.
     pub fn kicker(&self) -> String {
         let r = &self.read;
@@ -1416,9 +1459,17 @@ impl GamePage {
         self.state_tiles().iter().position(|t| t.key == point.path)
     }
 
-    /// The board's trail (EclipseGame:29-35): the Consoles section, the game's console and its title, a part it lacks left out.
+    /// The board's trail (EclipseGame:29-35): the Consoles section, the game's console, its title, and the deeper page's name.
     pub fn trail(&self) -> Vec<String> {
-        [crate::words::CONSOLES_SECTION, self.read.console.as_str(), self.read.title.as_str()].into_iter().filter(|w| !w.is_empty()).map(str::to_owned).collect()
+        let mut out: Vec<String> = [crate::words::CONSOLES_SECTION, self.read.console.as_str(), self.read.title.as_str()]
+            .into_iter()
+            .filter(|w| !w.is_empty())
+            .map(str::to_owned)
+            .collect();
+        if self.packaging {
+            out.push(PACKAGE_TITLE.to_owned());
+        }
+        out
     }
 
     /// The state cards in the board's order and words (EclipseGame:64-83, R-20261116-36): the resume point, each slot saved in
@@ -1454,8 +1505,43 @@ impl GamePage {
         !self.read.description.is_empty()
     }
 
-    /// Eclipse's Details or Options rows with board wording, aside hints, and real content indices (R-20261111-20, -16-14, -16-29).
+    /// The words shown on Eclipse's Media tab when the game has no media.
+    pub fn media_note(&self) -> &'static str {
+        if self.read.media.is_empty() { NO_MEDIA } else { "" }
+    }
+
+    /// The media type of the Media tile at `index` where it can be the game's cover and is not already.
+    pub fn media_cover(&self, index: usize) -> Option<String> {
+        let media = self.read.media.get(index).filter(|m| !matches!(m.kind, MediaKind::Taken | MediaKind::Clip | MediaKind::Manual))?;
+        let kind = kind_word(media.kind);
+        let own = CoverChoice::Own(kind.to_owned());
+        let offered = self.read.covers.iter().any(|c| c.choice == own);
+        (offered && self.read.cover_in_use != own).then(|| kind.to_owned())
+    }
+
+    /// Eclipse's Details, Options, Cheats or Package rows with board wording, aside hints, and content indices.
     pub fn board_rows(&self) -> Vec<BoardRow> {
+        if self.packaging {
+            return self
+                .package_rows()
+                .into_iter()
+                .enumerate()
+                .map(|(row, r)| {
+                    let value = if r.key == JOB && r.value == "…" { String::new() } else { r.value };
+                    BoardRow {
+                        key: r.key.to_owned(),
+                        label: r.label,
+                        value,
+                        steps: false,
+                        opens: false,
+                        is_switch: false,
+                        switch_on: false,
+                        sentence: "",
+                        row,
+                    }
+                })
+                .collect();
+        }
         let Some(tab) = self.tab_drawn() else { return Vec::new() };
         let Content::Rows(rows) = self.content() else { return Vec::new() };
         match tab {
@@ -1495,17 +1581,51 @@ impl GamePage {
                     BoardRow { key: r.key.to_owned(), label, value, steps: r.steps, opens: r.opens, is_switch: false, switch_on: false, sentence, row }
                 })
                 .collect(),
+            Tab::Cheats => rows
+                .into_iter()
+                .enumerate()
+                .map(|(row, r)| {
+                    let on = self.read.cheats.get(row).is_some_and(|c| c.on);
+                    BoardRow {
+                        key: format!("{CHEAT}.{row}"),
+                        label: r.label,
+                        value: r.value,
+                        steps: false,
+                        opens: false,
+                        is_switch: true,
+                        switch_on: on,
+                        sentence: CHEATS_SENTENCE,
+                        row,
+                    }
+                })
+                .collect(),
             _ => Vec::new(),
         }
     }
 
-    /// The focused board row's aside sentence and position ("2 of 5"); empty while a pill or trail link holds focus.
+    /// The focused board item's aside sentence and position ("2 of 5", "2 of 12 · 3 of 12 on"); empty on pills.
     pub fn board_aside(&self, action: Option<usize>, content: usize) -> (String, String) {
         if action.is_some() {
             return (String::new(), String::new());
         }
+        if self.packaging {
+            let rows = self.board_rows();
+            let Some(at) = rows.iter().position(|r| r.row == content) else { return (String::new(), String::new()) };
+            return (String::new(), place(at, rows.len()));
+        }
+        if self.tab_drawn() == Some(Tab::Media) {
+            return if content < self.read.media.len() {
+                (String::new(), place(content, self.read.media.len()))
+            } else {
+                (String::new(), String::new())
+            };
+        }
         let rows = self.board_rows();
         let Some(at) = rows.iter().position(|r| r.row == content) else { return (String::new(), String::new()) };
+        if self.tab_drawn() == Some(Tab::Cheats) {
+            let count = format!("{} {BETWEEN} {}", place(at, rows.len()), crate::cheats::count_words(&self.read.cheats));
+            return (rows[at].sentence.to_owned(), count);
+        }
         (rows[at].sentence.to_owned(), place(at, rows.len()))
     }
 
@@ -1531,6 +1651,15 @@ impl GamePage {
 
     /// The help as Eclipse's boards word it for the focus (R-20261116-30); none where the program's own is shown.
     pub fn board_help(&self, action: Option<usize>, content: usize) -> Option<Screen> {
+        if self.packaging {
+            let rows = self.package_rows();
+            return match rows.get(content).map(|r| r.key) {
+                Some(JOB) if self.job_running() => Some(Screen::GamePagePackageStop),
+                Some(JOB) if self.read.package_job.as_ref().is_some_and(|j| j.key == MAKE) => Some(Screen::GamePagePackageMake),
+                Some(JOB) => Some(Screen::GamePagePackageCheck),
+                _ => Some(Screen::GamePagePackageInfo),
+            };
+        }
         let key = action.and_then(|i| self.actions().get(i).map(|a| a.key));
         match (action, key) {
             (Some(_), Some(PLAY)) if self.resume_point().is_none() => Some(Screen::GamePageStart),
@@ -1540,6 +1669,8 @@ impl GamePage {
                 Some(Tab::Overview) => Some(if self.resume_point().is_some() { Screen::GamePageResumeBoard } else { Screen::GamePageStart }),
                 Some(Tab::States) if self.read.states.is_empty() => Some(Screen::GamePageStart),
                 Some(Tab::States) if self.help(None, content) == Screen::GamePageLoad => Some(Screen::GamePageState),
+                Some(Tab::Media) if content < self.read.media.len() => Some(Screen::GamePageMedia),
+                Some(Tab::Media) => Some(if self.resume_point().is_some() { Screen::GamePageResumeBoard } else { Screen::GamePageStart }),
                 Some(Tab::Details) => match self.board_rows().iter().find(|r| r.row == content) {
                     Some(r) if r.opens => Some(Screen::GamePageOpen),
                     Some(_) => Some(Screen::GamePageDetail),
@@ -1549,6 +1680,11 @@ impl GamePage {
                     Some(r) if r.steps => Some(Screen::GamePageOption),
                     Some(r) if r.opens => Some(Screen::GamePageOpen),
                     _ => None,
+                },
+                Some(Tab::Cheats) => match self.read.cheats.get(content) {
+                    Some(c) if c.on => Some(Screen::GamePageCheatOn),
+                    Some(_) => Some(Screen::GamePageCheatOff),
+                    None => None,
                 },
                 _ => None,
             },

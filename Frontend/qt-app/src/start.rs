@@ -2,7 +2,7 @@
 //! start, as plain values handed to the window's root as its initial properties (EmuSen_Qt.md §1.2.1: no static carries them).
 
 use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
-use emusen_platform_client::galaxia::consts::{DIR_MEDIA, DIR_THEMES};
+use emusen_platform_client::galaxia::consts::{DIR_MEDIA, DIR_SCREENSHOTS, DIR_THEMES};
 use emusen_qt_models::play::Windowed;
 use emusen_qt_models::settings_source::ClientSettings;
 use emusen_qt_models::{esde_shelves, themes};
@@ -108,6 +108,11 @@ pub fn read(library: &Path) -> Start {
     let platform = Platform::load(library).ok();
     let settings = platform.as_ref().and_then(|p| emusen_qt_models::clients::app_settings(p).ok()).unwrap_or(Value::Null);
     let media = platform.as_ref().and_then(|p| p.directory(DIR_MEDIA).ok().flatten());
+    let screenshots = platform.as_ref().and_then(|p| p.directory(DIR_SCREENSHOTS).ok().flatten());
+    let mut cover_stores = cover_stores_from(media.as_deref(), &settings);
+    if let Some(dir) = screenshots {
+        cover_stores.push(dir.to_string_lossy().into_owned());
+    }
     let args: Vec<String> = std::env::args().collect();
     let store = platform.as_ref().and_then(|p| p.directory(DIR_THEMES).ok().flatten());
     let named = theme(&args, std::env::var("EMUSEN_THEME").ok());
@@ -116,7 +121,7 @@ pub fn read(library: &Path) -> Start {
     let game_mode = game_mode_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(), std::env::var("SteamDeck").ok().as_deref());
     Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings),
         game_mode, guide_chords: guide_chords_from(&settings, game_mode),
-        theme, theme_words, cover_stores: cover_stores_from(media.as_deref(), &settings),
+        theme, theme_words, cover_stores,
         esde: esde_shelves::settings_of(&settings).themed, navigation_sounds: navigation_sounds_from(&settings), full_screen: FULL_SCREEN,
         windowed,
     }

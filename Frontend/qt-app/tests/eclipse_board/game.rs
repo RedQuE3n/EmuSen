@@ -12,7 +12,7 @@ use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::input::UiButton;
 use emusen_platform_client::bindings::consts::PROFILES;
 use emusen_platform_client::galaxia::consts::{
-    DIR_PACKAGES, FILE_GAMES, MODEL_APP_SETTINGS, MODEL_CHEAT_FILE, SAVE_PACKAGE_RESUME_STATE, SAVE_PACKAGE_STATE, SAVE_RESUME_STATE, SAVE_STATE,
+    DIR_PACKAGES, DIR_SCREENSHOTS, FILE_GAMES, MODEL_APP_SETTINGS, MODEL_CHEAT_FILE, SAVE_PACKAGE_RESUME_STATE, SAVE_PACKAGE_STATE, SAVE_RESUME_STATE, SAVE_STATE,
 };
 use emusen_platform_client::packages::Roots;
 use emusen_platform_client::library::Library;
@@ -235,6 +235,58 @@ pub fn add_media(harness: &mut Harness, world: &emusen_client_fixture::World, fo
     media
 }
 
+/// Sets up Media board (#78) fixtures: two player screenshots, Title screen, Clip, Manual, plus a cover (returning `world.root` as cover store).
+pub fn add_board_media(harness: &mut Harness, world: &emusen_client_fixture::World) -> PathBuf {
+    let platform = Platform::load(library()).unwrap();
+    let media = add_media(harness, world, &["covers", "titlescreens"]);
+    let shots = platform.directory(DIR_SCREENSHOTS).unwrap().unwrap();
+    std::fs::create_dir_all(&shots).unwrap();
+    let rom_path = rom(world).to_string_lossy().into_owned();
+    let taken = [
+        (shots.join(emusen_qt_models::screenshots::name(&rom_path, "2026-11-09", "14.03.11.251")), (560, 315), 2, String::new()),
+        (shots.join(emusen_qt_models::screenshots::name(&rom_path, "2026-11-09", "14.02.11.251")), (560, 315), 3, String::new()),
+    ];
+    draw_covers(harness, &world.root, &taken, |_| {});
+    let clip = media.join("snes/videos").join(format!("{TITLE}.mkv"));
+    std::fs::create_dir_all(clip.parent().unwrap()).unwrap();
+    std::fs::write(&clip, b"video").unwrap();
+    let manual = media.join("snes/manuals").join(format!("{TITLE}.pdf"));
+    std::fs::create_dir_all(manual.parent().unwrap()).unwrap();
+    std::fs::write(&manual, b"%PDF-1.4\n%%EOF\n").unwrap();
+    world.root.clone()
+}
+
+/// Replaces the game's cheat file with the named (description, enabled) switches.
+pub fn add_cheats(world: &emusen_client_fixture::World, switches: &[(&str, bool)]) {
+    let platform = Platform::load(library()).unwrap();
+    let path = rom(world).to_string_lossy().into_owned();
+    let rt = Runtime::new(&Api::load(library()).unwrap(), &Config::default()).unwrap();
+    let console = rt.systems().unwrap().into_iter().find(|s| s.id == "snes").expect("the SNES").console;
+    drop(rt);
+    let list = platform.cheat_game_list(Some(&console), &path).unwrap().expect("a list for the game");
+    let cheats: Vec<_> = switches
+        .iter()
+        .map(|(d, on)| json!({ "Kind": "RamPoke", "Description": d, "Enabled": on, "Writes": [{ "Space": "WRAM", "Address": "7E0DBE", "Value": "09" }] }))
+        .collect();
+    platform.model_save(MODEL_CHEAT_FILE, Some(&list.1), &format!("{}.json", list.0), &json!({ "Cheats": cheats })).unwrap();
+}
+
+/// The twelve cheats of board #81 (3 on, 9 off): five drawn rows plus seven below the fold.
+pub const BOARD_CHEATS: [(&str, bool); 12] = [
+    ("Infinite lives", true),
+    ("Start with all keys", true),
+    ("Moon jump", false),
+    ("Every level open", true),
+    ("Slow motion", false),
+    ("Extra shield", false),
+    ("Fast charge", false),
+    ("Keep power-ups", false),
+    ("No knockback", false),
+    ("Double score", false),
+    ("Stage select", false),
+    ("Sound test", false),
+];
+
 /// Sets up Options board data: two SNES core sidecars with Venus override, two controller profiles, and a 2-layer package.
 pub fn add_options(world: &emusen_client_fixture::World) -> PathBuf {
     let platform = Platform::load(library()).unwrap();
@@ -426,8 +478,18 @@ pub fn hold_board(scene: &mut Scene<'_>, table: &str, words: &[(&str, String, bo
         // A built row with nothing of its name in the tree is a difference, and the rest are held.
         let (present, missing): (Vec<Row>, Vec<Row>) = rows(table).1.into_iter().partition(|r| r.status != "built" || tree.find_named(&r.name).is_some());
         differences.extend(missing.iter().map(|r| format!("{at}: {} is not drawn", r.name)));
-        // A card the row has carried past the window's right margin is not drawn (R-20261123-33).
-        held(&tree, &present, k, unit, canvas_width, &tokens, &at, &|name, x, w| name.starts_with("card.") && x + w > canvas_width - 96.0 * k, differences);
+        // A card or media tile the row has carried past the window's right margin is not drawn (R-20261123-33).
+        held(
+            &tree,
+            &present,
+            k,
+            unit,
+            canvas_width,
+            &tokens,
+            &at,
+            &|name, x, w| (name.starts_with("card.") || name.starts_with("media.")) && x + w > canvas_width - 96.0 * k,
+            differences,
+        );
         for (name, want, upper) in words {
             let have = read(&tree, name, "text");
             let drawn = if *upper { have.to_uppercase() } else { have.clone() };
@@ -444,9 +506,13 @@ pub fn hold_board(scene: &mut Scene<'_>, table: &str, words: &[(&str, String, bo
         if letters != help_glyphs {
             differences.push(format!("{at}: the help line's glyphs read {letters:?} where the board draws {help_glyphs:?}"));
         }
-        let shoulders = glyphs(&tree, &["ownGlyph-Section", "ownGlyph2-Section"]);
-        if shoulders != ["LB", "RB"] || words_under(&tree, "helpSections") != ["Section"] {
-            differences.push(format!("{at}: the shoulders read {shoulders:?} {:?} where the board draws LB RB Section", words_under(&tree, "helpSections")));
+        if rows(table).1.iter().any(|r| r.name == "helpSections") {
+            let shoulders = glyphs(&tree, &["ownGlyph-Section", "ownGlyph2-Section"]);
+            if shoulders != ["LB", "RB"] || words_under(&tree, "helpSections") != ["Section"] {
+                differences.push(format!("{at}: the shoulders read {shoulders:?} {:?} where the board draws LB RB Section", words_under(&tree, "helpSections")));
+            }
+        } else if tree.nodes.iter().any(|n| n.name == "helpSections" && n.visible) {
+            differences.push(format!("{at}: helpSections is visible where the board draws none"));
         }
         // Nothing the board draws whole is cut.
         for n in tree.nodes.iter().filter(|n| n.visible && n.text.is_some() && !n.name.is_empty()) {

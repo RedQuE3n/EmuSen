@@ -316,8 +316,9 @@ impl GameHost {
     }
 
     fn show(&self) -> Result<(), String> {
-        use emusen_theme_qt::page::{card_rows, pill_rows, PageFacts};
+        use emusen_theme_qt::page::{board_row_rows, card_rows, media_tile_rows, pill_rows, PageFacts};
         let kind = |s: emusen_qt_models::help::Screen| emusen_theme_qt::help::kind_of(s).map_or(-1, |k| k.repr);
+        let (row_sentence, row_place) = self.page.board_aside(self.focus.0, self.focus.1);
         let facts = PageFacts {
             ready: true,
             key: self.page.read.title.clone(),
@@ -334,6 +335,13 @@ impl GameHost {
             help: kind(self.page.help(self.focus.0, self.focus.1)),
             board_help: self.page.board_help(self.focus.0, self.focus.1).map_or(-1, kind),
             focused: (self.focus.0.map_or(-1, |a| a as i32), self.focus.1 as i32),
+            has_description: self.page.has_description(),
+            board_rows: board_row_rows(&self.page.board_rows()),
+            row_sentence,
+            row_place,
+            media_tiles: media_tile_rows(&self.page.media_tiles()),
+            media_note: self.page.media_note().to_owned(),
+            subpage: self.page.subpage() as i32,
             ..PageFacts::default()
         };
         host::page(object(self.screen)).ok_or("no Page")?.show(&facts);

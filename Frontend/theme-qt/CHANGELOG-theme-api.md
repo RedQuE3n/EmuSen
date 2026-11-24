@@ -3,6 +3,16 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.16, an addition: Eclipse's game page Media, Cheats and Package (2026-11-24)
+
+Decided 2026-11-24 by the tester (R-20261113-16, -26, R-20261116-27, -29, -30): Eclipse draws the game page's Media and Cheats tabs and its Package deeper page as their boards draw them.
+
+- **`ThemeScreen.pageSubpages`** and **`Page.PageSubpage`** (`None`, `Package`): deeper pages of the game page a theme's screen draws as flags, written `1 << Page.Package`.
+- **`Page.mediaTiles`** (`key`, `label`, `picture`, `row`), **`Page.mediaNote`** and **`Page.coverable`**: the game's media items, the empty-media fallback sentence, and whether X (`setCover`) sets the focused tile as cover.
+- **`Page.subpage`**, **`Page.subpageTitle`** and **`Page.subpageSubtitle`**: the deeper page open, its heading and its subtitle; `Page.boardRows` also serves Cheats and Package rows, and `Page.rowPlace` carries Media's, Cheats' and Package's counts.
+- **`Help.PageMedia`**, **`Help.PageCheatOn`**, **`Help.PageCheatOff`**, **`Help.PagePackageCheck`**, **`Help.PagePackageMake`**, **`Help.PagePackageStop`** and **`Help.PagePackageInfo`**: the boards' help lines for Media, Cheats and Package.
+- The module is 1.16 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.16.*`.
+
 ## 1.15, an addition: Eclipse's game page Overview, Details and Options (2026-11-23)
 
 Decided 2026-11-23 by the tester (R-20261111-20, R-20261116-14, -27, -29, -30, -32): Eclipse draws the game page's

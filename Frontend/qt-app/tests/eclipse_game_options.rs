@@ -115,16 +115,20 @@ fn qt_3_4_12_eclipse_s_game_options_is_its_board_and_every_row_steps_resets_and_
     scene.pad(UiButton::Screensaver);
     until(&mut scene, "Television standard reset", 2000, |s| eclipse_board::read(&s.tree(), "pageRowWords.3", "text") == "The game's own");
 
-    // Package is row 4 (underlying row 5 with Cheats omitted), door row with A Open; A opens Package and B returns.
+    // Package is row 4 (underlying row 5 with Cheats omitted), door row with A Open; A opens Eclipse's Package subpage and B returns.
     scene.pad(UiButton::Down);
     scene.wait(120);
     assert_eq!(focused(&mut scene), "pageRow.4");
     assert_eq!(eclipse_board::read(&scene.tree(), "gameAsidePlace", "text"), "5 of 5");
     assert_eq!(words_under(&scene.tree(), "help"), ["Open", "Back", "Home"]);
     scene.pad(UiButton::Accept);
-    until(&mut scene, "Package deeper page opened", 3000, |s| s.property("theme", "pageDrawn") == "false");
+    until(&mut scene, "Eclipse Package subpage opened", 3000, |s| {
+        s.property("theme", "pageDrawn") == "true" && s.tree().nodes.iter().any(|n| n.name == "packageTitle" && n.visible)
+    });
     scene.pad(UiButton::Back);
-    until(&mut scene, "back to Eclipse Options from Package", 3000, |s| s.property("theme", "pageDrawn") == "true");
+    until(&mut scene, "back to Eclipse Options from Package", 3000, |s| {
+        s.property("theme", "pageDrawn") == "true" && !s.tree().nodes.iter().any(|n| n.name == "packageTitle" && n.visible)
+    });
 
     // Moving focus up to pills hides the aside.
     until(&mut scene, "row focus restored", 2000, |s| focused(s).starts_with("pageRow."));

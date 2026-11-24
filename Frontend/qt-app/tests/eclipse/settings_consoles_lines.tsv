@@ -1,0 +1,32 @@
+# The words of Consoles' heading, subtitle and 12 visible cards against their board, EclipseSettingsConsoles.dc.html: each line's box and baseline in board pixels.
+# Measured 2026-11-24 in Chrome after document.fonts.ready with Sora and JetBrains Mono (s4-boards/consoles.json).
+element	line top	line height	baseline
+consolesHeading	150	56	193	settingsCanvas
+consolesSubtitle	174	25	193	settingsCanvas
+consoleName.0	29	31	53	console.0
+consoleSub.0	65	22	82	console.0
+consoleName.1	29	31	53	console.1
+consoleSub.1	65	22	82	console.1
+consoleName.2	29	31	53	console.2
+consoleSub.2	65	22	82	console.2
+consoleName.3	29	31	53	console.3
+consoleSub.3	65	22	82	console.3
+consoleName.4	29	31	53	console.4
+consoleSub.4	65	22	82	console.4
+consoleName.5	29	31	53	console.5
+consoleSub.5	65	22	82	console.5
+consoleName.6	29	31	53	console.6
+consoleSub.6	65	22	82	console.6
+consoleName.7	29	31	53	console.7
+consoleSub.7	65	22	82	console.7
+consoleName.8	29	31	53	console.8
+consoleSub.8	65	22	82	console.8
+consoleName.9	29	31	53	console.9
+consoleSub.9	65	22	82	console.9
+consoleName.10	29	31	53	console.10
+consoleSub.10	65	22	82	console.10
+consoleName.11	29	31	53	console.11
+consoleSub.11	65	22	82	console.11
+consoleChipWords.9	7.5	21	23.5	consoleChip.9
+consoleChipWords.10	7.5	21	23.5	consoleChip.10
+consoleChipWords.11	7.5	21	23.5	consoleChip.11

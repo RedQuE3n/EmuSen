@@ -71,6 +71,20 @@ pub mod qobject {
         #[qproperty(*mut ThemeRows, chips, READ, CONSTANT)]
         #[qproperty(i32, chip_count, cxx_name = "chipCount", READ, NOTIFY = shown)]
         #[qproperty(i32, total, READ, NOTIFY = shown)]
+        /// From 1.15 (boards #27, #28, #57, #29): board-exact heading/aside projections, Consoles grid filter/subtitle/glow, core card, and Firmware file list.
+        #[qproperty(QString, board_heading, cxx_name = "boardHeading", READ, NOTIFY = shown)]
+        #[qproperty(QString, board_about_heading, cxx_name = "boardAboutHeading", READ, NOTIFY = shown)]
+        #[qproperty(QString, board_sentence, cxx_name = "boardSentence", READ, NOTIFY = shown)]
+        #[qproperty(QStringList, board_muted, cxx_name = "boardMuted", READ, NOTIFY = shown)]
+        #[qproperty(QString, consoles_subtitle, cxx_name = "consolesSubtitle", READ, NOTIFY = shown)]
+        #[qproperty(bool, consoles_filtered, cxx_name = "consolesFiltered", READ, NOTIFY = shown)]
+        #[qproperty(bool, has_consoles_with_games, cxx_name = "hasConsolesWithGames", READ, NOTIFY = shown)]
+        #[qproperty(QString, page_glow, cxx_name = "pageGlow", READ, NOTIFY = shown)]
+        #[qproperty(i32, card_planet, cxx_name = "cardPlanet", READ, NOTIFY = shown)]
+        #[qproperty(QString, card_title, cxx_name = "cardTitle", READ, NOTIFY = shown)]
+        #[qproperty(QString, card_subtitle, cxx_name = "cardSubtitle", READ, NOTIFY = shown)]
+        #[qproperty(*mut ThemeRows, firmware_files, cxx_name = "firmwareFiles", READ, CONSTANT)]
+        #[qproperty(i32, firmware_count, cxx_name = "firmwareCount", READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -83,14 +97,17 @@ pub mod qobject {
     impl cxx_qt::Initialize for ThemeSettings {}
 }
 
-/// `Settings.rows`' roles (EmuSen_Qt.md §3.2, `Settings`).
-pub const SETTINGS_ROW_ROLES: [&str; 19] = [
+/// `Settings.rows`' roles (EmuSen_Qt.md §3.2, `Settings`; 19..28 added in 1.15 for boards #27, #28, #57, #29).
+pub const SETTINGS_ROW_ROLES: [&str; 28] = [
     "key", "label", "about", "value", "kind", "isSwitch", "switchOn", "held", "marked", "code", "minimum", "maximum", "step", "amount", "consoleName",
-    "system", "games", "engine", "form",
+    "system", "games", "engine", "form", "boardLabel", "boardAbout", "boardValue", "boardForm", "planet", "subtitle", "chip", "chipAttention", "runs",
 ];
 
 /// `Settings.chips`' roles (from 1.14, R-20261116-22): Scraping's aside toggle chips and their model row index.
 pub const SETTINGS_CHIP_ROLES: [&str; 4] = ["key", "label", "switchOn", "row"];
+
+/// `Settings.firmwareFiles`' roles (from 1.15, board #29): each firmware file's label, status line and state number.
+pub const SETTINGS_FIRMWARE_ROLES: [&str; 3] = ["label", "status", "state"];
 
 /// Everything the singleton shows, as the host reads it from the program's model.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -107,10 +124,22 @@ pub struct SettingsFacts {
     pub page: String,
     pub rows: Vec<Row>,
     pub chips: Vec<Row>,
+    pub firmware_files: Vec<Row>,
     pub focused: i32,
     /// The help bar's kind for what is shown (`Help.entries`' kind), -1 where none is the screen's (a bindings page, listening).
     pub help: i32,
     pub pane: Pane,
+    pub board_heading: String,
+    pub board_about_heading: String,
+    pub board_sentence: String,
+    pub board_muted: Vec<String>,
+    pub consoles_subtitle: String,
+    pub consoles_filtered: bool,
+    pub has_consoles_with_games: bool,
+    pub page_glow: String,
+    pub card_planet: i32,
+    pub card_title: String,
+    pub card_subtitle: String,
 }
 
 /// The facts of a view whose rows were last told as `rows`; an error where those are not the view's rows.
@@ -119,14 +148,17 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
     if facets.len() != rows.len() {
         return Err(format!("{} rows told and {} in the view", rows.len(), facets.len()));
     }
-    let chip_start = view.chip_start().unwrap_or(rows.len()).min(rows.len());
+    let board_rows = view.board_rows(rows, &facets);
+    let offset = view.firmware_need_count().min(rows.len());
+    let chip_start = view.chip_start().unwrap_or(rows.len()).min(rows.len()).max(offset);
     let (range, unset) = (SliderRange::default(), WalkRow::default());
-    let cells = rows[..chip_start]
+    let cells = rows[offset..chip_start]
         .iter()
-        .zip(&facets[..chip_start])
+        .zip(&facets[offset..chip_start])
+        .zip(&board_rows[offset..chip_start])
         .enumerate()
-        .map(|(i, (r, facet))| {
-            let slider = if r.kind == RowKind::Slider { view.slider(i) } else { None };
+        .map(|(i, ((r, facet), br))| {
+            let slider = if r.kind == RowKind::Slider { view.slider(offset + i) } else { None };
             let [minimum, maximum, step, amount] = slider.unwrap_or([range.minimum, range.maximum, range.step, unset.amount]);
             let tile = facet.tile.clone().unwrap_or_default();
             vec![
@@ -149,6 +181,15 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
                 Cell::Whole(tile.games as i32),
                 Cell::Text(tile.engine),
                 Cell::Whole(form_of(Form::of(r, facet.switch)).repr),
+                Cell::Text(br.label.clone()),
+                Cell::Text(br.about.clone()),
+                Cell::Text(br.value.clone()),
+                Cell::Whole(form_of(br.form).repr),
+                Cell::Whole(br.planet),
+                Cell::Text(br.subtitle.clone()),
+                Cell::Text(br.chip.clone()),
+                Cell::Flag(br.chip_attention),
+                Cell::Flag(br.runs),
             ]
         })
         .collect();
@@ -165,7 +206,14 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
             ]
         })
         .collect();
+    let model_focused = (focused.max(offset as i32) as usize).min(rows.len().saturating_sub(1));
     let mut pane = view.pane(focused.max(0) as usize);
+    let aside = view.board_aside(model_focused, rows, &board_rows, &pane);
+    let firmware_files = aside
+        .firmware_files
+        .into_iter()
+        .map(|f| vec![Cell::Text(f.label), Cell::Text(f.status), Cell::Whole(f.state as i32)])
+        .collect();
     let about_heading = if pane.preview == settings::Preview::Chips {
         pane.sentence.clear();
         pane.caption.clone()
@@ -178,16 +226,28 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         title: view.title(),
         heading: view.heading(),
         about_heading,
-        defaultable: usize::try_from(focused).is_ok_and(|f| view.defaultable(f)),
+        defaultable: (focused >= 0 || offset > 0) && view.defaultable(model_focused),
         section: view.section as i32,
         trail: view.trail(),
         trail_line: view.trail_line(),
         page: view.page_key(),
         rows: cells,
         chips,
-        focused,
+        firmware_files,
+        focused: if offset > 0 { (focused - offset as i32).max(0) } else { focused },
         help: kind_of(view.help()).map_or(-1, |k| k.repr),
         pane,
+        board_heading: aside.heading,
+        board_about_heading: aside.about_heading,
+        board_sentence: aside.sentence,
+        board_muted: aside.muted,
+        consoles_subtitle: aside.consoles_subtitle,
+        consoles_filtered: view.consoles_with_games(),
+        has_consoles_with_games: view.has_consoles_with_games(),
+        page_glow: aside.page_glow,
+        card_planet: aside.card_planet,
+        card_title: aside.card_title,
+        card_subtitle: aside.card_subtitle,
     })
 }
 
@@ -221,9 +281,11 @@ pub struct ThemeSettingsRust {
     page: QString,
     rows: *mut ThemeRows,
     chips: *mut ThemeRows,
+    firmware_files: *mut ThemeRows,
     focused: i32,
     count: i32,
     chip_count: i32,
+    firmware_count: i32,
     total: i32,
     help: i32,
     sentence: QString,
@@ -235,6 +297,17 @@ pub struct ThemeSettingsRust {
     meter: f64,
     samples: QStringList,
     sample_scales: QList<f64>,
+    board_heading: QString,
+    board_about_heading: QString,
+    board_sentence: QString,
+    board_muted: QStringList,
+    consoles_subtitle: QString,
+    consoles_filtered: bool,
+    has_consoles_with_games: bool,
+    page_glow: QString,
+    card_planet: i32,
+    card_title: QString,
+    card_subtitle: QString,
     last: SettingsFacts,
 }
 
@@ -254,9 +327,11 @@ impl Default for ThemeSettingsRust {
             page: QString::default(),
             rows: std::ptr::null_mut(),
             chips: std::ptr::null_mut(),
+            firmware_files: std::ptr::null_mut(),
             focused: 0,
             count: 0,
             chip_count: 0,
+            firmware_count: 0,
             total: 0,
             help: -1,
             sentence: QString::default(),
@@ -268,7 +343,18 @@ impl Default for ThemeSettingsRust {
             meter: 0.0,
             samples: QStringList::default(),
             sample_scales: QList::default(),
-            last: SettingsFacts { help: -1, ..SettingsFacts::default() },
+            board_heading: QString::default(),
+            board_about_heading: QString::default(),
+            board_sentence: QString::default(),
+            board_muted: QStringList::default(),
+            consoles_subtitle: QString::default(),
+            consoles_filtered: false,
+            has_consoles_with_games: false,
+            page_glow: QString::default(),
+            card_planet: -3,
+            card_title: QString::default(),
+            card_subtitle: QString::default(),
+            last: SettingsFacts { help: -1, card_planet: -3, ..SettingsFacts::default() },
         }
     }
 }
@@ -285,9 +371,15 @@ impl cxx_qt::Initialize for qobject::ThemeSettings {
         if let Some(chips) = unsafe { chips_list.as_mut() } {
             unsafe { Pin::new_unchecked(chips) }.set_roles(&SETTINGS_CHIP_ROLES);
         }
+        let firmware_list = ffi::new_rows(self.as_mut().upcast_pin());
+        // Safety: the firmware list was just made, a child of this singleton.
+        if let Some(fw) = unsafe { firmware_list.as_mut() } {
+            unsafe { Pin::new_unchecked(fw) }.set_roles(&SETTINGS_FIRMWARE_ROLES);
+        }
         let mut me = self.as_mut().rust_mut();
         me.rows = list;
         me.chips = chips_list;
+        me.firmware_files = firmware_list;
     }
 }
 
@@ -303,6 +395,9 @@ impl qobject::ThemeSettings {
         }
         if let Some(chips) = unsafe { self.chips.as_mut() } {
             unsafe { Pin::new_unchecked(chips) }.replace(facts.chips.clone());
+        }
+        if let Some(fw) = unsafe { self.firmware_files.as_mut() } {
+            unsafe { Pin::new_unchecked(fw) }.replace(facts.firmware_files.clone());
         }
         let pane = &facts.pane;
         let mut tones = QList::<i32>::default();
@@ -322,6 +417,7 @@ impl qobject::ThemeSettings {
         me.focused = facts.focused;
         me.count = facts.rows.len() as i32;
         me.chip_count = facts.chips.len() as i32;
+        me.firmware_count = facts.firmware_files.len() as i32;
         me.total = (facts.rows.len() + facts.chips.len()) as i32;
         me.help = facts.help;
         me.sentence = QString::from(pane.sentence.as_str());
@@ -335,6 +431,17 @@ impl qobject::ThemeSettings {
         let mut scales = QList::<f64>::default();
         pane.samples.iter().for_each(|(_, scale)| scales.append(*scale));
         me.sample_scales = scales;
+        me.board_heading = QString::from(facts.board_heading.as_str());
+        me.board_about_heading = QString::from(facts.board_about_heading.as_str());
+        me.board_sentence = QString::from(facts.board_sentence.as_str());
+        me.board_muted = list(&facts.board_muted);
+        me.consoles_subtitle = QString::from(facts.consoles_subtitle.as_str());
+        me.consoles_filtered = facts.consoles_filtered;
+        me.has_consoles_with_games = facts.has_consoles_with_games;
+        me.page_glow = QString::from(facts.page_glow.as_str());
+        me.card_planet = facts.card_planet;
+        me.card_title = QString::from(facts.card_title.as_str());
+        me.card_subtitle = QString::from(facts.card_subtitle.as_str());
         me.last = facts.clone();
         drop(me);
         self.shown();

@@ -121,7 +121,7 @@ fn fill(line: &str, names: &[(&str, &str)]) -> String {
 }
 
 impl SettingsView {
-    fn cw(&self, name: &str) -> String {
+    pub(crate) fn cw(&self, name: &str) -> String {
         self.description_at(&["controllers", "words", name]).as_str().unwrap_or_default().to_owned()
     }
 
@@ -325,7 +325,7 @@ impl SettingsView {
     }
 
     /// How many seats the Players row and page count at least (the description's, Mistress's four).
-    fn seats_shown(&self) -> usize {
+    pub(crate) fn seats_shown(&self) -> usize {
         (self.description_at(&["controllers", "seats_shown"]).as_u64().unwrap_or(0) as usize).max(self.seats.players.len())
     }
 

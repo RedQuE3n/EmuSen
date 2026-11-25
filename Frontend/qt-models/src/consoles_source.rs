@@ -96,6 +96,11 @@ impl ScriptedConsoles {
     fn of<T: serde::de::DeserializeOwned + Default>(&self, value: &Value) -> T {
         serde_json::from_value(value.clone()).unwrap_or_default()
     }
+
+    /// Optional scripted audio output devices for tests, overriding the machine's live devices when present.
+    pub fn outputs(&self) -> Option<Vec<String>> {
+        self.world["outputs"].as_array().map(|list| list.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+    }
 }
 
 impl ConsoleSource for ScriptedConsoles {

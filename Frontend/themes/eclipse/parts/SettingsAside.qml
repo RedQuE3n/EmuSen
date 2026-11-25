@@ -201,7 +201,7 @@ FocusScope {
         weight: Tokens.weightSentence
     }
     Repeater {
-        model: Settings.firmwareCount > 0 ? [] : Settings.lines
+        model: Settings.firmwareCount > 0 ? [] : Settings.boardLines
         delegate: Line {
             required property int index
             required property string modelData

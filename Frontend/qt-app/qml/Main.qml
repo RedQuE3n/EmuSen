@@ -561,6 +561,24 @@ Window {
             function onPassed(key) { screens.act(key) }
             function onRefocus(row) { settingsModel.setFocused(row) }
         }
+        // Key listener for Hotkeys rebinding while the chosen theme draws Settings (EmuSen_Input.md §10.6).
+        FocusScope {
+            id: settingsThemeListener
+            objectName: "settingsThemeListener"
+            focus: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.listening && !settingsModel.listeningPad
+            Keys.onPressed: (event) => event.accepted = settingsModel.heardKey(event.key, event.modifiers)
+            Connections {
+                target: Kit.PadRouter
+                enabled: settingsThemeListener.activeFocus
+                function onPressed(button) { settingsModel.padPressed(button) }
+            }
+            Timer {
+                interval: 8
+                repeat: true
+                running: settingsThemeListener.activeFocus && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
+                onTriggered: Kit.PadRouter.pump()
+            }
+        }
         // A console's options asked for on Choose a console: Settings opens at that console's page (none for an empty one).
         Connections {
             target: screens

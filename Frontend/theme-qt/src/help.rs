@@ -61,6 +61,8 @@ pub mod qobject {
         PageOpen,
         PageDetail,
         PageOption,
+        /// 1.18: Eclipse's Settings Hotkeys bar (board #55: A Change, X Clear, B Back, START Home).
+        SettingsHotkeys,
     }
 
     extern "RustQt" {
@@ -108,7 +110,7 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 30] = [
+pub const KINDS: [HelpKind; 31] = [
     HelpKind::Continue,
     HelpKind::Game,
     HelpKind::Console,
@@ -139,6 +141,7 @@ pub const KINDS: [HelpKind; 30] = [
     HelpKind::PageOpen,
     HelpKind::PageDetail,
     HelpKind::PageOption,
+    HelpKind::SettingsHotkeys,
 ];
 
 /// The help bar a kind shows (EmuSen_Qt.md §3.2, `Help`).
@@ -154,6 +157,7 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::SettingsPage => Screen::SettingsPage,
         HelpKind::SettingsConsole => Screen::SettingsConsole,
         HelpKind::SettingsChoices => Screen::SettingsChoices,
+        HelpKind::SettingsHotkeys => Screen::SettingsHotkeys,
         HelpKind::Page => Screen::GamePage,
         HelpKind::PageResume => Screen::GamePageResume,
         HelpKind::PageResumeSlots => Screen::GamePageResumeSlots,
@@ -371,7 +375,11 @@ impl qobject::ThemeHelpEntries {
 
     /// The screen's list as Eclipse's Settings boards name it (`help::settings_named`), set once when it is made.
     fn show_settings(mut self: Pin<&mut Self>, screen: Screen, defaultable: bool) {
-        let list = help::settings_named(help::entries(screen).to_vec());
+        let list = if screen == Screen::SettingsHotkeys {
+            help::entries(screen).to_vec()
+        } else {
+            help::settings_named(help::entries(screen).to_vec())
+        };
         let lines = help::lines_of(screen, &list);
         self.as_mut().rust_mut().screen = screen;
         self.as_mut().rust_mut().defaultable = defaultable;

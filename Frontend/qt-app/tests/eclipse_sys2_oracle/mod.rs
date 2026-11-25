@@ -206,11 +206,7 @@ pub fn sys2(backend: &str) {
         &mut differences,
     );
     if backend == "card" {
-        scene.resize(1920, 1200);
-        scene.wait(300);
-        picture(&mut scene, "search");
-        scene.resize(1280, 800);
-        scene.wait(200);
+        picture(&mut scene, "search.png");
     }
 
     // Search interactions: RT -> SearchGrid -> arrow -> open GamePage -> back -> RT back -> 123 toggle -> Space -> B erase/close.
@@ -274,11 +270,7 @@ pub fn sys2(backend: &str) {
         &mut differences,
     );
     if backend == "card" {
-        scene.resize(1920, 1200);
-        scene.wait(300);
-        picture(&mut scene, "collections");
-        scene.resize(1280, 800);
-        scene.wait(200);
+        picture(&mut scene, "collections.png");
     }
 
     // Create, rename, and remove collection in games.db + open genre/user collections into Games grid.
@@ -356,11 +348,7 @@ pub fn sys2(backend: &str) {
         &mut differences,
     );
     if backend == "card" {
-        scene.resize(1920, 1200);
-        scene.wait(300);
-        picture(&mut scene, "tools");
-        scene.resize(1280, 800);
-        scene.wait(200);
+        picture(&mut scene, "tools.png");
     }
 
     // All 6 Tools routes open their target screens and B comes back to Tools.

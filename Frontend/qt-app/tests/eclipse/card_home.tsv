@@ -1,0 +1,37 @@
+# Eclipse Home Card (#5) against EclipseHomeCard.dc.html (1920 by 1200, Chrome JSON home_card.json).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+AdaptiveCardScrim	22	dimming scrim rgba(4,5,10,0.62)	Tokens.scrim	Rectangle	0	0	right:0	1200	-	Tokens.scrim	-	built	-
+cardDisc	24	left eclipse disc	Kit.CoronaDisc	CoronaDisc	-2440	-960	3120	3120	-	Tokens.surface	-	built	-
+coronaRim	24	2 px corona rim	Tokens.coronaColor	Rectangle	in:cardDisc:-2	top:cardDisc:-2	3124	3124	-	Tokens.coronaColor	-	built	-
+coronaGlow.0	24	inner corona glow	44 px blur, 8 px spread, 0.6	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 44 8 0.6
+coronaGlow.1	24	outer corona halo	170 px blur, 46 px spread, 0.28	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 170 46 0.28
+cardSection	26	menu column	section at 72,72,520x1056	Item	72	72	520	1056	-	-	-	built	-
+menuHeader	28	header bar	crescent, Menu, status	Item	72	72	520	43	-	-	-	built	-
+menuMark	30	crescent mark 34 px	Marks.menuCrescent	Item	72	mid:menuHeader	34	34	-	Tokens.accent	-	built	-
+cardTitle	31	"Menu"	CardModel.title	CardLine	after:menuMark:14	72	-	43	-	Tokens.textStrong	34	built	600 0 none
+menuStatus	33	"82% · 9:41 PM"	Words.statusClock	CardLine	-	mid:menuHeader	inright:menuHeader:0	27	-	#FFD8DBE6	22	built	400 0 none
+rowGlow.0	36	Continue glow	Kit.Glow	Glow	72	149	520	118	22	#66F0B4C4	-	built	glow 46 6 0 0
+rowRing.0	36	Continue 6 px ring	rgba(246,231,216,0.18)	Rectangle	66	143	532	130	28	#2EF6E7D8	-	built	-
+rowBg.0	36	Continue card pill	Tokens.accent	Rectangle	72	149	520	118	22	Tokens.accent	-	built	-
+continueArt	37	Continue thumbnail 132x84	continuePicture	Rectangle	in:rowBg.0:16	top:rowBg.0:17	132	84	14	-	-	built	-
+continueTag	39	"CONTINUE"	Words.continueEntry	CardLine	after:continueArt:20	top:rowBg.0:16	-	21	-	Tokens.overAccent	17	built	700 0.14 upper
+continueTitle	40	"Aurora Drift"	CardModel.continueTitle	CardLine	after:continueArt:20	below:continueTag:4	-	35	-	Tokens.overAccent	28	built	600 0 none
+continueSubtitle	41	"Suspended · Super Nintendo"	CardModel.continueSubtitle	CardLine	after:continueArt:20	below:continueTitle:4	-	22	-	Tokens.overAccent	18	built	400 0 none
+cardRow.1	47	row 1 Game page	MenuRowEclipse	MenuRowEclipse	72	301	520	72	-	-	-	built	-
+rowIcon.1	48	Game page icon	Marks.path	Item	92	mid:cardRow.1	30	30	-	Tokens.textStrong	-	built	-
+cardRow.2	47	row 2 Search	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.1:6	520	72	-	-	-	built	-
+rowIcon.2	48	Search icon	Marks.path	Item	92	mid:cardRow.2	30	30	-	Tokens.textStrong	-	built	-
+cardRow.3	47	row 3 Library	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.2:6	520	72	-	-	-	built	-
+rowIcon.3	48	Library icon	Marks.path	Item	92	mid:cardRow.3	30	30	-	Tokens.textStrong	-	built	-
+cardRow.4	47	row 4 Tools	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.3:6	520	72	-	-	-	built	-
+rowIcon.4	48	Tools icon	Marks.path	Item	92	mid:cardRow.4	30	30	-	Tokens.textStrong	-	built	-
+cardRow.5	47	row 5 Settings	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.4:6	520	72	-	-	-	built	-
+rowIcon.5	48	Settings icon	Marks.path	Item	92	mid:cardRow.5	30	30	-	Tokens.textStrong	-	built	-
+cardRow.6	47	row 6 Power	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.5:6	520	72	-	-	-	built	-
+rowIcon.6	48	Power icon	Marks.path	Item	92	mid:cardRow.6	30	30	-	Tokens.textStrong	-	built	-
+cardRow.7	47	row 7 Quit EmuSen	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.6:6	520	72	-	-	-	built	-
+rowIcon.7	48	Quit EmuSen icon	Marks.path	Item	92	mid:cardRow.7	30	30	-	Tokens.textStrong	-	built	-
+cardHelp	56	help bar A Choose B Close	HelpModel.CardHome	HelpBar	72	foot:cardSection	-	38	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Choose	57	A filled 34 px	CardGlyph	-	in:cardHelp:0	mid:cardHelp	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Close	58	B ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400

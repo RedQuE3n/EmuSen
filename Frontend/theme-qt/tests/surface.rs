@@ -6,8 +6,8 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.20.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.20.qmldir");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.21.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.21.qmldir");
 const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.13.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
@@ -145,6 +145,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "pageDeclared",
                 "pageAnswer",
                 "pageBack",
+                "pageViewKey",
+                "pageViewPages",
             ],
         ),
         ("Cues", &[], &["scroll", "systembrowse", "select", "back", "favorite", "launch", "quicksysselect"]),
@@ -247,6 +249,20 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "subpage",
                 "subpageTitle",
                 "subpageSubtitle",
+                "viewKind",
+                "viewSource",
+                "viewManual",
+                "viewCaption",
+                "viewPage",
+                "viewZoom",
+                "viewPanX",
+                "viewPanY",
+                "cropPicture",
+                "cropLeft",
+                "cropRight",
+                "cropTop",
+                "cropBottom",
+                "cropEdge",
             ],
             &[],
         ),
@@ -289,6 +305,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "OrbitLayout",
             "OrbitSlot",
             "PadGlyph",
+            "PdfPage",
             "PlanetLayout",
             "PlanetMark",
             "RoundPicture",

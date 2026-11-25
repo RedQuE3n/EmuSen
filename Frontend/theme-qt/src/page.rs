@@ -37,6 +37,11 @@ pub mod qobject {
     enum PageSubpage {
         None,
         Package,
+        Edit,
+        Cover,
+        Scrape,
+        Viewer,
+        Crop,
     }
 
     extern "RustQt" {
@@ -93,6 +98,21 @@ pub mod qobject {
         #[qproperty(i32, subpage, READ, NOTIFY = shown)]
         #[qproperty(QString, subpage_title, cxx_name = "subpageTitle", READ, NOTIFY = shown)]
         #[qproperty(QString, subpage_subtitle, cxx_name = "subpageSubtitle", READ, NOTIFY = shown)]
+        /// 1.19: Eclipse's Media Viewer and This game's crop deeper pages (R-20261116-33, -35, R-20261123-32).
+        #[qproperty(i32, view_kind, cxx_name = "viewKind", READ, NOTIFY = shown)]
+        #[qproperty(QString, view_source, cxx_name = "viewSource", READ, NOTIFY = shown)]
+        #[qproperty(QString, view_manual, cxx_name = "viewManual", READ, NOTIFY = shown)]
+        #[qproperty(QString, view_caption, cxx_name = "viewCaption", READ, NOTIFY = shown)]
+        #[qproperty(i32, view_page, cxx_name = "viewPage", READ, NOTIFY = shown)]
+        #[qproperty(i32, view_zoom, cxx_name = "viewZoom", READ, NOTIFY = shown)]
+        #[qproperty(i32, view_pan_x, cxx_name = "viewPanX", READ, NOTIFY = shown)]
+        #[qproperty(i32, view_pan_y, cxx_name = "viewPanY", READ, NOTIFY = shown)]
+        #[qproperty(QString, crop_picture, cxx_name = "cropPicture", READ, NOTIFY = shown)]
+        #[qproperty(f64, crop_left, cxx_name = "cropLeft", READ, NOTIFY = shown)]
+        #[qproperty(f64, crop_right, cxx_name = "cropRight", READ, NOTIFY = shown)]
+        #[qproperty(f64, crop_top, cxx_name = "cropTop", READ, NOTIFY = shown)]
+        #[qproperty(f64, crop_bottom, cxx_name = "cropBottom", READ, NOTIFY = shown)]
+        #[qproperty(i32, crop_edge, cxx_name = "cropEdge", READ, NOTIFY = shown)]
         type ThemePage = super::ThemePageRust;
     }
 
@@ -116,8 +136,8 @@ pub const PAGE_ROW_ROLES: [&str; 8] = ["key", "label", "value", "line", "picture
 pub const PAGE_PILL_ROLES: [&str; 8] = ["key", "label", "button", "filled", "heart", "on", "act", "row"];
 /// `Page.cards`' roles: a state card or the empty one, its badge's words, and `row`, its tile among `rows`, -1 for the empty card (1.13).
 pub const PAGE_CARD_ROLES: [&str; 7] = ["key", "label", "line", "picture", "marked", "badge", "row"];
-/// `Page.boardRows`' roles: a Details, Options, Cheats or Package row, its value form, aside sentence, and content index (1.15).
-pub const PAGE_BOARD_ROW_ROLES: [&str; 9] = ["key", "label", "value", "steps", "opens", "isSwitch", "switchOn", "sentence", "row"];
+/// `Page.boardRows`' roles: a Details, Options, Cheats or deeper-page row, its value form, aside sentence, and content index (1.15, 1.19).
+pub const PAGE_BOARD_ROW_ROLES: [&str; 11] = ["key", "label", "value", "steps", "opens", "isSwitch", "switchOn", "sentence", "row", "editable", "separated"];
 /// `Page.mediaTiles`' roles: a media item's key, label, picture URL, and index among `rows` (1.16).
 pub const PAGE_MEDIA_TILE_ROLES: [&str; 4] = ["key", "label", "picture", "row"];
 
@@ -171,6 +191,20 @@ pub struct PageFacts {
     pub subpage: i32,
     pub subpage_title: String,
     pub subpage_subtitle: String,
+    pub view_kind: i32,
+    pub view_source: String,
+    pub view_manual: String,
+    pub view_caption: String,
+    pub view_page: i32,
+    pub view_zoom: i32,
+    pub view_pan_x: i32,
+    pub view_pan_y: i32,
+    pub crop_picture: String,
+    pub crop_left: f64,
+    pub crop_right: f64,
+    pub crop_top: f64,
+    pub crop_bottom: f64,
+    pub crop_edge: i32,
 }
 
 /// The board's buttons' rows: each with the place among the actions of the action it is.
@@ -210,7 +244,7 @@ pub fn card_rows(cards: &[emusen_qt_models::game_page::Card]) -> Vec<Row> {
         .collect()
 }
 
-/// Eclipse's Details, Options, Cheats and Package rows.
+/// Eclipse's Details, Options, Cheats and deeper-page rows.
 pub fn board_row_rows(rows: &[emusen_qt_models::game_page::BoardRow]) -> Vec<Row> {
     rows.iter()
         .map(|r| {
@@ -224,6 +258,8 @@ pub fn board_row_rows(rows: &[emusen_qt_models::game_page::BoardRow]) -> Vec<Row
                 Cell::Flag(r.switch_on),
                 Cell::Text(r.sentence.to_owned()),
                 Cell::Whole(r.row as i32),
+                Cell::Flag(r.editable),
+                Cell::Flag(r.separated),
             ]
         })
         .collect()
@@ -327,6 +363,20 @@ pub struct ThemePageRust {
     subpage: i32,
     subpage_title: QString,
     subpage_subtitle: QString,
+    view_kind: i32,
+    view_source: QString,
+    view_manual: QString,
+    view_caption: QString,
+    view_page: i32,
+    view_zoom: i32,
+    view_pan_x: i32,
+    view_pan_y: i32,
+    crop_picture: QString,
+    crop_left: f64,
+    crop_right: f64,
+    crop_top: f64,
+    crop_bottom: f64,
+    crop_edge: i32,
     last: PageFacts,
 }
 
@@ -378,7 +428,21 @@ impl Default for ThemePageRust {
             subpage: 0,
             subpage_title: QString::default(),
             subpage_subtitle: QString::default(),
-            last: PageFacts { focused: (-1, 0), help: -1, board_help: -1, ..PageFacts::default() },
+            view_kind: 0,
+            view_source: QString::default(),
+            view_manual: QString::default(),
+            view_caption: QString::default(),
+            view_page: 0,
+            view_zoom: 0,
+            view_pan_x: 0,
+            view_pan_y: 0,
+            crop_picture: QString::default(),
+            crop_left: 0.0,
+            crop_right: 0.0,
+            crop_top: 0.0,
+            crop_bottom: 0.0,
+            crop_edge: -1,
+            last: PageFacts { focused: (-1, 0), help: -1, board_help: -1, crop_edge: -1, ..PageFacts::default() },
         }
     }
 }
@@ -462,6 +526,20 @@ impl qobject::ThemePage {
         me.subpage = facts.subpage;
         me.subpage_title = text(&facts.subpage_title);
         me.subpage_subtitle = text(&facts.subpage_subtitle);
+        me.view_kind = facts.view_kind;
+        me.view_source = text(&facts.view_source);
+        me.view_manual = text(&facts.view_manual);
+        me.view_caption = text(&facts.view_caption);
+        me.view_page = facts.view_page;
+        me.view_zoom = facts.view_zoom;
+        me.view_pan_x = facts.view_pan_x;
+        me.view_pan_y = facts.view_pan_y;
+        me.crop_picture = text(&facts.crop_picture);
+        me.crop_left = facts.crop_left;
+        me.crop_right = facts.crop_right;
+        me.crop_top = facts.crop_top;
+        me.crop_bottom = facts.crop_bottom;
+        me.crop_edge = facts.crop_edge;
         me.last = facts.clone();
         drop(me);
         fill(self.actions, &facts.actions);

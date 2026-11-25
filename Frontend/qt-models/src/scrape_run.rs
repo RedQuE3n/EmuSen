@@ -49,12 +49,28 @@ pub fn request(games: &[GameFile], one: bool, settings: &Value, kinds: &Value) -
     })
 }
 
+/// The start request for `games` with an optional search match `pick` index.
+pub fn request_pick(games: &[GameFile], one: bool, pick: Option<i64>, settings: &Value, kinds: &Value) -> Value {
+    let mut req = request(games, one, settings, kinds);
+    if let Some(p) = pick {
+        req["pick"] = json!(p);
+    }
+    req
+}
+
 /// The run started over `games` on the scraper of `source`, its store opened, `test` its test seam where one is given;
 /// how many games it queued.
 pub fn start(source: &ClientSource, games: &[GameFile], one: bool, test: Option<&Value>) -> Result<i64, String> {
     let settings = source.settings()?;
     let kinds = source.scraper().ok_or(crate::clients::NO_SCRAPER)?.get(&json!({ "what": "kinds" })).map_err(|e| e.to_string())?;
     source.scrape_start(&request(games, one, &settings, &kinds), test)
+}
+
+/// Starts a single-game run on an already-open scraper store with an optional chosen match `pick`.
+pub fn start_open(source: &ClientSource, games: &[GameFile], one: bool, pick: Option<i64>) -> Result<i64, String> {
+    let settings = source.settings()?;
+    let kinds = source.scraper().ok_or(crate::clients::NO_SCRAPER)?.get(&json!({ "what": "kinds" })).map_err(|e| e.to_string())?;
+    source.scrape_start_open(&request_pick(games, one, pick, &settings, &kinds))
 }
 
 /// The run followed until it ends, each progress told, then the scraper put back to finding pictures alone.

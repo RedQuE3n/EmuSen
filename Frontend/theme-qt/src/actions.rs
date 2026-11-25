@@ -142,6 +142,14 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pageTab"]
         fn page_tab(self: Pin<&mut ThemeActions>, tab: i32) -> bool;
+        /// A key on the media viewer (1.19, R-20261123-32).
+        #[qinvokable]
+        #[cxx_name = "pageViewKey"]
+        fn page_view_key(self: Pin<&mut ThemeActions>, key: i32, modifiers: i32) -> bool;
+        /// The PDF manual's page count reported to the viewer (1.19, R-20261123-32).
+        #[qinvokable]
+        #[cxx_name = "pageViewPages"]
+        fn page_view_pages(self: Pin<&mut ThemeActions>, pages: i32) -> bool;
     }
 }
 
@@ -190,6 +198,8 @@ pub enum ScreenAction {
     PageAnswer(i32),
     PageBack,
     PageTab(i32),
+    PageViewKey(i32, i32),
+    PageViewPages(i32),
 }
 
 /// The host's side: takes an action, or declines it, and says which.
@@ -294,6 +304,14 @@ impl qobject::ThemeActions {
 
     pub fn page_tab(self: Pin<&mut Self>, tab: i32) -> bool {
         self.call(ScreenAction::PageTab(tab))
+    }
+
+    pub fn page_view_key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        self.call(ScreenAction::PageViewKey(key, modifiers))
+    }
+
+    pub fn page_view_pages(self: Pin<&mut Self>, pages: i32) -> bool {
+        self.call(ScreenAction::PageViewPages(pages))
     }
 
     pub fn play(self: Pin<&mut Self>, game: &QString) -> bool {

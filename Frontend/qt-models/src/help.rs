@@ -109,6 +109,17 @@ pub enum Screen {
     GamePagePackageMake,
     GamePagePackageStop,
     GamePagePackageInfo,
+    /// Eclipse's boards for Edit Details, Scrape This Game, Media Viewer and This game's crop (R-20261116-30).
+    GamePageEditText,
+    GamePageScrape,
+    GamePageViewerBoard,
+    GamePageViewerBoardCover,
+    GamePageViewerBoardDelete,
+    GamePageViewerManualBoard,
+    GamePageCropToggle,
+    GamePageCropEdge,
+    /// Eclipse's Home Card menu foot: A Choose and B Close (EclipseHomeCard:56-59).
+    CardHome,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -177,6 +188,7 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::QuestionBack => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
         Screen::Card => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
         Screen::CardStart => &[(UiButton::Accept, "Start", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
+        Screen::CardHome => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Close", None)],
         Screen::Search => &[
             (UiButton::Accept, "Type", None),
             (UiButton::Back, "Delete", None),
@@ -325,6 +337,20 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::GamePagePackageMake => &[(UiButton::Accept, "Make", None), (UiButton::Back, "Options", None), PAGE_HOME],
         Screen::GamePagePackageStop => &[(UiButton::Accept, "Stop", None), (UiButton::Back, "Options", None), PAGE_HOME],
         Screen::GamePagePackageInfo => &[(UiButton::Back, "Options", None), PAGE_HOME],
+        Screen::GamePageEditText => &[
+            (UiButton::Accept, "Edit", None),
+            (UiButton::Left, "Value", None),
+            (UiButton::Search, "Reset to scraped", Some(RESET)),
+            (UiButton::Back, "Details", None),
+            PAGE_HOME,
+        ],
+        Screen::GamePageScrape => &[(UiButton::Accept, "Choose", None), PAGE_HEART, (UiButton::Back, "No", None), PAGE_HOME],
+        Screen::GamePageViewerBoard => &[(UiButton::Left, "Step", None), BACK],
+        Screen::GamePageViewerBoardCover => &[(UiButton::Left, "Step", None), (UiButton::Screensaver, "Set as cover", Some(SET_COVER)), BACK],
+        Screen::GamePageViewerBoardDelete => &[(UiButton::Left, "Step", None), (UiButton::Search, "Delete…", Some(DELETE)), BACK],
+        Screen::GamePageViewerManualBoard => &[(UiButton::Left, "Page", None), (UiButton::PageUp, "Zoom", None), BACK],
+        Screen::GamePageCropToggle => &[(UiButton::Left, "Value", None), (UiButton::Accept, "Change", None), BACK],
+        Screen::GamePageCropEdge => &[(UiButton::Left, "Value", None), (UiButton::Accept, "Type it", None), BACK],
     }
 }
 
@@ -584,6 +610,7 @@ pub fn unnamed(screen: Screen) -> &'static [Entry] {
         Screen::Grid | Screen::GridSearched => &[(UiButton::PageDown, "Console", Some(NEXT))],
         Screen::Search => &[(UiButton::PageDown, "Move to grid", Some(crate::screens::TO_GRID))],
         Screen::ToolSearch => &[(UiButton::PageDown, "Move to list", Some(crate::screens::TO_GRID))],
+        Screen::CardHome => &[(UiButton::Menu, "Close", Some(CLOSE))],
         _ => &[],
     }
 }

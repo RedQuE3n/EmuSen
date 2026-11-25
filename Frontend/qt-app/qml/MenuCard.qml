@@ -1,59 +1,55 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
-// The Card form, one drawing for every card (EmuSen_Interface.md §2.3, §2.8, §18.1, §20.6; EmuSen_Qt.md §7.1, stage 2): the scrim, the panel at the left edge with its shadow, the title row, the page's rows, the pane beside them, the help band, sliding in and out. The host's model gives the words; the pane is lines or a picture, or the host's own drawing in this item's children.
+// Card host: reference layout when coronaRim is 0, shared Eclipse Cards frame when coronaRim > 0 (R-20261113-5, R-20261114-21).
 FocusScope {
     id: root
     objectName: "PadCard"
-    // The page's rows, with the roles label, value, steps, opens and sectionEnd.
     property var rows
     property string title
     property string breadcrumb
-    // A line under the rows, in Muted: the Home card's Power page names the program's version there.
     property string footer
-    // A cover's URL before the title, the Pause Card's; empty for none.
     property string cover
-    // The row the page opens on, as the host's model says it.
     property int current: 0
-    // The focused row's pane: lines with a muted line under each, or a picture with its caption.
     property var paneLines
     property var paneMuted
     property string panePicture
     property string paneCaption
-    // The pane's own drawing, for a card whose pane holds more than lines or a picture (the rewind reel, the slots): the host's items, declared inside the card, are laid in the pane's box.
+    property string paneCore
+    property int panePlanet: -3
+    property string paneStatus
+    property bool paneStatusOk: false
+    property bool menu: false
+    property bool hasContinue: false
+    property string continueTitle
+    property string continueSubtitle
+    property string continuePicture
+    property string positionLine
+    property int battery: -1
+    property string clockText
+    property real pixelScale: 1
     default property alias paneContent: paneArea.data
-    // Whether the host's own pane drawing has anything to show; the pane's box shows with it.
     property bool paneDrawn: false
     property HelpModel help
     property int padFamily: Kit.Families.Generic
-    // Whether the card is on screen; it slides in as this turns on and out as it turns off.
     property bool open: false
-    readonly property real panelWidth: Math.round(root.width * 0.4)
-    readonly property real bandHeight: 98
-    // 1 out of place, 0 in place: the panel moves left by its right edge and 40 units, the band down by its height, the pane fades (LunaP §218).
+    property bool eclipse: false
     property real slide: 1
     readonly property bool leaving: !root.open && root.slide < 1
-    readonly property bool paneShown: (root.paneLines?.length ?? 0) > 0 || root.panePicture.length > 0 || root.paneCaption.length > 0 || root.paneDrawn
     readonly property alias controller: frame.controller
-    // The panel's shadow as Mistress's render measures it (2026-11-02, 1280 x 800): 15 of Surface's 27 at the panel's edge, back to Surface about 20 units out; offset 0,8 (EmuSen_Interface.md §5.4).
-    readonly property real shadowOpacity: 0.9
-    readonly property real shadowRadius: 48
+    readonly property MenuCardReference refView: refLoader.item as MenuCardReference
+    readonly property MenuCardEclipse eclipseView: eclipseLoader.item as MenuCardEclipse
     signal chosen(int index)
-    // Left (-1) or Right (+1) on a row; `held` while the press repeats.
     signal stepped(int index, int by, bool held)
     signal focused(int index)
     signal backed()
     signal acted(string key)
-    // A key the focused row did not take, for the host's model: the Pause Card's reel strides on the shoulders and triggers.
     signal keyed(int key)
-    // The card has left the screen.
     signal gone()
     Accessible.role: Accessible.Pane
     Accessible.name: root.title
-    // Each way stops the other, so a card closed while it still slides in leaves (EmuSen_Qt.md §7.2).
     onOpenChanged: {
         if (root.open) {
             exit.stop()
@@ -63,7 +59,6 @@ FocusScope {
             exit.restart()
         }
     }
-    onCurrentChanged: list.currentIndex = root.current
     NumberAnimation {
         id: enter
         target: root
@@ -81,96 +76,8 @@ FocusScope {
         easing.type: Kit.Tokens.exitCurve
         onFinished: root.gone()
     }
-    Rectangle {
-        objectName: "AdaptiveCardScrim"
-        anchors.fill: parent
-        color: Kit.Tokens.scrim
-    }
-    Rectangle {
-        objectName: "AdaptiveCardPane"
-        x: 576
-        y: 156
-        width: 640
-        height: root.height - 156 - 114
-        radius: Kit.Tokens.tileRadius
-        color: Kit.Tokens.surfaceRaised
-        visible: root.paneShown
-        opacity: 1 - root.slide
-        Column {
-            objectName: "AdaptiveDetail"
-            x: 24
-            y: 24
-            width: parent.width - 48
-            spacing: 4
-            Image {
-                objectName: "PanePicture"
-                width: parent.width
-                height: 444
-                visible: root.panePicture.length > 0
-                source: root.panePicture
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
-            }
-            Text {
-                objectName: "PaneCaption"
-                width: parent.width
-                visible: root.paneCaption.length > 0
-                text: root.paneCaption
-                color: Kit.Tokens.muted
-                font.family: Kit.Tokens.faceText
-                font.pixelSize: 20
-                elide: Text.ElideRight
-            }
-            Repeater {
-                model: root.paneLines
-                Column {
-                    id: said
-                    required property int index
-                    required property string modelData
-                    width: parent.width
-                    Text {
-                        width: parent.width
-                        visible: said.modelData.length > 0
-                        text: said.modelData
-                        color: Kit.Tokens.textStrong
-                        font.family: Kit.Tokens.faceText
-                        font.pixelSize: 22
-                        wrapMode: Text.WordWrap
-                    }
-                    Text {
-                        width: parent.width
-                        visible: text.length > 0
-                        text: root.paneMuted?.[said.index] ?? ""
-                        color: Kit.Tokens.muted
-                        font.family: Kit.Tokens.faceText
-                        font.pixelSize: 20
-                        wrapMode: Text.WordWrap
-                    }
-                }
-            }
-        }
-        Item {
-            id: paneArea
-            anchors.fill: parent
-        }
-    }
-    Rectangle {
-        id: band
-        objectName: "cardBand"
-        x: 0
-        y: root.height - root.bandHeight + root.bandHeight * root.slide
-        width: root.width
-        height: root.bandHeight
-        color: Kit.Tokens.surface
-        Rectangle {
-            width: parent.width
-            height: Kit.Tokens.hoverBorder
-            color: Kit.Tokens.border
-        }
-    }
     Kit.Frame {
         id: frame
-        x: -(root.panelWidth + 40) * root.slide
         width: root.width
         height: root.height
         surfaceDrawn: false
@@ -184,169 +91,84 @@ FocusScope {
             function onBackDeclined() { root.backed() }
             function onActionInvoked(key) { root.acted(key) }
         }
-        Item {
+        Loader {
+            id: refLoader
+            active: !root.eclipse
+            focus: !root.eclipse
             x: -frame.safeX
             y: -frame.safeY
             width: root.width
             height: root.height
-            Rectangle {
-                id: caster
-                objectName: "cardShadowCaster"
-                width: root.panelWidth
-                height: root.height
-                color: Kit.Tokens.surface
-                visible: false
-            }
-            // One shadow on the card's open edge: offset 0,8, blur 24, black at 50% (EmuSen_Interface.md §5.4).
-            MultiEffect {
-                source: caster
-                anchors.fill: caster
-                shadowEnabled: true
-                shadowColor: Kit.Tokens.shadowColor
-                shadowOpacity: root.shadowOpacity
-                shadowVerticalOffset: Kit.Tokens.shadowOffsetY
-                blurMax: root.shadowRadius
-                shadowBlur: 1
-            }
-            Rectangle {
-                objectName: "AdaptiveCard"
-                width: root.panelWidth
-                height: root.height
-                color: Kit.Tokens.surface
-                Accessible.role: Accessible.PopupMenu
-                Accessible.name: root.title
-            }
-            Image {
-                id: coverArt
-                objectName: "cardCover"
-                x: 64
-                y: 50
-                width: 60
-                height: 80
-                visible: root.cover.length > 0
-                source: root.cover
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
-            }
-            Column {
-                x: coverArt.visible ? coverArt.x + coverArt.width + 16 : 64
-                width: root.panelWidth - x - 24
-                anchors.verticalCenter: coverArt.verticalCenter
-                Text {
-                    objectName: "cardBreadcrumb"
-                    width: parent.width
-                    visible: text.length > 0
-                    text: root.breadcrumb
-                    color: Kit.Tokens.muted
-                    font.family: Kit.Tokens.faceText
-                    font.pixelSize: 20
-                    elide: Text.ElideRight
-                }
-                Text {
-                    objectName: "cardTitle"
-                    width: parent.width
-                    text: root.title
-                    color: Kit.Tokens.textStrong
-                    font.family: Kit.Tokens.faceLabel
-                    font.weight: Kit.Tokens.weightTitle
-                    font.pixelSize: 32
-                    fontSizeMode: Text.HorizontalFit
-                    minimumPixelSize: 22
-                    elide: Text.ElideRight
-                }
-            }
-            Text {
-                objectName: "cardFooter"
-                x: 64
-                y: 156 + list.count * Kit.Tokens.rowHeight + 22
-                width: root.panelWidth - 88
-                visible: text.length > 0
-                text: root.footer
-                color: Kit.Tokens.muted
-                font.family: Kit.Tokens.faceText
-                font.pixelSize: 26
-                // Whole: a failure's words run on to the next line, never cut (EmuSen_Qt.md §7.9).
-                wrapMode: Text.WordWrap
-            }
-            Item {
-                objectName: "AdaptiveCardRows"
-                x: 64
-                y: 156
-                width: root.panelWidth - 88
-                height: list.count * Kit.Tokens.rowHeight
-                ListView {
-                    id: list
-                    objectName: "PadMenuList"
-                    anchors.fill: parent
-                    model: root.rows
-                    focus: true
-                    interactive: false
-                    keyNavigationEnabled: true
-                    keyNavigationWraps: false
-                    highlightMoveDuration: Kit.Tokens.instant
-                    highlightResizeDuration: Kit.Tokens.instant
-                    Accessible.role: Accessible.List
-                    onCurrentIndexChanged: root.focused(list.currentIndex)
-                    delegate: Kit.MenuRow {
-                        id: row
-                        required property int index
-                        required property var model
-                        width: ListView.view.width
-                        controller: frame.controller
-                        label: row.model.label
-                        value: row.model.value
-                        steps: row.model.steps
-                        opens: row.model.opens
-                        ruled: true
-                        sectionEnd: row.model.sectionEnd
-                        inset: 24
-                        labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
-                        current: ListView.isCurrentItem
-                        focus: ListView.isCurrentItem
-                        onActivated: root.chosen(row.index)
-                        onActiveFocusChanged: list.currentIndex = row.activeFocus ? row.index : list.currentIndex
-                        Keys.onLeftPressed: (event) => root.stepped(row.index, -1, event.isAutoRepeat)
-                        Keys.onRightPressed: (event) => root.stepped(row.index, 1, event.isAutoRepeat)
-                        Keys.onPressed: (event) => root.keyed(event.key)
-                    }
-                }
+            sourceComponent: MenuCardReference {
+                focus: true
+                controller: frame.controller
+                rows: root.rows
+                title: root.title
+                breadcrumb: root.breadcrumb
+                footer: root.footer
+                cover: root.cover
+                current: root.current
+                paneLines: root.paneLines
+                paneMuted: root.paneMuted
+                panePicture: root.panePicture
+                paneCaption: root.paneCaption
+                paneDrawn: root.paneDrawn
+                help: root.help
+                padFamily: root.padFamily
+                slide: root.slide
+                onChosen: (index) => root.chosen(index)
+                onStepped: (index, by, held) => root.stepped(index, by, held)
+                onFocused: (index) => root.focused(index)
+                onKeyed: (key) => root.keyed(key)
             }
         }
-    }
-    Kit.HelpBar {
-        objectName: "cardHelp"
-        y: band.y + (root.bandHeight - Kit.Tokens.helpBar) / 2
-        width: root.width
-        controller: frame.controller
-        model: frame.help
-        family: root.padFamily
-        color: Kit.Tokens.surface
-        ruled: false
-        leftInset: 64
-        labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
-        entrySpacing: 40
-        glyphGap: 10
-    }
-    // The panel's shadow falls over the help band too, as Mistress's does: the band and its bar are painted after the panel, so the shadow's part beside the panel is drawn again over them.
-    Item {
-        objectName: "bandShadow"
-        x: frame.x + root.panelWidth
-        y: band.y
-        width: 64
-        height: root.bandHeight
-        clip: true
-        MultiEffect {
-            x: -root.panelWidth
-            y: -band.y
-            width: root.panelWidth
+        Loader {
+            id: eclipseLoader
+            active: root.eclipse
+            focus: root.eclipse
+            x: -frame.safeX
+            y: -frame.safeY
+            width: root.width
             height: root.height
-            source: caster
-            shadowEnabled: true
-            shadowColor: Kit.Tokens.shadowColor
-            shadowOpacity: root.shadowOpacity
-            shadowVerticalOffset: Kit.Tokens.shadowOffsetY
-            blurMax: root.shadowRadius
-            shadowBlur: 1
+            sourceComponent: MenuCardEclipse {
+                focus: true
+                controller: frame.controller
+                rows: root.rows
+                title: root.title
+                breadcrumb: root.breadcrumb
+                footer: root.footer
+                current: root.current
+                paneLines: root.paneLines
+                paneMuted: root.paneMuted
+                panePicture: root.panePicture
+                paneCaption: root.paneCaption
+                paneCore: root.paneCore
+                panePlanet: root.panePlanet
+                paneStatus: root.paneStatus
+                paneStatusOk: root.paneStatusOk
+                paneDrawn: root.paneDrawn
+                menu: root.menu
+                hasContinue: root.hasContinue
+                continueTitle: root.continueTitle
+                continueSubtitle: root.continueSubtitle
+                continuePicture: root.continuePicture
+                positionLine: root.positionLine
+                battery: root.battery
+                clockText: root.clockText
+                help: root.help
+                padFamily: root.padFamily
+                slide: root.slide
+                pixelScale: root.pixelScale
+                onChosen: (index) => root.chosen(index)
+                onStepped: (index, by, held) => root.stepped(index, by, held)
+                onFocused: (index) => root.focused(index)
+                onKeyed: (key) => root.keyed(key)
+            }
         }
+    }
+    Item {
+        id: paneArea
+        parent: root.eclipseView ? root.eclipseView.paneSlot : (root.refView ? root.refView.paneSlot : root)
+        anchors.fill: parent
     }
 }

@@ -78,6 +78,8 @@ pub mod qobject {
         GamePageViewerCover,
         GamePageViewerManualCover,
         GamePageCoverArt,
+        /// Eclipse's Home Card menu foot, after every screen before it.
+        CardHome,
     }
 
     extern "RustQt" {
@@ -163,6 +165,7 @@ impl qobject::HelpModel {
             HelpScreen::PausePage => Screen::PausePage,
             HelpScreen::Card => Screen::Card,
             HelpScreen::CardStart => Screen::CardStart,
+            HelpScreen::CardHome => Screen::CardHome,
             HelpScreen::Search => Screen::Search,
             HelpScreen::PauseSlots => Screen::PauseSlots,
             HelpScreen::PauseReel => Screen::PauseReel,
@@ -244,6 +247,7 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::PauseReel => HelpScreen::PauseReel,
         Screen::Card => HelpScreen::Card,
         Screen::CardStart => HelpScreen::CardStart,
+        Screen::CardHome => HelpScreen::CardHome,
         Screen::Search => HelpScreen::Search,
         Screen::Question => HelpScreen::Question,
         Screen::QuestionBack => HelpScreen::QuestionBack,
@@ -292,6 +296,12 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageCheatOn | Screen::GamePageCheatOff => HelpScreen::GamePageChange,
         Screen::GamePagePackageCheck | Screen::GamePagePackageMake | Screen::GamePagePackageStop => HelpScreen::GamePageChoose,
         Screen::GamePagePackageInfo => HelpScreen::GamePageNone,
+        Screen::GamePageEditText => HelpScreen::GamePageEdit,
+        Screen::GamePageScrape => HelpScreen::GamePageChoose,
+        Screen::GamePageViewerBoard | Screen::GamePageViewerBoardDelete => HelpScreen::GamePageViewer,
+        Screen::GamePageViewerBoardCover => HelpScreen::GamePageViewerCover,
+        Screen::GamePageViewerManualBoard => HelpScreen::GamePageManual,
+        Screen::GamePageCropToggle | Screen::GamePageCropEdge => HelpScreen::GamePageValue,
     };
     shown.repr
 }

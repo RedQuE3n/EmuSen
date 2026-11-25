@@ -91,11 +91,17 @@ fn qt_3_4_12_eclipse_s_game_media_is_its_board_and_handles_cover_viewer_and_empt
         assert_eq!(focused(&mut scene), "media.0");
         assert!(scene.tree().nodes.iter().any(|n| n.name == "gameMediaPlace" && n.visible), "count shown on media tile");
 
-        // A opens the program's viewer; B closes it and restores Eclipse Media with refreshed help.
+        // A opens Eclipse's Media Viewer; B closes it and restores Eclipse Media with refreshed help.
         scene.pad(UiButton::Accept);
-        until(&mut scene, "viewer opened", 3000, |s| s.property("theme", "pageDrawn") == "false" && s.property("pageModel", "viewing") == "true");
+        until(&mut scene, "Eclipse viewer opened", 3000, |s| {
+            s.property("theme", "pageDrawn") == "true"
+                && s.property("pageModel", "viewing") == "true"
+                && s.tree().nodes.iter().any(|n| n.name == "viewerCaption" && n.visible)
+        });
         scene.pad(UiButton::Back);
-        until(&mut scene, "back to Eclipse Media from viewer", 3000, |s| s.property("theme", "pageDrawn") == "true" && s.property("pageModel", "viewing") == "false");
+        until(&mut scene, "back to Eclipse Media from viewer", 3000, |s| {
+            s.property("theme", "pageDrawn") == "true" && s.property("pageModel", "viewing") == "false"
+        });
         until(&mut scene, "help chips refreshed after viewer close", 2000, |s| words_under(&s.tree(), "help") == ["View", "Set as cover", "Back", "Home"]);
         scene.assert_quiet();
     }

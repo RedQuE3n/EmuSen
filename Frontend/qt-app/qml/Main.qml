@@ -493,6 +493,8 @@ Window {
             padFamily: program.padFamily
             esdeLook: program.esdeLook
             esdeView: program.esdeView
+            clock: clock
+            battery: machineBattery.level
         }
         // Settings, from Home's Settings place and the Home card's Settings row (EmuSen_Qt.md §7.7); its Library ▸ Themes opens
         // the Themes tab.
@@ -729,6 +731,8 @@ Window {
             clock: clock
             gameMode: program.gameMode
             padFamily: program.padFamily
+            inHand: program.inHand
+            battery: machineBattery.level
         }
         PauseScreen {
             screens: screens
@@ -738,6 +742,8 @@ Window {
             padFamily: program.padFamily
             pauseShown: program.pauseShown
             gameShown: program.gameShown
+            clock: clock
+            battery: machineBattery.level
         }
         ResumeQuestion {
             session: player.session

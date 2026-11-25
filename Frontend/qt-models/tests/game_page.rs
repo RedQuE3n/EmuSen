@@ -953,3 +953,151 @@ fn qt_3_4_12_media_cheats_and_package_subpage_rows_aside_coverable_and_help() {
     assert_eq!(words(Screen::GamePagePackageStop), ["Stop", "Options", "Home"]);
     assert_eq!(words(Screen::GamePagePackageInfo), ["Options", "Home"]);
 }
+
+#[test]
+fn qt_3_4_12_g4_edit_cover_scrape_viewer_and_crop_subpages() {
+    // Edit Details: 18 rows omitting Hidden, release date formatting, Rating & Controller stepping, Clear Scraped Data question.
+    let mut r = read();
+    r.console = "Super Nintendo".into();
+    r.title = "Aurora Drift".into();
+    r.all_details = ALL_DETAILS
+        .iter()
+        .map(|(field, _, _)| {
+            let value = match *field {
+                "name" => "Aurora Drift",
+                "releasedate" => "1994-03-14",
+                "developer" => "Northlight Works",
+                "rating" => "0.8",
+                "controller" => "gamepad_nintendo_snes",
+                _ => "",
+            };
+            Detail { field, value: value.into(), edited: *field == "developer" }
+        })
+        .collect();
+    let mut page = GamePage::new(r, NOW);
+    page.choose_tab(3);
+    page.editing = true;
+    assert_eq!(page.subpage(), Subpage::Edit);
+    assert_eq!(page.trail(), ["Consoles", "Super Nintendo", "Aurora Drift", "Details", EDIT_TITLE]);
+    let rows = page.board_rows();
+    assert_eq!(rows.len(), 18, "9 left text rows + 8 stepped rows + Clear Scraped Data; Hidden omitted");
+    assert!(rows.iter().all(|row| row.label != "Hidden"));
+    assert_eq!(rows[4].label, "Release date");
+    assert_eq!(rows[4].value, "14 March 1994");
+    assert_eq!(rows[5].label, "Developer");
+    assert!(rows[5].editable && !rows[5].steps);
+    assert_eq!(rows[9].label, "Rating");
+    assert_eq!(rows[9].value, "4 of 5");
+    assert!(rows[9].steps && !rows[9].editable);
+    assert_eq!(rows[16].label, "Controller");
+    assert_eq!(rows[16].value, "SNES");
+    assert_eq!(rows[17].label, CLEAR_SCRAPED_LABEL);
+    assert!(!rows[17].steps && !rows[17].editable);
+    assert_eq!(page.board_aside(None, 5).1, "6 of 18");
+    assert_eq!(page.board_help(None, 5), Some(Screen::GamePageEditText));
+    assert_eq!(page.choose_board_edit(4), Outcome::Type { field: "releasedate", title: "Aurora Drift › Release date".into(), start: "1994-03-14".into() });
+    assert_eq!(page.step_board_edit(9, 1), Outcome::Changed(Change::Edit("rating", Some("1".into()))));
+    assert_eq!(page.step_board_edit(9, -1), Outcome::Changed(Change::Edit("rating", Some("0.6".into()))));
+    assert_eq!(page.step_board_edit(10, 1), Outcome::Changed(Change::Edit("completed", Some("1".into()))));
+    assert_eq!(page.reset_board_edit(5), Outcome::Changed(Change::Edit("developer", None)));
+    assert_eq!(page.reset_board_edit(0), Outcome::Nothing);
+    let Outcome::Ask(q, Change::ClearScraped) = page.choose_board_edit(17) else { panic!("Clear Scraped Data asks") };
+    assert_eq!(q.title, "Clear Scraped Data?");
+    assert_eq!(q.choices, ["No", "Clear"]);
+    assert_eq!(format_release_date("19940314T000000"), "14 March 1994");
+    assert_eq!(rating_words(""), "Off");
+    assert_eq!(controller_words("gamepad_nintendo_snes"), "SNES");
+
+    // Cover Art: console subtitle for own vs borrowed cards.
+    let mut cr = covered();
+    cr.console = "Super Nintendo".into();
+    cr.borrowed_console = Some("Game Boy Advance".into());
+    let borrowed = CoverChoice::Borrowed("/roms/gba/Other.gba".into());
+    cr.covers.insert(0, card(borrowed.clone(), "", "/m/other.png"));
+    cr.cover_in_use = borrowed;
+    let mut cpage = GamePage::new(cr, NOW);
+    cpage.choose_tab(3);
+    cpage.covering = true;
+    assert_eq!(cpage.subpage(), Subpage::Cover);
+    assert_eq!(cpage.cover_console(0), "Game Boy Advance");
+    assert_eq!(cpage.cover_console(1), "Super Nintendo");
+    assert_eq!(cpage.board_aside(None, 1), ("Super Nintendo".into(), "2 of 4".into()));
+
+    // Scrape This Game: match formatting, status parsing, 3 matches + 3 bottom actions with separated gap.
+    let mut sr = read();
+    sr.console = "Super Nintendo".into();
+    sr.title = "Aurora Drift".into();
+    let mut spage = GamePage::new(sr, NOW);
+    spage.choose_tab(3);
+    spage.scraping_pick = true;
+    spage.scrape_status = ScrapeStatus::Searching;
+    assert_eq!(spage.subpage(), Subpage::Scrape);
+    assert_eq!(spage.board_aside(None, 0), ("Searching…".into(), "1 of 3".into()));
+    assert_eq!(spage.board_rows().len(), 3);
+    let payload = serde_json::json!({
+        "status": "found",
+        "games": [
+            { "pick": 0, "names": [["us", "Aurora Drift"]], "dates": [["us", "1994-03-14"]], "system_id": 4 },
+            { "pick": 1, "names": [["us", "Aurora Drift II"]], "dates": [], "system_id": 4 },
+            { "pick": 2, "names": [["wor", "Aurora Drift III"]], "dates": [["wor", "1997"]], "system_id": null }
+        ],
+        "detail": ""
+    });
+    spage.scrape_status = parse_scrape_matches(&payload, &|id| (id == 4).then(|| "Super Nintendo".to_owned()), "");
+    assert!(matches!(spage.scrape_status, ScrapeStatus::Found(_)));
+    let srows = spage.board_rows();
+    assert_eq!(srows.len(), 6);
+    assert_eq!(srows[0].label, "Aurora Drift (1994, Super Nintendo)");
+    assert_eq!(srows[1].label, "Aurora Drift II (Super Nintendo)");
+    assert_eq!(srows[2].label, "Aurora Drift III (1997)");
+    assert!(!srows[2].separated && srows[3].separated);
+    assert_eq!(srows[3].label, SCRAPE_OTHER_LABEL);
+    assert_eq!(srows[4].label, SCRAPE_CHECKSUMS_LABEL);
+    assert_eq!(srows[5].label, SCRAPE_NO_LABEL);
+    assert_eq!(spage.board_help(None, 0), Some(Screen::GamePageScrape));
+
+    // Media Viewer: board caption with date & dimensions, Y Delete only on taken, X Set as cover only when coverable.
+    let mut vr = covered();
+    vr.title = "Aurora Drift".into();
+    vr.media_info = vec![
+        MediaInfo { when: Some(1_793_491_200), width: 512, height: 448 },
+        MediaInfo::default(),
+        MediaInfo::default(),
+        MediaInfo::default(),
+    ];
+    let vpage = GamePage::new(vr, NOW);
+    let v0 = vpage.viewer(0).unwrap();
+    assert_eq!(vpage.board_caption(&v0), "Screenshot 1 (1 of 4) · 1 November 2026 · 512 × 448");
+    assert_eq!(vpage.board_viewer_help(&v0), Screen::GamePageViewerBoardDelete);
+    let Outcome::Ask(dq, Change::DeleteMedia(p)) = vpage.viewer_delete(&v0) else { panic!("taken shot asks to delete") };
+    assert_eq!(dq.title, "Delete Screenshot 1?");
+    assert_eq!(dq.sentences[0], "Aurora Drift's Screenshot 1 is deleted. This cannot be undone.");
+    assert_eq!(dq.choices, ["No", "Delete"]);
+    assert_eq!(p, "/m/taken.png");
+    let v1 = vpage.viewer(1).unwrap();
+    assert_eq!(vpage.board_caption(&v1), "Scraped screenshot (2 of 4)");
+    assert_eq!(vpage.board_viewer_help(&v1), Screen::GamePageViewerBoardCover);
+    assert_eq!(vpage.viewer_delete(&v1), Outcome::Nothing, "scraped media is not deleted from viewer");
+
+    // This game's crop: 5 rows always visible, 0.5% stepping auto-enables crop, typed percent saves, preview falls back cleanly.
+    let mut crr = read();
+    crr.title = "Aurora Drift".into();
+    crr.cover = "/m/cover.png".into();
+    let mut crpage = GamePage::new(crr, NOW);
+    crpage.choose_tab(4);
+    crpage.cropping = true;
+    assert_eq!(crpage.subpage(), Subpage::Crop);
+    let crows = crpage.board_rows();
+    assert_eq!(crows.len(), 5, "all 4 edge rows stay visible even when Off");
+    assert_eq!((crows[0].value.as_str(), crows[3].value.as_str()), ("Off", "0%"));
+    assert_eq!(crpage.subpage_subtitle(0), CROP_TOGGLE_SUBTITLE);
+    assert_eq!(crpage.board_help(None, 0), Some(Screen::GamePageCropToggle));
+    assert_eq!(crpage.board_help(None, 3), Some(Screen::GamePageCropEdge));
+    assert_eq!(crpage.crop_preview(3).0, "/m/cover.png");
+    assert_eq!(crpage.step_board_crop(3, 1), Outcome::Changed(Change::Crop(Some(Crop { top: 0.005, ..Crop::default() }))));
+    crpage.changed(&Change::Crop(Some(Crop { top: 0.025, bottom: 0.025, ..Crop::default() })));
+    assert_eq!(crpage.board_rows()[0].value, "On");
+    assert_eq!(crpage.board_rows()[3].value, "2.5%");
+    assert_eq!(crpage.board_aside(None, 3), ("Aurora Drift · Top 2.5%".into(), "4 of 5".into()));
+    assert_eq!(crpage.typed_board_crop(emusen_qt_models::display::EDGES[2].key, "3.5"), Outcome::Changed(Change::Crop(Some(Crop { top: 0.035, bottom: 0.025, ..Crop::default() }))));
+}

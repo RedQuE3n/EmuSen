@@ -1,5 +1,5 @@
 NAME
-    shutdown - terminate the process
+    shutdown, quit, exit - terminate the shell process
 
 SYNOPSIS
     shutdown
@@ -7,11 +7,16 @@ SYNOPSIS
     exit
 
 DESCRIPTION
-    Terminates the whole process - 'quit' and 'exit' are recognized as
-    plain aliases, not separate commands. Works the same whether typed at
-    the initial no-ROM shell or the in-game debug prompt.
+    Requests termination of the shell or host process. 'quit' and 'exit'
+    are built-in aliases for shutdown.
 
 EXAMPLES
     shutdown
     quit
     exit
+
+EXIT STATUS
+    0   Always succeeds and requests process exit.
+
+SEE ALSO
+    dianash(1), tmux(1)

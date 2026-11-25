@@ -1,18 +1,29 @@
 NAME
-    cp - copy a file or directory
+    cp - copy files and directories
 
 SYNOPSIS
-    cp <src> <dst>
-    cp -r <src> <dst>
+    cp [-r | -rf] <src> <dst>
 
 DESCRIPTION
-    Copies a real file. If <dst> is an existing directory, <src> lands
-    inside it ('cp foo.txt logs/' -> 'logs/foo.txt'), matching real cp; an
-    existing destination FILE is silently overwritten (no -i prompt anywhere
-    in this shell, same as 'mv'). A directory requires -r, which copies it
-    and everything inside it. Both <src> and <dst> must resolve inside the
-    project's own directory tree - see 'cd'.
+    Copies <src> to <dst> inside the shell sandbox. If <dst> is an
+    existing directory, <src> is copied into it under its base name. An
+    existing destination file is overwritten without prompting. Copying
+    a file onto itself is refused.
+
+    Copying a directory requires -r (or -rf).
+
+OPTIONS
+    -r, -rf
+        Copy directories recursively (flags matched case-insensitively).
 
 EXAMPLES
-    cp notes.txt notes.bak.txt
-    cp -r home/Logs/Run1 home/Logs/Run1Backup
+    cp /Logs/notes.txt /Logs/notes.bak.txt
+    cp -r /Logs/Run1 /Logs/Run1Backup
+
+EXIT STATUS
+    0   Copy succeeded.
+    1   Missing arguments, path outside sandbox, source missing,
+        directory copied without -r, or I/O error.
+
+SEE ALSO
+    mv(1), rm(1), ls(1), touch(1)

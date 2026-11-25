@@ -1,17 +1,25 @@
 NAME
-    man - show a command's manual page
+    man - display a command's manual page
 
 SYNOPSIS
     man [command]
 
 DESCRIPTION
-    The detail lookup: with a command name, prints that command's full
-    manual page (this text) instead of just its one-line usage. With no
-    argument, there's nothing else useful to show, so it falls back to the
-    same overview 'help' prints. 'help' and 'man' are two separate commands,
-    not aliases of each other - 'help' always lists everything and never
-    shows a single command's full page; 'man' is the other way around.
+    Looks up and prints the manual page for <command> (case-insensitive)
+    from the shell's dianash/man directory. If no detailed manual page
+    exists for a registered command, prints its one-line usage entry.
+
+    With no argument, man prints the full command summary produced by
+    help(1).
 
 EXAMPLES
     man
     man watch
+    man hier
+
+EXIT STATUS
+    0   Manual page or usage printed.
+    1   No manual entry or command exists for <command>.
+
+SEE ALSO
+    help(1), which(1), hier(7)

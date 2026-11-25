@@ -5,5 +5,16 @@ SYNOPSIS
     sprites
 
 DESCRIPTION
-    Lists every active sprite: index, position, size, tile index, palette,
-    priority, and horizontal/vertical flip state.
+    Lists every active sprite reported by the attached core: index, X/Y
+    position, width and height, tile index, palette, priority, and
+    horizontal/vertical flip flags.
+
+EXAMPLES
+    sprites
+
+EXIT STATUS
+    0   Sprite table printed.
+    1   No target attached or session service fault.
+
+SEE ALSO
+    tile(1), tilemap(1), pal(1), regs(1)

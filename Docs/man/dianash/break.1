@@ -5,10 +5,21 @@ SYNOPSIS
     break
 
 DESCRIPTION
-    A hardcoded, zero-argument parser keyword (not an ordinary dispatched
-    command), same as real bash's own break/continue builtins. Ends the
-    nearest enclosing 'for'/'while'/'until' loop immediately. Outside any
-    loop it's a silent no-op, matching bash. Note: the breakpoint command is
-    named 'bp', not 'break' - a command literally named 'break' would be
-    unreachable, since this keyword is recognized before any command lookup
-    happens at all.
+    Zero-argument shell keyword that immediately terminates the nearest
+    enclosing for(1), while(1), or until loop. Outside any loop, break
+    succeeds as a no-op.
+
+    Because break is parsed as a language keyword before command lookup,
+    breakpoints are managed by bp(1) rather than break.
+
+EXAMPLES
+    for i in 1 2 3 4; do
+        if [ "$i" -eq 3 ]; then break; fi
+        echo $i
+    done
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    continue(1), for(1), while(1), bp(1)

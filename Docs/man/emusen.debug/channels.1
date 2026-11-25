@@ -1,10 +1,21 @@
 NAME
-    channels - list audio channels/voices
+    channels - list audio channels and voices
 
 SYNOPSIS
     channels
 
 DESCRIPTION
-    Lists every audio channel/voice the current core reports: index, active
-    state, envelope level (0-100), muted state, and core-specific detail.
-    Pair with 'mute' to isolate one voice for listening/measurement.
+    Lists every audio channel or voice reported by the attached core:
+    channel index, active state, envelope level (0-100), muted state, and
+    core-specific voice details. Pair with mute(1) to isolate individual
+    channels.
+
+EXAMPLES
+    channels
+
+EXIT STATUS
+    0   Channel list printed.
+    1   No target attached or session service fault.
+
+SEE ALSO
+    mute(1), regs(1), summary(1)

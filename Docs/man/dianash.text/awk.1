@@ -1,24 +1,51 @@
 NAME
-    awk - a small AWK subset for reshaping text by field
+    awk - filter and reshape text records by field
 
 SYNOPSIS
     awk [-F sep] 'program' [path]
 
 DESCRIPTION
-    Real AWK is a whole language; this is deliberately a small subset -
-    enough to cover 'filter/reshape another command's output by field',
-    without embedding a second full expression language. Supported
-    patterns: empty (matches every line), /regex/, NR==N (also !=, <, <=, >,
-    >=), BEGIN, END. Supported actions: {print expr[, expr...][; print
-    ...]}, where expr is $0, $N, $NF, NR, NF, a "quoted string", or a bare
-    number - no concatenation, no arithmetic, no user variables. A bare
-    pattern with no {...} defaults to {print $0} (real awk's own default
-    action); an explicit empty {} does nothing. Field splitting is
-    whitespace-runs by default, or a literal separator string via -F (not a
-    regex the way real awk's multi-character -F is). Reads piped stdin, or a
-    trailing file path (walled to the project's own directory tree).
+    A focused AWK subset for filtering and reshaping command output or
+    files inside the shell sandbox. Reads piped standard input when
+    present, otherwise reads [path].
+
+    Supported patterns:
+        (empty)         Matches every line.
+        /regex/         Matches lines matching a Rust regular expression
+                        (no look-around or back-references).
+        NR op N         Compares the 1-based record number using ==, !=,
+                        <, <=, >, or >=.
+        BEGIN, END      Runs once before the first line or after the
+                        last line.
+
+    Supported actions:
+        {print expr[, expr...][; print ...]}
+                        Prints expressions separated by single spaces.
+                        Supported expressions are $0, $N (1-based
+                        field), $NF, NR, NF, double-quoted strings, and
+                        numeric literals. A pattern with no action
+                        defaults to {print $0}; an empty {} does
+                        nothing.
+
+    By default, fields split on runs of whitespace with leading and
+    trailing whitespace trimmed. With -F, fields split on a literal
+    separator string (not a regex).
+
+OPTIONS
+    -F sep, -Fsep
+        Set the literal field separator. Escape sequences \t and \n in
+        sep are translated to tab and newline characters.
 
 EXAMPLES
     regs | awk '{print $1}'
     watch log 1 | awk -F, 'NR>1{print $2}'
-    echo -e "a\nb\nc" | awk 'NR==2'
+    cat /Logs/run.log | awk 'NR==2'
+    awk -F'\t' '{print $1, $NF}' /Logs/table.tsv
+
+EXIT STATUS
+    0   Program ran successfully.
+    1   Missing program, syntax error, path outside sandbox, or read
+        error.
+
+SEE ALSO
+    grep(1), sed(1), sort(1), uniq(1), wc(1)

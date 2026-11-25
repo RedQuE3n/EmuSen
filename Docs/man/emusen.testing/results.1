@@ -1,34 +1,57 @@
 NAME
-    results - the store's answers
+    results - query recorded trials, unit timings, and flakes
 
 SYNOPSIS
     results [--last N]
     results --slowest N [--tier T] [--since D]
-    results --flaky [--since D] | --misses [--since D] | --quarantine
+    results --flaky [--since D]
+    results --misses [--since D]
+    results --quarantine
     results --selected TRIAL
-    results unit UNIT | test NAME
+    results unit UNIT
+    results test NAME
     results export [--since D]
 
 DESCRIPTION
-    A command of the emusen.testing module; it only reads. The store is
-    ~/.local/share/EmuSen/testing/studio.db (EMUSEN_TESTING_DB for
-    another). D is a span such as 14d, 12h or 30m.
+    Read-only query command of the emusen.testing module. Reads the
+    SQLite testing store at ~/.local/share/EmuSen/testing/studio.db
+    (or the path named by EMUSEN_TESTING_DB).
 
-        (none)       the last trials: number, start, verdict, tier, tree,
-                     branch, time and the source a backfilled one came from
-        --slowest    units by median wall time, with runs and the maximum
-        --flaky      tests recorded flaky, with their runners, and tests
-                     with two outcomes under one key
-        --misses     impact's misses as the nightly records them
-        --quarantine the quarantine in force
-        --selected   why each unit was in a trial: reason, file, key, and
-                     the trial a reused unit came from
-        unit, test   history, the newest first
-        export       every trial since D as one JSON object a line
+    With no flags or subcommands, prints the most recent trials (number,
+    start time, verdict, tier, tree, branch, duration, and backfill
+    source if applicable).
 
-    Units read back from land.sh's old logs are named as land.sh ran them:
-    a crate folder, and 'dotnet:EmuSen.WiseMan' for a dotnet step without
-    a TRX file. See EmuSen_Testing.md §3.5.
+    Subcommands:
+        unit UNIT   History for UNIT, newest first.
+        test NAME   History for test NAME, newest first.
+        export      Emit every trial since --since as JSON Lines (one
+                    JSON object per line).
+
+OPTIONS
+    --last N
+        Number of recent trials to list (default: 10).
+    --slowest N
+        Show the N slowest units by median wall time, with run counts
+        and maximum duration.
+    --tier T
+        Filter --slowest results to tier T.
+    --since D
+        Time window filter using a duration suffix such as 14d, 12h, or
+        30m.
+    --flaky
+        List tests recorded as flaky (with runners) and tests with
+        conflicting outcomes under the same input key.
+    --misses
+        List impact(1) selection misses recorded by nightly runs.
+    --quarantine
+        List active test quarantines.
+    --selected TRIAL
+        Show why each unit was selected in trial number TRIAL (reason,
+        triggering file, key, and source trial if reused).
+
+ENVIRONMENT
+    EMUSEN_TESTING_DB
+        Override path to the studio SQLite database.
 
 EXAMPLES
     results --slowest 15 --tier land
@@ -36,3 +59,10 @@ EXAMPLES
     results unit "cargo:EmuSen/Cores/Sony/Sapphire - PlayStation 2"
     results test Every_audited_window_state
     results export --since 30d > trials.jsonl
+
+EXIT STATUS
+    0   Query completed.
+    2   Invalid subcommand, invalid option or duration, or store error.
+
+SEE ALSO
+    trial(1), ingest(1), impact(1), units(1)

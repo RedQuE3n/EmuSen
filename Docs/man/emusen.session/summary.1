@@ -1,17 +1,26 @@
 NAME
-    summary - free-text state dump
+    summary - print a free-text state summary of the loaded core
 
 SYNOPSIS
     summary
 
 DESCRIPTION
-    Prints whatever the current IDebugTarget's GetSummaryText() has to say -
-    a catch-all, unstructured dump for state that doesn't have its own
-    dedicated command yet. 'No target attached.' if no ROM is loaded.
+    Prints the attached core's unstructured free-text state summary from
+    the emusen.session service, covering state that does not yet have a
+    dedicated inspection command. Prints 'No target attached.' if no game
+    is loaded.
 
-    On a core of the stable ABI the first line names the engine, the system
-    and the frame, and the console's system pack adds what it reads from the
-    main processor's live registers. On the SNES that is the 65816's state on
-    one line, P's letters upper case where set, the same line C# Venus prints
-    first; the PPU lines Venus adds need the video registers, which no SNES
-    engine of the stable ABI publishes yet.
+    On cores using the stable ABI, the first line identifies the engine,
+    system, and current frame number, followed by main-CPU register state
+    supplied by the console's system pack (for example, a single-line
+    65816 register summary on SNES with active P flags in uppercase).
+
+EXAMPLES
+    summary
+
+EXIT STATUS
+    0   Summary printed (including when no target is attached).
+    1   Session service fault.
+
+SEE ALSO
+    regs(1), cpus(1), spaces(1), coretop(1)

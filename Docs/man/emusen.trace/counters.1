@@ -1,5 +1,5 @@
 NAME
-    counters - per-address read/write/execute tallies
+    counters - tally per-address reads, writes, executes, and uninit reads
 
 SYNOPSIS
     counters on <space>
@@ -10,41 +10,38 @@ SYNOPSIS
     counters cold <addr> <len>
 
 DESCRIPTION
-    Counts every read, write and execute per address in one memory space.
-    Where 'watch' records individual events with context and 'cov' records
-    only whether an address ever executed, this records how MANY times -
-    which is the question behind 'is this table live or dead', 'which byte
-    of this struct does the game actually touch', and 'which half of this
-    buffer is the one being updated'.
+    Counts every read, write, execute, and uninitialized read per byte
+    address in one selected memory space. Counting is off by default and
+    arms against one memory space at a time.
 
-    Armed against one space at a time, because the tallies cost four arrays
-    the size of that space - worth paying where a question is being asked,
-    not worth paying everywhere by default. 'counters off' stops counting
-    but leaves what was collected readable; 'counters clear' zeroes the
-    counts and stays armed.
+    An address read before any write occurs while counting is armed is
+    also tallied as an uninitialized read ('u'). Arm counting before the
+    code path of interest runs so prior initialization is not miscounted.
+    Execution counts track the processor's execution bus space; plain RAM
+    spaces show zero executes unless code actually runs from RAM.
 
-    A bare address (with an optional length) reports totals over that range,
-    including how many of its bytes were touched at all. 'counters top'
-    ranks the busiest addresses - 'r' reads (default), 'w' writes, 'x'
-    executes, 'u' uninitialized reads. 'counters cold' is the inverse:
-    addresses in a range that nothing ever touched, which is what proves a
-    table is unused rather than merely quiet.
+OPTIONS
+    on <space>
+        Start tallying accesses for memory space <space> (see spaces(1)).
 
-UNINITIALIZED READS
-    An address read before anything wrote it (since counting started) is
-    counted separately. On real hardware that read returns whatever the RAM
-    powered up holding, so a game doing it is either relying on
-    power-on state or has a genuine bug - and an emulator whose RAM fill
-    differs from hardware will diverge exactly there. 'counters top u' is
-    the fastest way to find those addresses.
+    off
+        Stop tallying while preserving collected counts for inspection.
 
-    'Since counting started' is doing real work in that sentence: arm before
-    the moment being studied, not after, or an address the game initialized
-    earlier will look uninitialized.
+    clear
+        Reset all tallies to zero while remaining armed.
 
-    Execution is counted against whatever space the core reports its program
-    counter in (the CPU bus), so counting a RAM space leaves the execute
-    column at zero unless that RAM is genuinely executed from.
+    <addr> [<len>]
+        Print read, write, execute, and uninit totals across hex range
+        <addr> for <len> bytes (default 1), plus how many bytes were
+        touched.
+
+    top [r|w|x|u] [<n>]
+        Rank the <n> hottest addresses (default 20) by reads ('r',
+        default), writes ('w'), executes ('x'), or uninitialized reads
+        ('u').
+
+    cold <addr> <len>
+        List addresses in the hex range that were never accessed.
 
 EXAMPLES
     counters on WRAM
@@ -52,6 +49,12 @@ EXAMPLES
     counters top w 10
     counters top u
     counters cold 1000 200
+    counters off
+
+EXIT STATUS
+    0   Command completed (or usage message printed).
+    1   No target attached, unknown space, invalid argument, or session
+        service fault.
 
 SEE ALSO
-    watch, cov, search, memfind, profile
+    watch(1), cov(1), bp(1), search(1), memfind(1), profile(1), spaces(1)

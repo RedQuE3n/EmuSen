@@ -5,14 +5,27 @@ SYNOPSIS
     find [path] [-name pattern]
 
 DESCRIPTION
-    Walks <path> (default: current directory) and everything under it,
-    printing one entry per line, each path shown relative the same way it
-    was given (e.g. 'find EmuSen' prints 'EmuSen/...' paths). -name filters
-    to entries whose own name matches a glob ('*'/'?' wildcards only, no
-    regex) - a directory that doesn't match is still walked into, only
-    excluded from the printed list itself, matching real find's own
-    behavior. Walled to the project's own directory tree (see 'cd').
+    Recursively traverses [path] (default: current directory) inside the
+    shell sandbox and prints matching entries one per line, preserving
+    the path prefix as given.
+
+    When -name is specified, directories whose names do not match are
+    still traversed so matching descendants are printed.
+
+OPTIONS
+    -name pattern
+        Filter entries by base name using a case-insensitive glob
+        supporting '*' (any sequence), '?' (any single character), and
+        '\' to match the next character literally.
 
 EXAMPLES
-    find
-    find EmuSen.DianaSh -name '*Command.cs'
+    find /Logs
+    find /Games -name '*.sfc'
+    find /Saves -name '*.srm'
+
+EXIT STATUS
+    0   Traversal completed.
+    1   Path outside sandbox or path does not exist.
+
+SEE ALSO
+    ls(1), grep(1), cd(1), hier(7)

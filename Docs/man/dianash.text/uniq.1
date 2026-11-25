@@ -1,23 +1,31 @@
 NAME
-    uniq - collapse adjacent duplicate lines
+    uniq - filter or count adjacent duplicate lines
 
 SYNOPSIS
-    uniq [-c] [-D] [-w <chars>]
+    uniq [-c] [-D] [-w <chars>] [text...]
 
 DESCRIPTION
-    Collapses ADJACENT duplicate lines only, matching real uniq's own
-    semantics - it is NOT a global dedup, so pipe through 'sort' first if
-    that's what's actually wanted ('regs | sort | uniq'). -c prefixes each
-    remaining line with its consecutive repeat count.
+    Processes piped standard input (or trailing literal [text...]) and
+    collapses consecutive identical lines to a single line. Non-adjacent
+    duplicates are not merged; pipe through sort(1) first for global
+    deduplication.
 
-    -D prints every line of each run of two or more adjacent duplicates,
-    and nothing of a line that has none: the duplicates themselves, not
-    one of each. -c and -D together are refused, as GNU uniq refuses them.
-
-    -w <chars> (also -w<chars>) compares only the first <chars>
-    characters of each line, so lines that differ after them count as
-    duplicates; the first line of a run is the one kept.
+OPTIONS
+    -c  Prefix each output line with its consecutive repetition count
+        and a space. Cannot be combined with -D.
+    -D  Print every line belonging to a run of two or more adjacent
+        duplicates, omitting unique lines. Cannot be combined with -c.
+    -w <chars>, -w<chars>
+        Compare only the first <chars> characters of each line when
+        detecting duplicates. The first line of each run is kept.
 
 EXAMPLES
     watch log 1 | sort | uniq -c
-    rom hash -r --comparable / | sort | uniq -D -w 40
+    rom hash -r --comparable /Games | sort | uniq -D -w 40
+
+EXIT STATUS
+    0   Output produced.
+    1   Invalid -w count, or -c and -D specified together.
+
+SEE ALSO
+    sort(1), wc(1), grep(1)

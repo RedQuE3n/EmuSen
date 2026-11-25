@@ -1,5 +1,5 @@
 NAME
-    history - list previously executed commands
+    history - display or clear command history
 
 SYNOPSIS
     history
@@ -8,15 +8,26 @@ SYNOPSIS
     !!
 
 DESCRIPTION
-    Lists every completed (non-buffered) command line typed at the prompt,
-    numbered from 1 like bash's own history builtin. 'history clear' forgets
-    all of it. '!N' re-runs history entry N; '!!' re-runs the last command -
-    both are expanded before lexing even happens, the same point a real
-    shell expands '!'-references, and only at the start of a brand-new
-    (not mid-block) line. A script run via 'source' does NOT add its own
-    lines to history - only the 'source' invocation itself does.
+    Lists completed interactive command lines recorded in the current
+    session, numbered starting at 1 (up to 500 entries). 'history clear'
+    erases the recorded entries.
+
+    At the start of a new interactive line (not inside an open block),
+    '!N' re-runs history entry N and '!!' re-runs the most recent entry.
+    History expansion runs before lexing, and the expanded command is
+    what gets recorded. Lines inside a sourced script are not added to
+    history and do not undergo '!' expansion; only the source(1) line
+    itself is recorded.
 
 EXAMPLES
     history
     !!
     !12
+    history clear
+
+EXIT STATUS
+    0   History displayed or cleared, or re-run command succeeded.
+    1   History expansion referenced an empty history or invalid index.
+
+SEE ALSO
+    dianash(1), source(1), tmux(1)

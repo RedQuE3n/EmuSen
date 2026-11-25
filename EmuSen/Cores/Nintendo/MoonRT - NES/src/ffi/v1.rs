@@ -6,7 +6,7 @@ use emusen_native::core::{
     Region, Scope, Setting, SettingKind, Space, StateFormat, System, Video, caps, status,
 };
 
-use super::{BATTERY_SPACE, STATUS_NOT_INES, STATUS_NULL, STATUS_PRG_TRUNCATED, STATUS_UNSUPPORTED_BOARD, build_rom_patches, fault_status, rom_patch};
+use super::{BATTERY_SPACE, STATUS_NOT_INES, STATUS_PRG_TRUNCATED, STATUS_UNSUPPORTED_BOARD, build_rom_patches, fault_status};
 use crate::machine::{LoadError, Machine, OLDEST_READABLE_VERSION, SAMPLE_RATE, STATE_VERSION};
 use crate::memory::cartridge::{Cartridge, RomError};
 use crate::model::Model;
@@ -400,30 +400,6 @@ impl v1::Core for Machine {
 }
 
 emusen_native::core_exports!(Machine; reset, mutes, rom_patches, debug, debug_stack, raw_picture, debug_registers, debug_disassemble);
-
-/// The byte a CPU read of `address` returns for `original` under
-/// the current patches, or -1 for none, the exhaustive patch test's view through the v1 loader (EmuSen_CoreAPI.md §26).
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn moonrt_core_rom_patch(machine: *const v1::sys::Machine, address: u32, original: u32) -> i32 {
-    unsafe { v1::exports::core_of::<Machine>(machine) }.map_or(STATUS_NULL, |m| rom_patch(m, address, original))
-}
-
-/// One instruction with the frame loop's DMA charge, NMI edge and stolen
-/// cycles, the cycles or a fault status; a test extension, as the step goldens drive it (EmuSen_Backend.md §19.3.5, M15).
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned, with no other call on it in flight.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn moonrt_core_step(machine: *mut v1::sys::Machine) -> i32 {
-    unsafe { v1::exports::core_of_mut::<Machine>(machine) }.map_or(STATUS_NULL, |m| {
-        crate::take_fault();
-        let cycles = m.step();
-        crate::take_fault().map_or(cycles, fault_status)
-    })
-}
 
 #[cfg(test)]
 mod tests {

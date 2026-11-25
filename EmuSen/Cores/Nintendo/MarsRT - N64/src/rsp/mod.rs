@@ -30,22 +30,6 @@ const VECTOR_OPERATION: u32 = 1 << 25;
 const TRANSFER_FORMATS: u32 = 12;
 const TRANSFER_SCALES: u64 = 0x4444_3344_3210;
 
-/// The processor's scalar state, copied in from C# before a call and out after it. See Mars_Native.md §3.1.
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug, PartialEq)]
-pub struct Scalars {
-    pub pc: u32,
-    pub next_pc: u32,
-    pub vco: u16,
-    pub vcc: u16,
-    pub divide_input: u16,
-    pub divide_output: u16,
-    pub vce: u8,
-    pub halted: u8,
-    pub broke: u8,
-    pub divide_loaded: u8,
-}
-
 /// What the processor runs over: its registers, IMEM and DMEM, and its scalars. See Mars_Native.md §5.2.
 pub trait Memory {
     fn gpr(&self, register: usize) -> u32;
@@ -156,131 +140,7 @@ pub fn narrow(words: &[u64; 8]) -> ([[u16; 8]; 3], [u16; 8]) {
     (std::array::from_fn(|third| std::array::from_fn(|i| (words[i] >> (32 - 16 * third)) as u16)), std::array::from_fn(|i| (words[i] >> 48) as u16))
 }
 
-/// Memory C# owns: pinned registers, vectors, accumulator, IMEM and DMEM, and scalars copied across each call.
-pub struct Pinned {
-    pub s: Scalars,
-    gpr: *mut u32,
-    vector: *mut u16,
-    accumulator: *mut u64,
-    imem: *const u8,
-    dmem: *mut u8,
-    simd: bool,
-}
-
-impl Memory for Pinned {
-    #[inline(always)]
-    fn gpr(&self, register: usize) -> u32 {
-        unsafe { *self.gpr.add(register & 31) }
-    }
-    #[inline(always)]
-    fn set_gpr(&mut self, register: usize, value: u32) {
-        unsafe { *self.gpr.add(register & 31) = value }
-    }
-    #[inline(always)]
-    fn element(&self, register: usize, element: usize) -> u16 {
-        unsafe { *self.vector.add(((register & 31) << 3) | (element & 7)) }
-    }
-    #[inline(always)]
-    fn set_element(&mut self, register: usize, element: usize, value: u16) {
-        unsafe { *self.vector.add(((register & 31) << 3) | (element & 7)) = value }
-    }
-    #[inline(always)]
-    fn acc(&self, element: usize) -> u64 {
-        unsafe { *self.accumulator.add(element & 7) }
-    }
-    #[inline(always)]
-    fn set_acc(&mut self, element: usize, value: u64) {
-        unsafe { *self.accumulator.add(element & 7) = value }
-    }
-    #[inline(always)]
-    fn data(&self, address: u32) -> u8 {
-        unsafe { *self.dmem.add((address & DATA_MASK) as usize) }
-    }
-    #[inline(always)]
-    fn set_data(&mut self, address: u32, value: u8) {
-        unsafe { *self.dmem.add((address & DATA_MASK) as usize) = value }
-    }
-    #[inline(always)]
-    fn fetch(&self, pc: u32) -> u32 {
-        let at = (pc & PC_MASK) as usize;
-        let bytes = unsafe { std::ptr::read_unaligned(self.imem.add(at) as *const [u8; 4]) };
-        u32::from_be_bytes(bytes)
-    }
-    #[inline(always)]
-    fn pc(&self) -> u32 {
-        self.s.pc
-    }
-    #[inline(always)]
-    fn set_pc(&mut self, value: u32) {
-        self.s.pc = value
-    }
-    #[inline(always)]
-    fn next_pc(&self) -> u32 {
-        self.s.next_pc
-    }
-    #[inline(always)]
-    fn set_next_pc(&mut self, value: u32) {
-        self.s.next_pc = value
-    }
-    #[inline(always)]
-    fn vco(&self) -> u16 {
-        self.s.vco
-    }
-    #[inline(always)]
-    fn set_vco(&mut self, value: u16) {
-        self.s.vco = value
-    }
-    #[inline(always)]
-    fn vcc(&self) -> u16 {
-        self.s.vcc
-    }
-    #[inline(always)]
-    fn set_vcc(&mut self, value: u16) {
-        self.s.vcc = value
-    }
-    #[inline(always)]
-    fn vce(&self) -> u8 {
-        self.s.vce
-    }
-    #[inline(always)]
-    fn set_vce(&mut self, value: u8) {
-        self.s.vce = value
-    }
-    #[inline(always)]
-    fn divide_input(&self) -> u16 {
-        self.s.divide_input
-    }
-    #[inline(always)]
-    fn set_divide_input(&mut self, value: u16) {
-        self.s.divide_input = value
-    }
-    #[inline(always)]
-    fn divide_output(&self) -> u16 {
-        self.s.divide_output
-    }
-    #[inline(always)]
-    fn set_divide_output(&mut self, value: u16) {
-        self.s.divide_output = value
-    }
-    #[inline(always)]
-    fn divide_loaded(&self) -> u8 {
-        self.s.divide_loaded
-    }
-    #[inline(always)]
-    fn set_divide_loaded(&mut self, value: u8) {
-        self.s.divide_loaded = value
-    }
-    #[inline(always)]
-    fn halted(&self) -> u8 {
-        self.s.halted
-    }
-    #[inline(always)]
-    fn simd(&self) -> bool {
-        self.simd
-    }
-}
-
-/// The processor over a `Memory`: C#'s pinned arrays for the twin, or MarsRT's own state.
+/// The processor over a `Memory`.
 pub struct Rsp<M: Memory> {
     pub m: M,
 }
@@ -444,22 +304,6 @@ enum Reciprocal {
     Single,
     Low,
     High,
-}
-
-impl Rsp<Pinned> {
-    /// # Safety
-    /// Every pointer must stay valid, and be touched by no one else while a call into this processor runs:
-    /// gpr 32 words, vector 256 halfwords, accumulator 8 doublewords, imem and dmem 4096 bytes each.
-    pub unsafe fn new(
-        gpr: *mut u32,
-        vector: *mut u16,
-        accumulator: *mut u64,
-        imem: *const u8,
-        dmem: *mut u8,
-    ) -> Rsp<Pinned> {
-        tables();
-        Rsp { m: Pinned { s: Scalars::default(), gpr, vector, accumulator, imem, dmem, simd: simd_default() } }
-    }
 }
 
 impl<M: Memory> Rsp<M> {

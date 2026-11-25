@@ -4,7 +4,6 @@
 use emusen_native::abi;
 
 use crate::Fault;
-use crate::machine::Machine;
 use crate::memory::bus::RomPatches;
 
 mod units;
@@ -46,15 +45,4 @@ pub fn build_rom_patches(triples: &[u32]) -> Option<Box<RomPatches>> {
         }
     }
     if map.is_empty() { None } else { Some(Box::new(map)) }
-}
-/// The patch table's answer for one read, which `moonrt_core_rom_patch` gives.
-fn rom_patch(m: &Machine, address: u32, original: u32) -> i32 {
-    let (Ok(address), Ok(original)) = (u16::try_from(address), u8::try_from(original)) else { return -1 };
-    match &*m.bus.rom_patches {
-        Some(map) => match map.get(&address) {
-            Some(entries) if entries[original as usize] != 0 => (entries[original as usize] & 0xFF) as i32,
-            _ => -1,
-        },
-        None => -1,
-    }
 }

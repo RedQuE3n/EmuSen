@@ -1,6 +1,4 @@
-//! MarsRT on the core ABI v1: `Core` over the machine and its scan-out, the console's facts as descriptors, the settings C#
-//! Mars offers as the schema, and the `marsrt_core_*` extensions WiseMan's tests call on a v1 handle. See
-//! Mars_Native.md §7 and EmuSen_CoreAPI.md §18.6.
+//! MarsRT on the core ABI v1: `Core` over the machine and scan-out, descriptors, and settings (Mars_Native.md §7).
 
 use std::sync::Arc;
 
@@ -11,7 +9,7 @@ use emusen_native::core::{
 use emusen_native::debug::Hooks;
 use emusen_native::ffi::{StateMachine, Status};
 
-use super::{Core, PHASES, STATUS_NOT_A_ROM, STATUS_NULL, space};
+use super::{Core, PHASES, STATUS_NOT_A_ROM, space};
 use crate::machine::{Machine, SNAPSHOT_VERSION, STATE_VERSION};
 use crate::memory::bus::StateShape;
 use crate::rom::RomImage;
@@ -783,149 +781,6 @@ impl v1::Core for Core {
 }
 
 emusen_native::core_exports!(Core; present, phases, audio_peek, axes, settings, setting_notes, rom_patches, debug, debug_registers, telemetry, presence, debug_translate);
-
-// ---- Extensions: the tests' ways into the machine, which WiseMan's fixture reaches by name and no shipped host calls (EmuSen_Backend.md §18.10)
-
-/// A live handle's core, or `None` for null.
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned.
-unsafe fn of<'a>(machine: *const v1::sys::Machine) -> Option<&'a Core> {
-    unsafe { v1::exports::core_of::<Core>(machine) }
-}
-
-/// # Safety
-/// As `of`.
-unsafe fn of_mut<'a>(machine: *mut v1::sys::Machine) -> Option<&'a mut Core> {
-    unsafe { v1::exports::core_of_mut::<Core>(machine) }
-}
-
-/// `values` copied up to `len` into `out` when it is not null; returns how many there are.
-///
-/// # Safety
-/// `out` valid for `len` values, or null.
-unsafe fn copy<T: Copy>(values: &[T], out: *mut T, len: usize) -> i64 {
-    if !out.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(values.as_ptr(), out, values.len().min(len)) };
-    }
-    values.len() as i64
-}
-
-/// The IS-Viewer's transcript, copied up to `len` bytes; returns its whole length.
-///
-/// # Safety
-/// As `marsrt_core_gpu_report`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_is_viewer_text(machine: *const v1::sys::Machine, out: *mut u8, len: usize) -> i64 {
-    unsafe { of(machine) }.map_or(STATUS_NULL as i64, |c| unsafe { copy(&c.machine.bus.is_viewer.text[..], out, len) })
-}
-
-/// The interpreter alone for `steps` instructions, as the corpus runs; through the blocks when they are on.
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_run_steps(machine: *mut v1::sys::Machine, steps: u64) -> i32 {
-    let Some(c) = (unsafe { of_mut(machine) }) else { return STATUS_NULL };
-    c.machine.run_steps(steps);
-    0
-}
-
-/// One COP0 register, `Cop0[register]`; the cheat gate reads Status (12).
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_cop0(machine: *const v1::sys::Machine, register: u32) -> u64 {
-    unsafe { of(machine) }.map_or(0, |c| c.machine.cpu.cop0[(register & 31) as usize])
-}
-
-/// A test's way to a device register: `MemoryBus.Write32` at a physical address, as the WiseMan tests program the VI.
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_bus_write32(machine: *mut v1::sys::Machine, physical: u32, value: u32) -> i32 {
-    let Some(c) = (unsafe { of_mut(machine) }) else { return STATUS_NULL };
-    c.machine.bus.write32(physical, value);
-    0
-}
-
-/// A test's way to read a device register: `MemoryBus.Read32` at a physical address, side effects and all.
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_bus_read32(machine: *mut v1::sys::Machine, physical: u32) -> u32 {
-    unsafe { of_mut(machine) }.map_or(0, |c| c.machine.bus.read32(physical))
-}
-
-/// A test's way to a COP0 register, with everything C# derives after a write outside an instruction.
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_set_cop0(machine: *mut v1::sys::Machine, register: u32, value: u64) -> i32 {
-    let Some(c) = (unsafe { of_mut(machine) }) else { return STATUS_NULL };
-    c.machine.cpu.cop0[(register & 31) as usize] = value;
-    c.machine.cpu.cop0_written(&c.machine.bus);
-    0
-}
-
-/// A test's way to an interrupt: the sources unmasked and raised at the MI, as `Mi.Mask` and `Mi.Raise` are set by hand.
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_mi_raise(machine: *mut v1::sys::Machine, sources: u32) -> i32 {
-    let Some(c) = (unsafe { of_mut(machine) }) else { return STATUS_NULL };
-    c.machine.bus.mi.mask |= sources as i32;
-    c.machine.bus.mi.raise(sources as i32);
-    0
-}
-
-/// A test's way to run the signal processor by itself: `Rsp.Start` at `pc` when `start` is set, then `Rsp.Step` `steps` times, its
-/// coverage recorded while the hooks arm it.
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_rsp_step(machine: *mut v1::sys::Machine, start: u32, pc: u32, steps: u32) -> i32 {
-    let Some(c) = (unsafe { of_mut(machine) }) else { return STATUS_NULL };
-    c.sync_rsp_coverage();
-    if start != 0 {
-        c.machine.bus.sp.processor.start(pc);
-    }
-    for _ in 0..steps {
-        if !c.machine.bus.sp.processor.halted {
-            c.machine.bus.rsp_step_one();
-        }
-    }
-    0
-}
-
-/// The version of the state last loaded: 1 a state, 2 a snapshot, 0 none.
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_state_kind(machine: *const v1::sys::Machine) -> i32 {
-    unsafe { of(machine) }.map_or(STATUS_NULL, |c| c.machine.loaded_version)
-}
-
-/// A state's fields alone, nothing derived, as the state tests compare them byte for byte; zero, or a negative status, and a
-/// failed load changes nothing.
-///
-/// # Safety
-/// `machine` a live v1 handle or null; `data` valid for `len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_load_fields(machine: *mut v1::sys::Machine, data: *const u8, len: usize) -> i32 {
-    let Some(c) = (unsafe { of_mut(machine) }) else { return STATUS_NULL };
-    match c.machine.load_state(unsafe { emusen_native::ffi::input(data, len) }) {
-        Ok(()) => 0,
-        Err(e) => e.status(),
-    }
-}
 
 #[cfg(test)]
 mod tests {

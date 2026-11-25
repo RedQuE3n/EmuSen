@@ -1,12 +1,10 @@
-//! MarsRT's machine and its host, the VI's scan-out, behind the core ABI v1 (`v1`), and C# Mars's native components (`rdp`,
-//! `vi`). A negative return is a status. See Mars_Native.md §5.1, §5.2, §5.5 and §7.
+//! MarsRT's machine and its VI scan-out behind the core ABI v1 (`v1`). A negative return is a status (Mars_Native.md §7).
 
 pub mod blocks;
 pub mod host;
 pub mod multiple;
 pub mod threads;
 pub mod v1;
-pub mod vi;
 
 use std::sync::Arc;
 

@@ -501,6 +501,8 @@ Window {
             objectName: "settingsModel"
             platformLibrary: program.platformLibrary
             cores: library.cores
+            builtIns: BuiltInThemes.manifests
+            themedSettings: program.themeHost?.settings ?? false
             open: screens.shown === Screens.Settings || program.pauseShown
             facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
             gamePads: pads.gamePads
@@ -510,6 +512,11 @@ Window {
             onLever: (system, id, value) => player.session.setLever(system, id, value)
             onOpenFolder: (path) => folders.open(path)
             onChooseFolder: (key, start) => folders.choose(key, start)
+            onThemeUsed: (folder) => program.theme = folder
+            onThemeRestyled: (esde) => {
+                program.esdeChosen = program.esdeChosen && esde
+                library.restyle()
+            }
             // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14),
             // and a suspended game's picture is drawn as its display settings now ask (§1.8.10).
             onSaved: {
@@ -560,6 +567,79 @@ Window {
             function onLeft() { screens.back() }
             function onPassed(key) { screens.act(key) }
             function onRefocus(row) { settingsModel.setFocused(row) }
+            function onTypeWords(start) { settingsThemeTypist.setText(start, start.length) }
+        }
+        // Docked keyboard overlay for Profiles, Shader parameters search and ScreenScraper log-in while Eclipse draws Settings.
+        Kit.KeyboardModel {
+            id: settingsThemeTypist
+            onClosed: settingsModel.typed(settingsThemeTypist.text)
+        }
+        Loader {
+            id: settingsThemeTypingScope
+            anchors.fill: parent
+            z: 10
+            active: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.typing
+            focus: active
+            onActiveChanged: if (!active && chosenTheme.focus) chosenTheme.forceActiveFocus()
+            sourceComponent: Kit.NormalizedCanvas {
+                id: settingsThemeTypingCanvas
+                anchors.fill: parent
+                Kit.Frame {
+                    id: settingsThemeTyping
+                    objectName: "settingsTyping"
+                    anchors.fill: parent
+                    focus: true
+                    padFamily: program.padFamily
+                    helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
+                    helpSpacing: 40
+                    helpGlyphGap: 10
+                    controller.navigationShown: false
+                    help: HelpModel {
+                        screen: HelpModel.ToolSearch
+                    }
+                    Connections {
+                        target: settingsThemeTyping.controller
+                        function onActionInvoked(key) { settingsThemeTypist.act(key) }
+                    }
+                    Column {
+                        spacing: 12
+                        Text {
+                            text: settingsModel.typingTitle
+                            color: Kit.Tokens.textStrong
+                            font.family: Kit.Tokens.faceText
+                            font.weight: Kit.Tokens.weightTitle
+                            font.pixelSize: Kit.Tokens.fontTitle
+                        }
+                        Text {
+                            text: settingsModel.typingPrompt
+                            color: Kit.Tokens.muted
+                            font.family: Kit.Tokens.faceText
+                            font.pixelSize: Kit.Tokens.fontBody
+                        }
+                        Text {
+                            objectName: "settingsTyped"
+                            text: settingsModel.typingDisplay(settingsThemeTypist.text)
+                            color: Kit.Tokens.text
+                            font.family: Kit.Tokens.faceText
+                            font.pixelSize: Kit.Tokens.fontRow
+                        }
+                    }
+                    Item {
+                        x: -settingsThemeTyping.safeX
+                        y: -settingsThemeTyping.safeY
+                        width: settingsThemeTypingCanvas.width
+                        height: settingsThemeTypingCanvas.height
+                        Kit.Keyboard {
+                            objectName: "settingsKeyboard"
+                            model: settingsThemeTypist
+                            y: 398
+                            width: settingsThemeTypingCanvas.width
+                            focus: true
+                            labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
+                        }
+                    }
+                }
+            }
         }
         // Key listener for Hotkeys rebinding while the chosen theme draws Settings (EmuSen_Input.md §10.6).
         FocusScope {

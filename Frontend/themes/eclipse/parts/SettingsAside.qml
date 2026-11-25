@@ -142,6 +142,11 @@ FocusScope {
         pixelScale: root.pixelScale
         visible: Settings.cardPlanet >= -2
     }
+    SettingsThemePreview {
+        unit: root.unit
+        pixelScale: root.pixelScale
+        visible: Settings.themePreview
+    }
     Line {
         objectName: "asideCaption"
         unit: root.unit
@@ -186,6 +191,19 @@ FocusScope {
     SettingsFirmwareCard {
         unit: root.unit
         visible: Settings.firmwareCount > 0
+    }
+    // Theme metadata line drawn between heading and findings on Themes (EclipseSettingsThemes:73).
+    Line {
+        objectName: "asideMeta"
+        unit: root.unit
+        visible: text.length > 0
+        width: root.width
+        text: Settings.boardMeta
+        color: Tokens.muted
+        wrapMode: Text.WordWrap
+        lineHeightMode: Text.FixedHeight
+        lineHeight: 1.5 * 18
+        size: 18
     }
     Line {
         objectName: "asideSentence"

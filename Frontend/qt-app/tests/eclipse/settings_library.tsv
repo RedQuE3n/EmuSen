@@ -1,7 +1,7 @@
 # Eclipse's Settings, the Library page, against its board, EclipseSettingsLibrary.dc.html (1920 by 1200), one row an element (EmuSen_Qt.md §3.4.11).
 # board_height: 1200
 # Read from the board in Chrome after document.fonts.ready, with Sora and JetBrains Mono (measured 2026-11-23); the rules are settings_display.tsv's (tests/eclipse_board/mod.rs).
-# The state held is the board's: Library shown, ROM folder focused; the program holds 11 rows (Media viewer at 6, ES-DE theme folder at 10, R-20261116-21), so the window holds rows 0 to 8 and rows 9 to 10 are held when scrolled in.
+# The state held is the board's: Library shown, ROM folder focused; the program holds 12 rows (Account and run at 4, Media viewer at 7, ES-DE theme folder at 11, R-20261116-21, -24), so the window holds rows 0 to 8 and rows 9 to 11 are held when scrolled in.
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 backdropGround	17	the ground, #07080F	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
 backdropField.0	19	the page's glow: a 900 px disc of #1FA890, blurred 150 px at 0.4	the kit's BackdropField, SettingsInk.pageGlow	-	right:-280	60	900	900	-	opacity:0.4	blur:150	built	field 0 -1 #1FA890 0
@@ -60,45 +60,51 @@ rowAbout.3	45	its short line	the row's about	Text	in:row.3:24	-	-	-	-	Tokens.mut
 rowValue.3	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.3	inright:row.3:24	-	-	-	-	built	-
 rowWords.3	51	"ScreenScraper", muted	the row's value	Text	in:rowValue.3:0	-	-	-	-	Tokens.muted	22	built	400 0 none
 rowDoor.3	59	›, 22 px, muted	Chevron	Chevron	after:rowWords.3:14	mid:row.3	inright:rowValue.3:0	22	-	Tokens.muted	-	built	-
-row.4	42	row 4, Collections	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.3:10	820	84	20	-	-	built	-
+row.4	42	row 4, Account and run (program-only, R-20261116-24)	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.3:10	820	84	20	-	-	built	-
 rowFill.4	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.4:0	top:row.4:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.4	44	"Collections"	the row's label	Text	in:row.4:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowName.4	44	"Account and run"	the row's label	Text	in:row.4:24	-	-	-	-	Tokens.text	24	built	600 0 none
 rowAbout.4	45	its short line	the row's about	Text	in:row.4:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.4	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.4	inright:row.4:24	-	-	-	-	built	-
 rowDoor.4	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.4	inright:rowValue.4:0	22	-	Tokens.muted	-	built	-
-row.5	42	row 5, Hidden games	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.4:10	820	84	20	-	-	built	-
+row.5	42	row 5, Collections	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.4:10	820	84	20	-	-	built	-
 rowFill.5	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.5:0	top:row.5:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.5	44	"Hidden games"	the row's label	Text	in:row.5:24	-	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.5	45	its short line (R-20261116-20)	the row's about	Text	in:row.5:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowName.5	44	"Collections"	the row's label	Text	in:row.5:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.5	45	its short line	the row's about	Text	in:row.5:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.5	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.5	inright:row.5:24	-	-	-	-	built	-
-rowLess.5	49	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.5:0	mid:row.5	22	22	-	Tokens.accent	-	built	-
-rowWords.5	51	"Not listed", 14 px after it	the row's value	Text	after:rowLess.5:14	-	-	-	-	Tokens.text	22	built	400 0 none
-rowMore.5	53	▶, 14 px after the value	Chevron	Chevron	after:rowWords.5:14	mid:row.5	22	22	-	Tokens.accent	-	built	-
-row.6	42	row 6, Media viewer (program-only, R-20261116-21)	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.5:10	820	84	20	-	-	built	-
+rowDoor.5	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.5	inright:rowValue.5:0	22	-	Tokens.muted	-	built	-
+row.6	42	row 6, Hidden games	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.5:10	820	84	20	-	-	built	-
 rowFill.6	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.6:0	top:row.6:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.6	44	"Media viewer"	the row's label	Text	in:row.6:24	-	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.6	45	its hint, cut at the value (R-20261123-31)	the row's about	Text	in:row.6:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowName.6	44	"Hidden games"	the row's label	Text	in:row.6:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.6	45	its short line (R-20261116-20)	the row's about	Text	in:row.6:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.6	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.6	inright:row.6:24	-	-	-	-	built	-
-rowDoor.6	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.6	inright:rowValue.6:0	22	-	Tokens.muted	-	built	-
-row.7	42	row 7, Cheats	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.6:10	820	84	20	-	-	built	-
+rowLess.6	49	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.6:0	mid:row.6	22	22	-	Tokens.accent	-	built	-
+rowWords.6	51	"Not listed", 14 px after it	the row's value	Text	after:rowLess.6:14	-	-	-	-	Tokens.text	22	built	400 0 none
+rowMore.6	53	▶, 14 px after the value	Chevron	Chevron	after:rowWords.6:14	mid:row.6	22	22	-	Tokens.accent	-	built	-
+row.7	42	row 7, Media viewer (program-only, R-20261116-21)	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.6:10	820	84	20	-	-	built	-
 rowFill.7	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.7:0	top:row.7:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.7	44	"Cheats"	the row's label	Text	in:row.7:24	-	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.7	45	its short line (R-20261123-16)	the row's about	Text	in:row.7:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowName.7	44	"Media viewer"	the row's label	Text	in:row.7:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.7	45	its hint, cut at the value (R-20261123-31)	the row's about	Text	in:row.7:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.7	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.7	inright:row.7:24	-	-	-	-	built	-
 rowDoor.7	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.7	inright:rowValue.7:0	22	-	Tokens.muted	-	built	-
-row.8	42	row 8, Compressed discs	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.7:10	820	84	20	-	-	built	-
+row.8	42	row 8, Cheats	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.7:10	820	84	20	-	-	built	-
 rowFill.8	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.8:0	top:row.8:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.8	44	"Compressed discs"	the row's label	Text	in:row.8:24	-	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.8	45	its short line (R-20261116-20)	the row's about	Text	in:row.8:24	-	-	-	-	Tokens.muted	17	built	400 0 none
+rowName.8	44	"Cheats"	the row's label	Text	in:row.8:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.8	45	its short line (R-20261123-16)	the row's about	Text	in:row.8:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.8	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.8	inright:row.8:24	-	-	-	-	built	-
 rowDoor.8	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.8	inright:rowValue.8:0	22	-	Tokens.muted	-	built	-
-row.9	42	row 9, ES-DE media folder, held when scrolled in	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.8:10	820	84	20	-	-	built	-
+row.9	42	row 9, Compressed discs, held when scrolled in	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.8:10	820	84	20	-	-	built	-
 rowFill.9	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.9:0	top:row.9:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
-rowName.9	44	"ES-DE media folder"	the row's label	Text	in:row.9:24	-	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.9	45	its short line, cut at the value as the board cuts it	the row's about	Text	in:row.9:24	-	before:rowValue.9:24	-	-	Tokens.muted	17	built	400 0 none
+rowName.9	44	"Compressed discs"	the row's label	Text	in:row.9:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.9	45	its short line (R-20261116-20)	the row's about	Text	in:row.9:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.9	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.9	inright:row.9:24	-	-	-	-	built	-
-rowWords.9	51	"None", muted	the row's value	Text	in:rowValue.9:0	-	-	-	-	Tokens.muted	22	built	400 0 none
-rowDoor.9	59	›, 22 px, muted	Chevron	Chevron	after:rowWords.9:14	mid:row.9	inright:rowValue.9:0	22	-	Tokens.muted	-	built	-
+rowDoor.9	59	›, 22 px, muted	Chevron	Chevron	-	mid:row.9	inright:rowValue.9:0	22	-	Tokens.muted	-	built	-
+row.10	42	row 10, ES-DE media folder, held when scrolled in	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.9:10	820	84	20	-	-	built	-
+rowFill.10	42	its fill and 1 px inset line #22263A	SettingsInk.row	Rectangle	in:row.10:0	top:row.10:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
+rowName.10	44	"ES-DE media folder"	the row's label	Text	in:row.10:24	-	-	-	-	Tokens.text	24	built	600 0 none
+rowAbout.10	45	its short line, cut at the value as the board cuts it	the row's about	Text	in:row.10:24	-	before:rowValue.10:24	-	-	Tokens.muted	17	built	400 0 none
+rowValue.10	47	its value, 24 px in from the right	the row's value form	Row	-	mid:row.10	inright:row.10:24	-	-	-	-	built	-
+rowWords.10	51	"None", muted	the row's value	Text	in:rowValue.10:0	-	-	-	-	Tokens.muted	22	built	400 0 none
+rowDoor.10	59	›, 22 px, muted	Chevron	Chevron	after:rowWords.10:14	mid:row.10	inright:rowValue.10:0	22	-	Tokens.muted	-	built	-
 rowRing	42	the focused row's ring: 3 px of #07080F, 3 px of the accent, 40 px glow 8 px out	the kit's FocusRing	FocusRing	-	-	-	-	-	-	-	built	ring 3 3 40 8 26 #66F0B4C4 #FF07080F #FFF6E7D8
 settingsAside	66	the About panel, 424 wide, 96 px from the right	SettingsAside	SettingsAside	-	236	right:96	-	-	-	-	built	-
 asideFolder	67	the ROM folder count card, 424 wide, corner 22, #11131C, 1 px inset #262A3A	SettingsFolder, Settings.preview 7	SettingsFolder	in:settingsAside:0	top:settingsAside:0	424	-	22	#FF11131C	-	built	line 1 #FF262A3A

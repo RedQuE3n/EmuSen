@@ -105,6 +105,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "settingsBack"]
         fn settings_back(self: Pin<&mut ThemeActions>) -> bool;
+        /// Selects an inline kind pill on Settings -> Library -> Themes (1.20, board #61).
+        #[qinvokable]
+        #[cxx_name = "settingsInlinePill"]
+        fn settings_inline_pill(self: Pin<&mut ThemeActions>, index: i32) -> bool;
 
         /// A game's page's calls, each the program's own (EmuSen_Qt.md §3.2, `Page`).
         #[qinvokable]
@@ -175,6 +179,7 @@ pub enum ScreenAction {
     SettingsFocus(i32),
     SettingsShoulder(i32),
     SettingsBack,
+    SettingsInlinePill(i32),
     PageSection(i32),
     PageAct(i32),
     PageStepAction(i32, i32),
@@ -245,6 +250,10 @@ impl qobject::ThemeActions {
 
     pub fn settings_back(self: Pin<&mut Self>) -> bool {
         self.call(ScreenAction::SettingsBack)
+    }
+
+    pub fn settings_inline_pill(self: Pin<&mut Self>, index: i32) -> bool {
+        self.call(ScreenAction::SettingsInlinePill(index))
     }
 
     pub fn page_section(self: Pin<&mut Self>, section: i32) -> bool {

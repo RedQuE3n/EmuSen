@@ -60,6 +60,7 @@
         <file alias="parts/SettingsMeter.qml">../themes/eclipse/parts/SettingsMeter.qml</file>
         <file alias="parts/SettingsNav.qml">../themes/eclipse/parts/SettingsNav.qml</file>
         <file alias="parts/SettingsRow.qml">../themes/eclipse/parts/SettingsRow.qml</file>
+        <file alias="parts/SettingsThemePreview.qml">../themes/eclipse/parts/SettingsThemePreview.qml</file>
         <file alias="parts/StateCard.qml">../themes/eclipse/parts/StateCard.qml</file>
         <file alias="parts/Tabs.qml">../themes/eclipse/parts/Tabs.qml</file>
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>

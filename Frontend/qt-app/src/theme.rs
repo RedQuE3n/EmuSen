@@ -347,8 +347,8 @@ impl ActionSink for Sink {
     fn act(&mut self, action: &Action) -> bool {
         // Safety: the cell holds the feed while it lives and null after; the theme's engine runs on the feed's thread.
         let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
-        // X back to default, Hotkeys X clear, Consoles Y filter, and LT/RT letter jump on a theme's Settings (R-20261116-22).
-        if matches!(action, Action::Act(key) if matches!(key.as_str(), help::DEFAULT | help::CLEAR | help::CONSOLES_FILTER | help::CONSOLES_LETTER_BACK | help::CONSOLES_LETTER_ON)) {
+        // X back to default, Hotkeys X clear, Themes X check, Consoles Y filter, and LT/RT letter jump on a theme's Settings (R-20261116-22, -24).
+        if matches!(action, Action::Act(key) if matches!(key.as_str(), help::DEFAULT | help::CLEAR | help::CHECK | help::CONSOLES_FILTER | help::CONSOLES_LETTER_BACK | help::CONSOLES_LETTER_ON)) {
             let settings = feed.taken(Role::Settings).then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
             return settings.is_some_and(|s| match action {
                 Action::Act(key) if key == help::DEFAULT => {
@@ -357,6 +357,10 @@ impl ActionSink for Sink {
                 }
                 Action::Act(key) if key == help::CLEAR => {
                     s.act(&QString::from(help::CLEAR));
+                    true
+                }
+                Action::Act(key) if key == help::CHECK => {
+                    s.act(&QString::from(help::CHECK));
                     true
                 }
                 Action::Act(key) if key == help::CONSOLES_FILTER => s.toggle_consoles_with_games(),
@@ -453,6 +457,7 @@ impl ActionSink for Sink {
                 took
             }
             (ScreenAction::SettingsShoulder(by), Some(s), _) => s.shoulder(*by),
+            (ScreenAction::SettingsInlinePill(index), Some(s), _) => s.choose_inline_pill(*index),
             (ScreenAction::SettingsBack, Some(s), _) => {
                 if let Some(start) = s.view().chip_start().filter(|&st| *s.focused() >= st as i32) {
                     s.set_focused(self.chip_return.clamp(0, start.saturating_sub(1) as i32));

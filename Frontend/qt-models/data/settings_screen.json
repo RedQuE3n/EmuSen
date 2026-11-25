@@ -135,6 +135,7 @@
          "value": {"from": "AppSettings EmuSenTheme", "blank": "EmuSen (built in)", "words": {"emusen": "EmuSen (built in)"}}},
         {"id": "scraping", "label": "Scraping", "hint": "Where art and facts come from, and what is fetched.", "page": "Scraping",
          "value": {"from": "AppSettings Scraping", "words": {"true": "ScreenScraper", "false": "Off"}}},
+        {"id": "scraperun", "label": "Account and run", "about": "Your ScreenScraper account, a queued run and the scraper's status.", "hint": "Your ScreenScraper account, a queued run and the scraper's status.", "page": "ScrapeRun"},
         {"id": "collections", "label": "Collections", "hint": "The automatic collections shown, your own, and how lists are sorted.", "page": "Collections"},
         {"id": "hidden", "row": "AppSettings ShowHiddenGames", "about": "Games hidden from the library. Their files are never touched."},
         {"id": "viewer", "label": "Media viewer", "hint": "How X shows a game's videos, pictures and manual: the help's place, the media types, the video's settings.", "page": "Media viewer"},

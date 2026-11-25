@@ -133,18 +133,62 @@ ThemeScreen {
                             value: root.isConsoles
                         }
                     }
-                    // A page's trail over its heading, every level above the page (G:66, R-20261123-39).
-                    Line {
-                        id: crumb
-                        objectName: "settingsCrumb"
-                        unit: design.unit
-                        boardLine: true
-                        visible: !root.isConsoles && text.length > 0
+                    // A page's trail over its heading, with inline kind pills on Themes (G:66, R-20261123-39, EclipseSettingsThemes:40).
+                    Row {
+                        id: crumbRow
+                        objectName: "settingsCrumbRow"
+                        visible: !root.isConsoles && crumb.text.length > 0
                         x: 500 * design.unit
                         y: 150 * design.unit
-                        text: Settings.trailLine
-                        color: Tokens.muted
-                        size: 20
+                        height: Settings.inlinePills.length > 0 ? 34 * design.unit : crumb.height
+                        spacing: 18 * design.unit
+                        Line {
+                            id: crumb
+                            objectName: "settingsCrumb"
+                            unit: design.unit
+                            boardLine: true
+                            y: (crumbRow.height - height) / 2
+                            text: Settings.boardTrailLine
+                            color: Tokens.muted
+                            size: 20
+                        }
+                        Row {
+                            id: inlinePills
+                            objectName: "settingsInlinePills"
+                            visible: Settings.inlinePills.length > 0
+                            spacing: 8 * design.unit
+                            Repeater {
+                                model: Settings.inlinePills
+                                delegate: Rectangle {
+                                    id: pill
+                                    required property int index
+                                    required property string modelData
+                                    readonly property bool active: pill.index === Settings.inlinePill
+                                    objectName: "inlinePill." + pill.index
+                                    height: 34 * design.unit
+                                    width: pillLabel.implicitWidth + 32 * design.unit
+                                    radius: 17 * design.unit
+                                    color: pill.active ? Tokens.accent : "transparent"
+                                    border.width: pill.active ? 0 : 2 * design.unit
+                                    border.color: own.ringMuted
+                                    Line {
+                                        id: pillLabel
+                                        objectName: "inlinePillWords." + pill.index
+                                        unit: design.unit
+                                        boardLine: true
+                                        anchors.centerIn: parent
+                                        text: pill.modelData
+                                        size: 20
+                                        weight: pill.active ? Tokens.weightTitle : Font.Normal
+                                        color: pill.active ? Tokens.overAccent : Tokens.text
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: Actions.settingsInlinePill(pill.index)
+                                    }
+                                }
+                            }
+                        }
                     }
                     Line {
                         id: heading
@@ -153,7 +197,7 @@ ThemeScreen {
                         visible: !root.isConsoles
                         x: 500 * design.unit
                         // Under the trail by its 6 px margin and the column's 10 px gap (G:66-68).
-                        y: crumb.visible ? crumb.y + crumb.height + (6 + 10) * design.unit : 150 * design.unit
+                        y: crumbRow.visible ? crumbRow.y + crumbRow.height + (6 + 10) * design.unit : 150 * design.unit
                         // Its box the board's line box, its words on the board's baseline, as the rows' are (G:68).
                         boardLine: true
                         text: Settings.boardHeading

@@ -646,7 +646,7 @@ pub fn saves(backend: &str) {
     oracle(&SAVES, backend, &|scene, sdl, pad, differences| three_levels(scene, sdl, pad, &SAVES, backend, differences));
 }
 
-/// Board #30 (EclipseSettingsLibrary.dc.html): Library section, ROM folder focused with the count card in the About panel, 11 rows in the program (R-20261116-21).
+/// Board #30 (EclipseSettingsLibrary.dc.html): Library section, ROM folder focused with the count card in the About panel, 12 rows in the program (R-20261116-21, -24).
 pub const LIBRARY: Page = Page {
     name: "library",
     table: include_str!("../eclipse/settings_library.tsv"),
@@ -663,15 +663,16 @@ pub const LIBRARY: Page = Page {
         (1, "Artwork folder", "Box art, named like the game's file; blank keeps it beside the games.", Some(true)),
         (2, "Themes", "The big picture's look: EmuSen's own, or an ES-DE theme's.", Some(false)),
         (3, "Scraping", "Where art and facts come from, and what is fetched.", Some(false)),
-        (4, "Collections", "The automatic collections shown, your own, and how lists are sorted.", Some(false)),
-        (5, "Hidden games", "Games hidden from the library. Their files are never touched.", Some(false)),
-        (7, "Cheats", "The cheats of the game last played, turned on or off.", Some(false)),
-        (8, "Compressed discs", "The library's discs converted to CHD beside them, checked and listed.", Some(false)),
-        (9, "ES-DE media folder", "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", Some(true)),
+        (5, "Collections", "The automatic collections shown, your own, and how lists are sorted.", Some(false)),
+        (6, "Hidden games", "Games hidden from the library. Their files are never touched.", Some(false)),
+        (8, "Cheats", "The cheats of the game last played, turned on or off.", Some(false)),
+        (9, "Compressed discs", "The library's discs converted to CHD beside them, checked and listed.", Some(false)),
+        (10, "ES-DE media folder", "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", Some(true)),
     ],
     program_only: &[
-        (6, "Media viewer"),
-        (10, "ES-DE theme folder"),
+        (4, "Account and run"),
+        (7, "Media viewer"),
+        (11, "ES-DE theme folder"),
     ],
     hidden: &[],
     glow: "#1FA890",

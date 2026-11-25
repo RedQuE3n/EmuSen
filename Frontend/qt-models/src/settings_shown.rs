@@ -62,6 +62,12 @@ pub struct BoardRow {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BoardAside {
     pub heading: String,
+    pub trail_line: String,
+    pub inline_pills: Vec<String>,
+    pub inline_pill: i32,
+    pub theme_preview: bool,
+    pub preview_image: String,
+    pub meta: String,
     pub about_heading: String,
     pub sentence: String,
     pub lines: Vec<String>,
@@ -150,6 +156,9 @@ impl Page {
             Page::ShaderConsoles { levers: true } => ("leverConsoles", vec![]),
             Page::Shaders(c) => ("shaders", vec![c]),
             Page::Levers(c) => ("levers", vec![c]),
+            Page::ShaderParams(c) => ("shaderParams", vec![c]),
+            Page::Themes => ("themes", vec![]),
+            Page::ScrapeRun => ("scrapeRun", vec![]),
             Page::Output => ("output", vec![]),
         };
         std::iter::once(kind).chain(of).collect::<Vec<_>>().join(":")
@@ -297,6 +306,24 @@ impl SettingsView {
                 }
                 return out;
             }
+            Some(Page::Levers(_) | Page::ShaderParams(_) | Page::Shaders(_)) => {
+                if let Some(br) = self.shaders_board_row(row, entry) {
+                    return br;
+                }
+                return out;
+            }
+            Some(Page::Themes) => {
+                if let Some(br) = self.themes_board_row(row, entry) {
+                    return br;
+                }
+                return out;
+            }
+            Some(Page::ScrapeRun) => {
+                if let Some(br) = self.scrape_board_row(entry) {
+                    return br;
+                }
+                return out;
+            }
             _ => {}
         }
         let Some(console) = self.console() else { return out };
@@ -424,6 +451,12 @@ impl SettingsView {
         let s6_cards_help = matches!(self.page(), Some(Page::Players | Page::Profiles | Page::Profile(..)));
         let mut out = BoardAside {
             heading,
+            trail_line: self.trail_line(),
+            inline_pills: Vec::new(),
+            inline_pill: -1,
+            theme_preview: false,
+            preview_image: String::new(),
+            meta: String::new(),
             about_heading: if pane.preview == crate::settings::Preview::Chips {
                 pane.caption.clone()
             } else {
@@ -442,6 +475,17 @@ impl SettingsView {
             cards_help: cards_page || s6_cards_help,
             box_menu: cards_page || s6_page,
         };
+        if self.shaders_board_aside(focused, board_rows, pane, &mut out) {
+            return out;
+        }
+        if matches!(self.page(), Some(Page::Themes)) {
+            self.themes_board_aside(focused, &mut out);
+            return out;
+        }
+        if matches!(self.page(), Some(Page::ScrapeRun)) {
+            self.scrape_board_aside(focused, board_rows, pane, &mut out);
+            return out;
+        }
         match self.page() {
             Some(Page::Players) => {
                 out.about_heading = self.heading();

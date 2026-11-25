@@ -31,4 +31,10 @@ QtObject {
     readonly property color checkerDark: "#2A2E40"
     readonly property color ringMuted: "#5A6076"
     readonly property color unsupportedName: "#8E94AB"
+    // Themes' fallback swatch card ground and four accent tiles (EclipseSettingsThemes:67-70).
+    readonly property color themePreviewGround: "#0C1030"
+    readonly property color swatch0: "#3F6FE0"
+    readonly property color swatch1: "#1FA890"
+    readonly property color swatch2: "#B0487A"
+    readonly property color swatch3: "#B8862B"
 }

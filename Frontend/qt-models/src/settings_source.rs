@@ -6,9 +6,10 @@ use crate::clients::app_settings;
 use crate::settings::{Model, SettingsSource};
 use crate::settings_controllers::{Chooser, ControlWord};
 use emusen_platform_client::bindings::consts as files;
-use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, DIR_SCREENSHOTS, DIR_SHADERS, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
-use emusen_platform_client::{serenity, Platform};
-use serde_json::Value;
+use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, DIR_MEDIA, DIR_SCREENSHOTS, DIR_SHADERS, DIR_THEMES, FILE_GAMES, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
+use emusen_platform_client::scrape::ScraperConfig;
+use emusen_platform_client::{serenity, Lent, Platform};
+use serde_json::{json, Value};
 
 pub struct ClientSettings {
     platform: std::sync::Arc<Platform>,
@@ -65,6 +66,90 @@ impl ClientSettings {
     pub fn chooser(&self) -> Result<std::sync::Arc<dyn Chooser>, String> {
         let controls = ControlWord::read(&self.platform.bindings_controls().map_err(words)?);
         Ok(std::sync::Arc::new(Endymion(self.platform.clone(), controls)))
+    }
+
+    /// Galaxia's installed themes folder, for Settings -> Library -> Themes (#61).
+    pub fn themes_store(&self) -> Option<std::path::PathBuf> {
+        self.platform.directory(DIR_THEMES).ok().flatten()
+    }
+
+    /// Live ScreenScraper account, queue, run and quota snapshot from emusen.scrape (#62).
+    pub fn scrape_snapshot(&self) -> crate::settings_scrape::ScrapeState {
+        let mut out = crate::settings_scrape::ScrapeState::default();
+        let Ok(service) = self.platform.scrape_service() else { return out };
+        if let Ok(account) = service.get(&json!({ "what": "account" })) {
+            out.signed_in = account["signed_in"].as_bool().unwrap_or(false);
+            out.account_name = account["name"].as_str().unwrap_or_default().to_owned();
+            out.verified = account["verified"].as_str().unwrap_or_default().to_owned();
+        }
+        if let Ok(queue) = service.get(&json!({ "what": "queue" })) {
+            out.queued = queue.as_array().map_or(0, Vec::len);
+        }
+        if let Ok(quota) = service.get(&json!({ "what": "quota" })) {
+            out.requests_today = quota["requests"].as_u64().unwrap_or(0);
+            out.max_per_day = quota["max_per_day"].as_u64();
+            out.threads = quota["threads"].as_u64().unwrap_or(0);
+            out.gate = quota["gate"].as_str().unwrap_or_default().to_owned();
+        }
+        if let Ok(progress) = service.progress(0) {
+            out.queued = out.queued.max(progress["interrupted"].as_u64().unwrap_or(0) as usize);
+            out.run = crate::scrape_run::Run::of(&progress);
+        }
+        out
+    }
+
+    /// Signs into a ScreenScraper member account through emusen.scrape (#62).
+    pub fn scrape_sign_in(&self, user: &str, password: &str) -> Result<Value, String> {
+        let service = self.platform.scrape_service().map_err(words)?;
+        let _ = service.change(&json!({ "op": "settings", "developer_files": true }));
+        service.change(&json!({ "op": "sign_in", "user": user, "password": password })).map_err(words)
+    }
+
+    /// Signs out of the saved ScreenScraper member account through emusen.scrape (#62).
+    pub fn scrape_sign_out(&self) -> Result<Value, String> {
+        let service = self.platform.scrape_service().map_err(words)?;
+        service.change(&json!({ "op": "sign_out" })).map_err(words)
+    }
+
+    /// Re-verifies the saved ScreenScraper member account through emusen.scrape (#62).
+    pub fn scrape_check(&self) -> Result<Value, String> {
+        let service = self.platform.scrape_service().map_err(words)?;
+        let _ = service.change(&json!({ "op": "settings", "developer_files": true }));
+        service.change(&json!({ "op": "check" })).map_err(words)
+    }
+
+    /// Resumes queued games from a stopped scrape run, opening the media store if idle (#62).
+    pub fn scrape_resume(&self, settings: &Value) -> Result<i64, String> {
+        let service = self.platform.scrape_service().map_err(words)?;
+        let kinds = service.get(&json!({ "what": "kinds" })).map_err(words)?;
+        let mut req = crate::scrape_run::request(&[], false, settings, &kinds);
+        req["resume"] = json!(true);
+        match service.start(&req) {
+            Ok(n) => Ok(n),
+            Err(_) => {
+                let root = self.platform.directory(DIR_MEDIA).map_err(words)?.ok_or("the media folder is not known")?;
+                let games_db = self.platform.file(FILE_GAMES).ok().map(|p| p.to_string_lossy().into_owned());
+                let sqlite = Lent::open(crate::clients::SQLITE).map_err(words)?;
+                let text = |key: &str| settings.get(key).and_then(Value::as_str).filter(|v| !v.is_empty());
+                let config = ScraperConfig {
+                    root: root.to_string_lossy().into_owned(),
+                    games_db,
+                    settings: json!({
+                        "roms": text("RomDirectory"), "art": text("ArtworkDirectory"), "esde_media": text("EsdeMediaDirectory"),
+                        "openemu": settings.get("OpenEmuFallback").and_then(Value::as_bool).unwrap_or(true),
+                        "developer_files": true, "sources_alone": false,
+                    }),
+                    ..ScraperConfig::default()
+                };
+                self.platform.scraper_open(&config, Some(&sqlite)).map_err(words)?;
+                self.platform.scrape_service().map_err(words)?.start(&req).map_err(words)
+            }
+        }
+    }
+
+    /// Cancels an active scrape run through emusen.scrape (#62).
+    pub fn scrape_cancel(&self) -> Result<bool, String> {
+        self.platform.scrape_service().map_err(words)?.cancel().map_err(words)
     }
 }
 

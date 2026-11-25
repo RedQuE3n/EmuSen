@@ -71,6 +71,10 @@ pub mod qobject {
         PagePackageInfo,
         /// 1.19: Eclipse's Settings Hotkeys bar (board #55: A Change, X Clear, B Back, START Home).
         SettingsHotkeys,
+        /// 1.20: Eclipse's Settings Themes bars (board #61: Use/Check/Kind/Back/Home and ES-DE choices).
+        SettingsThemes,
+        SettingsThemesChecked,
+        SettingsThemesChoice,
     }
 
     extern "RustQt" {
@@ -118,7 +122,7 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 38] = [
+pub const KINDS: [HelpKind; 41] = [
     HelpKind::Continue,
     HelpKind::Game,
     HelpKind::Console,
@@ -157,6 +161,9 @@ pub const KINDS: [HelpKind; 38] = [
     HelpKind::PagePackageStop,
     HelpKind::PagePackageInfo,
     HelpKind::SettingsHotkeys,
+    HelpKind::SettingsThemes,
+    HelpKind::SettingsThemesChecked,
+    HelpKind::SettingsThemesChoice,
 ];
 
 /// The help bar a kind shows (EmuSen_Qt.md §3.2, `Help`).
@@ -173,6 +180,9 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::SettingsConsole => Screen::SettingsConsole,
         HelpKind::SettingsChoices => Screen::SettingsChoices,
         HelpKind::SettingsHotkeys => Screen::SettingsHotkeys,
+        HelpKind::SettingsThemes => Screen::Themes,
+        HelpKind::SettingsThemesChecked => Screen::ThemesChecked,
+        HelpKind::SettingsThemesChoice => Screen::ThemesChoice,
         HelpKind::Page => Screen::GamePage,
         HelpKind::PageResume => Screen::GamePageResume,
         HelpKind::PageResumeSlots => Screen::GamePageResumeSlots,
@@ -397,7 +407,7 @@ impl qobject::ThemeHelpEntries {
 
     /// The screen's list as Eclipse's Settings boards name it (`help::settings_named`), set once when it is made.
     fn show_settings(mut self: Pin<&mut Self>, screen: Screen, defaultable: bool) {
-        let list = if screen == Screen::SettingsHotkeys {
+        let list = if matches!(screen, Screen::SettingsHotkeys | Screen::Themes | Screen::ThemesChecked | Screen::ThemesChoice) {
             help::entries(screen).to_vec()
         } else {
             help::settings_named(help::entries(screen).to_vec())

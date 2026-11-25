@@ -206,6 +206,17 @@ pub enum Outcome {
     Failed(String),
     /// A lever of a console's shader moved, already saved: the picture of a game of that console follows it at once.
     Lever { console: String, id: String, value: f32 },
+    /// Themes inside Settings: use a checked theme, check a package, or step an active ES-DE theme choice.
+    UseTheme(String),
+    ThemeCheck(String),
+    ThemeStepChoice { choice: usize, by: i32 },
+    /// Scraping account and run actions handled through emusen.scrape.
+    ScrapeRefresh,
+    ScrapeSignIn { user: String, password: String },
+    ScrapeSignOut,
+    ScrapeCheck,
+    ScrapeResume,
+    ScrapeCancel,
 }
 
 /// A page open under a section.
@@ -239,6 +250,12 @@ pub enum Page {
     Shaders(String),
     /// A console's shader's levers, each a slider or a row of its named values.
     Levers(String),
+    /// A console's pack shader parameters with search and reset (board #60, R-20261116-22).
+    ShaderParams(String),
+    /// Library -> Themes inside Settings when Eclipse draws Settings (board #61, R-20261116-24).
+    Themes,
+    /// Library -> Scraping (account and run) inside Settings (board #62, R-20261116-24).
+    ScrapeRun,
     /// Sound ▸ Output: the machine's audio devices as a page of choices (R-20261116-22).
     Output,
 }
@@ -246,8 +263,8 @@ pub enum Page {
 impl Page {
     fn console(&self) -> Option<&str> {
         match self {
-            Page::Group(_) | Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys | Page::Bindings | Page::ShaderConsoles { .. } | Page::Output => None,
-            Page::Shaders(c) | Page::Levers(c) => Some(c),
+            Page::Group(_) | Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys | Page::Bindings | Page::ShaderConsoles { .. } | Page::Themes | Page::ScrapeRun | Page::Output => None,
+            Page::Shaders(c) | Page::Levers(c) | Page::ShaderParams(c) => Some(c),
             Page::Console(c) | Page::Engine(c) | Page::Firmware(c) | Page::Cards(c) | Page::Drawer(c, _) => Some(c),
             Page::Saves(c, _) | Page::Save(c, _, _) | Page::Delete(c, _, _) => Some(c),
         }
@@ -287,6 +304,18 @@ pub struct SettingsView {
     pub(crate) card: crate::settings_card::CardPlace,
     /// Whether Consoles' list is narrowed to consoles holding at least one game (board #27, R-20261116-22).
     pub(crate) consoles_with_games: bool,
+    /// Whether an EmuSen theme (Eclipse) currently draws Settings, enabling board-projected Settings pages.
+    pub themed_settings: bool,
+    /// Current case-insensitive parameter filter on Page::ShaderParams (board #60).
+    pub param_search: String,
+    /// Installed themes listing for Page::Themes (board #61).
+    pub themes: Option<crate::themes::Listing>,
+    /// Active kind tab on Page::Themes (EmuSen or ES-DE, board #61).
+    pub theme_kind: crate::themes::Kind,
+    /// Live ScreenScraper account, queue, run and quota state for Page::ScrapeRun (board #62).
+    pub scrape: crate::settings_scrape::ScrapeState,
+    /// Focused row index kept in sync by SettingsModel for focus-dependent help bars (Page::Themes).
+    pub focused_row: usize,
 }
 
 impl Default for SettingsView {
@@ -413,6 +442,12 @@ impl SettingsView {
             from_card: false,
             card: Default::default(),
             consoles_with_games: false,
+            themed_settings: false,
+            param_search: String::new(),
+            themes: None,
+            theme_kind: crate::themes::Kind::EmuSen,
+            scrape: crate::settings_scrape::ScrapeState::default(),
+            focused_row: 0,
         }
     }
 
@@ -466,6 +501,9 @@ impl SettingsView {
         if let Some(screen) = self.controller_help() {
             return screen;
         }
+        if let Some(screen) = self.themes_help(self.focused_row) {
+            return screen;
+        }
         match self.page() {
             None => Screen::Settings,
             Some(Page::Console(_)) if self.pages.len() == 1 => Screen::SettingsConsole,
@@ -491,6 +529,8 @@ impl SettingsView {
         self.listening = None;
         self.from_card = false;
         self.consoles_with_games = false;
+        self.param_search.clear();
+        self.focused_row = 0;
     }
 
     /// Resets Consoles' has-games filter when leaving the section or closing Settings (board #27).
@@ -562,6 +602,12 @@ impl SettingsView {
             self.binding = None;
             self.held.clear();
         }
+        if matches!(page, Page::ShaderParams(_)) {
+            self.param_search.clear();
+        }
+        if page == Page::ScrapeRun {
+            self.scrape.pending_user = None;
+        }
         Some(at)
     }
 
@@ -581,6 +627,12 @@ impl SettingsView {
             return rows;
         }
         if let Some(rows) = self.page().and_then(|p| self.shaders_entries(p)) {
+            return rows;
+        }
+        if let Some(rows) = self.page().and_then(|p| self.themes_entries(p)) {
+            return rows;
+        }
+        if let Some(rows) = self.page().and_then(|p| self.scrape_entries(p)) {
             return rows;
         }
         match self.page() {
@@ -962,6 +1014,12 @@ impl SettingsView {
         if let Some(row) = self.shaders_row(entry) {
             return row;
         }
+        if let Some(row) = self.themes_row(entry) {
+            return row;
+        }
+        if let Some(row) = self.scrape_row(entry) {
+            return row;
+        }
         if let Some(row) = self.console_row(entry) {
             return row;
         }
@@ -1105,6 +1163,12 @@ impl SettingsView {
         if let Some(pane) = entry.as_ref().and_then(|e| self.shaders_pane(e)) {
             return pane;
         }
+        if let Some(pane) = entry.as_ref().and_then(|e| self.themes_pane(e)) {
+            return pane;
+        }
+        if let Some(pane) = entry.as_ref().and_then(|e| self.scrape_pane(e)) {
+            return pane;
+        }
         let Some(entry) = entry else { return Pane::default() };
         if let Some(words) = self.console_pane(&entry) {
             let mut lines = words.lines.into_iter();
@@ -1204,6 +1268,12 @@ impl SettingsView {
             return outcome;
         }
         if let Some(outcome) = self.shaders_step(&entry, by) {
+            return outcome;
+        }
+        if let Some(outcome) = self.themes_step(&entry, by) {
+            return outcome;
+        }
+        if let Some(outcome) = self.scrape_step(&entry) {
             return outcome;
         }
         if let Some(outcome) = self.console_step(&entry, by) {
@@ -1348,11 +1418,22 @@ impl SettingsView {
         if let Some(outcome) = self.shaders_choose(&entry, index) {
             return outcome;
         }
+        if let Some(outcome) = self.themes_choose(&entry) {
+            return outcome;
+        }
+        if let Some(outcome) = self.scrape_choose(&entry) {
+            return outcome;
+        }
         if let Some(outcome) = self.console_choose(&entry, index) {
             return outcome;
         }
         if entry["page"] == "output" {
             return self.open(Page::Output, self.row(&entry).label, index);
+        }
+        if entry["page"] == "ScrapeRun" {
+            self.scrape.status_note.clear();
+            let opened = self.open(Page::ScrapeRun, "Scraping".to_owned(), index);
+            return Outcome::All(vec![opened, Outcome::ScrapeRefresh]);
         }
         if let Some(device) = entry["output"].as_str() {
             set_at(&mut self.read.app, "SoundOutputDevice", json!(device));
@@ -1371,6 +1452,10 @@ impl SettingsView {
         }
         if let Some(folder) = entry["open"].as_str() {
             return self.read.folders.get(folder).map_or(Outcome::Nothing, |path| Outcome::OpenFolder(path.clone()));
+        }
+        if entry["door"] == "themes" && self.themed_settings {
+            self.theme_kind = crate::themes::Kind::EmuSen;
+            return self.open(Page::Themes, text_of(&entry["label"]), index);
         }
         entry["door"].as_str().map_or(Outcome::Nothing, |d| Outcome::Door(d.to_owned()))
     }
@@ -1764,6 +1849,9 @@ impl SettingsView {
     /// LB or RB on a console's page: the console before or after it among those an engine runs, its page in place of
     /// this one; elsewhere nothing, the shoulders being the strip's.
     pub fn shoulder(&mut self, by: i32) -> bool {
+        if self.themes_shoulder(by) {
+            return true;
+        }
         let Some((Page::Console(from), _, at)) = self.pages.first().cloned() else { return false };
         if self.pages.len() != 1 {
             return false;

@@ -272,7 +272,7 @@ Item {
         role: Host.ThemeHost.Settings
         host: host
         wanted: themed.settingsModel !== null
-        inputs: themed.inputs && !(themed.settingsModel?.listening ?? false)
+        inputs: themed.inputs && !(themed.settingsModel?.listening ?? false) && !(themed.settingsModel?.typing ?? false)
         shown: themed.screens.shown === Screens.Settings
     }
     Slot {

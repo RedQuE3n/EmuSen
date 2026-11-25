@@ -127,6 +127,12 @@ pub mod qobject {
         #[qproperty(bool, typing, READ, NOTIFY = asked)]
         #[qproperty(QString, typing_title, cxx_name = "typingTitle", READ, NOTIFY = asked)]
         #[qproperty(QString, typing_prompt, cxx_name = "typingPrompt", READ, NOTIFY = asked)]
+        /// Whether the current typing prompt is a password field masked on screen (#62).
+        #[qproperty(bool, typing_secret, cxx_name = "typingSecret", READ, NOTIFY = asked)]
+        /// Built-in theme manifests for Settings -> Library -> Themes (#61).
+        #[qproperty(QStringList, built_ins, cxx_name = "builtIns")]
+        /// Whether an EmuSen theme draws Settings, enabling Eclipse's board-projected pages.
+        #[qproperty(bool, themed_settings, cxx_name = "themedSettings")]
         /// Why a read or a save failed, in the platform's words; empty when it did not.
         #[qproperty(QString, problem, READ, NOTIFY)]
         type SettingsModel = super::SettingsModelRust;
@@ -160,6 +166,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "sampleScale"]
         fn sample_scale(self: &SettingsModel, index: i32) -> f64;
+
+        /// Formats typed text for the typing overlay, masking characters when `typingSecret` is true.
+        #[qinvokable]
+        #[cxx_name = "typingDisplay"]
+        fn typing_display(self: &SettingsModel, text: &QString) -> QString;
 
         /// Left (-1) or Right (+1) on a row: whether it did anything.
         #[qinvokable]
@@ -317,6 +328,21 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "testerButton"]
         fn tester_button(self: Pin<&mut SettingsModel>, button: PadButton, down: bool, swap: bool) -> bool;
+
+        /// Selects an inline kind pill on Settings -> Library -> Themes (#61).
+        #[qinvokable]
+        #[cxx_name = "chooseInlinePill"]
+        fn choose_inline_pill(self: Pin<&mut SettingsModel>, index: i32) -> bool;
+
+        /// An EmuSen theme was chosen from Settings -> Library -> Themes (#61): folder for ThemeHost, empty for reference.
+        #[qsignal]
+        #[cxx_name = "themeUsed"]
+        fn theme_used(self: Pin<&mut SettingsModel>, folder: QString);
+
+        /// The library's look was stored from Settings -> Library -> Themes (#61): whether an ES-DE theme draws it.
+        #[qsignal]
+        #[cxx_name = "themeRestyled"]
+        fn theme_restyled(self: Pin<&mut SettingsModel>, esde: bool);
     }
 
     unsafe extern "RustQt" {
@@ -416,6 +442,9 @@ pub struct SettingsModelRust {
     typing: bool,
     typing_title: QString,
     typing_prompt: QString,
+    typing_secret: bool,
+    built_ins: QStringList,
+    themed_settings: bool,
     /// The page's question waiting for typed words.
     typed_for: Option<crate::settings_controllers::Typed>,
     /// Each pad's buttons at the last read of the seats, so a press listened for is the one newly down.
@@ -501,6 +530,9 @@ impl Default for SettingsModelRust {
             typing: false,
             typing_title: QString::default(),
             typing_prompt: QString::default(),
+            typing_secret: false,
+            built_ins: QStringList::default(),
+            themed_settings: false,
             typed_for: None,
             pressed: Vec::new(),
         }
@@ -552,7 +584,38 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
                 model.seats_changed();
             })
             .release();
-        self.on_focused_changed(|model| model.pane()).release();
+        self.as_mut()
+            .on_built_ins_changed(|model| {
+                if !model.platform_library.is_empty() {
+                    model.refresh();
+                }
+            })
+            .release();
+        self.as_mut()
+            .on_themed_settings_changed(|mut model| {
+                let themed = model.themed_settings;
+                model.as_mut().rust_mut().view.themed_settings = themed;
+                if !themed && matches!(model.view.page(), Some(settings::Page::Themes)) {
+                    if let Some(row) = model.as_mut().rust_mut().view.back() {
+                        model.as_mut().shown(true);
+                        model.refocus(row as i32);
+                        return;
+                    }
+                }
+                model.shown(false);
+            })
+            .release();
+        self.on_focused_changed(|mut model| {
+            let focused = model.focused.max(0) as usize;
+            model.as_mut().rust_mut().view.focused_row = focused;
+            let help = shown_screen(model.view.help());
+            if model.help != help {
+                model.as_mut().rust_mut().help = help;
+                model.as_mut().help_changed();
+            }
+            model.pane();
+        })
+        .release();
     }
 }
 
@@ -620,6 +683,15 @@ impl qobject::SettingsModel {
         usize::try_from(index).ok().and_then(|i| self.sample_scales.get(i)).copied().unwrap_or(1.0)
     }
 
+    /// Formats typed text for the typing overlay, masking passwords when `typing_secret` is true.
+    pub fn typing_display(&self, text: &QString) -> QString {
+        if *self.typing_secret() {
+            QString::from("•".repeat(text.to_string().chars().count()).as_str())
+        } else {
+            text.clone()
+        }
+    }
+
     pub fn refresh(mut self: Pin<&mut Self>) {
         let library = self.platform_library.to_string();
         if library.is_empty() {
@@ -632,6 +704,7 @@ impl qobject::SettingsModel {
         self.as_mut().said(String::new());
         let thread = self.qt_thread();
         let (cores, world) = (self.cores.to_string(), self.world.to_string());
+        let manifests: Vec<String> = self.built_ins.iter().map(|m| m.to_string()).collect();
         std::thread::spawn(move || {
             let read = ClientSettings::open(&library).and_then(|source| {
                 let mut read = settings::read(&source)?;
@@ -646,7 +719,11 @@ impl qobject::SettingsModel {
                 };
                 let names: Vec<&str> = read.consoles.consoles.iter().map(|c| c.console.as_str()).collect();
                 read.bindings = source.bindings(&names)?;
-                Ok((read, source.chooser()?))
+                let store = source.themes_store();
+                let built_ins: Vec<(&str, &str)> = crate::themes::BUILT_IN.iter().copied().zip(manifests.iter().map(String::as_str)).collect();
+                let listing = crate::themes::listing(&read.app, store.as_deref(), &built_ins);
+                let scrape = source.scrape_snapshot();
+                Ok((read, source.chooser()?, listing, scrape))
             });
             let _ = thread.queue(move |mut model| {
                 if model.asked != asked {
@@ -654,9 +731,22 @@ impl qobject::SettingsModel {
                 }
                 model.as_mut().rust_mut().reading = false;
                 match read {
-                    Ok((read, chooser)) => {
-                        model.as_mut().rust_mut().view.read = read;
-                        model.as_mut().rust_mut().view.chooser = Some(chooser);
+                    Ok((read, chooser, mut listing, scrape)) => {
+                        if let Some(prev) = model.view.themes.as_ref() {
+                            for row in &mut listing.rows {
+                                if let Some(before) = prev.rows.iter().find(|r| r.id == row.id && r.kind == row.kind && row.checked == crate::themes::Checked::Not) {
+                                    row.checked = before.checked.clone();
+                                }
+                            }
+                        }
+                        let mut r = model.as_mut().rust_mut();
+                        let (note, pending) = (r.view.scrape.status_note.clone(), r.view.scrape.pending_user.clone());
+                        r.view.read = read;
+                        r.view.chooser = Some(chooser);
+                        r.view.themes = Some(listing);
+                        r.view.scrape = scrape;
+                        r.view.scrape.status_note = note;
+                        r.view.scrape.pending_user = pending;
                         model.as_mut().said(String::new());
                     }
                     Err(words) => model.as_mut().said(format!("The settings could not be read: {words}")),
@@ -743,6 +833,14 @@ impl qobject::SettingsModel {
             self.shown(true);
         }
         stepped
+    }
+
+    pub fn choose_inline_pill(mut self: Pin<&mut Self>, index: i32) -> bool {
+        let changed = self.as_mut().rust_mut().view.choose_inline_pill(index);
+        if changed {
+            self.shown(true);
+        }
+        changed
     }
 
     fn read_if_named(self: Pin<&mut Self>) {
@@ -837,15 +935,26 @@ impl qobject::SettingsModel {
             }
             Outcome::Type { title, prompt, start, typed } => {
                 {
+                    let secret = matches!(typed, crate::settings_controllers::Typed::ScrapePassword);
                     let mut r = self.as_mut().rust_mut();
                     r.typed_for = Some(typed);
                     r.typing = true;
+                    r.typing_secret = secret;
                     r.typing_title = QString::from(title.as_str());
                     r.typing_prompt = QString::from(prompt.as_str());
                 }
                 self.as_mut().asked();
                 self.type_words(QString::from(start.as_str()));
             }
+            Outcome::UseTheme(id) => self.use_theme_in_settings(id),
+            Outcome::ThemeCheck(id) => self.check_theme_in_settings(id),
+            Outcome::ThemeStepChoice { choice, by } => self.step_theme_choice(choice, by),
+            Outcome::ScrapeRefresh => self.refresh_scrape(),
+            Outcome::ScrapeSignIn { user, password } => self.scrape_sign_in(user, password),
+            Outcome::ScrapeSignOut => self.scrape_sign_out(),
+            Outcome::ScrapeCheck => self.scrape_check(),
+            Outcome::ScrapeResume => self.scrape_resume(),
+            Outcome::ScrapeCancel => self.scrape_cancel(),
             Outcome::All(all) => {
                 for one in all {
                     self.as_mut().outcome(one);
@@ -968,6 +1077,8 @@ impl qobject::SettingsModel {
                 self.as_mut().focused_changed();
             }
         }
+        let focused = self.focused.max(0) as usize;
+        self.as_mut().rust_mut().view.focused_row = focused;
         let trail = list(self.view.trail().into_iter());
         if self.trail != trail {
             self.as_mut().rust_mut().trail = trail;
@@ -1094,7 +1205,11 @@ impl qobject::SettingsModel {
 
     pub fn typed(mut self: Pin<&mut Self>, words: &QString) {
         let Some(typed) = self.as_mut().rust_mut().typed_for.take() else { return };
-        self.as_mut().rust_mut().typing = false;
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.typing = false;
+            r.typing_secret = false;
+        }
         self.as_mut().asked();
         let outcome = self.as_mut().rust_mut().view.typed(&typed, &words.to_string());
         self.outcome(outcome);
@@ -1161,6 +1276,9 @@ impl qobject::SettingsModel {
         } else if words == crate::help::CLEAR {
             let focused = self.focused.max(0) as usize;
             self.as_mut().rust_mut().view.clear_hotkey(focused)
+        } else if words == crate::help::CHECK {
+            let focused = self.focused.max(0) as usize;
+            self.view.check_focused_theme(focused)
         } else {
             Outcome::Nothing
         };
@@ -1227,6 +1345,227 @@ impl qobject::SettingsModel {
             self.as_mut().drawn();
         }
         !down
+    }
+
+    /// Uses a checked theme chosen on Settings -> Library -> Themes (#61).
+    fn use_theme_in_settings(mut self: Pin<&mut Self>, id: String) {
+        let Some((kind, store, folder)) = self.view.themes.as_ref().and_then(|l| {
+            let row = l.rows.iter().find(|r| r.id == id && r.usable())?;
+            let folder = l.store.as_ref().filter(|_| !crate::themes::is_built_in(&row.id)).map(|s| s.join(&row.id));
+            Some((row.kind, l.store.clone(), folder))
+        }) else {
+            return;
+        };
+        let root = folder.as_deref().map(emusen_esde::check::theme_root);
+        let saved = emusen_platform_client::Platform::load(self.platform_library.to_string()).map_err(|e| e.to_string()).and_then(|p| {
+            crate::clients::change_app_settings(&p, |settings| match (kind, &root) {
+                (crate::themes::Kind::Esde, Some(root)) => crate::themes::choose_esde(settings, root),
+                _ => crate::themes::choose_own(settings, &id),
+            })
+        });
+        let settings = match saved {
+            Ok(s) => s,
+            Err(words) => return self.said(format!("The theme could not be stored: {words}")),
+        };
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.view.read.app = settings.clone();
+            r.saved_since_open = true;
+            if let Some(listing) = r.view.themes.as_mut() {
+                listing.esde = crate::themes::mark(&mut listing.rows, &settings, store.as_deref());
+                listing.chosen = crate::themes::chosen_of(&settings);
+            }
+        }
+        self.as_mut().shown(false);
+        if kind == crate::themes::Kind::EmuSen {
+            let host_folder = crate::themes::resolve(&id, store.as_deref()).host_folder();
+            self.as_mut().theme_used(QString::from(host_folder.as_str()));
+        }
+        self.theme_restyled(kind == crate::themes::Kind::Esde);
+    }
+
+    /// Checks a non-built-in theme package off the GUI thread on Settings -> Library -> Themes (#61).
+    fn check_theme_in_settings(mut self: Pin<&mut Self>, id: String) {
+        let Some((at, kind, folder)) = self.view.themes.as_ref().and_then(|l| {
+            let at = l.rows.iter().position(|r| r.id == id)?;
+            let row = &l.rows[at];
+            if crate::themes::is_built_in(&row.id) || row.checked == crate::themes::Checked::Running {
+                return None;
+            }
+            Some((at, row.kind, l.store.as_ref()?.join(&row.id)))
+        }) else {
+            return;
+        };
+        if let Some(listing) = self.as_mut().rust_mut().view.themes.as_mut() {
+            listing.rows[at].checked = crate::themes::Checked::Running;
+        }
+        self.as_mut().shown(false);
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let checked = crate::themes::check(kind, &folder);
+            let _ = qt.queue(move |mut model| {
+                if let Some(row) = model.as_mut().rust_mut().view.themes.as_mut().and_then(|l| l.rows.iter_mut().find(|r| r.id == id)) {
+                    row.checked = checked;
+                }
+                model.shown(false);
+            });
+        });
+    }
+
+    /// Steps an active ES-DE theme choice on Settings -> Library -> Themes (#61).
+    fn step_theme_choice(mut self: Pin<&mut Self>, index: usize, by: i32) {
+        let Some((root, mut choice)) = self.view.themes.as_ref().and_then(|l| l.esde.as_ref()).and_then(|e| Some((e.root.clone(), e.choices.get(index)?.clone()))) else {
+            return;
+        };
+        let value = choice.step(by).to_owned();
+        let saved = emusen_platform_client::Platform::load(self.platform_library.to_string())
+            .map_err(|e| e.to_string())
+            .and_then(|p| crate::clients::change_app_settings(&p, |settings| crate::themes::store_choice(settings, &root, choice.key, &value)));
+        match saved {
+            Ok(settings) => {
+                let mut r = self.as_mut().rust_mut();
+                r.view.read.app = settings;
+                r.saved_since_open = true;
+                if let Some(esde) = r.view.themes.as_mut().and_then(|l| l.esde.as_mut()) {
+                    if let Some(slot) = esde.choices.get_mut(index) {
+                        *slot = choice;
+                    }
+                }
+                self.as_mut().shown(false);
+                self.theme_restyled(true);
+            }
+            Err(words) => self.said(format!("The choice could not be stored: {words}")),
+        }
+    }
+
+    /// Reads live ScreenScraper account, queue, run and quota state from emusen.scrape (#62).
+    fn refresh_scrape(mut self: Pin<&mut Self>) {
+        if let Ok(source) = ClientSettings::open(&self.platform_library.to_string()) {
+            let snap = source.scrape_snapshot();
+            let mut r = self.as_mut().rust_mut();
+            let (note, pending) = (r.view.scrape.status_note.clone(), r.view.scrape.pending_user.clone());
+            r.view.scrape = snap;
+            r.view.scrape.status_note = note;
+            r.view.scrape.pending_user = pending;
+        }
+        self.shown(false);
+    }
+
+    /// Signs into a ScreenScraper account off the GUI thread (#62).
+    fn scrape_sign_in(mut self: Pin<&mut Self>, user: String, password: String) {
+        let library = self.platform_library.to_string();
+        let qt = self.qt_thread();
+        self.as_mut().rust_mut().view.scrape.status_note = "Checking account…".to_owned();
+        self.as_mut().shown(false);
+        std::thread::spawn(move || {
+            let answer = ClientSettings::open(&library).and_then(|s| {
+                let res = s.scrape_sign_in(&user, &password);
+                Ok((res, s.scrape_snapshot()))
+            });
+            let _ = qt.queue(move |mut model| {
+                match answer {
+                    Ok((Ok(val), snap)) => {
+                        let mut r = model.as_mut().rust_mut();
+                        r.view.scrape = snap;
+                        if val["result"].as_str() != Some("signed_in") {
+                            let said = val["said"].as_str().filter(|s| !s.is_empty()).unwrap_or_else(|| val["result"].as_str().unwrap_or("Could not sign in."));
+                            r.view.scrape.status_note = said.to_owned();
+                        }
+                        model.as_mut().said(String::new());
+                    }
+                    Ok((Err(why), snap)) => {
+                        let mut r = model.as_mut().rust_mut();
+                        r.view.scrape = snap;
+                        r.view.scrape.status_note = why;
+                    }
+                    Err(why) => model.as_mut().rust_mut().view.scrape.status_note = why,
+                }
+                model.shown(false);
+            });
+        });
+    }
+
+    /// Signs out of the saved ScreenScraper account (#62).
+    fn scrape_sign_out(mut self: Pin<&mut Self>) {
+        if let Ok(source) = ClientSettings::open(&self.platform_library.to_string()) {
+            match source.scrape_sign_out() {
+                Ok(_) => {
+                    self.as_mut().rust_mut().view.scrape = source.scrape_snapshot();
+                    self.as_mut().said(String::new());
+                }
+                Err(why) => self.as_mut().rust_mut().view.scrape.status_note = why,
+            }
+        }
+        self.shown(false);
+    }
+
+    /// Re-verifies the saved ScreenScraper account off the GUI thread (#62).
+    fn scrape_check(mut self: Pin<&mut Self>) {
+        let library = self.platform_library.to_string();
+        let qt = self.qt_thread();
+        self.as_mut().rust_mut().view.scrape.status_note = "Checking account…".to_owned();
+        self.as_mut().shown(false);
+        std::thread::spawn(move || {
+            let answer = ClientSettings::open(&library).and_then(|s| {
+                let res = s.scrape_check();
+                Ok((res, s.scrape_snapshot()))
+            });
+            let _ = qt.queue(move |mut model| {
+                match answer {
+                    Ok((Ok(val), snap)) => {
+                        let mut r = model.as_mut().rust_mut();
+                        r.view.scrape = snap;
+                        if val["result"].as_str() != Some("signed_in") {
+                            let said = val["said"].as_str().filter(|s| !s.is_empty()).unwrap_or_else(|| val["result"].as_str().unwrap_or("Could not verify account."));
+                            r.view.scrape.status_note = said.to_owned();
+                        }
+                    }
+                    Ok((Err(why), snap)) => {
+                        let mut r = model.as_mut().rust_mut();
+                        r.view.scrape = snap;
+                        r.view.scrape.status_note = why;
+                    }
+                    Err(why) => model.as_mut().rust_mut().view.scrape.status_note = why,
+                }
+                model.shown(false);
+            });
+        });
+    }
+
+    /// Resumes queued games from a stopped scrape run off the GUI thread (#62).
+    fn scrape_resume(self: Pin<&mut Self>) {
+        let library = self.platform_library.to_string();
+        let app = self.view.read.app.clone();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let answer = ClientSettings::open(&library).and_then(|s| {
+                let res = s.scrape_resume(&app);
+                Ok((res, s.scrape_snapshot()))
+            });
+            let _ = qt.queue(move |mut model| {
+                match answer {
+                    Ok((Ok(_), snap)) => model.as_mut().rust_mut().view.scrape = snap,
+                    Ok((Err(why), snap)) => {
+                        let mut r = model.as_mut().rust_mut();
+                        r.view.scrape = snap;
+                        r.view.scrape.status_note = why;
+                    }
+                    Err(why) => model.as_mut().rust_mut().view.scrape.status_note = why,
+                }
+                model.shown(false);
+            });
+        });
+    }
+
+    /// Cancels an active scrape run (#62).
+    fn scrape_cancel(mut self: Pin<&mut Self>) {
+        if let Ok(source) = ClientSettings::open(&self.platform_library.to_string()) {
+            match source.scrape_cancel() {
+                Ok(_) => self.as_mut().rust_mut().view.scrape = source.scrape_snapshot(),
+                Err(why) => self.as_mut().rust_mut().view.scrape.status_note = why,
+            }
+        }
+        self.shown(false);
     }
 
     /// The focused row's pane.

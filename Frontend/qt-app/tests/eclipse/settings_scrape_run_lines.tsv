@@ -1,0 +1,19 @@
+# The words of Library -> Scraping (account and run) against its board, EclipseSettingsScrapeRun.dc.html: each line's box and baseline in board pixels.
+# Measured 2026-11-25 in Chrome after document.fonts.ready with Sora and JetBrains Mono (s7-boards/scrape_run.json); CSS line-height 1.35 * 17 = 22.95.
+element	line top	line height	baseline
+settingsCrumb	150	25	169	settingsCanvas
+settingsHeading	191	56	234	settingsCanvas
+rowName.0	12	30	35
+rowAbout.0	46	45.9	62
+rowWords.0	38.45	27	59.45
+rowName.1	12	30	35
+rowAbout.1	46	45.9	62
+rowName.2	12	30	35
+rowAbout.2	46	45.9	62
+rowWords.2	38.45	27	59.45
+rowName.3	13.525	30	36.525
+rowAbout.3	47.525	22.95	63.525
+rowName.4	13.525	30	36.525
+rowAbout.4	47.525	22.95	63.525
+rowName.5	13.525	30	36.525
+rowAbout.5	47.525	22.95	63.525

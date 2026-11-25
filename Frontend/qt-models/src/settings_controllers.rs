@@ -114,6 +114,9 @@ pub struct Drawn {
 pub enum Typed {
     NewProfile { console: String, from: String },
     Rename { console: String, profile: String },
+    SearchParameters,
+    ScrapeUser,
+    ScrapePassword,
 }
 
 fn fill(line: &str, names: &[(&str, &str)]) -> String {
@@ -558,9 +561,31 @@ impl SettingsView {
         None
     }
 
-    /// A typed answer taken: a new profile made, or one renamed and its page following it.
+    /// A typed answer taken: profile actions, shader parameter search, or ScreenScraper sign-in steps.
     pub fn typed(&mut self, typed: &Typed, words: &str) -> Outcome {
         let words = words.trim();
+        match typed {
+            Typed::SearchParameters => {
+                self.param_search = words.to_owned();
+                return Outcome::Shown;
+            }
+            Typed::ScrapeUser => {
+                if words.is_empty() {
+                    self.scrape.pending_user = None;
+                    return Outcome::Nothing;
+                }
+                self.scrape.pending_user = Some(words.to_owned());
+                return Outcome::Type { title: "Log in".to_owned(), prompt: "Your ScreenScraper password.".to_owned(), start: String::new(), typed: Typed::ScrapePassword };
+            }
+            Typed::ScrapePassword => {
+                let user = self.scrape.pending_user.take();
+                return match user {
+                    Some(user) if !words.is_empty() => Outcome::ScrapeSignIn { user, password: words.to_owned() },
+                    _ => Outcome::Nothing,
+                };
+            }
+            _ => {}
+        }
         if words.is_empty() {
             return Outcome::Nothing;
         }
@@ -575,6 +600,7 @@ impl SettingsView {
                 }
                 Outcome::Bindings(vec![file])
             }
+            Typed::SearchParameters | Typed::ScrapeUser | Typed::ScrapePassword => Outcome::Nothing,
         }
     }
 

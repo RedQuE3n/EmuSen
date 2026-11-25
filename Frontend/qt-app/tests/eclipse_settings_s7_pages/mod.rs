@@ -384,6 +384,7 @@ pub fn s7_with(harness: &mut emusen_qt_test::Harness, backend: &str) {
         let (ax, ay) = centre(scene, "allSettingsWords");
         scene.click(ax, ay);
         until(scene, "#60 Parameters page open", |s| s.property("settingsModel", "shadersShown") == "false" && at(s) == (0, "shaderParams:SNES".to_owned()));
+        assert_eq!(at(scene), (0, "shaderParams:SNES".to_owned()));
 
         press(scene, sdl, pad, PadControl::Down);
         press(scene, sdl, pad, PadControl::Down);
@@ -464,6 +465,7 @@ pub fn s7_with(harness: &mut emusen_qt_test::Harness, backend: &str) {
         until(scene, "B returns from #20 to display", |s| s.property("settingsModel", "shadersShown") == "false" && at(s).1 == "display");
         sdl.press(pad, back, false);
         settle(scene);
+        assert_eq!(at(scene).1, "display");
 
         // Board #62: Library -> Account and run (seed 12 real queued games in emusen.scrape first).
         seed_queued_scrape(platform, roms);

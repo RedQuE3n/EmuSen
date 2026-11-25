@@ -212,8 +212,80 @@ struct Descriptors {
     info: String,
     schema: String,
     abi: u32,
+    reads_by_path: bool,
     /// The firmware answer, for a core whose answer does not read the image; none where it does or was not given.
     firmware: Option<(i64, Vec<u8>)>,
+}
+
+/// Injects `EXPECT` and any target-specific JSON members into core info, and reports whether `host_requires` lists `image_path`.
+fn augment_info(raw: &str, add_expect: bool, extra: &str) -> Result<(String, bool), String> {
+    let mut doc: serde_json::Value = serde_json::from_str(raw).map_err(|e| format!("the served library's info is not JSON: {e}"))?;
+    let obj = doc.as_object_mut().ok_or("the served library's info is not a JSON object")?;
+    if add_expect {
+        match obj.get_mut("capabilities") {
+            Some(serde_json::Value::Array(list)) => {
+                if !list.iter().any(|v| v.as_str() == Some("EXPECT")) {
+                    list.insert(0, serde_json::Value::String("EXPECT".to_owned()));
+                }
+            }
+            Some(_) => return Err("the served library's capabilities is not a JSON array".to_owned()),
+            None => {
+                obj.insert("capabilities".to_owned(), serde_json::json!(["EXPECT"]));
+            }
+        }
+    }
+    if !extra.is_empty() {
+        let extra_doc: serde_json::Value = serde_json::from_str(&format!("{{{extra}}}")).map_err(|e| format!("the proxy's extra info is not JSON members: {e}"))?;
+        if let serde_json::Value::Object(map) = extra_doc {
+            obj.extend(map);
+        }
+    }
+    let reads_by_path = obj.get("host_requires").and_then(serde_json::Value::as_array).is_some_and(|xs| xs.iter().any(|v| v.as_str() == Some("image_path")));
+    let serialized = serde_json::to_string(&doc).map_err(|e| format!("failed to serialize core info: {e}"))?;
+    Ok((serialized, reads_by_path))
+}
+
+/// Appends the broker's frame-deadline setting to the served core's settings schema array.
+fn augment_schema(raw: &str) -> Result<String, String> {
+    let mut items = if raw.trim().is_empty() {
+        Vec::new()
+    } else {
+        match serde_json::from_str::<serde_json::Value>(raw) {
+            Ok(serde_json::Value::Array(items)) => items,
+            Ok(_) => return Err("the served library's settings schema is not a JSON array".to_owned()),
+            Err(e) => return Err(format!("the served library's settings schema is not JSON: {e}")),
+        }
+    };
+    items.push(serde_json::json!({
+        "key": DEADLINE_KEY,
+        "label": "Answer within",
+        "help": "Seconds the core has to finish a frame before it is stopped as hung; loading and closing get six times as long.",
+        "kind": "count",
+        "default": DEADLINE_DEFAULT.to_string(),
+        "min": 1,
+        "max": 600,
+        "step": 1,
+        "scope": "run",
+        "category": "System",
+        "effect": "none",
+        "advanced": true,
+    }));
+    serde_json::to_string(&items).map_err(|e| format!("failed to serialize settings schema: {e}"))
+}
+
+/// Formats the fallback descriptor returned when the served library cannot be probed.
+fn broken_info(why: &str) -> String {
+    serde_json::json!({
+        "abi": "",
+        "id": "broken-proxy",
+        "name": "broken proxy",
+        "version": "0",
+        "license": "NOASSERTION",
+        "description": why,
+        "systems": [],
+        "capabilities": [],
+    })
+    .to_string()
 }
 
 /// Core info, the schema, the served library's version and an image-blind firmware answer, asked once.
@@ -232,29 +304,10 @@ fn descriptors<T: Target>() -> &'static Result<Descriptors, String> {
                 (_, bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
             }
         };
-        let mut info = text(Op::Info)?;
-        if T::CAPABILITIES & caps::EXPECT != 0 {
-            let list = info.find(r#""capabilities":["#).ok_or("the served library's info lists no capabilities")? + r#""capabilities":["#.len();
-            let empty = info[list..].starts_with(']');
-            info.insert_str(list, if empty { r#""EXPECT""# } else { r#""EXPECT","# });
-        }
-        let extra = T::info_extra();
-        if !extra.is_empty()
-            && let Some(end) = info.rfind('}')
-        {
-            info.insert_str(end, &format!(",{extra}"));
-        }
-        let mut schema = text(Op::SettingsSchema)?;
-        let deadline = format!(
-            r#"{{"key":"{DEADLINE_KEY}","label":"Answer within","help":"Seconds the core has to finish a frame before it is stopped as hung; loading and closing get six times as long.","kind":"count","default":"{DEADLINE_DEFAULT}","min":1,"max":600,"step":1,"scope":"run","category":"System","effect":"none","advanced":true}}"#
-        );
-        match schema.rfind(']') {
-            Some(end) if schema[..end].trim_end().ends_with('[') => schema.insert_str(end, &deadline),
-            Some(end) => schema.insert_str(end, &format!(",{deadline}")),
-            None => schema = format!("[{deadline}]"),
-        }
+        let (info, reads_by_path) = augment_info(&text(Op::Info)?, T::CAPABILITIES & caps::EXPECT != 0, &T::info_extra())?;
+        let schema = augment_schema(&text(Op::SettingsSchema)?)?;
         let firmware = if T::firmware_reads_image() { None } else { runner.text(Op::FirmwareFor, &firmware_request::<T>(&[])).ok() };
-        Ok(Descriptors { info, schema, abi: caps.aux as u32, firmware })
+        Ok(Descriptors { info, schema, abi: caps.aux as u32, reads_by_path, firmware })
     })
 }
 
@@ -270,7 +323,7 @@ pub unsafe fn info<T: Target>(out: *mut u8, len: usize) -> i64 {
     match descriptors::<T>() {
         Ok(d) => unsafe { copy_out(d.info.as_bytes(), out, len) },
         Err(why) => {
-            let text = format!(r#"{{"abi":"","id":"broken-proxy","name":"broken proxy","version":"0","license":"NOASSERTION","description":{why:?},"systems":[],"capabilities":[]}}"#);
+            let text = broken_info(why);
             unsafe { copy_out(text.as_bytes(), out, len) }
         }
     }
@@ -410,7 +463,7 @@ fn path_of(p: *const c_char) -> Option<String> {
 
 /// Whether the served library reads its image by path alone, so its bytes need not cross.
 fn reads_by_path<T: Target>() -> bool {
-    descriptors::<T>().as_ref().is_ok_and(|d| d.info.contains(r#""image_path""#))
+    descriptors::<T>().as_ref().is_ok_and(|d| d.reads_by_path)
 }
 
 /// `emusen_core_expect`: the first hash given stands, and a later one that differs is refused without changing it.
@@ -993,5 +1046,65 @@ mod tests {
         assert!(sent.len() > image.len());
         assert_eq!(firmware_request::<Ignores>(&image), empty);
         assert!(empty.len() < 16);
+    }
+
+    #[test]
+    fn broken_info_escapes_special_characters_as_valid_json() {
+        let why = "bad \"quote\" 'apos' \\path\\to\nline2\r\tctrl:\x00\x07\x1f end";
+        let raw = broken_info(why);
+        let parsed: serde_json::Value = serde_json::from_str(&raw).expect("valid RFC 8259 JSON");
+        assert_eq!(parsed["id"], "broken-proxy");
+        assert_eq!(parsed["description"], why);
+        assert_eq!(parsed["systems"], serde_json::json!([]));
+        assert_eq!(parsed["capabilities"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn augment_info_handles_capabilities_ordering_whitespace_and_extra_members() {
+        let empty_caps = "{\n  \"capabilities\" : [ ] ,\n  \"id\" : \"c\"\n}";
+        let (out, by_path) = augment_info(empty_caps, true, r#""libretro":{"file":"a.so","sha256":"00"}"#).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert!(!by_path);
+        assert_eq!(v["capabilities"], serde_json::json!(["EXPECT"]));
+        assert_eq!(v["libretro"]["file"], "a.so");
+
+        let non_empty = r#"{ "description": "mentions \"image_path\" in prose", "capabilities": [ "RESET", "MEDIA" ] }"#;
+        let (out, by_path) = augment_info(non_empty, true, "").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert!(!by_path);
+        assert_eq!(v["capabilities"], serde_json::json!(["EXPECT", "RESET", "MEDIA"]));
+
+        let absent_caps = r#"{ "id": "c", "host_requires": [ "present", "image_path" ] }"#;
+        let (out, by_path) = augment_info(absent_caps, true, "").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert!(by_path);
+        assert_eq!(v["capabilities"], serde_json::json!(["EXPECT"]));
+
+        let already = r#"{"capabilities":["RESET","EXPECT"]}"#;
+        let (out, _) = augment_info(already, true, "").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["capabilities"], serde_json::json!(["RESET", "EXPECT"]));
+
+        assert!(augment_info(r#"{"capabilities":42}"#, true, "").is_err());
+    }
+
+    #[test]
+    fn augment_schema_appends_deadline_for_empty_and_non_empty_arrays() {
+        for raw in ["", "[]", "  [ \n\t ]  "] {
+            let out = augment_schema(raw).unwrap();
+            let arr: Vec<serde_json::Value> = serde_json::from_str(&out).unwrap();
+            assert_eq!(arr.len(), 1, "input {raw:?}");
+            assert_eq!(arr[0]["key"], DEADLINE_KEY);
+            assert_eq!(arr[0]["default"], DEADLINE_DEFAULT.to_string());
+        }
+        let existing = "[\n  { \"key\": \"video.mode\", \"default\": \"auto\" }\n]\n";
+        let out = augment_schema(existing).unwrap();
+        let arr: Vec<serde_json::Value> = serde_json::from_str(&out).unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["key"], "video.mode");
+        assert_eq!(arr[1]["key"], DEADLINE_KEY);
+        assert_eq!(arr[1]["min"], 1);
+        assert_eq!(arr[1]["max"], 600);
+        assert!(augment_schema("{}").is_err());
     }
 }

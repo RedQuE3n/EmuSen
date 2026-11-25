@@ -2,7 +2,7 @@
 
 use crate::json::{self, float_or_null, number_or_null, quoted, strings_into, text_or_null};
 use crate::store::{Key, Record, Stored};
-use crate::{Error, Scraper, kinds, layout};
+use crate::{Error, ScraperInner, kinds, layout};
 use serde_json::Value;
 
 pub(crate) fn record_json(out: &mut String, r: &Record) {
@@ -82,7 +82,7 @@ pub(crate) fn games(r: &Value) -> Result<Vec<(String, String)>, Error> {
     }
 }
 
-pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
+pub(crate) fn get(s: &ScraperInner, r: &Value) -> Result<String, Error> {
     let what = json::text(r, "what")?;
     let mut out = String::new();
     match what.as_str() {
@@ -243,7 +243,7 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
     Ok(out)
 }
 
-pub(crate) fn quota_json(s: &Scraper, out: &mut String) -> Result<(), Error> {
+pub(crate) fn quota_json(s: &ScraperInner, out: &mut String) -> Result<(), Error> {
     let q = {
         let store = s.store();
         s.quota.snapshot(&store, &s.clock)?

@@ -1,0 +1,30 @@
+# Eclipse Core Details (#73) against EclipseCoreDetails.dc.html (1920 by 1200, Chrome JSON t1-boards/core_details.json).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+AdaptiveCardScrim	23	dimming scrim	Tokens.scrim	Rectangle	0	0	right:0	1200	-	Tokens.scrim	-	built	-
+cardDisc	25	left eclipse disc	Kit.CoronaDisc	CoronaDisc	-2400	-960	3120	3120	-	Tokens.surface	-	built	-
+cardSection	27	card section 560x1026	Item	Item	72	64	560	1026	-	-	-	built	-
+cardBreadcrumb	29	"CORES · PLAYSTATION" eyebrow	CardLine	CardLine	72	64	560	22	-	#FFF3C9D2	18	built	600 0.22 upper
+cardTitle	30	"SwanStation · details"	CardLine	CardLine	72	below:cardBreadcrumb:8	560	53	-	Tokens.textStrong	50	built	600 -0.01 none
+cardRow.0	36	row 0 Listed by libretro as	MenuRowEclipse	MenuRowEclipse	72	below:cardTitle:26	560	66	-	-	-	built	-
+cardRow.1	36	row 1 File stem	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.0:6	560	66	-	-	-	built	-
+cardRow.2	36	row 2 Core	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.1:6	560	66	-	-	-	built	-
+cardRow.3	36	row 3 Library	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.2:6	560	66	-	-	-	built	-
+cardRow.4	36	row 4 From focused	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.3:6	560	72	-	-	-	built	-
+rowGlow.4	36	From glow	Kit.Glow	Glow	72	top:cardRow.4:0	560	72	36	#66F0B4C4	-	built	glow 46 6 0 0
+rowRing.4	36	From 6 px ring	rgba(246,231,216,0.18)	Rectangle	66	top:cardRow.4:-6	572	84	42	#2EF6E7D8	-	built	-
+rowBg.4	36	From cream pill	Tokens.accent	Rectangle	72	top:cardRow.4:0	560	72	36	Tokens.accent	-	built	-
+rowGlyph.4	37	A badge 46 px	CardGlyph	CardGlyph	86	mid:cardRow.4	46	46	-	-	-	built	glyph 21 600
+cardRow.5	36	row 5 Downloaded	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.4:6	560	66	-	-	-	built	-
+cardRow.6	36	row 6 Firmware	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.5:6	560	66	-	-	-	built	-
+cardRow.7	36	row 7 SHA-256	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.6:6	560	66	-	-	-	built	-
+cardRow.8	36	row 8 Trust	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.7:6	560	66	-	-	-	built	-
+AdaptiveCardPane	46	floating detail card	Rectangle	Rectangle	800	210	760	150.8	28	#F207080F	-	built	line 1 #FF262A3A
+detailPaneLabel	46	"FROM" uppercase eyebrow	CardLine	CardLine	836	246	688	22	-	#FFF3C9D2	18	built	600 0.18 upper
+detailPaneValue	46	"buildbot.libretro.com, index CRC-32 3F9A61C2"	CardLine	CardLine	836	below:detailPaneLabel:22	688	34.8	-	Tokens.textStrong	24	built	400 0 none
+cardStatus	48	top-right status pill	Rectangle	Rectangle	-	48	right:200	56	28	#D107080F	-	built	-
+cardBattery	49	"82%"	CardLine	CardLine	in:cardStatus:22	mid:cardStatus	-	27	-	Tokens.textStrong	22	built	400 0 none
+cardClock	49	"9:41 PM"	CardLine	CardLine	after:cardBattery:22	mid:cardStatus	inright:cardStatus:22	27	-	Tokens.textStrong	22	built	600 0 none
+cardFooterBar	52	bottom footer bar 76 px	Rectangle	Rectangle	0	1124	right:0	76	-	Tokens.surface	-	built	-
+cardHelp	53	help bar A Choose B Back START Close	HelpModel.Card	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD8DBE6	21	built	400 0 none
+cardPosition	58	"5 of 9"	CardLine	CardLine	-	mid:cardFooterBar	right:72	26	-	Tokens.muted	21	built	400 0 none

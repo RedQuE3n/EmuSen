@@ -50,6 +50,10 @@ pub struct Core {
     pub development: bool,
     /// The firmware its info declares: "required", "optional", or none.
     pub firmware: Option<String>,
+    /// Installed or offered build date (`YYYY-MM-DD`) and one-line summary from the listing.
+    pub build: Option<String>,
+    pub offered: Option<String>,
+    pub description: Option<String>,
 }
 
 impl Core {
@@ -135,6 +139,9 @@ pub fn of_tool(e: &Value, consoles: &Consoles) -> Option<Core> {
         authors: strings(e, "authors"),
         size: e.get("size").and_then(Value::as_u64),
         stem: Some(stem),
+        build: text(e, "build"),
+        offered: text(e, "offered"),
+        description: text(e, "description").filter(|d| !d.is_empty()),
         ..Core::default()
     })
 }

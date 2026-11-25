@@ -1,0 +1,63 @@
+# Eclipse Cores (#10) against EclipseCores.dc.html (1920 by 1200, Chrome JSON t1-boards/cores.json).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground #07080F	Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
+backdropField.0	18	ambient blue glow #2A6FD6	Kit.BackdropField	-	1250	80	900	900	-	opacity:0.36	blur:150	built	field 0 -1 #2A6FD6 0
+coresMark	23	crescent mark	Marks.menuCrescent	Item	96	mid:80	34	34	-	-	-	built	-
+trailWords.0	24	"Tools"	CardLine	CardLine	after:coresMark:28	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.0	24	"/"	CardLine	CardLine	after:trailWords.0:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailWords.1	24	"Cores"	CardLine	CardLine	after:trailSlash.0:14	mid:80	-	-	-	Tokens.textStrong	24	built	600 0 none
+clock	26	"9:41 PM"	Device.shortTime	CardLine	-	mid:80	right:96	-	-	Tokens.textStrong	22	built	600 0 none
+battery	26	"82%"	Device.battery	CardLine	before:clock:22	mid:80	-	-	-	Tokens.textStrong	22	built	400 0 none
+coresTopStrip	30	top filter strip and VIEW button	Item	Item	96	146	1124	52	-	-	-	built	-
+filterPill.ready	31	ready filter pill	Item	Item	in:coresTopStrip:0	top:coresTopStrip:0	-	52	-	-	-	built	-
+filterPill.updates	32	updates filter pill	Item	Item	after:filterPill.ready:12	top:coresTopStrip:0	-	52	-	-	-	built	-
+filterPill.firmware	33	firmware filter pill	Item	Item	after:filterPill.updates:12	top:coresTopStrip:0	-	52	-	-	-	built	-
+coresViewButton	35	VIEW toggle button	Item	Item	-	top:coresTopStrip:0	inright:coresTopStrip:0	52	-	-	-	built	-
+consoleCard.0	40	grid card 0	Item	Item	96	232	361.3333	258	-	-	-	built	-
+consoleBg.0	40	card 0 surface	Rectangle	Rectangle	in:consoleCard.0:0	top:consoleCard.0:0	361.3333	258	22	#FF11131C	-	built	line 1 #FF262A3A
+consoleName.0	42	card 0 console name	CardLine	CardLine	in:consoleCard.0:24	top:consoleCard.0:22	313.3333	-	-	Tokens.textStrong	23	built	600 0 none
+consoleMaker.0	43	card 0 maker and count	CardLine	CardLine	in:consoleCard.0:24	below:consoleName.0:4	313.3333	-	-	Tokens.muted	16	built	400 0 none
+consoleMark.0	48	card 0 mark	Item	Item	in:consoleCard.0:24	-	54	54	-	-	-	built	-
+consoleCore.0	50	card 0 core name	CardLine	CardLine	after:consoleMark.0:16	-	-	-	-	Tokens.textStrong	30	built	600 0 none
+consoleCoreKind.0	51	card 0 core kind	CardLine	CardLine	after:consoleMark.0:16	below:consoleCore.0:2	-	-	-	Tokens.muted	16	built	400 0 none
+consoleOther.0	54	card 0 other cores	CardLine	CardLine	in:consoleCard.0:24	up:consoleCard.0:22	313.3333	-	-	Tokens.muted	16	built	400 0 none
+consoleCard.1	40	grid card 1	Item	Item	after:consoleCard.0:20	232	361.3333	258	-	-	-	built	-
+consoleCard.2	40	grid card 2	Item	Item	after:consoleCard.1:20	232	361.3333	258	-	-	-	built	-
+consoleCard.3	40	grid card 3	Item	Item	96	below:consoleCard.0:20	361.3333	258	-	-	-	built	-
+consoleCard.6	40	grid card 6 PlayStation	Item	Item	96	below:consoleCard.3:20	361.3333	258	-	-	-	built	-
+consoleFlag.6	45	Newer build rose badge	Rectangle	Rectangle	inright:consoleCard.6:24	top:consoleCard.6:22	-	32	16	#FFF3C9D2	-	built	-
+consoleFlagWords.6	45	Newer build words	CardLine	CardLine	-	mid:consoleFlag.6	-	-	-	Tokens.overAccent	15	built	700 0 none
+consoleCard.7	40	grid card 7 PlayStation 2	Item	Item	after:consoleCard.6:20	below:consoleCard.3:20	361.3333	258	-	-	-	built	-
+consoleFlag.7	45	Firmware outlined badge	Rectangle	Rectangle	inright:consoleCard.7:24	top:consoleCard.7:22	-	32	16	#00000000	-	built	line 2 #FFB9BED0
+asideEyebrow	63	"SONY · 88 GAMES"	CardLine	CardLine	1280	146	544	22	-	#FFF3C9D2	18	built	600 0.2 upper
+asideHeading	64	"PlayStation"	CardLine	CardLine	1280	below:asideEyebrow:6	544	-	-	Tokens.textStrong	46	built	600 0 none
+asideInstalledHeading	66	"On this machine"	CardLine	CardLine	1280	below:asideHeading:24	544	-	-	#FFD8DBE6	20	built	600 0 none
+asideCore.0	68	installed core 0 Diamond	Item	Item	1280	below:asideInstalledHeading:18	544	90	-	-	-	built	-
+asideCoreBg.0	68	core 0 card bg	Rectangle	Rectangle	in:asideCore.0:0	top:asideCore.0:0	544	90	18	#FF0F111A	-	built	line 1 #FF22263A
+asideCoreMark.0	69	core 0 40px mark	Item	Item	in:asideCore.0:20	mid:asideCore.0	40	40	-	-	-	built	-
+asideCoreName.0	71	"Diamond"	CardLine	CardLine	after:asideCoreMark.0:14	-	-	-	-	Tokens.textStrong	25	built	600 0 none
+asideCoreKind.0	72	"EmuSen's own core · up to date"	CardLine	CardLine	after:asideCoreMark.0:14	below:asideCoreName.0:2	-	-	-	Tokens.muted	16	built	400 0 none
+asideCoreBadge.0	74	"Plays this console"	Rectangle	Rectangle	inright:asideCore.0:20	mid:asideCore.0	-	32	16	#00000000	-	built	line 2 #FFF6E7D8
+asideCore.1	78	installed core 1 focused	Item	Item	1280	below:asideCore.0:18	544	233	-	-	-	built	-
+asideCoreRing.1	78	focused core focus ring	Kit.FocusRing	FocusRing	in:asideCore.1:0	top:asideCore.1:0	544	233	-	-	-	built	ring 3 3 40 8 24 #59F0B4C4 #FF07080F #FFF6E7D8
+asideCoreBg.1	78	focused core bg	Rectangle	Rectangle	in:asideCore.1:0	top:asideCore.1:0	544	233	18	#FF151826	-	built	line 0 -
+asideCoreName.1	82	"Beetle PSX HW"	CardLine	CardLine	after:asideCoreMark.1:14	-	-	-	-	Tokens.textStrong	25	built	600 0 none
+asideCoreKind.1	83	"Hosted core from libretro"	CardLine	CardLine	after:asideCoreMark.1:14	below:asideCoreName.1:2	-	-	-	Tokens.muted	16	built	400 0 none
+asidePillUpdate.1	91	Update pill	Item	Item	in:asideCore.1:20	-	-	44	-	-	-	built	-
+asidePillDefault.1	92	Use for this console pill	Item	Item	after:asidePillUpdate.1:10	top:asidePillUpdate.1:0	-	44	-	-	-	built	-
+asidePillRemove.1	93	Remove pill	Item	Item	in:asideCore.1:20	below:asidePillUpdate.1:10	-	44	-	-	-	built	-
+asideAvailableHeading	98	More from libretro heading	CardLine	CardLine	1280	below:asideCore.1:26	544	-	-	#FFD8DBE6	20	built	600 0 none
+asideAvail.0	100	available core 0 SwanStation	Item	Item	1280	below:asideAvailableHeading:18	544	84	-	-	-	built	-
+asideAvailBg.0	100	avail 0 bg	Rectangle	Rectangle	in:asideAvail.0:0	top:asideAvail.0:0	544	84	18	#FF0F111A	-	built	line 1 #FF22263A
+asideAvailName.0	103	"SwanStation"	CardLine	CardLine	1348	-	-	-	-	Tokens.textStrong	22	built	600 0 none
+asideAvailDesc.0	104	"Fast, with upscaling"	CardLine	CardLine	1348	below:asideAvailName.0:2	-	-	-	Tokens.muted	16	built	400 0 none
+asideAvail.1	109	available core 1 PCSX ReARMed	Item	Item	1280	below:asideAvail.0:18	544	84	-	-	-	built	-
+asideNote	118	safety disclaimer note	CardLine	CardLine	1280	below:asideAvail.1:18	544	-	-	Tokens.muted	17	built	400 0 none
+coresHelp	122	footer help bar	Kit.HelpBar	HelpBar	96	mid:1141	-	38	-	-	21	built	400 0 none
+ownGlyph-Update	123	A filled 34 px	CardGlyph	-	in:coresHelp:0	mid:coresHelp	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Use for this console	124	X ringed 38 px	CardGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Remove	125	Y ringed 38 px	CardGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Update all · 2	126	MENU capsule 34 px	CardGlyph	-	-	mid:coresHelp	-	34	-	-	-	built	word 14 400 15 10
+ownGlyph-Back	127	B ringed 38 px	CardGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
+coresSummary	129	footer console summary	CardLine	CardLine	-	mid:coresHelp	right:96	-	-	#FFD8DBE6	21	built	400 0 none

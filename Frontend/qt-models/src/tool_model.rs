@@ -46,6 +46,8 @@ pub mod qobject {
         #[qproperty(QString, cores)]
         /// A file holding a world in place of the back end's, as the recordings script theirs; empty for the back end.
         #[qproperty(QString, world)]
+        #[qproperty(bool, eclipse)]
+        #[qproperty(QString, console_counts, cxx_name = "consoleCounts")]
         /// Whether the screen is shown: it reads everything anew each time this turns on.
         #[qproperty(bool, open)]
         #[qproperty(bool, busy, READ, NOTIFY)]
@@ -85,6 +87,13 @@ pub mod qobject {
         #[qproperty(i32, card_current, cxx_name = "cardCurrent", READ, NOTIFY)]
         #[qproperty(QStringList, card_pane_lines, cxx_name = "cardPaneLines", READ, NOTIFY)]
         #[qproperty(QStringList, card_pane_muted, cxx_name = "cardPaneMuted", READ, NOTIFY)]
+        #[qproperty(QString, card_pane_status, cxx_name = "cardPaneStatus", READ, NOTIFY)]
+        #[qproperty(bool, card_pane_status_ok, cxx_name = "cardPaneStatusOk", READ, NOTIFY)]
+        #[qproperty(QString, card_position_line, cxx_name = "cardPositionLine", READ, NOTIFY)]
+        #[qproperty(QString, card_detail_label, cxx_name = "cardDetailLabel", READ, NOTIFY)]
+        #[qproperty(QString, card_detail_value, cxx_name = "cardDetailValue", READ, NOTIFY)]
+        #[qproperty(QString, eclipse_cores, cxx_name = "eclipseCores", READ, NOTIFY)]
+        #[qproperty(QString, eclipse_help, cxx_name = "eclipseHelp", READ, NOTIFY)]
         /// The question over the screen: the plan, or one the tool asks.
         #[qproperty(bool, asking, READ, NOTIFY)]
         #[qproperty(QString, question_title, cxx_name = "questionTitle", READ, NOTIFY)]
@@ -140,6 +149,27 @@ pub mod qobject {
         /// The running job's events taken, as the screen's timer asks.
         #[qinvokable]
         fn poll(self: Pin<&mut ToolModel>);
+        #[qinvokable]
+        #[cxx_name = "eclipseChooseFilter"]
+        fn eclipse_choose_filter(self: Pin<&mut ToolModel>, key: &QString);
+        #[qinvokable]
+        #[cxx_name = "eclipseToggleView"]
+        fn eclipse_toggle_view(self: Pin<&mut ToolModel>);
+        #[qinvokable]
+        #[cxx_name = "eclipseFocusConsole"]
+        fn eclipse_focus_console(self: Pin<&mut ToolModel>, console: &QString);
+        #[qinvokable]
+        #[cxx_name = "eclipseFocusCore"]
+        fn eclipse_focus_core(self: Pin<&mut ToolModel>, key: &QString);
+        #[qinvokable]
+        #[cxx_name = "eclipseFocusZone"]
+        fn eclipse_focus_zone(self: Pin<&mut ToolModel>, zone: &QString);
+        #[qinvokable]
+        #[cxx_name = "eclipseAct"]
+        fn eclipse_act(self: Pin<&mut ToolModel>, action: &QString, key: &QString);
+        #[qinvokable]
+        #[cxx_name = "eclipseNavigate"]
+        fn eclipse_navigate(self: Pin<&mut ToolModel>, dir: &QString);
         /// A card or the docked keyboard over the screen closed, so the list takes the keys back.
         #[qsignal]
         #[cxx_name = "listFocused"]
@@ -176,6 +206,8 @@ pub struct ToolModelRust {
     platform_library: QString,
     cores: QString,
     world: QString,
+    eclipse: bool,
+    console_counts: QString,
     open: bool,
     busy: bool,
     problem: QString,
@@ -209,6 +241,13 @@ pub struct ToolModelRust {
     card_current: i32,
     card_pane_lines: QStringList,
     card_pane_muted: QStringList,
+    card_pane_status: QString,
+    card_pane_status_ok: bool,
+    card_position_line: QString,
+    card_detail_label: QString,
+    card_detail_value: QString,
+    eclipse_cores: QString,
+    eclipse_help: QString,
     asking: bool,
     question_title: QString,
     question_sentences: QStringList,
@@ -233,6 +272,8 @@ impl Default for ToolModelRust {
             platform_library: QString::default(),
             cores: QString::default(),
             world: QString::default(),
+            eclipse: false,
+            console_counts: QString::default(),
             open: false,
             busy: false,
             problem: QString::default(),
@@ -266,6 +307,13 @@ impl Default for ToolModelRust {
             card_current: 0,
             card_pane_lines: QStringList::default(),
             card_pane_muted: QStringList::default(),
+            card_pane_status: QString::default(),
+            card_pane_status_ok: false,
+            card_position_line: QString::default(),
+            card_detail_label: QString::default(),
+            card_detail_value: QString::default(),
+            eclipse_cores: QString::from("{}"),
+            eclipse_help: QString::from("[]"),
             asking: false,
             question_title: QString::default(),
             question_sentences: QStringList::default(),
@@ -281,8 +329,10 @@ impl Default for ToolModelRust {
 }
 
 impl cxx_qt::Initialize for qobject::ToolModel {
-    fn initialize(self: Pin<&mut Self>) {
-        self.on_open_changed(|model| model.opened()).release();
+    fn initialize(mut self: Pin<&mut Self>) {
+        self.as_mut().on_open_changed(|model| model.opened()).release();
+        self.as_mut().on_eclipse_changed(|model| model.sync_eclipse()).release();
+        self.on_console_counts_changed(|model| model.sync_eclipse()).release();
     }
 }
 
@@ -366,12 +416,29 @@ impl qobject::ToolModel {
                 _ => Err("no tool is named".to_owned()),
             };
             match made {
-                Ok(source) => self.as_mut().rust_mut().shown = Some(Tool::new(source)),
+                Ok(source) => {
+                    let e = self.eclipse;
+                    let counts = crate::tools::cores::eclipse::parse_console_counts(&self.console_counts.to_string());
+                    let mut tool = Tool::new(source);
+                    tool.set_eclipse(e);
+                    tool.set_console_counts(counts);
+                    self.as_mut().rust_mut().shown = Some(tool);
+                }
                 Err(words) => put!(self, problem, QString::from(words.as_str()), problem_changed),
             }
         }
         if let Some(tool) = self.as_mut().rust_mut().shown.as_mut() {
             tool.refresh();
+        }
+        self.fill();
+    }
+
+    fn sync_eclipse(mut self: Pin<&mut Self>) {
+        let e = self.eclipse;
+        let counts = crate::tools::cores::eclipse::parse_console_counts(&self.console_counts.to_string());
+        if let Some(tool) = self.as_mut().rust_mut().shown.as_mut() {
+            tool.set_eclipse(e);
+            tool.set_console_counts(counts);
         }
         self.fill();
     }
@@ -502,6 +569,56 @@ impl qobject::ToolModel {
         });
     }
 
+    pub fn eclipse_choose_filter(self: Pin<&mut Self>, key: &QString) {
+        let key = key.to_string();
+        self.with(move |t| {
+            t.eclipse_choose_filter(&key);
+            None
+        });
+    }
+
+    pub fn eclipse_toggle_view(self: Pin<&mut Self>) {
+        self.with(move |t| {
+            t.eclipse_toggle_view();
+            None
+        });
+    }
+
+    pub fn eclipse_focus_console(self: Pin<&mut Self>, console: &QString) {
+        let console = console.to_string();
+        self.with(move |t| {
+            t.eclipse_focus_console(&console);
+            None
+        });
+    }
+
+    pub fn eclipse_focus_core(self: Pin<&mut Self>, key: &QString) {
+        let key = key.to_string();
+        self.with(move |t| {
+            t.eclipse_focus_core(&key);
+            None
+        });
+    }
+
+    pub fn eclipse_focus_zone(self: Pin<&mut Self>, zone: &QString) {
+        let zone = zone.to_string();
+        self.with(move |t| {
+            t.eclipse_focus_zone(&zone);
+            None
+        });
+    }
+
+    pub fn eclipse_act(self: Pin<&mut Self>, action: &QString, key: &QString) {
+        let action = action.to_string();
+        let key = key.to_string();
+        self.with(move |t| t.eclipse_act(&action, (!key.is_empty()).then_some(key.as_str())));
+    }
+
+    pub fn eclipse_navigate(self: Pin<&mut Self>, dir: &QString) {
+        let dir = dir.to_string();
+        self.with(move |t| t.eclipse_navigate(&dir));
+    }
+
     /// Every property read again from the tool's description.
     fn fill(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().filling = true;
@@ -556,25 +673,41 @@ impl qobject::ToolModel {
                 .collect(),
         ));
         let card = tool.card();
-        let (card_title, card_breadcrumb, card_rows, card_current, pane_lines, pane_muted) = match &card {
+        let (card_title, card_breadcrumb, card_rows, card_current, pane_lines, pane_muted, pane_status, pane_status_ok, position_line) = match &card {
             Some((title, breadcrumb, rows, at)) => {
                 let shown: Vec<Value> = rows
                     .iter()
                     .map(|r| json!({ "key": r.key, "label": r.label, "value": r.value, "steps": r.steps, "opens": r.opens, "sectionEnd": r.section_end, "dimmed": false }))
                     .collect();
-                let pane = rows.get(*at).map(|r| r.pane.lines.clone()).unwrap_or_default();
+                let pane = rows.get(*at).map(|r| &r.pane);
+                let lines = pane.map(|p| p.lines.as_slice()).unwrap_or(&[]);
                 (
                     QString::from(title.as_str()),
                     QString::from(breadcrumb.as_str()),
                     text(&Value::Array(shown)),
                     *at as i32,
-                    list(&pane.iter().map(|l| l.0.clone()).collect::<Vec<_>>()),
-                    list(&pane.iter().map(|l| l.1.clone()).collect::<Vec<_>>()),
+                    list(&lines.iter().map(|l| l.0.clone()).collect::<Vec<_>>()),
+                    list(&lines.iter().map(|l| l.1.clone()).collect::<Vec<_>>()),
+                    QString::from(pane.map(|p| p.status.as_str()).unwrap_or_default()),
+                    pane.is_some_and(|p| p.status_ok),
+                    QString::from(crate::words::position_line(*at, rows.len()).as_str()),
                 )
             }
             // With no card the focused row is none, so a card's first row is a change the card's list follows.
-            None => (QString::default(), QString::default(), QString::from("[]"), -1, QStringList::default(), QStringList::default()),
+            None => (QString::default(), QString::default(), QString::from("[]"), -1, QStringList::default(), QStringList::default(), QString::default(), false, QString::default()),
         };
+        let (detail_label, detail_value) = tool
+            .card_detail_pane()
+            .map_or_else(|| (QString::default(), QString::default()), |(l, v)| (QString::from(l.as_str()), QString::from(v.as_str())));
+        let eclipse_view = tool.eclipse_view();
+        let eclipse_cores = QString::from(eclipse_view.as_ref().map_or_else(|| "{}".to_owned(), ToString::to_string).as_str());
+        let eclipse_help = QString::from(
+            eclipse_view
+                .as_ref()
+                .and_then(|v| v.get("footerHelp"))
+                .map_or_else(|| "[]".to_owned(), ToString::to_string)
+                .as_str(),
+        );
         let question = tool.question().cloned();
         let busy = source.running();
         let changed_library = self.busy && !busy && source.changes_library();
@@ -608,16 +741,17 @@ impl qobject::ToolModel {
         put!(self, card_current, card_current, card_current_changed);
         put!(self, card_pane_lines, pane_lines, card_pane_lines_changed);
         put!(self, card_pane_muted, pane_muted, card_pane_muted_changed);
+        put!(self, card_pane_status, pane_status, card_pane_status_changed);
+        put!(self, card_pane_status_ok, pane_status_ok, card_pane_status_ok_changed);
+        put!(self, card_position_line, position_line, card_position_line_changed);
+        put!(self, card_detail_label, detail_label, card_detail_label_changed);
+        put!(self, card_detail_value, detail_value, card_detail_value_changed);
+        put!(self, eclipse_cores, eclipse_cores, eclipse_cores_changed);
+        put!(self, eclipse_help, eclipse_help, eclipse_help_changed);
         let closed = self.card_open && card.is_none();
         put!(self, card_open, card.is_some(), card_open_changed);
-        // A card closed on the search's opening leaves the focus to the keys.
-        if (closed && !search_keys) || typed {
-            self.as_mut().list_focused();
-        }
-        if opened {
-            self.as_mut().search_opened();
-        }
-        match question {
+        let closed_asking = self.asking && question.is_none();
+        match &question {
             Some(q) => {
                 put!(self, question_title, QString::from(q.title.as_str()), question_title_changed);
                 put!(self, question_sentences, list(&q.sentences), question_sentences_changed);
@@ -627,6 +761,13 @@ impl qobject::ToolModel {
                 put!(self, asking, true, asking_changed);
             }
             None => put!(self, asking, false, asking_changed),
+        }
+        // A card or question closed leaves the focus back with the list/grid.
+        if ((closed || closed_asking) && card.is_none() && question.is_none() && !search_keys) || typed {
+            self.as_mut().list_focused();
+        }
+        if opened {
+            self.as_mut().search_opened();
         }
         put!(self, busy, busy, busy_changed);
         if changed_library {

@@ -1,0 +1,57 @@
+# Eclipse's game page, This game's crop, against its board, EclipseGameCrop.dc.html (1920 by 1200), one row an element (EmuSen_Qt.md §3.4.12).
+# board_height: 1200
+# Read from EclipseGameCrop.dc.html in Chrome after document.fonts.ready (g4-boards/crop.json); held by tests/eclipse_board/mod.rs.
+# The page as the board draws it: Aurora Drift on the Super Nintendo, This game's crop, Top 2.5% focused (row 3, "4 of 5") with Bottom 2.5% also shaded.
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the dark ground	Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
+backdropField.0	18	a colour field: #1FC9A8, an ellipse, blurred 110 px at 0.5	the kit's BackdropField	-	1240	-420	900	720	-	opacity:0.5	blur:110	built	field 0 -1 #1FC9A8 0
+backdropField.1	19	a colour field: #6A4CF0, an ellipse, blurred 120 px at 0.55	the kit's BackdropField	-	1500	-200	700	600	-	opacity:0.55	blur:120	built	field 0 -1 #6A4CF0 1
+mark	22	the crescent mark	Marks.crescent	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+trail	23	the trail, 28 px after the mark	Page.trail	Trail	after:mark:28	mid:80	-	-	-	-	-	built	-
+trailLink.0	24	"Consoles", a link	Actions.openSection(Page.trailSection)	Walkable	in:trail:0	mid:80	-	-	-	-	-	built	-
+trailWords.0	24	"Consoles", muted	words::CONSOLES_SECTION	Text	in:trailLink.0:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.0	25	the slash	Words.crumb	Text	after:trailLink.0:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailLink.1	26	"Super Nintendo", a link	Actions.openConsole(Page.console)	Walkable	after:trailSlash.0:14	mid:80	-	-	-	-	-	built	-
+trailWords.1	26	the console's name, muted	Read.console	Text	in:trailLink.1:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.1	27	the slash	Words.crumb	Text	after:trailLink.1:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailLink.2	28	"Aurora Drift", a link	Actions.pageBack()	Walkable	after:trailSlash.1:14	mid:80	-	-	-	-	-	built	-
+trailWords.2	28	the game's title, muted	Page.title	Text	in:trailLink.2:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.2	29	the slash	Words.crumb	Text	after:trailLink.2:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailLink.3	30	"Options", a link	Actions.pageBack()	Walkable	after:trailSlash.2:14	mid:80	-	-	-	-	-	built	-
+trailWords.3	30	"Options", muted	Section::Options	Text	in:trailLink.3:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.3	31	the slash	Words.crumb	Text	after:trailLink.3:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailWords.4	32	"This game's crop", semi-bold	game_page::CROP_TITLE	Text	after:trailSlash.3:14	mid:80	-	-	-	Tokens.text	24	built	600 0 none
+status	35	the status glass	Ink.glass	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
+battery	36	"82%"	Device.battery	Text	in:status:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	36	"9:41 PM"	Device.shortTime	Text	after:battery:22	mid:80	inright:status:22	-	-	Tokens.text	22	built	600 0 none
+packageTitleLine	40	the heading's line box, 59.36 px at 1.06	the heading's line height	Item	96	150	1100	59.36	-	-	-	built	-
+packageTitle	40	"This game's crop"	Page.subpageTitle	Text	96	mid:packageTitleLine	-	-	-	Tokens.textStrong	56	built	600 -0.01 none
+packageSubtitle	41	focused row subtitle	Page.subpageSubtitle	Text	96	below:packageTitleLine:10	1100	31.9	-	#FFC9CDDB	22	built	300 0 none
+cropRows	43	the 5 crop rows, 700 wide	Page.boardRows	ListView	96	330	700	350	-	-	-	built	-
+pageRow.0	45	This game's crop toggle row	Page.boardRows[0]	PageRow	96	330	700	62	-	-	-	built	-
+pageRowFill.0	45	resting fill and 1 px inset border	Tokens.inputSurface, Ink.plateEdge	Rectangle	in:pageRow.0:0	top:pageRow.0:0	700	62	16	Tokens.inputSurface	-	built	line 1 #FF262A3A
+pageRowName.0	46	"This game's crop"	the row's label	Line	in:pageRow.0:22	mid:pageRow.0	-	-	-	Tokens.text	22	built	600 0 none
+pageRowWords.0	49	"On"	the row's value	Line	-	mid:pageRow.0	inright:pageRow.0:22	-	-	Tokens.text	21	built	400 0 none
+pageRow.1	45	Left row	Page.boardRows[1]	PageRow	96	below:pageRow.0:10	700	62	-	-	-	built	-
+pageRow.2	45	Right row	Page.boardRows[2]	PageRow	96	below:pageRow.1:10	700	62	-	-	-	built	-
+pageRow.3	45	Top row, focused	Page.boardRows[3]	PageRow	96	below:pageRow.2:10	700	62	-	-	-	built	-
+pageRowFill.3	45	focused fill	Tokens.surfaceRaised	Rectangle	in:pageRow.3:0	top:pageRow.3:0	700	62	16	Tokens.surfaceRaised	-	built	-
+pageRowRing.3	79	focused row ring	FocusRing	FocusRing	in:pageRow.3:0	top:pageRow.3:0	700	62	16	-	-	built	ring 4 3 40 10 23 #80F0B4C4 #FF07080F #FFF6E7D8
+pageRowName.3	46	"Top"	the row's label	Line	in:pageRow.3:22	mid:pageRow.3	-	-	-	Tokens.text	22	built	600 0 none
+pageRowMore.3	50	right chevron on focused row	Chevron	Chevron	-	mid:pageRow.3	inright:pageRow.3:22	18	-	Tokens.accent	-	built	-
+pageRowWords.3	49	"2.5%"	the row's value	Line	-	mid:pageRow.3	before:pageRowMore.3:12	-	-	Tokens.text	21	built	400 0 none
+pageRowLess.3	48	left chevron on focused row	Chevron	Chevron	-	mid:pageRow.3	before:pageRowWords.3:12	18	-	Tokens.accent	-	built	-
+pageRow.4	45	Bottom row	Page.boardRows[4]	PageRow	96	below:pageRow.3:10	700	62	-	-	-	built	-
+cropPreview	56	preview frame on right	Item	Item	920	268	904	678	-	-	-	built	-
+cropFrame	56	fallback #12205A frame	GameInk.cropFrame	Rectangle	920	268	904	678	18	#FF12205A	-	built	-
+cropShadeTop	62	top shaded crop strip (2.5%)	Page.cropTop	Item	920	268	904	16.95	-	-	-	built	-
+cropLineTop	62	active top 2 px accent rule	Tokens.accent	Rectangle	920	284.95	904	2	-	Tokens.accent	-	built	-
+cropShadeBottom	63	bottom shaded crop strip (2.5%)	Page.cropBottom	Item	920	929.05	904	16.95	-	-	-	built	-
+cropLineBottom	63	inactive bottom 2 px 45% rule	GameInk.cropLineDim	Rectangle	920	927.05	904	2	-	#73F6E7D8	-	built	-
+cropBorder	56	1 px inset border	Ink.plateEdge	Rectangle	920	268	904	678	18	#00000000	-	built	line 1 #FF262A3A
+cropCaption	65	"Aurora Drift · Top 2.5%"	Page.rowSentence	Line	920	966	904	-	-	Tokens.muted	20	built	400 0 none
+help	66	the help line's entries, 40 above the foot	Page.boardHelp, Help.PageCropEdge	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Value	68	◀ ▶ in a 2 px box, 30 inside	Eclipse's Glyph	-	in:help:0	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph-Type it	69	A filled disc of 34	Eclipse's Glyph	-	-	mid:help	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Back	70	B, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+packagePlace	72	"4 of 5" at footer right	Page.rowPlace	Line	-	mid:help	right:96	-	-	Tokens.muted	21	built	400 0 none

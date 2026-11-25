@@ -1,0 +1,64 @@
+# Eclipse's game page, Edit Details, against its board, EclipseGameEdit.dc.html (1920 by 1200), one row an element (EmuSen_Qt.md §3.4.12).
+# board_height: 1200
+# Read from EclipseGameEdit.dc.html in Chrome after document.fonts.ready (g4-boards/edit.json); held by tests/eclipse_board/mod.rs.
+# The page as the board draws it: Aurora Drift on the Super Nintendo, Edit Details, 18 rows (Hidden omitted per R-20261116-32), Developer (row 5) focused ("6 of 18").
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the dark ground	Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
+backdropField.0	18	a colour field: #1FC9A8, an ellipse, blurred 110 px at 0.5	the kit's BackdropField	-	1240	-420	900	720	-	opacity:0.5	blur:110	built	field 0 -1 #1FC9A8 0
+backdropField.1	19	a colour field: #6A4CF0, an ellipse, blurred 120 px at 0.55	the kit's BackdropField	-	1500	-200	700	600	-	opacity:0.55	blur:120	built	field 0 -1 #6A4CF0 1
+mark	22	the crescent mark	Marks.crescent	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
+trail	23	the trail, 28 px after the mark	Page.trail	Trail	after:mark:28	mid:80	-	-	-	-	-	built	-
+trailLink.0	24	"Consoles", a link	Actions.openSection(Page.trailSection)	Walkable	in:trail:0	mid:80	-	-	-	-	-	built	-
+trailWords.0	24	"Consoles", muted	words::CONSOLES_SECTION	Text	in:trailLink.0:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.0	25	the slash	Words.crumb	Text	after:trailLink.0:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailLink.1	26	"Super Nintendo", a link	Actions.openConsole(Page.console)	Walkable	after:trailSlash.0:14	mid:80	-	-	-	-	-	built	-
+trailWords.1	26	the console's name, muted	Read.console	Text	in:trailLink.1:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.1	27	the slash	Words.crumb	Text	after:trailLink.1:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailLink.2	28	"Aurora Drift", a link	Actions.pageBack()	Walkable	after:trailSlash.1:14	mid:80	-	-	-	-	-	built	-
+trailWords.2	28	the game's title, muted	Page.title	Text	in:trailLink.2:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.2	29	the slash	Words.crumb	Text	after:trailLink.2:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailLink.3	30	"Details", a link	Actions.pageBack()	Walkable	after:trailSlash.2:14	mid:80	-	-	-	-	-	built	-
+trailWords.3	30	"Details", muted	Section::Details	Text	in:trailLink.3:0	mid:80	-	-	-	Tokens.muted	24	built	400 0 none
+trailSlash.3	31	the slash	Words.crumb	Text	after:trailLink.3:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailWords.4	32	"Edit Details", semi-bold	game_page::EDIT_TITLE	Text	after:trailSlash.3:14	mid:80	-	-	-	Tokens.text	24	built	600 0 none
+status	35	the status glass	Ink.glass	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
+battery	36	"82%"	Device.battery	Text	in:status:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
+clock	36	"9:41 PM"	Device.shortTime	Text	after:battery:22	mid:80	inright:status:22	-	-	Tokens.text	22	built	600 0 none
+packageTitleLine	40	the heading's line box, 59.36 px at 1.06	the heading's line height	Item	96	150	1100	59.36	-	-	-	built	-
+packageTitle	40	"Edit Details"	Page.subpageTitle	Text	96	mid:packageTitleLine	-	-	-	Tokens.textStrong	56	built	600 -0.01 none
+pageRow.0	45	Name row, resting	Page.boardRows[0]	PageRow	96	268	840	62	-	-	-	built	-
+pageRowFill.0	45	resting fill and 1 px inset border	Tokens.inputSurface, Ink.plateEdge	Rectangle	in:pageRow.0:0	top:pageRow.0:0	840	62	16	Tokens.inputSurface	-	built	line 1 #FF262A3A
+pageRowName.0	46	"Name"	the row's label	Line	in:pageRow.0:22	mid:pageRow.0	-	-	-	Tokens.text	22	built	600 0 none
+pageRowWords.0	49	"Aurora Drift"	the row's value	Line	-	mid:pageRow.0	inright:pageRow.0:22	-	-	Tokens.text	21	built	400 0 none
+pageRow.1	45	Sort name row	Page.boardRows[1]	PageRow	96	below:pageRow.0:10	840	62	-	-	-	built	-
+pageRow.2	45	Custom collections sortname row	Page.boardRows[2]	PageRow	96	below:pageRow.1:10	840	62	-	-	-	built	-
+pageRow.3	45	Description row	Page.boardRows[3]	PageRow	96	below:pageRow.2:10	840	62	-	-	-	built	-
+pageRow.4	45	Release date row	Page.boardRows[4]	PageRow	96	below:pageRow.3:10	840	62	-	-	-	built	-
+pageRow.5	45	Developer row, focused	Page.boardRows[5]	PageRow	96	below:pageRow.4:10	840	62	-	-	-	built	-
+pageRowFill.5	45	focused fill	Tokens.surfaceRaised	Rectangle	in:pageRow.5:0	top:pageRow.5:0	840	62	16	Tokens.surfaceRaised	-	built	-
+pageRowRing.5	84	focused row ring	FocusRing	FocusRing	in:pageRow.5:0	top:pageRow.5:0	840	62	16	-	-	built	ring 4 3 40 10 23 #80F0B4C4 #FF07080F #FFF6E7D8
+pageRowName.5	46	"Developer"	the row's label	Line	in:pageRow.5:22	mid:pageRow.5	-	-	-	Tokens.text	22	built	600 0 none
+pageRowPen.5	51	pen icon on focused text row	Pen	Pen	-	mid:pageRow.5	inright:pageRow.5:22	20	-	Tokens.accent	-	built	-
+pageRowWords.5	49	"Northlight Works"	the row's value	Line	-	mid:pageRow.5	before:pageRowPen.5:12	-	-	Tokens.text	21	built	400 0 none
+pageRow.6	45	Publisher row	Page.boardRows[6]	PageRow	96	below:pageRow.5:10	840	62	-	-	-	built	-
+pageRow.7	45	Genre row	Page.boardRows[7]	PageRow	96	below:pageRow.6:10	840	62	-	-	-	built	-
+pageRow.8	45	Players row	Page.boardRows[8]	PageRow	96	below:pageRow.7:10	840	62	-	-	-	built	-
+pageRow.9	58	Rating row, top of right column	Page.boardRows[9]	PageRow	984	268	840	62	-	-	-	built	-
+pageRowFill.9	58	resting fill and 1 px inset border	Tokens.inputSurface, Ink.plateEdge	Rectangle	in:pageRow.9:0	top:pageRow.9:0	840	62	16	Tokens.inputSurface	-	built	line 1 #FF262A3A
+pageRowName.9	59	"Rating"	the row's label	Line	in:pageRow.9:22	mid:pageRow.9	-	-	-	Tokens.text	22	built	600 0 none
+pageRowWords.9	62	"4 of 5"	the row's value	Line	-	mid:pageRow.9	inright:pageRow.9:22	-	-	Tokens.text	21	built	400 0 none
+pageRow.10	58	Completed row	Page.boardRows[10]	PageRow	984	below:pageRow.9:10	840	62	-	-	-	built	-
+pageRow.11	58	Kid game row	Page.boardRows[11]	PageRow	984	below:pageRow.10:10	840	62	-	-	-	built	-
+pageRow.12	58	Broken / not working row	Page.boardRows[12]	PageRow	984	below:pageRow.11:10	840	62	-	-	-	built	-
+pageRow.13	58	Exclude from game counter row	Page.boardRows[13]	PageRow	984	below:pageRow.12:10	840	62	-	-	-	built	-
+pageRow.14	58	Exclude from multi-scraper row	Page.boardRows[14]	PageRow	984	below:pageRow.13:10	840	62	-	-	-	built	-
+pageRow.15	58	Hide metadata fields row	Page.boardRows[15]	PageRow	984	below:pageRow.14:10	840	62	-	-	-	built	-
+pageRow.16	58	Controller row	Page.boardRows[16]	PageRow	984	below:pageRow.15:10	840	62	-	-	-	built	-
+pageRow.17	58	Clear Scraped Data row	Page.boardRows[17]	PageRow	984	below:pageRow.16:10	840	62	-	-	-	built	-
+help	69	the help line's entries, 40 above the foot	Page.boardHelp, Help.PageEditText	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Edit	71	A filled disc of 34	Eclipse's Glyph, lead	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Value	72	◀ ▶ in a 2 px box, 30 inside	Eclipse's Glyph	-	-	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph-Reset to scraped	73	Y, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Details	74	B, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Home	75	Start in a 2 px box, 30 inside	Eclipse's Glyph, named	-	-	mid:help	-	34	-	-	-	built	word 15 400 8 10
+packagePlace	77	"6 of 18" at the footer's right	Page.rowPlace	Line	-	mid:help	right:96	-	-	Tokens.muted	21	built	400 0 none

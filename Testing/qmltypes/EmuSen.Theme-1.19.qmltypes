@@ -209,6 +209,19 @@ Module {
             lineNumber: 61
             Parameter { name: "tab"; type: "int" }
         }
+        Method {
+            name: "pageViewKey"
+            type: "bool"
+            lineNumber: 62
+            Parameter { name: "key"; type: "int" }
+            Parameter { name: "modifiers"; type: "int" }
+        }
+        Method {
+            name: "pageViewPages"
+            type: "bool"
+            lineNumber: 63
+            Parameter { name: "pages"; type: "int" }
+        }
     }
     Component {
         file: "bells.cxxqt.h"
@@ -694,7 +707,15 @@ Module {
                 "PagePackageCheck",
                 "PagePackageMake",
                 "PagePackageStop",
-                "PagePackageInfo"
+                "PagePackageInfo",
+                "PageEditText",
+                "PageScrape",
+                "PageViewerBoard",
+                "PageViewerBoardCover",
+                "PageViewerBoardDelete",
+                "PageViewerManualBoard",
+                "PageCropToggle",
+                "PageCropEdge"
             ]
         }
         Property {
@@ -712,7 +733,7 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 74
+            lineNumber: 82
             Parameter { name: "kind"; type: "HelpKind" }
         }
         Method {
@@ -720,14 +741,14 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 75
+            lineNumber: 83
             Parameter { name: "kind"; type: "HelpKind" }
             Parameter { name: "flags"; type: "QMap_QString_QVariant" }
         }
     }
     Component {
         file: "help.cxxqt.h"
-        lineNumber: 96
+        lineNumber: 104
         name: "ThemeHelpEntries"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -739,7 +760,7 @@ Module {
             type: "QString"
             read: "getActionLines"
             index: 0
-            lineNumber: 102
+            lineNumber: 110
             isReadonly: true
             isPropertyConstant: true
         }
@@ -747,7 +768,7 @@ Module {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 108
+            lineNumber: 116
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -755,13 +776,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 109
+            lineNumber: 117
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 110
+            lineNumber: 118
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }
@@ -1020,7 +1041,7 @@ Module {
             name: "PageSection"
             isScoped: true
             type: "int"
-            lineNumber: 77
+            lineNumber: 91
             values: [
                 "Overview",
                 "States",
@@ -1034,8 +1055,16 @@ Module {
             name: "PageSubpage"
             isScoped: true
             type: "int"
-            lineNumber: 86
-            values: ["None", "Package"]
+            lineNumber: 100
+            values: [
+                "None",
+                "Package",
+                "Edit",
+                "Cover",
+                "Scrape",
+                "Viewer",
+                "Crop"
+            ]
         }
         Property {
             name: "ready"
@@ -1448,7 +1477,133 @@ Module {
             lineNumber: 76
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 140 }
+        Property {
+            name: "viewKind"
+            type: "int"
+            read: "getViewKind"
+            notify: "shown"
+            index: 45
+            lineNumber: 77
+            isReadonly: true
+        }
+        Property {
+            name: "viewSource"
+            type: "QString"
+            read: "getViewSource"
+            notify: "shown"
+            index: 46
+            lineNumber: 78
+            isReadonly: true
+        }
+        Property {
+            name: "viewManual"
+            type: "QString"
+            read: "getViewManual"
+            notify: "shown"
+            index: 47
+            lineNumber: 79
+            isReadonly: true
+        }
+        Property {
+            name: "viewCaption"
+            type: "QString"
+            read: "getViewCaption"
+            notify: "shown"
+            index: 48
+            lineNumber: 80
+            isReadonly: true
+        }
+        Property {
+            name: "viewPage"
+            type: "int"
+            read: "getViewPage"
+            notify: "shown"
+            index: 49
+            lineNumber: 81
+            isReadonly: true
+        }
+        Property {
+            name: "viewZoom"
+            type: "int"
+            read: "getViewZoom"
+            notify: "shown"
+            index: 50
+            lineNumber: 82
+            isReadonly: true
+        }
+        Property {
+            name: "viewPanX"
+            type: "int"
+            read: "getViewPanX"
+            notify: "shown"
+            index: 51
+            lineNumber: 83
+            isReadonly: true
+        }
+        Property {
+            name: "viewPanY"
+            type: "int"
+            read: "getViewPanY"
+            notify: "shown"
+            index: 52
+            lineNumber: 84
+            isReadonly: true
+        }
+        Property {
+            name: "cropPicture"
+            type: "QString"
+            read: "getCropPicture"
+            notify: "shown"
+            index: 53
+            lineNumber: 85
+            isReadonly: true
+        }
+        Property {
+            name: "cropLeft"
+            type: "double"
+            read: "getCropLeft"
+            notify: "shown"
+            index: 54
+            lineNumber: 86
+            isReadonly: true
+        }
+        Property {
+            name: "cropRight"
+            type: "double"
+            read: "getCropRight"
+            notify: "shown"
+            index: 55
+            lineNumber: 87
+            isReadonly: true
+        }
+        Property {
+            name: "cropTop"
+            type: "double"
+            read: "getCropTop"
+            notify: "shown"
+            index: 56
+            lineNumber: 88
+            isReadonly: true
+        }
+        Property {
+            name: "cropBottom"
+            type: "double"
+            read: "getCropBottom"
+            notify: "shown"
+            index: 57
+            lineNumber: 89
+            isReadonly: true
+        }
+        Property {
+            name: "cropEdge"
+            type: "int"
+            read: "getCropEdge"
+            notify: "shown"
+            index: 58
+            lineNumber: 90
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 173 }
     }
     Component {
         file: "rows.cxxqt.h"

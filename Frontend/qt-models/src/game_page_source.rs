@@ -7,7 +7,10 @@
 
 use crate::clients::{app_settings, engine_shown, ClientSource};
 use crate::display::Crop;
-use crate::game_page::{cover_words, media_word, Change, Choice, CoverCard, CoverChoice, CropOffer, Detail, GamePageSource, Media, MediaKind, Package, PackageJob, Read, Slot, State, CHECK, DETAILS, MAKE};
+use crate::game_page::{
+    cover_words, media_word, Change, Choice, CoverCard, CoverChoice, CropOffer, Detail, GamePageSource, Media, MediaInfo, MediaKind, Package, PackageJob, Read, Slot, State, ALL_DETAILS, CHECK,
+    DETAILS, MAKE,
+};
 use crate::library::{console_name, title_of, HERO};
 use emusen_crystal_client::Scope;
 use emusen_platform_client::bindings::consts::PROFILES;
@@ -53,7 +56,84 @@ fn modified(path: &Path) -> Option<i64> {
     Some(at.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64))
 }
 
+/// Reads PNG, GIF, BMP, WebP or JPEG pixel dimensions from file headers without decoding pixels.
+fn image_dimensions(path: &Path) -> (u32, u32) {
+    let Ok(bytes) = std::fs::read(path) else { return (0, 0) };
+    if bytes.len() >= 24 && &bytes[..8] == b"\x89PNG\r\n\x1a\n" {
+        return (u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]), u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]));
+    }
+    if bytes.len() >= 10 && (&bytes[..6] == b"GIF87a" || &bytes[..6] == b"GIF89a") {
+        return (u16::from_le_bytes([bytes[6], bytes[7]]) as u32, u16::from_le_bytes([bytes[8], bytes[9]]) as u32);
+    }
+    if bytes.len() >= 26 && &bytes[..2] == b"BM" {
+        let w = i32::from_le_bytes([bytes[18], bytes[19], bytes[20], bytes[21]]).unsigned_abs();
+        let h = i32::from_le_bytes([bytes[22], bytes[23], bytes[24], bytes[25]]).unsigned_abs();
+        return (w, h);
+    }
+    if bytes.len() >= 30 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        if &bytes[12..16] == b"VP8X" {
+            let w = 1 + (bytes[24] as u32 | ((bytes[25] as u32) << 8) | ((bytes[26] as u32) << 16));
+            let h = 1 + (bytes[27] as u32 | ((bytes[28] as u32) << 8) | ((bytes[29] as u32) << 16));
+            return (w, h);
+        }
+        if &bytes[12..16] == b"VP8 " && bytes[23..26] == [0x9d, 0x01, 0x2a] {
+            let w = (u16::from_le_bytes([bytes[26], bytes[27]]) & 0x3fff) as u32;
+            let h = (u16::from_le_bytes([bytes[28], bytes[29]]) & 0x3fff) as u32;
+            return (w, h);
+        }
+        if &bytes[12..16] == b"VP8L" && bytes[20] == 0x2f {
+            let bits = u32::from_le_bytes([bytes[21], bytes[22], bytes[23], bytes[24]]);
+            return (1 + (bits & 0x3fff), 1 + ((bits >> 14) & 0x3fff));
+        }
+    }
+    if bytes.len() >= 4 && bytes[0] == 0xFF && bytes[1] == 0xD8 {
+        let mut i = 2;
+        while i + 9 < bytes.len() {
+            if bytes[i] != 0xFF {
+                break;
+            }
+            let marker = bytes[i + 1];
+            if marker == 0xD9 || marker == 0xDA {
+                break;
+            }
+            let len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+            if matches!(marker, 0xC0..=0xC3) {
+                let h = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
+                let w = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
+                return (w, h);
+            }
+            if len < 2 {
+                break;
+            }
+            i += 2 + len;
+        }
+    }
+    (0, 0)
+}
+
+/// Resolves the console display name of a borrowed cover's source game from the systems table.
+fn borrowed_console_name(systems: &[emusen_crystal_client::shapes::SystemRow], from: &str, picture: &str) -> Option<String> {
+    let pic = Path::new(picture);
+    if let Some(sys) = pic.parent().and_then(Path::parent).and_then(Path::file_name).and_then(|n| n.to_str()) {
+        if let Some(s) = systems.iter().find(|s| s.esde_system.eq_ignore_ascii_case(sys)) {
+            return Some(console_name(s));
+        }
+    }
+    let from_path = Path::new(from);
+    if let Some(folder) = from_path.parent().and_then(Path::file_name).and_then(|n| n.to_str()) {
+        if let Some(s) = systems.iter().find(|s| s.id.eq_ignore_ascii_case(folder) || s.esde_system.eq_ignore_ascii_case(folder) || s.console.eq_ignore_ascii_case(folder)) {
+            return Some(console_name(s));
+        }
+    }
+    None
+}
+
 impl ClientSource {
+    /// Looks up a console display name by its ScreenScraper system id from the runtime's systems table.
+    pub fn console_by_screenscraper(&self, id: u32) -> Option<String> {
+        let systems = self.runtime.systems().ok()?;
+        systems.iter().find(|s| s.screenscraper_system == Some(id)).map(console_name)
+    }
     fn media_file(&self, game: &GameFile, esde_system: &str, kind: &str) -> String {
         let Some(scraper) = self.scraper() else { return String::new() };
         let found = scraper.get(&json!({ "what": "media", "path": game.path, "system": esde_system, "type": kind }));
@@ -248,12 +328,27 @@ impl GamePageSource for ClientSource {
         };
         let edited = |key: &str| metadata.get(key).and_then(|v| v.get("source")).and_then(Value::as_str) == Some("edited");
         read.details = DETAILS.iter().map(|(field, _)| Detail { field, value: value(field), edited: edited(field) }).collect();
+        read.all_details = ALL_DETAILS.iter().map(|(field, _, _)| Detail { field, value: value(field), edited: edited(field) }).collect();
+        read.esde_system = esde.clone();
         read.media = self.screenshots(game)?;
         read.media.extend(MEDIA.iter().filter_map(|(kind, what)| Some(media(kind)).filter(|f| !f.is_empty()).map(|path| Media { path, kind: *what })));
+        read.media_info = read
+            .media
+            .iter()
+            .map(|m| {
+                let p = Path::new(&m.path);
+                let (width, height) = if matches!(m.kind, MediaKind::Clip | MediaKind::Manual) { (0, 0) } else { image_dimensions(p) };
+                MediaInfo { when: modified(p), width, height }
+            })
+            .collect();
         read.engine = Some(value(crate::edits::ALT_EMULATOR)).filter(|e| !e.is_empty());
         (read.package, read.layers, read.package_job) = self.package(game)?;
         read.scraping = self.scraping();
         (read.covers, read.cover_in_use, read.covers_unread) = self.covers(game, &esde)?;
+        if let CoverChoice::Borrowed(from) = &read.cover_in_use {
+            let pic = read.covers.iter().find(|c| matches!(c.choice, CoverChoice::Borrowed(_))).map_or("", |c| c.picture.as_str());
+            read.borrowed_console = borrowed_console_name(&systems, from, pic);
+        }
         let Some(s) = system else { return Ok(read) };
         // The engines: the console's own first, then each it may run on (Mistress's IGamePageHost.Engines).
         let cores = self.runtime.cores().map_err(words)?;
@@ -354,6 +449,12 @@ impl GamePageSource for ClientSource {
                 let at = crate::words::utc(crate::words::now());
                 self.library.change(&json!({ "op": "save_edits", "path": path, "changes": { crate::edits::HIDDEN: crate::edits::YES }, "at": at })).map(drop).map_err(words)
             }
+            Change::ClearScraped => {
+                let systems = self.runtime.systems().map_err(words)?;
+                let system = systems.iter().find(|s| Some(&s.id) == game.system.as_ref()).ok_or("the game's console is not known")?;
+                self.scrape_forget(path, &system.esde_system)
+            }
+            Change::DeleteMedia(file) => std::fs::remove_file(file).map_err(words),
             Change::Profile(profile) => {
                 let systems = self.runtime.systems().map_err(words)?;
                 let Some(s) = systems.iter().find(|s| Some(&s.id) == game.system.as_ref()) else { return Ok(()) };

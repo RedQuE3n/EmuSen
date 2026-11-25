@@ -38,8 +38,8 @@ Kit.NormalizedCanvas {
         // Cover art stands in its place while it is open.
         visible: !screen.page.coverArt
         form: Kit.Forms.BigScreen
-        // The viewer and the keyboard take the keys while they are open; the page has them back when they close.
-        focus: screen.inputs && !screen.page.viewing && !screen.page.typing && !screen.page.coverArt
+        // The viewer and the keyboard take the keys while they are open; a question over the viewer still takes focus on frame.
+        focus: screen.inputs && (!screen.page.viewing || screen.page.asking) && !screen.page.typing && !screen.page.coverArt
         padFamily: screen.padFamily
         helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
@@ -323,7 +323,7 @@ Kit.NormalizedCanvas {
         objectName: "pageViewer"
         anchors.fill: parent
         visible: screen.page.viewing
-        focus: screen.inputs && screen.page.viewing
+        focus: screen.inputs && screen.page.viewing && !screen.page.asking
         surfaceDrawn: false
         padFamily: screen.padFamily
         helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })

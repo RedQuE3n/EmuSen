@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import EmuSen.Kit as Kit
 import EmuSen.Models
 import EmuSen.ThemeHost as Host
 import EmuSen.App
@@ -209,6 +210,17 @@ Item {
         function onAskingChanged() { feed.showPage(themed.pageModel) }
         function onQuestionTitleChanged() { feed.showPage(themed.pageModel) }
         function onFocusMoved() { feed.showPage(themed.pageModel) }
+        function onViewingChanged() { feed.showPage(themed.pageModel) }
+        function onViewKindChanged() { feed.showPage(themed.pageModel) }
+        function onViewSourceChanged() { feed.showPage(themed.pageModel) }
+        function onViewManualChanged() { feed.showPage(themed.pageModel) }
+        function onViewCaptionChanged() { feed.showPage(themed.pageModel) }
+        function onViewPageChanged() { feed.showPage(themed.pageModel) }
+        function onViewZoomChanged() { feed.showPage(themed.pageModel) }
+        function onViewPanXChanged() { feed.showPage(themed.pageModel) }
+        function onViewPanYChanged() { feed.showPage(themed.pageModel) }
+        function onViewHelpChanged() { feed.showPage(themed.pageModel) }
+        function onThemeDrawsChanged() { feed.showPage(themed.pageModel) }
     }
     Connections {
         target: themed.library
@@ -274,6 +286,34 @@ Item {
         wanted: themed.settingsModel !== null
         inputs: themed.inputs
         shown: themed.screens.shown === Screens.Settings
+    }
+    // Trusted host stage for themed Media Viewer clips: keeps QtMultimedia out of the theme sandbox.
+    Loader {
+        id: viewerClipStage
+        objectName: "themeViewerClipStage"
+        anchors.fill: parent
+        active: gameSlot.shown && (themed.pageModel?.viewing ?? false) && (themed.pageModel?.viewKind ?? 0) === 1
+        sourceComponent: Rectangle {
+            color: Kit.Tokens.voidFill
+            Kit.NormalizedCanvas {
+                anchors.fill: parent
+                Kit.VideoTile {
+                    objectName: "themeViewerClip"
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    y: 34 * parent.unit
+                    height: 990 * parent.unit
+                    source: themed.pageModel.viewSource
+                    still: themed.pageModel.hero
+                    playing: true
+                    muted: false
+                    volume: themed.pageModel.clipVolume
+                    fillMode: Image.PreserveAspectFit
+                    delay: 1
+                    fade: 0
+                }
+            }
+        }
     }
     Slot {
         id: gameSlot

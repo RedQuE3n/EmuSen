@@ -470,7 +470,8 @@ impl ActionSink for Sink {
             (ScreenAction::PageStep(row, by), _, Some(p)) => p.step(*row, *by),
             (ScreenAction::PageFocus(action, row), _, Some(p)) => {
                 let actions = p.shown_actions().len();
-                let took = (*action == -1 || within(*action, actions)) && (*row == 0 || within(*row, p.shown_items().len()));
+                let count = p.shown_items().len().max(p.board_rows().len());
+                let took = (*action == -1 || within(*action, actions)) && (*row == 0 || within(*row, count));
                 if took {
                     p.focus(*action, *row);
                 }
@@ -480,6 +481,11 @@ impl ActionSink for Sink {
             (ScreenAction::PageAnswer(choice), _, Some(p)) => p.answer(*choice),
             (ScreenAction::PageBack, _, Some(p)) => p.back(),
             (ScreenAction::PageTab(tab), _, Some(p)) => p.choose_tab(*tab),
+            (ScreenAction::PageViewKey(key, modifiers), _, Some(p)) => p.view_key(*key, *modifiers),
+            (ScreenAction::PageViewPages(pages), _, Some(p)) => {
+                p.view_pages(*pages);
+                true
+            }
             _ => false,
         }
     }
@@ -690,6 +696,7 @@ impl qobject::ThemeFeed {
         let text = |t: &QString| t.to_string();
         let words = |l: &QStringList| QList::<QString>::from(l).iter().map(|w| w.to_string()).collect::<Vec<_>>();
         let (row_sentence, row_place) = page.board_aside();
+        let (crop_picture, crop_ratios, crop_edge) = page.crop_preview();
         let facts = PageFacts {
             ready: *page.ready(),
             key: page.game_key().to_owned(),
@@ -734,7 +741,21 @@ impl qobject::ThemeFeed {
             coverable: page.coverable(),
             subpage: page.subpage() as i32,
             subpage_title: page.subpage_title().to_owned(),
-            subpage_subtitle: page.subpage_subtitle().to_owned(),
+            subpage_subtitle: page.subpage_subtitle(),
+            view_kind: *page.view_kind(),
+            view_source: text(page.view_source()),
+            view_manual: text(page.view_manual()),
+            view_caption: page.board_view_caption(),
+            view_page: *page.view_page(),
+            view_zoom: *page.view_zoom(),
+            view_pan_x: *page.view_pan_x(),
+            view_pan_y: *page.view_pan_y(),
+            crop_picture,
+            crop_left: crop_ratios[0],
+            crop_right: crop_ratios[1],
+            crop_top: crop_ratios[2],
+            crop_bottom: crop_ratios[3],
+            crop_edge,
         };
         if let Some(view) = self.engine().and_then(host::page) {
             view.show(&facts);

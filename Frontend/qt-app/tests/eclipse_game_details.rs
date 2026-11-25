@@ -88,23 +88,31 @@ fn qt_3_4_12_eclipse_s_game_details_is_its_board_and_every_row_works() {
     assert_eq!(focused(&mut scene), "pageRow.0");
     assert!(scene.tree().nodes.iter().any(|n| n.name == "gameAside" && n.visible), "aside shown on row 0");
 
-    // Pointer click on Edit Details opens the program's deeper page; B returns to Eclipse Details.
+    // Pointer click on Edit Details opens Eclipse's Edit Details subpage; B returns to Eclipse Details.
     let (x, y) = centre(&mut scene, "pageRow.1");
     scene.click(x, y);
-    until(&mut scene, "Edit Details deeper page opened", 3000, |s| s.property("theme", "pageDrawn") == "false");
+    until(&mut scene, "Eclipse Edit Details subpage opened", 3000, |s| {
+        s.property("theme", "pageDrawn") == "true" && eclipse_board::read(&s.tree(), "packageTitle", "text") == "Edit Details"
+    });
     scene.pad(UiButton::Back);
-    until(&mut scene, "back to Eclipse Details", 3000, |s| s.property("theme", "pageDrawn") == "true");
+    until(&mut scene, "back to Eclipse Details", 3000, |s| {
+        s.property("theme", "pageDrawn") == "true" && !s.tree().nodes.iter().any(|n| n.name == "packageTitle" && n.visible)
+    });
 
-    // Pad A on Cover Art opens the program's Cover Art page; B returns.
+    // Pad A on Cover Art opens Eclipse's Cover Art subpage; B returns.
     until(&mut scene, "row focus restored", 2000, |s| focused(s).starts_with("pageRow."));
     while focused(&mut scene) != "pageRow.2" {
         scene.pad(UiButton::Down);
         scene.wait(100);
     }
     scene.pad(UiButton::Accept);
-    until(&mut scene, "Cover Art deeper page opened", 3000, |s| s.property("theme", "pageDrawn") == "false");
+    until(&mut scene, "Eclipse Cover Art subpage opened", 3000, |s| {
+        s.property("theme", "pageDrawn") == "true" && eclipse_board::read(&s.tree(), "packageTitle", "text") == "Cover Art"
+    });
     scene.pad(UiButton::Back);
-    until(&mut scene, "back to Eclipse Details from Cover Art", 3000, |s| s.property("theme", "pageDrawn") == "true");
+    until(&mut scene, "back to Eclipse Details from Cover Art", 3000, |s| {
+        s.property("theme", "pageDrawn") == "true" && !s.tree().nodes.iter().any(|n| n.name == "packageTitle" && n.visible)
+    });
 
     // Pad A on Hide from Library opens the program's question; B cancels back to Details.
     until(&mut scene, "row focus restored", 2000, |s| focused(s).starts_with("pageRow."));

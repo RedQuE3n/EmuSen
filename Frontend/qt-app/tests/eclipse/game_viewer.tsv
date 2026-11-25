@@ -1,0 +1,16 @@
+# Eclipse's game page, Media Viewer, against its board, EclipseGameViewer.dc.html (1920 by 1200), one row an element (EmuSen_Qt.md §3.4.12).
+# board_height: 1200
+# Read from EclipseGameViewer.dc.html (g4-boards/viewer.json had fontsLoaded=false; sizes verified directly from EclipseGameViewer.dc.html); held by tests/eclipse_board/mod.rs.
+# The page as the board draws it: Screenshot 1 (2 of 5) on pure black with 132px bottom caption and help strip.
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+viewerBackdrop	17	pure black ground	Tokens.voidFill	Rectangle	0	0	right:0	1200	-	Tokens.voidFill	-	built	-
+viewerArea	20	centered media viewport	Item	Item	0	34	right:0	990	-	-	-	built	-
+viewerPicture	20	fitted picture	Image	Image	0	34	right:0	990	-	-	-	built	-
+viewerBar	28	bottom 132 px dark strip	Tokens.surface	Rectangle	0	1068	right:0	132	-	Tokens.surface	-	built	-
+viewerRule	28	2 px top rule	Tokens.rule	Rectangle	0	1068	right:0	2	-	Tokens.rule	-	built	-
+viewerCaption	29	caption line, 88 above foot	Page.viewCaption	Line	96	up:viewerBar:88	-	-	-	Tokens.textStrong	22	built	400 0 none
+help	30	the help line's entries, 40 above the foot	Page.boardHelp, Help.PageViewerBoardDelete	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Step	32	◀ ▶ in a 2 px box, 30 inside	Eclipse's Glyph	-	in:help:0	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph-Delete…	33	Y, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Back	34	B, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
+packagePlace	36	"2 of 5" at footer right	Page.rowPlace	Line	-	mid:help	right:96	-	-	Tokens.muted	21	built	400 0 none

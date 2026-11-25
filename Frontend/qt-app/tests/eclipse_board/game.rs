@@ -191,6 +191,11 @@ pub fn program_with_media<'a>(harness: &'a mut Harness, media: Option<&Path>) ->
 
 /// As `program`, naming an optional media store and an optional cores folder.
 pub fn program_with<'a>(harness: &'a mut Harness, media: Option<&Path>, cores: Option<&Path>) -> Scene<'a> {
+    program_full(harness, media, cores, None)
+}
+
+/// As `program_with`, also wiring an optional `scraperTest` JSON string.
+pub fn program_full<'a>(harness: &'a mut Harness, media: Option<&Path>, cores: Option<&Path>, scraper_test: Option<&str>) -> Scene<'a> {
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     if let Some(dir) = media {
@@ -198,6 +203,9 @@ pub fn program_with<'a>(harness: &'a mut Harness, media: Option<&Path>, cores: O
     }
     if let Some(dir) = cores {
         assert!(scene.set_property("library", "cores", dir.to_str().unwrap()));
+    }
+    if let Some(test) = scraper_test {
+        assert!(scene.set_property("program", "scraperTest", test));
     }
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     assert!(scene.set_property("program", "theme", &std::fs::canonicalize(ECLIPSE).unwrap().display().to_string()));
@@ -542,4 +550,162 @@ pub fn favourite(world: &emusen_client_fixture::World) -> bool {
     let platform = Platform::load(library()).unwrap();
     let all = records(&platform).get(&json!({ "what": "records" })).unwrap();
     all.get(rom(world).to_string_lossy().as_ref()).and_then(|r| r.get("favourite")).and_then(serde_json::Value::as_bool).unwrap_or(false)
+}
+
+/// Saves manual edit fields for the board's game in games.db.
+pub fn set_edits(world: &emusen_client_fixture::World, changes: serde_json::Value) {
+    let platform = Platform::load(library()).unwrap();
+    let path = rom(world).to_string_lossy().into_owned();
+    let games = records(&platform);
+    games.change(&json!({ "op": "save_edits", "path": path, "changes": changes, "at": "2026-11-09T00:00:00Z" })).unwrap();
+}
+
+/// Saves a per-game display crop in games.db.
+pub fn set_crop(world: &emusen_client_fixture::World, crop: emusen_qt_models::display::Crop) {
+    let platform = Platform::load(library()).unwrap();
+    let path = rom(world).to_string_lossy().into_owned();
+    let games = records(&platform);
+    games.change(&crop.set_record(&path)).unwrap();
+}
+
+/// Builds a minimal valid PDF of `pages` pages for Media Viewer tests.
+pub fn mini_pdf(pages: usize) -> Vec<u8> {
+    let kids: Vec<String> = (0..pages).map(|i| format!("{} 0 R", 3 + i)).collect();
+    let mut objects = vec!["<< /Type /Catalog /Pages 2 0 R >>".to_owned(), format!("<< /Type /Pages /Kids [{}] /Count {pages} >>", kids.join(" "))];
+    objects.extend((0..pages).map(|_| "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_owned()));
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, object) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend(format!("{} 0 obj\n{object}\nendobj\n", i + 1).bytes());
+    }
+    let xref = out.len();
+    out.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).bytes());
+    for at in offsets {
+        out.extend(format!("{at:010} 00000 n \n").bytes());
+    }
+    out.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).bytes());
+    out
+}
+
+/// Sets up Media Viewer fixtures: two 512x448 player screenshots (mtime 1 November 2026), Scraped screenshot, Title screen, Clip, 3-page Manual, and Cover.
+pub fn add_viewer_media(harness: &mut Harness, world: &emusen_client_fixture::World) -> (PathBuf, PathBuf) {
+    let platform = Platform::load(library()).unwrap();
+    let media = add_media(harness, world, &["covers", "screenshots", "titlescreens"]);
+    let shots = platform.directory(DIR_SCREENSHOTS).unwrap().unwrap();
+    std::fs::create_dir_all(&shots).unwrap();
+    let rom_path = rom(world).to_string_lossy().into_owned();
+    let shot1 = shots.join(emusen_qt_models::screenshots::name(&rom_path, "2026-11-01", "14.03.11.251"));
+    let shot2 = shots.join(emusen_qt_models::screenshots::name(&rom_path, "2026-11-01", "14.02.11.251"));
+    let taken = [(shot1.clone(), (512, 448), 2, String::new()), (shot2.clone(), (512, 448), 3, String::new())];
+    draw_covers(harness, &world.root, &taken, |_| {});
+    let nov1 = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_793_491_200);
+    for p in [&shot1, &shot2] {
+        std::fs::File::options().write(true).open(p).unwrap().set_modified(nov1).unwrap();
+    }
+    let clip = media.join("snes/videos").join(format!("{TITLE}.mkv"));
+    std::fs::create_dir_all(clip.parent().unwrap()).unwrap();
+    std::fs::write(&clip, b"video").unwrap();
+    let manual = media.join("snes/manuals").join(format!("{TITLE}.pdf"));
+    std::fs::create_dir_all(manual.parent().unwrap()).unwrap();
+    std::fs::write(&manual, mini_pdf(3)).unwrap();
+    (world.root.clone(), shot1)
+}
+
+/// Loopback HTTPS ScreenScraper mock answering jeuRecherche, jeuInfos, and PNG media for Scrape This Game tests.
+pub struct MockScraper {
+    child: std::process::Child,
+    pub test: String,
+    asked: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+impl MockScraper {
+    /// Starts the local HTTPS mock with a self-signed cert in `dir` and writes the developer credentials file in `config`.
+    pub fn start(dir: &Path, config: &Path) -> Self {
+        use std::io::{BufRead, BufReader};
+        use std::process::{Command, Stdio};
+        emusen_client_fixture::scraper::RecordedScraper::developer(config);
+        std::fs::create_dir_all(dir).unwrap();
+        let ca_cert = dir.join("ca.pem");
+        let ca_key = dir.join("ca.key");
+        let leaf_cert = dir.join("leaf.pem");
+        let leaf_key = dir.join("leaf.key");
+        let leaf_csr = dir.join("leaf.csr");
+        let ext = dir.join("ext.cnf");
+        std::fs::write(&ext, "subjectAltName=DNS:api.screenscraper.fr,DNS:neoclone.screenscraper.fr,DNS:localhost\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n").unwrap();
+        let run_ssl = |args: &[&str]| {
+            let ok = Command::new("openssl").args(args).stdout(Stdio::null()).stderr(Stdio::null()).status().expect("openssl runs").success();
+            assert!(ok, "openssl failed: {args:?}");
+        };
+        run_ssl(&["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", ca_key.to_str().unwrap(), "-out", ca_cert.to_str().unwrap(), "-subj", "/CN=EmuSen Test Root", "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"]);
+        run_ssl(&["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", leaf_key.to_str().unwrap(), "-out", leaf_csr.to_str().unwrap(), "-subj", "/CN=api.screenscraper.fr"]);
+        run_ssl(&["x509", "-req", "-in", leaf_csr.to_str().unwrap(), "-CA", ca_cert.to_str().unwrap(), "-CAkey", ca_key.to_str().unwrap(), "-CAcreateserial", "-out", leaf_cert.to_str().unwrap(), "-days", "1", "-extfile", ext.to_str().unwrap()]);
+        let pem = std::fs::read_to_string(&ca_cert).unwrap();
+        let script = r#"
+import http.server, json, ssl, sys, urllib.parse
+cert, key = sys.argv[1], sys.argv[2]
+PNG = bytes([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A,0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,0x08,0x06,0x00,0x00,0x00,0x1F,0x15,0xC4,0x89,0x00,0x00,0x00,0x0A,0x49,0x44,0x41,0x54,0x78,0x9C,0x63,0x00,0x01,0x00,0x00,0x05,0x00,0x01,0x0D,0x0A,0x2D,0xB4,0x00,0x00,0x00,0x00,0x49,0x45,0x4E,0x44,0xAE,0x42,0x60,0x82]) + bytes(4096)
+MATCHES = [
+    {"id":"101","systeme":{"id":"4"},"noms":[{"region":"us","text":"Aurora Drift"}],"dates":[{"region":"us","text":"1994-03-14"}],"medias":[{"type":"box-2D","region":"us","url":"https://neoclone.screenscraper.fr/cover.png","format":"png"}]},
+    {"id":"102","systeme":{"id":"9"},"noms":[{"region":"us","text":"Aurora Drift"}],"dates":[{"region":"us","text":"1995-05-01"}],"medias":[{"type":"box-2D","region":"us","url":"https://neoclone.screenscraper.fr/cover2.png","format":"png"}]},
+    {"id":"103","systeme":{"id":"4"},"noms":[{"region":"us","text":"Aurora Drifters"}],"dates":[{"region":"us","text":"1996-08-12"}],"medias":[{"type":"box-2D","region":"us","url":"https://neoclone.screenscraper.fr/cover3.png","format":"png"}]}
+]
+class H(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    def log_message(self, *a): pass
+    def send_body(self, code, ctype, body):
+        self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body))); self.send_header("Connection", "close"); self.end_headers(); self.wfile.write(body)
+    def do_GET(self):
+        print("asked " + self.path, flush=True)
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        if "jeuRecherche.php" in self.path:
+            term = (q.get("recherche") or [""])[0].lower()
+            if "fail" in term:
+                self.send_body(500, "text/plain", b"server error"); return
+            games = [] if "empty" in term else MATCHES
+            self.send_body(200, "application/json", json.dumps({"response": {"jeux": games}}).encode())
+        elif "jeuInfos.php" in self.path:
+            self.send_body(200, "application/json", json.dumps({"response": {"jeu": MATCHES[0]}}).encode())
+        else:
+            self.send_body(200, "image/png", PNG)
+srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ctx.load_cert_chain(cert, key)
+srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+print(srv.server_address[1], flush=True)
+srv.serve_forever()
+"#;
+        let mut child = Command::new("python3")
+            .args(["-c", script, leaf_cert.to_str().unwrap(), leaf_key.to_str().unwrap()])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("python3 mock scraper starts");
+        let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+        let port: u16 = lines.next().and_then(Result::ok).expect("mock scraper port").trim().parse().unwrap();
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let kept = asked.clone();
+        std::thread::spawn(move || {
+            for line in lines.map_while(Result::ok) {
+                if let Some(p) = line.strip_prefix("asked ") {
+                    kept.lock().unwrap_or_else(|e| e.into_inner()).push(p.to_owned());
+                }
+            }
+        });
+        let test = json!({ "connect": format!("127.0.0.1:{port}"), "roots": pem }).to_string();
+        Self { child, test, asked }
+    }
+
+    /// Paths requested so far.
+    pub fn asked(&self) -> Vec<String> {
+        self.asked.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+}
+
+impl Drop for MockScraper {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
 }

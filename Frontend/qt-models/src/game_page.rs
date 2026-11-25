@@ -56,6 +56,10 @@ pub enum Change {
     Crop(Option<Crop>),
     /// One of the game's own pictures, by its media type, made its cover; none puts back the cover found.
     Cover(Option<String>),
+    /// The game's scraped record and store pictures cleared, keeping the player's own edits (R-20261116-32).
+    ClearScraped,
+    /// One of the player's own screenshots deleted from disk (R-20261116-35).
+    DeleteMedia(String),
 }
 
 /// What the player is told when a change could not be made, and why (EmuSen_Qt.md §7.9).
@@ -71,6 +75,8 @@ pub fn change_failed(change: &Change, why: &str) -> String {
         Change::Cheat(..) => "The cheat was not switched",
         Change::Crop(_) => "The game's crop could not be stored",
         Change::Cover(_) => "The game's cover could not be chosen",
+        Change::ClearScraped => "Scraped data could not be cleared",
+        Change::DeleteMedia(_) => "The screenshot could not be deleted",
     };
     format!("{what}: {why}")
 }
@@ -176,6 +182,22 @@ pub struct Read {
     pub covers_unread: Option<String>,
     /// What the game shows as its cover.
     pub cover_in_use: CoverChoice,
+    /// All 17 editable metadata fields for Eclipse's Edit Details (R-20261116-32).
+    pub all_details: Vec<Detail>,
+    /// File modified time and pixel size parallel to `media`, for Media Viewer captions (R-20261116-35).
+    pub media_info: Vec<MediaInfo>,
+    /// Console name of the borrowed cover's source game when a borrowed cover is shown.
+    pub borrowed_console: Option<String>,
+    /// The game's ES-DE system id for scraper search and forget requests.
+    pub esde_system: String,
+}
+
+/// File date and pixel dimensions of one media item, for Eclipse's Media Viewer caption (R-20261116-35).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MediaInfo {
+    pub when: Option<i64>,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// What a card of Cover art stands for (decided 2026-11-14, R-20261114-10).
@@ -503,10 +525,33 @@ pub struct GamePage {
     pub packaging: bool,
     /// Whether Details shows Cover art, its deeper page.
     pub covering: bool,
+    /// Whether Details shows Scrape This Game's match picker dialog (R-20261116-34).
+    pub scraping_pick: bool,
+    /// Current state of the Scrape This Game search dialog.
+    pub scrape_status: ScrapeStatus,
+    /// Last search text sent by Scrape This Game.
+    pub scrape_query: String,
     /// The package's job: its key, whether it is running, and what it has said; none before one started.
     pub job: Option<(&'static str, bool, Run)>,
     /// This page's scrape: whether it is going, and what it last said; none before one started.
     pub run: Option<(bool, String)>,
+}
+
+/// One candidate match returned by ScreenScraper's `search` for Scrape This Game.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScrapeMatch {
+    pub pick: i64,
+    pub label: String,
+}
+
+/// State of the Scrape This Game match picker dialog.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum ScrapeStatus {
+    #[default]
+    Searching,
+    Found(Vec<ScrapeMatch>),
+    Empty,
+    Failed(String),
 }
 
 /// How long ago, as the page says it: Just now, 12 min ago, 2 h ago, Yesterday, 3 days ago, then the date (Mistress's
@@ -652,13 +697,13 @@ impl GamePage {
         self.custom = false;
         self.packaging = false;
         self.covering = false;
+        self.scraping_pick = false;
     }
 
-    /// B on the page: Edit Details and Cover art go back to Details, and Cheats, Display crop and Package to Options, and
-    /// says so; else the page is left.
+    /// B on the page leaves any open deeper page back to its tab; else leaves the page.
     pub fn back(&mut self) -> bool {
         self.custom = false;
-        let deeper = [&mut self.editing, &mut self.cheating, &mut self.cropping, &mut self.packaging, &mut self.covering];
+        let deeper = [&mut self.editing, &mut self.cheating, &mut self.cropping, &mut self.packaging, &mut self.covering, &mut self.scraping_pick];
         deeper.into_iter().fold(false, |went, d| std::mem::replace(d, false) | went)
     }
 
@@ -1041,10 +1086,14 @@ impl GamePage {
             Change::Profile(v) => r.profile = v.clone(),
             Change::Standard(v) => r.standard = v.clone(),
             Change::Edit(field, value) => {
-                if let Some(d) = r.details.iter_mut().find(|d| d.field == *field) {
-                    d.edited = value.is_some();
-                    if let Some(v) = value {
-                        d.value = v.clone();
+                for list in [&mut r.details, &mut r.all_details] {
+                    if let Some(d) = list.iter_mut().find(|d| d.field == *field) {
+                        d.edited = value.is_some();
+                        if let Some(v) = value {
+                            d.value = v.clone();
+                        }
+                    } else if let Some(v) = value {
+                        list.push(Detail { field, value: v.clone(), edited: true });
                     }
                 }
             }
@@ -1063,7 +1112,15 @@ impl GamePage {
                 r.cover_in_use = v.clone().map_or(CoverChoice::Found, CoverChoice::Own);
                 r.covers.retain(|c| !matches!(c.choice, CoverChoice::Borrowed(_)));
             }
-            Change::DeleteState(_) | Change::Hide => {}
+            Change::DeleteMedia(path) => {
+                if let Some(at) = r.media.iter().position(|m| m.path == *path) {
+                    r.media.remove(at);
+                    if at < r.media_info.len() {
+                        r.media_info.remove(at);
+                    }
+                }
+            }
+            Change::DeleteState(_) | Change::Hide | Change::ClearScraped => {}
         }
     }
 
@@ -1223,12 +1280,216 @@ pub const CHEATS_SENTENCE: &str = "The game's cheats, on or off; the same switch
 /// Package inner page's heading and subtitle (EclipseGamePackage:38-39).
 pub const PACKAGE_TITLE: &str = "Package";
 pub const PACKAGE_SUBTITLE: &str = "The game's package and its layers, from Packages.";
+/// Eclipse inner pages' headings, keys and status words (R-20261116-32 to -35).
+pub const EDIT_TITLE: &str = "Edit Details";
+pub const SCRAPE_TITLE: &str = "Scrape This Game";
+pub const CROP_TITLE: &str = "This game's crop";
+pub const CLEAR_SCRAPED: &str = "clear_scraped";
+pub const CLEAR_SCRAPED_LABEL: &str = "Clear Scraped Data";
+pub const SCRAPE_QUERY: &str = "scrape_query";
+pub const SCRAPE_OTHER: &str = "scrape_other";
+pub const SCRAPE_CHECKSUMS: &str = "scrape_checksums";
+pub const SCRAPE_NO: &str = "scrape_no";
+pub const SCRAPE_INTRO: &str = "The match chosen gives the game its name, facts, cover and pictures, fetched by one paced run.";
+pub const SCRAPE_SEARCHING: &str = "Searching…";
+pub const SCRAPE_EMPTY: &str = "No matches found.";
+pub const SCRAPE_OTHER_LABEL: &str = "Search by another name…";
+pub const SCRAPE_CHECKSUMS_LABEL: &str = "By the file's checksums…";
+pub const SCRAPE_NO_LABEL: &str = "No";
+pub const CROP_TOGGLE_SUBTITLE: &str = "Whether this game has a crop of its own instead of the console's overscan.";
+
+/// How one field of Eclipse's Edit Details is displayed and edited (R-20261116-32).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditKind {
+    Text,
+    Date,
+    Rating,
+    Flag,
+    Controller,
+}
+
+/// All 17 editable metadata fields for Eclipse's Edit Details, omitting Hidden (R-20261116-32).
+pub const ALL_DETAILS: [(&str, &str, EditKind); 17] = [
+    (crate::edits::NAME, "Name", EditKind::Text),
+    ("sortname", "Sort name", EditKind::Text),
+    ("collectionsortname", "Custom collections sortname", EditKind::Text),
+    ("description", "Description", EditKind::Text),
+    ("releasedate", "Release date", EditKind::Date),
+    ("developer", "Developer", EditKind::Text),
+    ("publisher", "Publisher", EditKind::Text),
+    ("genre", "Genre", EditKind::Text),
+    ("players", "Players", EditKind::Text),
+    ("rating", "Rating", EditKind::Rating),
+    ("completed", "Completed", EditKind::Flag),
+    ("kidgame", "Kid game", EditKind::Flag),
+    ("broken", "Broken / not working", EditKind::Flag),
+    ("nogamecount", "Exclude from game counter", EditKind::Flag),
+    ("nomultiscrape", "Exclude from multi-scraper", EditKind::Flag),
+    ("hidemetadata", "Hide metadata fields", EditKind::Flag),
+    ("controller", "Controller", EditKind::Controller),
+];
+
+/// ES-DE's customControllerIcon keys with short labels for Edit Details (R-20261116-32).
+pub const CONTROLLERS: [(&str, &str); 37] = [
+    ("", ""),
+    ("gamepad_generic", "Gamepad"),
+    ("gamepad_nintendo_nes", "NES"),
+    ("gamepad_nintendo_snes", "SNES"),
+    ("gamepad_nintendo_64", "Nintendo 64"),
+    ("gamepad_nintendo_gamecube", "GameCube"),
+    ("gamepad_playstation", "PlayStation"),
+    ("gamepad_sega_master_system", "Master System"),
+    ("gamepad_sega_md_3_buttons", "Genesis (3-button)"),
+    ("gamepad_sega_md_6_buttons", "Genesis (6-button)"),
+    ("gamepad_sega_dreamcast", "Dreamcast"),
+    ("gamepad_xbox", "Xbox"),
+    ("joystick_generic", "Joystick"),
+    ("joystick_arcade_no_buttons", "Arcade stick"),
+    ("joystick_arcade_no_buttons_twin", "Twin stick"),
+    ("joystick_arcade_1_button", "Arcade (1 button)"),
+    ("joystick_arcade_2_buttons", "Arcade (2 buttons)"),
+    ("joystick_arcade_3_buttons", "Arcade (3 buttons)"),
+    ("joystick_arcade_4_buttons", "Arcade (4 buttons)"),
+    ("joystick_arcade_5_buttons", "Arcade (5 buttons)"),
+    ("joystick_arcade_6_buttons", "Arcade (6 buttons)"),
+    ("keyboard_generic", "Keyboard"),
+    ("keyboard_and_mouse_generic", "Keyboard and mouse"),
+    ("mouse_generic", "Mouse"),
+    ("mouse_amiga", "Amiga mouse"),
+    ("lightgun_generic", "Light gun"),
+    ("lightgun_nintendo", "NES Zapper"),
+    ("steering_wheel_generic", "Steering wheel"),
+    ("flight_stick_generic", "Flight stick"),
+    ("spinner_generic", "Spinner"),
+    ("trackball_generic", "Trackball"),
+    ("wii_remote_nintendo", "Wii Remote"),
+    ("wii_remote_and_nunchuk_nintendo", "Wii Remote + Nunchuk"),
+    ("joycon_left_or_right_nintendo", "Joy-Con (single)"),
+    ("joycon_pair_nintendo", "Joy-Con (pair)"),
+    ("xbox_kinect", "Kinect"),
+    ("unknown", "Unknown"),
+];
+
+/// Formats an ISO date ("1994-03-14" or "19940314...") as "14 March 1994", keeping unparseable text verbatim.
+pub fn format_release_date(raw: &str) -> String {
+    let s = raw.trim();
+    let (y, m, d) = if s.len() >= 10 && s.as_bytes()[4] == b'-' && s.as_bytes()[7] == b'-' {
+        (&s[0..4], &s[5..7], &s[8..10])
+    } else if s.len() >= 8 && s.as_bytes()[..8].iter().all(u8::is_ascii_digit) {
+        (&s[0..4], &s[4..6], &s[6..8])
+    } else {
+        return raw.to_owned();
+    };
+    let (Ok(year), Ok(month), Ok(day)) = (y.parse::<u32>(), m.parse::<usize>(), d.parse::<u32>()) else {
+        return raw.to_owned();
+    };
+    if year == 0 || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return raw.to_owned();
+    }
+    format!("{day} {} {year}", MONTHS_LONG[month - 1])
+}
+
+/// Formats a Unix timestamp in UTC as "1 November 2026" for Media Viewer captions.
+pub fn format_date_long(at: i64) -> String {
+    let utc = crate::words::utc(at);
+    let (y, m, d) = (&utc[0..4], utc[5..7].parse::<usize>().unwrap_or(1), utc[8..10].parse::<u32>().unwrap_or(1));
+    format!("{d} {} {y}", MONTHS_LONG[m.clamp(1, 12) - 1])
+}
+
+/// Converts a stored 0..1 rating string into a 0..5 star index (0 = Off).
+fn rating_stars(raw: &str) -> i32 {
+    let Ok(v) = raw.trim().parse::<f64>() else { return 0 };
+    if v <= 0.0 || !v.is_finite() { 0 } else { (v.clamp(0.0, 1.0) * 5.0).round() as i32 }
+}
+
+/// Formats a stored rating for Edit Details: "Off" or "1 of 5".."5 of 5".
+pub fn rating_words(raw: &str) -> String {
+    match rating_stars(raw) {
+        0 => "Off".into(),
+        n => format!("{n} of 5"),
+    }
+}
+
+/// Steps a stored rating through Off and 1..5 stars ("" / "0.2".."1").
+pub fn rating_stepped(raw: &str, by: i32) -> String {
+    const VALUES: [&str; 6] = ["", "0.2", "0.4", "0.6", "0.8", "1"];
+    let next = (rating_stars(raw) + by.signum()).rem_euclid(6) as usize;
+    VALUES[next].to_owned()
+}
+
+/// Formats a stored customControllerIcon key as its short label.
+pub fn controller_words(raw: &str) -> String {
+    CONTROLLERS.iter().find(|(k, _)| *k == raw).map_or_else(|| raw.to_owned(), |(_, l)| (*l).to_owned())
+}
+
+/// Steps a stored controller key through ES-DE's customControllerIcon list.
+pub fn controller_stepped(raw: &str, by: i32) -> String {
+    let at = CONTROLLERS.iter().position(|(k, _)| *k == raw).unwrap_or(0) as i32;
+    let next = (at + by.signum()).rem_euclid(CONTROLLERS.len() as i32) as usize;
+    CONTROLLERS[next].0.to_owned()
+}
+
+/// Formats a Scrape This Game candidate as "<name> (<year>, <console>)", dropping empty parts.
+pub fn format_scrape_match(name: &str, year: &str, console: &str) -> String {
+    let parts: Vec<&str> = [year.trim(), console.trim()].into_iter().filter(|p| !p.is_empty()).collect();
+    if parts.is_empty() { name.trim().to_owned() } else { format!("{} ({})", name.trim(), parts.join(", ")) }
+}
+
+/// Picks a preferred localised text from ScreenScraper's [[region, text], ...] array.
+fn pick_localised(arr: Option<&serde_json::Value>) -> String {
+    let pairs: Vec<(&str, &str)> = arr
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|p| Some((p.get(0)?.as_str()?, p.get(1)?.as_str()?.trim())))
+        .filter(|(_, t)| !t.is_empty())
+        .collect();
+    for key in ["wor", "us", "eu", "en", "ss"] {
+        if let Some((_, t)) = pairs.iter().find(|(k, _)| k.eq_ignore_ascii_case(key)) {
+            return (*t).to_owned();
+        }
+    }
+    pairs.first().map(|(_, t)| (*t).to_owned()).unwrap_or_default()
+}
+
+/// Parses ScreenScraper's `search` JSON response into `ScrapeStatus`.
+pub fn parse_scrape_matches(response: &serde_json::Value, console_of: &dyn Fn(u32) -> Option<String>, fallback_console: &str) -> ScrapeStatus {
+    let status = response["status"].as_str().unwrap_or("failed");
+    if status.eq_ignore_ascii_case("notfound") || status.eq_ignore_ascii_case("not_found") {
+        return ScrapeStatus::Empty;
+    }
+    if !status.eq_ignore_ascii_case("found") {
+        let detail = response["detail"].as_str().filter(|d| !d.is_empty()).unwrap_or("Search failed.");
+        return ScrapeStatus::Failed(detail.to_owned());
+    }
+    let matches: Vec<ScrapeMatch> = response["games"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|g| {
+            let pick = g["pick"].as_i64()?;
+            let name = pick_localised(g.get("names"));
+            if name.is_empty() {
+                return None;
+            }
+            let year = crate::esde_shelves::year_of(&pick_localised(g.get("dates"))).unwrap_or_default();
+            let console = g["system_id"].as_u64().and_then(|id| console_of(id as u32)).unwrap_or_else(|| fallback_console.to_owned());
+            Some(ScrapeMatch { pick, label: format_scrape_match(&name, &year, &console) })
+        })
+        .collect();
+    if matches.is_empty() { ScrapeStatus::Empty } else { ScrapeStatus::Found(matches) }
+}
 
 /// A deeper page of the game page that a theme may draw (`ThemeScreen.pageSubpages`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Subpage {
     None,
     Package,
+    Edit,
+    Cover,
+    Scrape,
+    Viewer,
+    Crop,
 }
 
 impl Subpage {
@@ -1236,6 +1497,11 @@ impl Subpage {
         match self {
             Subpage::None => 0,
             Subpage::Package => 1 << 1,
+            Subpage::Edit => 1 << 2,
+            Subpage::Cover => 1 << 3,
+            Subpage::Scrape => 1 << 4,
+            Subpage::Viewer => 1 << 5,
+            Subpage::Crop => 1 << 6,
         }
     }
 }
@@ -1291,7 +1557,7 @@ pub struct Card {
     pub row: Option<usize>,
 }
 
-/// A row of Eclipse's Details or Options tab, carrying its aside hint and underlying content index.
+/// A row of Eclipse's Details, Options, Cheats or deeper pages, with aside hint and content index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoardRow {
     pub key: String,
@@ -1301,6 +1567,8 @@ pub struct BoardRow {
     pub opens: bool,
     pub is_switch: bool,
     pub switch_on: bool,
+    pub editable: bool,
+    pub separated: bool,
     pub sentence: &'static str,
     pub row: usize,
 }
@@ -1358,7 +1626,7 @@ impl GamePage {
 
     /// The tab a theme would draw now; none for a deeper page, which stays the program's (EmuSen_Qt.md §3.2).
     pub fn tab_drawn(&self) -> Option<Tab> {
-        let deeper = self.editing || self.cropping || self.packaging || self.covering;
+        let deeper = self.editing || self.cropping || self.packaging || self.covering || self.scraping_pick;
         (!deeper).then(|| self.tabs()[self.tab()])
     }
 
@@ -1370,7 +1638,19 @@ impl GamePage {
 
     /// The deeper page open if one is, else `Subpage::None`.
     pub fn subpage(&self) -> Subpage {
-        if self.packaging { Subpage::Package } else { Subpage::None }
+        if self.packaging {
+            Subpage::Package
+        } else if self.editing {
+            Subpage::Edit
+        } else if self.covering {
+            Subpage::Cover
+        } else if self.scraping_pick {
+            Subpage::Scrape
+        } else if self.cropping {
+            Subpage::Crop
+        } else {
+            Subpage::None
+        }
     }
 
     /// Whether a theme whose `pageSections` is `drawn` and `pageSubpages` is `subpages` draws the page as it stands.
@@ -1386,6 +1666,20 @@ impl GamePage {
         }
         let sub = self.subpage();
         sub != Subpage::None && (subpages & sub.flag() != 0)
+    }
+
+    /// Whether a theme with `drawn` tabs and `subpages` draws the page, taking Media Viewer into account.
+    pub fn drawn_by_all(&self, drawn: i32, subpages: i32, modal: bool, viewing: bool) -> bool {
+        if drawn == 0 {
+            return true;
+        }
+        if modal {
+            return false;
+        }
+        if viewing {
+            return subpages & Subpage::Viewer.flag() != 0;
+        }
+        self.drawn_by_subpages(drawn, subpages, false)
     }
 
     /// The board's line over the title (EclipseGame:43): console · year · genre, each the game has.
@@ -1459,7 +1753,7 @@ impl GamePage {
         self.state_tiles().iter().position(|t| t.key == point.path)
     }
 
-    /// The board's trail (EclipseGame:29-35): the Consoles section, the game's console, its title, and the deeper page's name.
+    /// The board's trail: Consoles, the game's console, its title, and any open deeper page.
     pub fn trail(&self) -> Vec<String> {
         let mut out: Vec<String> = [crate::words::CONSOLES_SECTION, self.read.console.as_str(), self.read.title.as_str()]
             .into_iter()
@@ -1468,8 +1762,57 @@ impl GamePage {
             .collect();
         if self.packaging {
             out.push(PACKAGE_TITLE.to_owned());
+        } else if self.editing {
+            out.push(Section::Details.name().to_owned());
+            out.push(EDIT_TITLE.to_owned());
+        } else if self.covering {
+            out.push(Section::Details.name().to_owned());
+            out.push(COVER_ART.to_owned());
+        } else if self.scraping_pick {
+            out.push(Section::Details.name().to_owned());
+            out.push(SCRAPE_TITLE.to_owned());
+        } else if self.cropping {
+            out.push(Section::Options.name().to_owned());
+            out.push(CROP_TITLE.to_owned());
         }
         out
+    }
+
+    /// Heading of the currently open Eclipse deeper page, empty on main tabs.
+    pub fn subpage_title(&self) -> &'static str {
+        if self.packaging {
+            PACKAGE_TITLE
+        } else if self.editing {
+            EDIT_TITLE
+        } else if self.covering {
+            COVER_ART
+        } else if self.scraping_pick {
+            SCRAPE_TITLE
+        } else if self.cropping {
+            CROP_TITLE
+        } else {
+            ""
+        }
+    }
+
+    /// Subtitle under the heading of the currently open Eclipse deeper page.
+    pub fn subpage_subtitle(&self, content: usize) -> String {
+        if self.packaging {
+            return PACKAGE_SUBTITLE.to_owned();
+        }
+        if self.cropping {
+            let most = self.read.crop.as_ref().map_or(25.0, |c| if c.most > 0.0 { c.most * 100.0 } else { 25.0 });
+            let cap = crate::display::edge_words(most);
+            return match content {
+                0 => CROP_TOGGLE_SUBTITLE.to_owned(),
+                1 => format!("The part of the picture hidden at its left edge, 0 to {cap}; A types it."),
+                2 => format!("The part of the picture hidden at its right edge, 0 to {cap}; A types it."),
+                3 => format!("The part of the picture hidden at its top edge, 0 to {cap}; A types it."),
+                4 => format!("The part of the picture hidden at its bottom edge, 0 to {cap}; A types it."),
+                _ => CROP_TOGGLE_SUBTITLE.to_owned(),
+            };
+        }
+        String::new()
     }
 
     /// The state cards in the board's order and words (EclipseGame:64-83, R-20261116-36): the resume point, each slot saved in
@@ -1519,8 +1862,26 @@ impl GamePage {
         (offered && self.read.cover_in_use != own).then(|| kind.to_owned())
     }
 
-    /// Eclipse's Details, Options, Cheats or Package rows with board wording, aside hints, and content indices.
+    /// Raw detail value for one field of Eclipse's Edit Details, falling back to `details`.
+    fn all_detail(&self, field: &str) -> Option<&Detail> {
+        self.read.all_details.iter().find(|d| d.field == field).or_else(|| self.read.details.iter().find(|d| d.field == field))
+    }
+
+    /// Eclipse's Details, Options, Cheats or deeper page rows with board wording and content indices.
     pub fn board_rows(&self) -> Vec<BoardRow> {
+        let plain = |key: String, label: String, value: String, steps: bool, opens: bool, editable: bool, separated: bool, sentence: &'static str, row: usize| BoardRow {
+            key,
+            label,
+            value,
+            steps,
+            opens,
+            is_switch: false,
+            switch_on: false,
+            editable,
+            separated,
+            sentence,
+            row,
+        };
         if self.packaging {
             return self
                 .package_rows()
@@ -1528,19 +1889,66 @@ impl GamePage {
                 .enumerate()
                 .map(|(row, r)| {
                     let value = if r.key == JOB && r.value == "…" { String::new() } else { r.value };
-                    BoardRow {
-                        key: r.key.to_owned(),
-                        label: r.label,
-                        value,
-                        steps: false,
-                        opens: false,
-                        is_switch: false,
-                        switch_on: false,
-                        sentence: "",
-                        row,
-                    }
+                    plain(r.key.to_owned(), r.label, value, false, false, false, false, "", row)
                 })
                 .collect();
+        }
+        if self.editing {
+            let mut rows: Vec<BoardRow> = ALL_DETAILS
+                .iter()
+                .enumerate()
+                .map(|(row, (field, label, kind))| {
+                    let raw = self.all_detail(field).map_or("", |d| d.value.as_str());
+                    let (value, steps, editable) = match kind {
+                        EditKind::Text => (raw.to_owned(), false, true),
+                        EditKind::Date => (format_release_date(raw), false, true),
+                        EditKind::Rating => (rating_words(raw), true, false),
+                        EditKind::Flag => (if raw == crate::edits::YES { "On" } else { "Off" }.to_owned(), true, false),
+                        EditKind::Controller => (controller_words(raw), true, false),
+                    };
+                    plain((*field).to_owned(), (*label).to_owned(), value, steps, false, editable, false, "", row)
+                })
+                .collect();
+            rows.push(plain(CLEAR_SCRAPED.to_owned(), CLEAR_SCRAPED_LABEL.to_owned(), String::new(), false, false, false, false, "", rows.len()));
+            return rows;
+        }
+        if self.scraping_pick {
+            let matches = match &self.scrape_status {
+                ScrapeStatus::Found(list) => list.as_slice(),
+                _ => &[],
+            };
+            let mut rows: Vec<BoardRow> = matches
+                .iter()
+                .enumerate()
+                .map(|(i, m)| plain(format!("pick.{}", m.pick), m.label.clone(), String::new(), false, false, false, false, "", i))
+                .collect();
+            let has_matches = !rows.is_empty();
+            let base = rows.len();
+            rows.push(plain(SCRAPE_OTHER.to_owned(), SCRAPE_OTHER_LABEL.to_owned(), String::new(), false, false, false, has_matches, "", base));
+            rows.push(plain(SCRAPE_CHECKSUMS.to_owned(), SCRAPE_CHECKSUMS_LABEL.to_owned(), String::new(), false, false, false, false, "", base + 1));
+            rows.push(plain(SCRAPE_NO.to_owned(), SCRAPE_NO_LABEL.to_owned(), String::new(), false, false, false, false, "", base + 2));
+            return rows;
+        }
+        if self.cropping {
+            let own = self.read.crop.as_ref().and_then(|c| c.own);
+            let mut cur = own.unwrap_or_default();
+            let mut rows = vec![plain(
+                OVERSCAN.to_owned(),
+                CROP_TITLE.to_owned(),
+                if own.is_some() { "On" } else { "Off" }.to_owned(),
+                true,
+                false,
+                false,
+                false,
+                "",
+                0,
+            )];
+            const SHORT: [&str; 4] = ["Left", "Right", "Top", "Bottom"];
+            for (i, (edge, short)) in crate::display::EDGES.iter().zip(SHORT).enumerate() {
+                let value = crate::display::edge_words(*edge.of(&mut cur) * 100.0);
+                rows.push(plain(edge.key.to_owned(), short.to_owned(), value, true, false, false, false, "", i + 1));
+            }
+            return rows;
         }
         let Some(tab) = self.tab_drawn() else { return Vec::new() };
         let Content::Rows(rows) = self.content() else { return Vec::new() };
@@ -1550,17 +1958,7 @@ impl GamePage {
                 .enumerate()
                 .map(|(row, r)| {
                     let value = if (r.key == SCRAPE || r.key == HIDE) && r.value == "…" { String::new() } else { r.value };
-                    BoardRow {
-                        key: r.key.to_owned(),
-                        label: r.label,
-                        value,
-                        steps: r.steps,
-                        opens: r.opens,
-                        is_switch: false,
-                        switch_on: false,
-                        sentence: detail_sentence(r.key),
-                        row,
-                    }
+                    plain(r.key.to_owned(), r.label, value, r.steps, r.opens, false, false, detail_sentence(r.key), row)
                 })
                 .collect(),
             Tab::Options => rows
@@ -1578,7 +1976,7 @@ impl GamePage {
                         STANDARD => (r.label, if self.read.standard.is_none() { "The game's own".to_owned() } else { r.value }, r.sentence),
                         _ => (r.label, r.value, r.sentence),
                     };
-                    BoardRow { key: r.key.to_owned(), label, value, steps: r.steps, opens: r.opens, is_switch: false, switch_on: false, sentence, row }
+                    plain(r.key.to_owned(), label, value, r.steps, r.opens, false, false, sentence, row)
                 })
                 .collect(),
             Tab::Cheats => rows
@@ -1594,6 +1992,8 @@ impl GamePage {
                         opens: false,
                         is_switch: true,
                         switch_on: on,
+                        editable: false,
+                        separated: false,
                         sentence: CHEATS_SENTENCE,
                         row,
                     }
@@ -1603,15 +2003,53 @@ impl GamePage {
         }
     }
 
-    /// The focused board item's aside sentence and position ("2 of 5", "2 of 12 · 3 of 12 on"); empty on pills.
+    /// Console subtitle shown under the focused Cover Art preview heading.
+    pub fn cover_console(&self, index: usize) -> String {
+        match self.cover_cards().get(index).map(|c| &c.choice) {
+            Some(CoverChoice::Borrowed(_)) => self.read.borrowed_console.clone().unwrap_or_else(|| self.read.console.clone()),
+            Some(_) => self.read.console.clone(),
+            None => String::new(),
+        }
+    }
+
+    /// The focused board item's aside/subtitle sentence and position ("2 of 5"); empty on pills.
     pub fn board_aside(&self, action: Option<usize>, content: usize) -> (String, String) {
         if action.is_some() {
             return (String::new(), String::new());
         }
-        if self.packaging {
+        if self.packaging || self.editing {
             let rows = self.board_rows();
             let Some(at) = rows.iter().position(|r| r.row == content) else { return (String::new(), String::new()) };
             return (String::new(), place(at, rows.len()));
+        }
+        if self.covering {
+            let cards = self.cover_cards();
+            return if content < cards.len() {
+                (self.cover_console(content), place(content, cards.len()))
+            } else {
+                (String::new(), String::new())
+            };
+        }
+        if self.scraping_pick {
+            let intro = match &self.scrape_status {
+                ScrapeStatus::Searching => SCRAPE_SEARCHING.to_owned(),
+                ScrapeStatus::Found(_) => SCRAPE_INTRO.to_owned(),
+                ScrapeStatus::Empty => SCRAPE_EMPTY.to_owned(),
+                ScrapeStatus::Failed(detail) => detail.clone(),
+            };
+            let rows = self.board_rows();
+            let at = rows.iter().position(|r| r.row == content);
+            return (intro, at.map_or_else(String::new, |i| place(i, rows.len())));
+        }
+        if self.cropping {
+            let rows = self.board_rows();
+            let caption = match rows.get(content) {
+                Some(r) if content == 0 => format!("{} {BETWEEN} {}", self.read.title, r.value),
+                Some(r) => format!("{} {BETWEEN} {} {}", self.read.title, r.label, r.value),
+                None => self.read.title.clone(),
+            };
+            let p = if content < rows.len() { place(content, rows.len()) } else { String::new() };
+            return (caption, p);
         }
         if self.tab_drawn() == Some(Tab::Media) {
             return if content < self.read.media.len() {
@@ -1660,6 +2098,18 @@ impl GamePage {
                 _ => Some(Screen::GamePagePackageInfo),
             };
         }
+        if self.editing {
+            return Some(Screen::GamePageEditText);
+        }
+        if self.covering {
+            return Some(Screen::GamePageCoverArt);
+        }
+        if self.scraping_pick {
+            return Some(Screen::GamePageScrape);
+        }
+        if self.cropping {
+            return Some(if content == 0 { Screen::GamePageCropToggle } else { Screen::GamePageCropEdge });
+        }
         let key = action.and_then(|i| self.actions().get(i).map(|a| a.key));
         match (action, key) {
             (Some(_), Some(PLAY)) if self.resume_point().is_none() => Some(Screen::GamePageStart),
@@ -1689,6 +2139,190 @@ impl GamePage {
                 _ => None,
             },
         }
+    }
+
+    /// A on a row of Eclipse's 18-row Edit Details (R-20261116-32).
+    pub fn choose_board_edit(&self, index: usize) -> Outcome {
+        if !self.editing {
+            return Outcome::Nothing;
+        }
+        if index == ALL_DETAILS.len() {
+            let sentence = format!("{}'s scraped facts and pictures are cleared. Your own edits stay.", self.read.title);
+            return Outcome::Ask(ask("Clear Scraped Data?", &sentence, "Clear"), Change::ClearScraped);
+        }
+        let Some(&(field, label, kind)) = ALL_DETAILS.get(index) else { return Outcome::Nothing };
+        match kind {
+            EditKind::Text | EditKind::Date => {
+                let start = self.all_detail(field).map(|d| d.value.clone()).unwrap_or_default();
+                Outcome::Type { field, title: format!("{} › {label}", self.read.title), start }
+            }
+            EditKind::Rating | EditKind::Flag | EditKind::Controller => self.step_board_edit(index, 1),
+        }
+    }
+
+    /// Left/Right on a stepped row of Eclipse's Edit Details (R-20261116-32).
+    pub fn step_board_edit(&self, index: usize, by: i32) -> Outcome {
+        if !self.editing {
+            return Outcome::Nothing;
+        }
+        let Some(&(field, _, kind)) = ALL_DETAILS.get(index) else { return Outcome::Nothing };
+        let raw = self.all_detail(field).map_or("", |d| d.value.as_str());
+        match kind {
+            EditKind::Rating => Outcome::Changed(Change::Edit(field, Some(rating_stepped(raw, by)))),
+            EditKind::Flag => {
+                let next = if raw == crate::edits::YES { "0" } else { crate::edits::YES };
+                Outcome::Changed(Change::Edit(field, Some(next.to_owned())))
+            }
+            EditKind::Controller => Outcome::Changed(Change::Edit(field, Some(controller_stepped(raw, by)))),
+            EditKind::Text | EditKind::Date => Outcome::Nothing,
+        }
+    }
+
+    /// Y Reset to scraped on Eclipse's 18-row Edit Details (R-20261116-32).
+    pub fn reset_board_edit(&self, index: usize) -> Outcome {
+        if !self.editing {
+            return Outcome::Nothing;
+        }
+        let Some(&(field, _, _)) = ALL_DETAILS.get(index) else { return Outcome::Nothing };
+        match self.all_detail(field) {
+            Some(d) if d.edited => Outcome::Changed(Change::Edit(field, None)),
+            _ => Outcome::Nothing,
+        }
+    }
+
+    /// A on a row of Eclipse's This game's crop: row 0 toggles, edges open typing (R-20261116-33).
+    pub fn choose_board_crop(&self, index: usize) -> Outcome {
+        if !self.cropping {
+            return Outcome::Nothing;
+        }
+        let Some(crop) = &self.read.crop else { return Outcome::Nothing };
+        if index == 0 {
+            let next = if crop.own.is_some() { None } else { Some(Crop::default()) };
+            return Outcome::Changed(Change::Crop(next));
+        }
+        let Some(edge) = crate::display::EDGES.get(index - 1).copied() else { return Outcome::Nothing };
+        let mut cur = crop.own.unwrap_or_default();
+        let percent = *edge.of(&mut cur) * 100.0;
+        let start = format!("{}", (percent * 10.0).round() / 10.0);
+        Outcome::Type { field: edge.key, title: format!("{} › {}", self.read.title, edge.label), start }
+    }
+
+    /// Left/Right on a row of Eclipse's This game's crop: 0.5% steps, auto-enabling crop (R-20261116-33).
+    pub fn step_board_crop(&self, index: usize, by: i32) -> Outcome {
+        if !self.cropping {
+            return Outcome::Nothing;
+        }
+        let Some(crop) = &self.read.crop else { return Outcome::Nothing };
+        if index == 0 {
+            let next = if crop.own.is_some() { None } else { Some(Crop::default()) };
+            return Outcome::Changed(Change::Crop(next));
+        }
+        let Some(edge) = crate::display::EDGES.get(index - 1).copied() else { return Outcome::Nothing };
+        let mut next = crop.own.unwrap_or_default();
+        let percent = *edge.of(&mut next) * 100.0;
+        let most = if crop.most > 0.0 { crop.most } else { 0.25 };
+        *edge.of(&mut next) = crate::display::edge_stepped_by(most, percent, by, crate::display::HALF_EDGE_STEP) / 100.0;
+        Outcome::Changed(Change::Crop(Some(next)))
+    }
+
+    /// Saves a typed edge percentage on Eclipse's This game's crop, auto-enabling crop (R-20261116-33).
+    pub fn typed_board_crop(&self, field: &str, words: &str) -> Outcome {
+        let Some(crop) = &self.read.crop else { return Outcome::Nothing };
+        let Some(edge) = crate::display::Edge::by_key(field) else { return Outcome::Nothing };
+        let cleaned = words.trim().trim_end_matches('%').trim().replace(',', ".");
+        let Ok(parsed) = cleaned.parse::<f64>() else { return Outcome::Nothing };
+        if !parsed.is_finite() {
+            return Outcome::Nothing;
+        }
+        let most = if crop.most > 0.0 { crop.most } else { 0.25 };
+        let mut next = crop.own.unwrap_or_default();
+        *edge.of(&mut next) = (parsed.clamp(0.0, most * 100.0) * 10.0).round() / 1000.0;
+        Outcome::Changed(Change::Crop(Some(next)))
+    }
+
+    /// Preview picture path, active edge ratios [L, R, T, B] and focused edge index (-1..3) for Crop.
+    pub fn crop_preview(&self, content: usize) -> (&str, [f64; 4], i32) {
+        let picture = if !self.read.screenshot.is_empty() {
+            self.read.screenshot.as_str()
+        } else if let Some(taken) = self.read.media.iter().find(|m| m.kind == MediaKind::Taken) {
+            taken.path.as_str()
+        } else if !self.read.hero.is_empty() {
+            self.read.hero.as_str()
+        } else if !self.read.cover.is_empty() {
+            self.read.cover.as_str()
+        } else {
+            ""
+        };
+        let ratios = match self.read.crop.as_ref().and_then(|c| c.own) {
+            Some(c) => [c.left, c.right, c.top, c.bottom],
+            None => [0.0; 4],
+        };
+        let edge = if (1..=4).contains(&content) { (content - 1) as i32 } else { -1 };
+        (picture, ratios, edge)
+    }
+
+    /// Media Viewer help bar in Eclipse's board words (R-20261116-35).
+    pub fn board_viewer_help(&self, viewer: &emusen_esde::scene::Viewer) -> Screen {
+        if viewer.reading.is_some() {
+            return Screen::GamePageViewerManualBoard;
+        }
+        let shown: Vec<&Media> = self.read.media.iter().filter(|m| m.kind != MediaKind::Manual).collect();
+        if shown.get(viewer.index).is_some_and(|m| m.kind == MediaKind::Taken) {
+            return Screen::GamePageViewerBoardDelete;
+        }
+        if self.viewer_cover(viewer).is_some() {
+            return Screen::GamePageViewerBoardCover;
+        }
+        Screen::GamePageViewerBoard
+    }
+
+    /// Media Viewer caption in Eclipse's board format: "<Label> (i of n) · d Month YYYY · W × H".
+    pub fn board_caption(&self, viewer: &emusen_esde::scene::Viewer) -> String {
+        if let Some(view) = viewer.reading {
+            return match viewer.pages {
+                0 => "Manual".into(),
+                n => format!("Manual {BETWEEN} Page {} of {n}", view.page + 1),
+            };
+        }
+        let items: Vec<(String, &Media, MediaInfo)> = self
+            .media_labels()
+            .into_iter()
+            .zip(self.read.media.iter().enumerate())
+            .filter(|(_, (_, m))| m.kind != MediaKind::Manual)
+            .map(|(label, (i, m))| (label, m, self.read.media_info.get(i).copied().unwrap_or_default()))
+            .collect();
+        let Some((label, _, info)) = items.get(viewer.index) else { return String::new() };
+        let mut parts = vec![format!("{label} ({})", place(viewer.index, items.len()))];
+        if let Some(when) = info.when {
+            parts.push(format_date_long(when));
+        }
+        if info.width > 0 && info.height > 0 {
+            parts.push(format!("{} × {}", info.width, info.height));
+        }
+        parts.join(&format!(" {BETWEEN} "))
+    }
+
+    /// Media Viewer footer right count ("2 of 5" or manual page count).
+    pub fn board_viewer_place(&self, viewer: &emusen_esde::scene::Viewer) -> String {
+        if let Some(view) = viewer.reading {
+            return if viewer.pages == 0 { String::new() } else { place(view.page, viewer.pages) };
+        }
+        let count = self.read.media.iter().filter(|m| m.kind != MediaKind::Manual).count();
+        if viewer.index < count { place(viewer.index, count) } else { String::new() }
+    }
+
+    /// Y Delete… on a player screenshot inside Eclipse's Media Viewer (R-20261116-35).
+    pub fn viewer_delete(&self, viewer: &emusen_esde::scene::Viewer) -> Outcome {
+        if viewer.reading.is_some() {
+            return Outcome::Nothing;
+        }
+        let items: Vec<(String, &Media)> = self.media_labels().into_iter().zip(&self.read.media).filter(|(_, m)| m.kind != MediaKind::Manual).collect();
+        let Some((label, media)) = items.get(viewer.index) else { return Outcome::Nothing };
+        if media.kind != MediaKind::Taken {
+            return Outcome::Nothing;
+        }
+        let sentence = format!("{}'s {label} is deleted. This cannot be undone.", self.read.title);
+        Outcome::Ask(ask(&format!("Delete {label}?"), &sentence, "Delete"), Change::DeleteMedia(media.path.clone()))
     }
 }
 

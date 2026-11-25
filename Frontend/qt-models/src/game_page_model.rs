@@ -500,6 +500,7 @@ pub struct GamePageModelRust {
     cover_chosen: bool,
     /// Set to ask the package's job running to stop.
     job_stop: Option<Arc<std::sync::atomic::AtomicBool>>,
+    scrape_search_seq: u64,
     theme_sections: i32,
     theme_subpages: i32,
     theme_draws: bool,
@@ -565,6 +566,7 @@ impl Default for GamePageModelRust {
             typing_for: None,
             cover_chosen: false,
             job_stop: None,
+            scrape_search_seq: 0,
             theme_sections: 0,
             theme_subpages: 0,
             theme_draws: true,
@@ -583,6 +585,11 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
                 model.as_mut().rust_mut().page.cropping = false;
                 model.as_mut().rust_mut().page.packaging = false;
                 model.as_mut().rust_mut().page.covering = false;
+                model.as_mut().rust_mut().page.scraping_pick = false;
+                model.as_mut().rust_mut().page.scrape_status = crate::game_page::ScrapeStatus::Searching;
+                model.as_mut().rust_mut().page.scrape_query.clear();
+                let seq = model.scrape_search_seq.wrapping_add(1);
+                model.as_mut().rust_mut().scrape_search_seq = seq;
                 model.as_mut().rust_mut().page.run = None;
                 model.as_mut().rust_mut().page.job = None;
                 model.as_mut().rust_mut().focus = (Some(0), 0);
@@ -766,7 +773,7 @@ impl qobject::GamePageModel {
     fn shown(self: Pin<&mut Self>, turned: bool) {
         self.telling(|mut model| {
             // Hide the theme's page before resetting its lists when a program deeper page or question takes over.
-            if model.theme_draws && !model.page.drawn_by_subpages(model.theme_sections, model.theme_subpages, model.asking || model.viewing || model.typing) {
+            if model.theme_draws && !model.page.drawn_by_all(model.theme_sections, model.theme_subpages, model.asking || model.typing, model.viewing) {
                 model.as_mut().rust_mut().theme_draws = false;
                 model.as_mut().theme_draws_changed();
             }
@@ -843,7 +850,7 @@ impl qobject::GamePageModel {
             self.as_mut().rust_mut().help = help;
             self.as_mut().help_changed();
         }
-        let draws = self.page.drawn_by_subpages(self.theme_sections, self.theme_subpages, self.asking || self.viewing || self.typing);
+        let draws = self.page.drawn_by_all(self.theme_sections, self.theme_subpages, self.asking || self.typing, self.viewing);
         if self.theme_draws != draws {
             self.as_mut().rust_mut().theme_draws = draws;
             self.theme_draws_changed();
@@ -873,12 +880,33 @@ impl qobject::GamePageModel {
                         model.hidden();
                         return;
                     }
-                    // An edited name, or a cover chosen, is read again by the library's views.
-                    if ok && matches!(change, crate::game_page::Change::Edit(..) | crate::game_page::Change::Cover(_)) {
+                    // An edited name, a cover chosen, or cleared scraped data is read again by the library's views.
+                    if ok && matches!(change, crate::game_page::Change::Edit(..) | crate::game_page::Change::Cover(_) | crate::game_page::Change::ClearScraped) {
                         model.as_mut().edited();
                     }
                     if ok {
                         model.as_mut().rust_mut().page.changed(&change);
+                        if matches!(change, crate::game_page::Change::DeleteMedia(_)) {
+                            let next = model.viewer.as_ref().and_then(|v| {
+                                let non_manual = model.page.read.media.iter().filter(|m| m.kind != crate::game_page::MediaKind::Manual).count();
+                                if non_manual == 0 {
+                                    return None;
+                                }
+                                let at = v.index.min(non_manual - 1);
+                                let media_idx = model
+                                    .page
+                                    .read
+                                    .media
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, m)| m.kind != crate::game_page::MediaKind::Manual)
+                                    .nth(at)
+                                    .map(|(i, _)| i)?;
+                                model.page.viewer(media_idx)
+                            });
+                            model.as_mut().rust_mut().viewer = next;
+                            model.as_mut().viewed();
+                        }
                         model.as_mut().shown(false);
                         model.as_mut().focus_moved();
                     }
@@ -933,7 +961,19 @@ impl qobject::GamePageModel {
                     model.as_mut().rust_mut().viewer = viewer;
                     model.as_mut().viewed();
                 }
-                Outcome::Scrape => model.scrape(),
+                Outcome::Scrape => {
+                    if model.theme_subpages & crate::game_page::Subpage::Scrape.flag() != 0 {
+                        let query = model.page.read.title.clone();
+                        model.as_mut().rust_mut().page.scraping_pick = true;
+                        model.as_mut().rust_mut().page.scrape_query = query;
+                        model.as_mut().rust_mut().page.scrape_status = crate::game_page::ScrapeStatus::Searching;
+                        model.as_mut().rust_mut().focus = (None, 0);
+                        model.as_mut().shown(true);
+                        model.start_scrape_search();
+                    } else {
+                        model.scrape();
+                    }
+                }
                 Outcome::Stop(question) => model.ask(question, Pending::Stop),
                 Outcome::Type { field, title, start } => {
                     model.as_mut().rust_mut().typing_for = Some(field);
@@ -1109,6 +1149,21 @@ impl qobject::GamePageModel {
     }
 
     pub fn back(mut self: Pin<&mut Self>) -> bool {
+        if self.viewing {
+            self.view_close();
+            return true;
+        }
+        if self.page.scraping_pick {
+            let seq = self.scrape_search_seq.wrapping_add(1);
+            self.as_mut().rust_mut().scrape_search_seq = seq;
+            self.as_mut().rust_mut().page.scraping_pick = false;
+            self.as_mut().rust_mut().focus = (None, 0);
+            if let Some(source) = self.source.clone() {
+                let _ = source.scrape_end();
+            }
+            self.shown(true);
+            return true;
+        }
         // Cover art closes once its press has been delivered, as the viewer does, so the page under it never hears that B.
         if self.page.covering {
             // A queue refused (cxx-qt's ThreadingQueueError) closes it at once, so the B is never lost.
@@ -1145,10 +1200,102 @@ impl qobject::GamePageModel {
         }
         if let (true, Some(field)) = (kept, field) {
             let words = words.to_string();
+            if field == crate::game_page::SCRAPE_QUERY {
+                let trimmed = words.trim().to_owned();
+                if !trimmed.is_empty() && self.page.scraping_pick {
+                    self.as_mut().rust_mut().page.scrape_query = trimmed;
+                    self.start_scrape_search();
+                }
+                return;
+            }
+            if crate::display::Edge::by_key(field).is_some() {
+                let outcome = self.page.typed_board_crop(field, &words);
+                self.outcome(outcome);
+                return;
+            }
             // Words left empty put back what was scraped, as the editor's Clear on one field does.
             let value = Some(words.trim().to_owned()).filter(|w| !w.is_empty());
             self.outcome(Outcome::Changed(crate::game_page::Change::Edit(field, value)));
         }
+    }
+
+    /// Runs a ScreenScraper name search off the GUI thread and updates the Scrape This Game dialog.
+    fn start_scrape_search(mut self: Pin<&mut Self>) {
+        let Some(source) = self.source.clone() else { return };
+        let seq = self.scrape_search_seq.wrapping_add(1);
+        self.as_mut().rust_mut().scrape_search_seq = seq;
+        self.as_mut().rust_mut().page.scrape_status = crate::game_page::ScrapeStatus::Searching;
+        self.as_mut().rust_mut().focus = (None, 0);
+        self.as_mut().shown(false);
+        self.as_mut().focus_moved();
+        let (path, esde, console, query, test) = (
+            self.file.path.clone(),
+            self.page.read.esde_system.clone(),
+            self.page.read.console.clone(),
+            self.page.scrape_query.clone(),
+            self.scraper_test.to_string(),
+        );
+        let test: Option<serde_json::Value> = serde_json::from_str(&test).ok();
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let enabled = crate::library::LibrarySource::settings(source.as_ref())
+                .ok()
+                .and_then(|s| s.get("Scraping").and_then(serde_json::Value::as_bool))
+                .unwrap_or(true);
+            let status = match source.scrape_search(&path, &esde, &query, enabled, test.as_ref()) {
+                Ok(resp) => crate::game_page::parse_scrape_matches(&resp, &|id| source.console_by_screenscraper(id), &console),
+                Err(why) => crate::game_page::ScrapeStatus::Failed(why),
+            };
+            let _ = thread.queue(move |mut model| {
+                if model.scrape_search_seq != seq || !model.page.scraping_pick {
+                    return;
+                }
+                model.as_mut().rust_mut().page.scrape_status = status;
+                model.as_mut().rust_mut().focus = (None, 0);
+                model.as_mut().shown(false);
+                model.as_mut().focus_moved();
+            });
+        });
+    }
+
+    /// Starts a single-game scrape from the Scrape This Game picker, keeping open-store `picks` intact.
+    fn scrape_from_picker(mut self: Pin<&mut Self>, pick: Option<i64>) {
+        let Some(source) = self.source.clone() else { return };
+        let seq = self.scrape_search_seq.wrapping_add(1);
+        self.as_mut().rust_mut().scrape_search_seq = seq;
+        self.as_mut().rust_mut().page.scraping_pick = false;
+        self.as_mut().rust_mut().focus = (None, 0);
+        self.as_mut().shown(true);
+        let (file, test) = (self.file.clone(), self.scraper_test.to_string());
+        let test: Option<serde_json::Value> = serde_json::from_str(&test).ok();
+        self.as_mut().ran(Some((true, "Starting".into())), "running");
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let started = match pick {
+                Some(p) => crate::scrape_run::start_open(&source, std::slice::from_ref(&file), true, Some(p)),
+                None => crate::scrape_run::start(&source, std::slice::from_ref(&file), true, test.as_ref()),
+            };
+            if let Err(why) = started {
+                let _ = source.scrape_end();
+                let _ = thread.queue(move |mut model| {
+                    model.as_mut().ran(Some((false, "It could not start".into())), "idle");
+                    model.said(format!("The scrape could not start: {why}"));
+                });
+                return;
+            }
+            let path = file.path.clone();
+            let followed = crate::scrape_run::follow(&source, |progress| {
+                let (going, words) = crate::game_page::run_words(&progress, &path);
+                let state = progress["state"].as_str().unwrap_or("idle").to_owned();
+                let _ = thread.queue(move |model| model.ran(Some((going, words)), &state));
+            });
+            let _ = thread.queue(move |mut model| {
+                if let Err(why) = followed {
+                    model.as_mut().said(format!("The scrape could not be followed: {why}"));
+                }
+                model.refresh();
+            });
+        });
     }
 
     /// The page's scrape: the scraper opened with its store, the game queued, its progress followed off the GUI thread and
@@ -1277,6 +1424,37 @@ impl qobject::GamePageModel {
 
     pub fn choose(self: Pin<&mut Self>, index: i32) -> bool {
         let index = index.max(0) as usize;
+        if self.page.scraping_pick {
+            let matches = match &self.page.scrape_status {
+                crate::game_page::ScrapeStatus::Found(list) => list.clone(),
+                _ => Vec::new(),
+            };
+            if let Some(m) = matches.get(index) {
+                self.scrape_from_picker(Some(m.pick));
+                return true;
+            }
+            return match index.checked_sub(matches.len()) {
+                Some(0) => {
+                    let start = self.page.scrape_query.clone();
+                    self.outcome(Outcome::Type { field: crate::game_page::SCRAPE_QUERY, title: crate::game_page::SCRAPE_TITLE.to_owned(), start });
+                    true
+                }
+                Some(1) => {
+                    self.scrape_from_picker(None);
+                    true
+                }
+                Some(2) => self.back(),
+                _ => false,
+            };
+        }
+        if self.page.editing && (self.theme_subpages & crate::game_page::Subpage::Edit.flag() != 0) {
+            let outcome = self.page.choose_board_edit(index);
+            return self.did(outcome);
+        }
+        if self.page.cropping && (self.theme_subpages & crate::game_page::Subpage::Crop.flag() != 0) {
+            let outcome = self.page.choose_board_crop(index);
+            return self.did(outcome);
+        }
         let outcome = match self.page.content() {
             Content::Tiles(_) => self.page.choose_tile(index),
             _ => self.page.choose_row(index),
@@ -1285,7 +1463,16 @@ impl qobject::GamePageModel {
     }
 
     pub fn step(mut self: Pin<&mut Self>, index: i32, by: i32) -> bool {
-        let outcome = self.as_mut().rust_mut().page.step_row(index.max(0) as usize, by);
+        let index = index.max(0) as usize;
+        if self.page.editing && (self.theme_subpages & crate::game_page::Subpage::Edit.flag() != 0) {
+            let outcome = self.page.step_board_edit(index, by);
+            return self.did(outcome);
+        }
+        if self.page.cropping && (self.theme_subpages & crate::game_page::Subpage::Crop.flag() != 0) {
+            let outcome = self.page.step_board_crop(index, by);
+            return self.did(outcome);
+        }
+        let outcome = self.as_mut().rust_mut().page.step_row(index, by);
         self.did(outcome)
     }
 
@@ -1304,11 +1491,18 @@ impl qobject::GamePageModel {
         match key.to_string().as_str() {
             crate::help::FAVOURITE => self.did(Outcome::Changed(crate::game_page::Change::Favourite)),
             crate::help::RESET => {
-                let outcome = self.page.reset(self.focus.1);
+                let outcome = if self.page.editing && (self.theme_subpages & crate::game_page::Subpage::Edit.flag() != 0) {
+                    self.page.reset_board_edit(self.focus.1)
+                } else {
+                    self.page.reset(self.focus.1)
+                };
                 self.did(outcome)
             }
             crate::help::DELETE => {
-                let outcome = self.page.delete(self.focus.1);
+                let outcome = match self.viewer.as_ref() {
+                    Some(v) => self.page.viewer_delete(v),
+                    None => self.page.delete(self.focus.1),
+                };
                 self.did(outcome)
             }
             crate::help::DEFAULT => {
@@ -1436,6 +1630,9 @@ impl qobject::GamePageModel {
 
     /// The help as Eclipse's boards word it for the focus; none where they draw none.
     pub fn board_help_screen(&self) -> Option<crate::help::Screen> {
+        if let Some(v) = self.viewer.as_ref() {
+            return Some(self.page.board_viewer_help(v));
+        }
         self.page.board_help(self.focus.0, self.focus.1)
     }
 
@@ -1444,14 +1641,28 @@ impl qobject::GamePageModel {
         self.page.has_description()
     }
 
-    /// Eclipse's Details or Options rows for the tab shown.
+    /// Eclipse's Details, Options, Cheats or deeper page rows.
     pub fn board_rows(&self) -> Vec<crate::game_page::BoardRow> {
         self.page.board_rows()
     }
 
-    /// The focused board row's aside sentence and position ("2 of 5").
+    /// The focused board item's aside/subtitle sentence and position ("2 of 5").
     pub fn board_aside(&self) -> (String, String) {
+        if let Some(v) = self.viewer.as_ref() {
+            return (String::new(), self.page.board_viewer_place(v));
+        }
         self.page.board_aside(self.focus.0, self.focus.1)
+    }
+
+    /// Media Viewer caption in Eclipse's board format.
+    pub fn board_view_caption(&self) -> String {
+        self.viewer.as_ref().map(|v| self.page.board_caption(v)).unwrap_or_default()
+    }
+
+    /// Crop preview URL, edge ratios [L, R, T, B] and focused edge index (-1..3).
+    pub fn crop_preview(&self) -> (String, [f64; 4], i32) {
+        let (pic, ratios, edge) = self.page.crop_preview(self.focus.1);
+        (cover_url(pic), ratios, edge)
     }
 
     /// Whether X on the focused Options row resets an override back to the console's default.
@@ -1461,7 +1672,7 @@ impl qobject::GamePageModel {
 
     /// The deeper page open if one is, else `Subpage::None`.
     pub fn subpage(&self) -> crate::game_page::Subpage {
-        self.page.subpage()
+        if self.viewing { crate::game_page::Subpage::Viewer } else { self.page.subpage() }
     }
 
     /// Eclipse's Media tiles, pictures as URLs.
@@ -1481,11 +1692,11 @@ impl qobject::GamePageModel {
 
     /// The deeper page's heading and subtitle where one is open.
     pub fn subpage_title(&self) -> &'static str {
-        if self.page.packaging { crate::game_page::PACKAGE_TITLE } else { "" }
+        self.page.subpage_title()
     }
 
-    pub fn subpage_subtitle(&self) -> &'static str {
-        if self.page.packaging { crate::game_page::PACKAGE_SUBTITLE } else { "" }
+    pub fn subpage_subtitle(&self) -> String {
+        self.page.subpage_subtitle(self.focus.1)
     }
 
     /// Told while the page tells QML of a change, the focus is kept and applied once the telling has finished (EmuSen_Qt.md §7.8.1).

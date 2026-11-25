@@ -163,33 +163,39 @@ fn schema() -> Vec<Setting> {
     ]
 }
 
-/// Whether the settings, or `SAPPHIRE_VU1` for measurement, choose VU1's recompiler, the default since S40's gate was
-/// met (decided 2026-10-26 by the tester, Sapphire_Native.md §45.6).
+/// Explicit setting first, falling back to `fallback` only when the setting is absent.
+fn setting_or<'a>(setting: Option<&'a str>, fallback: impl FnOnce() -> Option<String>) -> Option<std::borrow::Cow<'a, str>> {
+    setting.map(std::borrow::Cow::Borrowed).or_else(|| fallback().map(std::borrow::Cow::Owned))
+}
+
+/// Explicit setting first, falling back to the named environment variable when absent.
+fn setting_or_env<'a>(setting: Option<&'a str>, env_name: &str) -> Option<std::borrow::Cow<'a, str>> {
+    setting_or(setting, || std::env::var(env_name).ok())
+}
+
+/// Whether the settings, or `SAPPHIRE_VU1` when unset, choose VU1's recompiler (default on, Sapphire_Native.md §45.6).
 pub fn vu1_recompiler_chosen(setting: Option<&str>) -> bool {
-    std::env::var("SAPPHIRE_VU1").ok().as_deref().or(setting) != Some("interpreter")
+    setting_or_env(setting, "SAPPHIRE_VU1").as_deref() != Some("interpreter")
 }
 
-/// Whether the settings, or `SAPPHIRE_VU0` for measurement, choose VU0's recompiler, the default since Sapphire_Speed.md
-/// §55's gate was met.
+/// Whether the settings, or `SAPPHIRE_VU0` when unset, choose VU0's recompiler (default on, Sapphire_Speed.md §55).
 pub fn vu0_recompiler_chosen(setting: Option<&str>) -> bool {
-    std::env::var("SAPPHIRE_VU0").ok().as_deref().or(setting) != Some("interpreter")
+    setting_or_env(setting, "SAPPHIRE_VU0").as_deref() != Some("interpreter")
 }
 
-/// Whether the settings, or `EMUSEN_SAPPHIRE_IDLE` for measurement, turn idle skipping on, the default once S33's gate
-/// was met (Sapphire_Native.md §47).
+/// Whether the settings, or `EMUSEN_SAPPHIRE_IDLE` when unset, enable idle skipping (default on, Sapphire_Native.md §47).
 pub fn idle_chosen(setting: Option<&str>) -> bool {
-    std::env::var("EMUSEN_SAPPHIRE_IDLE").ok().as_deref().or(setting) != Some("off")
+    setting_or_env(setting, "EMUSEN_SAPPHIRE_IDLE").as_deref() != Some("off")
 }
 
-/// Whether the settings, or `EMUSEN_SAPPHIRE_TIER` for measurement, choose the recompiler, the default since S36's gate
-/// was met (decided 2026-10-26 by the tester, Sapphire_Native.md §44.6).
+/// Whether the settings, or `EMUSEN_SAPPHIRE_TIER` when unset, choose the EE recompiler (default on, Sapphire_Native.md §44.6).
 pub fn recompiler_chosen(setting: Option<&str>) -> bool {
-    std::env::var("EMUSEN_SAPPHIRE_TIER").ok().as_deref().or(setting) != Some("interpreter")
+    setting_or_env(setting, "EMUSEN_SAPPHIRE_TIER").as_deref() != Some("interpreter")
 }
 
-/// The GS's workers the settings, or `SAPPHIRE_GS_WORKERS` for measurement, choose: automatic by default.
+/// The GS worker count chosen by settings, or `SAPPHIRE_GS_WORKERS` when unset (default automatic).
 pub fn gs_workers_chosen(setting: Option<&str>) -> usize {
-    std::env::var("SAPPHIRE_GS_WORKERS").ok().as_deref().or(setting).and_then(crate::gs::workers::parse).unwrap_or_else(crate::gs::workers::automatic)
+    setting_or_env(setting, "SAPPHIRE_GS_WORKERS").as_deref().and_then(crate::gs::workers::parse).unwrap_or_else(crate::gs::workers::automatic)
 }
 
 /// The market of the console: the setting's when it names one; on Automatic, the disc's own market where its serial or
@@ -1019,5 +1025,23 @@ mod tests {
         assert_eq!(m.media_lid(1, true), Err(status::NO_SUCH_DRIVE));
         m.media_insert(DRIVE, &Insert { image: Some(&disc), files: Vec::new(), restore: true }).unwrap();
         assert!(m.drives()[0].loaded && !m.drives()[0].lid_open, "a restore sets the drive with its tray closed");
+    }
+
+    #[test]
+    fn explicit_setting_overrides_env_fallback_and_absent_setting_uses_fallback_or_default() {
+        assert_eq!(setting_or(Some("recompiler"), || Some("interpreter".into())).as_deref(), Some("recompiler"));
+        assert_eq!(setting_or(Some("interpreter"), || panic!("env fallback must not run when setting is present")).as_deref(), Some("interpreter"));
+        assert_eq!(setting_or(None, || Some("interpreter".into())).as_deref(), Some("interpreter"));
+        assert_eq!(setting_or(None, || None).as_deref(), None);
+        assert_eq!(setting_or_env(Some("1"), "SAPPHIRE_TEST_UNSET_KEY").as_deref(), Some("1"));
+        assert_eq!(setting_or_env(None, "SAPPHIRE_TEST_UNSET_KEY").as_deref(), None);
+        assert!(!vu1_recompiler_chosen(Some("interpreter")) && vu1_recompiler_chosen(Some("recompiler")));
+        assert!(!vu0_recompiler_chosen(Some("interpreter")) && vu0_recompiler_chosen(Some("recompiler")));
+        assert!(!idle_chosen(Some("off")) && idle_chosen(Some("on")));
+        assert!(!recompiler_chosen(Some("interpreter")) && recompiler_chosen(Some("recompiler")));
+        assert_eq!(gs_workers_chosen(Some("1")), 1);
+        assert_eq!(gs_workers_chosen(Some("auto")), crate::gs::workers::automatic());
+        assert_eq!(setting_or(None, || Some("3".into())).as_deref().and_then(crate::gs::workers::parse), Some(3));
+        assert_eq!(setting_or(None, || None).as_deref().and_then(crate::gs::workers::parse).unwrap_or_else(crate::gs::workers::automatic), crate::gs::workers::automatic());
     }
 }

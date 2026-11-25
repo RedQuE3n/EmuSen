@@ -183,6 +183,27 @@ pub fn percent(n: i32) -> String {
     }
 }
 
+/// Eclipse Home Card's header clock line: "82% · 9:41 PM", or the clock alone with no battery.
+pub fn status_clock(battery: i32, time: &str) -> String {
+    let charge = percent(battery);
+    if charge.is_empty() {
+        time.to_owned()
+    } else if time.is_empty() {
+        charge
+    } else {
+        format!("{charge} {BETWEEN} {time}")
+    }
+}
+
+/// Eclipse Card footer row counter: "2 of 7", or empty when a page has no rows.
+pub fn position_line(index: usize, total: usize) -> String {
+    if total == 0 {
+        String::new()
+    } else {
+        format!("{} of {total}", (index + 1).min(total))
+    }
+}
+
 /// A console plate's line where it holds no game, after its year: "1986 · no games yet" (EclipseConsoles:129).
 pub const NO_GAMES_LINE: &str = "no games yet";
 

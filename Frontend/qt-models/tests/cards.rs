@@ -175,3 +175,74 @@ fn settings_doors_open_the_compressed_discs_tool_and_the_last_games_cheats_and_b
     assert_eq!(step(Shown::Settings, &act("cheats")), Some((Shown::Page, Some("cheats".into()))));
     assert_eq!(step(Shown::Settings, &act("logging")), None, "a door with no screen yet opens nothing");
 }
+
+#[test]
+fn eclipse_cards_project_boards_5_44_45_and_46() {
+    use emusen_qt_models::help::Screen;
+    let home = pages_of(home_card::CARD).unwrap();
+    let f = facts(Facts {
+        suspended: "Chrono Trigger".into(),
+        suspended_console: "Super Nintendo".into(),
+        suspended_picture: "file:///ct.png".into(),
+        total_games: 1284,
+        in_hand: "Super Metroid".into(),
+        search: true,
+        startable: vec![
+            home_card::Startable { console: "PlayStation".into(), name: "PlayStation".into(), engine: "Diamond".into(), firmware: "✓ Firmware found.".into(), system: "psx".into(), libretro: false },
+            home_card::Startable { console: "Dreamcast".into(), name: "Dreamcast".into(), engine: "Flycast".into(), firmware: "Firmware missing.".into(), system: "dreamcast".into(), libretro: true },
+        ],
+        ..Facts::default()
+    });
+    // Board #5 with suspended game and game in hand: Menu title, Continue card + 7 drawn rows.
+    let menu = home.page_for(home_card::FIRST, &f, true);
+    assert!(menu.menu && menu.title == "Menu");
+    assert_eq!(menu.continue_card.as_ref().map(|c| (c.title.as_str(), c.subtitle.as_str())), Some(("Chrono Trigger", "Suspended · Super Nintendo")));
+    assert_eq!(
+        menu.rows.iter().map(|r| (r.label.as_str(), r.value.as_str(), r.icon.as_str())).collect::<Vec<_>>(),
+        [
+            ("Continue", "Chrono Trigger", ""),
+            ("Game page", "Super Metroid", "menu.gamePage"),
+            ("Search", "1,284 games", "menu.search"),
+            ("Library", "", "menu.library"),
+            ("Tools", "Cores, Scraper, Packages", "menu.tools"),
+            ("Settings", "", "menu.settings"),
+            ("Power", "Sleep, restart, shut down", "menu.power"),
+            ("Quit EmuSen", "The game closes first", "menu.quit"),
+        ]
+    );
+    assert_eq!(home.help_for(home_card::FIRST, true), Screen::CardHome);
+    assert_eq!(home.help_for(home_card::FIRST, false), Screen::Card);
+    assert_eq!(home.choose(home_card::FIRST, home_card::LIBRARY), Choice::Act(home_card::LIBRARY.into()));
+    assert_eq!(step(Shown::HomeCard, &Ask::Act(home_card::LIBRARY.into())), Some((Shown::Grid, Some("all".into()))));
+    assert_eq!(step(Shown::HomeCard, &Ask::Act("library".into())), Some((Shown::Tool, Some("library".into()))));
+    assert_eq!(step(Shown::HomeCard, &Ask::Act(home_card::SEARCH.into())), Some((Shown::Search, Some("all".into()))));
+    // Undrawn state: no suspended game and no game in hand omits Continue and Game page and clears Quit hint.
+    let idle = home.page_for(home_card::FIRST, &facts(Facts { total_games: 12, ..Facts::default() }), true);
+    assert!(idle.continue_card.is_none());
+    assert_eq!(idle.rows.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["Search", "Library", "Tools", "Settings", "Power", "Quit EmuSen"]);
+    assert_eq!(idle.rows.last().unwrap().value, "");
+    // Board #46 Start Console populates pane core, planet, and firmware status/ok.
+    let sc = home.page_for(home_card::START_CONSOLE, &f, true);
+    assert_eq!((sc.rows[0].pane.core.as_str(), sc.rows[0].pane.status.as_str(), sc.rows[0].pane.status_ok), ("Diamond", "✓ Firmware found.", true));
+    assert!(sc.rows[0].pane.planet >= 0);
+    assert_eq!((sc.rows[1].pane.core.as_str(), sc.rows[1].pane.planet, sc.rows[1].pane.status.as_str(), sc.rows[1].pane.status_ok), ("Flycast", -1, "Firmware missing.", false));
+    // Board #44 Eclipse List Card shows full sort list and section divider before Start Console.
+    let list = pages_of(list_card::CARD).unwrap();
+    let lf = json!({
+        "section": "Super Nintendo", "count": "148 games", "sort": "Name", "filter": "", "letter": "C", "letters": "A B C",
+        "startable": [{ "console": "PlayStation", "name": "PlayStation", "engine": "Diamond" }],
+        "filters": [
+            { "key": "every", "name": "Every game", "count": 4 }, { "key": "favourites", "name": "Favourites", "count": 1 },
+            { "key": "notPlayed", "name": "Not played", "count": 2 }, { "key": "collection:1", "name": "Co-op", "count": 1 }
+        ]
+    });
+    let lp = list.page_for(list_card::FIRST, &lf, true);
+    assert_eq!(lp.rows[1].pane.lines[0].1, "Name · Last played · Most played · Year · Rating");
+    assert!(lp.rows[4].section_end && !lp.rows[5].section_end);
+    // Board #45 Eclipse Filter attaches detail pane per row and divider before collections.
+    let fp = list.page_for(list_card::FILTER, &lf, true);
+    assert_eq!(fp.rows.iter().map(|r| (r.label.as_str(), r.section_end)).collect::<Vec<_>>(), [("Every game", false), ("Favourites", false), ("Not played", true), ("Co-op", false)]);
+    assert_eq!(fp.rows[1].pane.lines[0].0, "Shows the section's favourites.");
+    assert_eq!(fp.rows[2].pane.lines[0].0, "Shows the section's games never played.");
+    assert_eq!(fp.rows[3].pane.lines[0].0, "Shows Co-op.");
+}

@@ -17,6 +17,7 @@ pub mod qobject {
         #[qproperty(QString, attention, READ, CONSTANT)]
         #[qproperty(QString, badge, READ, CONSTANT)]
         #[qproperty(QString, alien, READ, CONSTANT)]
+        #[qproperty(QString, menu_crescent, cxx_name = "menuCrescent", READ, CONSTANT)]
         type Marks = super::MarksRust;
     }
 
@@ -38,6 +39,7 @@ pub struct MarksRust {
     attention: QString,
     badge: QString,
     alien: QString,
+    menu_crescent: QString,
 }
 
 impl Default for MarksRust {
@@ -49,6 +51,7 @@ impl Default for MarksRust {
             attention: QString::from(marks::ATTENTION),
             badge: QString::from(marks::BADGE),
             alien: QString::from(marks::alien().as_str()),
+            menu_crescent: QString::from(marks::MENU_CRESCENT),
         }
     }
 }

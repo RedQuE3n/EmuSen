@@ -14,6 +14,8 @@ Kit.NormalizedCanvas {
     required property int padFamily
     required property bool pauseShown
     required property bool gameShown
+    property Clock clock: null
+    property int battery: -1
     readonly property alias slide: card.slide
     visible: card.open || card.leaving
     PauseCard {
@@ -23,6 +25,9 @@ Kit.NormalizedCanvas {
         session: cardCanvas.session
         settings: cardCanvas.settings
         padFamily: cardCanvas.padFamily
+        pixelScale: cardCanvas.unit
+        battery: cardCanvas.battery
+        clockText: cardCanvas.clock ? cardCanvas.clock.shortTime : ""
         open: cardCanvas.pauseShown
         focus: cardCanvas.pauseShown
         onResumed: cardCanvas.screens.play()

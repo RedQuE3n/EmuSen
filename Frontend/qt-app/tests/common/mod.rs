@@ -258,6 +258,9 @@ pub fn eclipse_reference() -> std::path::PathBuf {
     let reference: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(themes.join("emusen/theme.json")).unwrap()).unwrap();
     let mut manifest: serde_json::Value = serde_json::from_str(include_str!("../../../themes/eclipse/theme.json")).unwrap();
     manifest["screens"] = reference["screens"].clone();
+    if let Some(dark) = manifest.get_mut("tokens").and_then(|t| t.get_mut("dark")).and_then(|d| d.as_object_mut()) {
+        dark.remove("coronaRim");
+    }
     std::fs::write(folder.join("theme.json"), manifest.to_string()).unwrap();
     folder
 }

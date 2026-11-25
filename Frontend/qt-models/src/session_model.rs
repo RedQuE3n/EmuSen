@@ -453,6 +453,15 @@ fn when_words(saved_at: Option<&str>) -> String {
     format!("{}, {}", local.date().format(&QString::from("ddd d MMM")), local.time().format(&QString::from("HH:mm")))
 }
 
+/// Short slot timestamp for Eclipse Pause Card from an ISO 8601 UTC timestamp.
+fn eclipse_when_words(saved_at: Option<&str>) -> String {
+    let Some(at) = saved_at.and_then(crate::words::parse_utc) else {
+        return String::new();
+    };
+    let now = crate::words::now();
+    crate::game_page::short_when(crate::clock::local_day(at, 0), crate::clock::local_day(now, 0), &crate::clock::short_time(at))
+}
+
 impl qobject::SessionModel {
     fn set_problem(mut self: Pin<&mut Self>, value: QString) {
         if self.problem != value {
@@ -954,6 +963,14 @@ impl qobject::SessionModel {
                 exists: s.exists,
                 when: when_words(s.saved_at.as_deref()),
                 picture: if s.exists { picture_of(&s.path).unwrap_or_default() } else { String::new() },
+            })
+            .collect();
+        facts.slot_when = slots
+            .iter()
+            .filter(|s| s.exists && (1..=pause::SLOTS).contains(&s.slot))
+            .filter_map(|s| {
+                let words = eclipse_when_words(s.saved_at.as_deref());
+                (!words.is_empty()).then_some((s.slot, words))
             })
             .collect();
         facts.cards = card_facts(&runtime, session, &info.console);

@@ -2370,3 +2370,13 @@ pub fn state_when(day: Day, today: Day, yesterday: Day, time: &str) -> String {
         d => format!("{} {month} {}, {time}", d.2, d.0),
     }
 }
+
+/// Short slot timestamp for Eclipse Pause Card (EclipsePause:51): time today, day and month this year, else with year.
+pub fn short_when(day: Day, today: Day, time: &str) -> String {
+    let month = MONTHS_LONG[(day.1.clamp(1, 12) - 1) as usize];
+    match day {
+        d if d == today => time.to_owned(),
+        d if d.0 == today.0 => format!("{} {month}", d.2),
+        d => format!("{} {month} {}", d.2, d.0),
+    }
+}

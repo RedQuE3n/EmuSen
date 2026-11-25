@@ -10,6 +10,7 @@ FocusScope {
     property var rows
     property string title
     property string breadcrumb
+    property string subtitle
     property string footer
     property string cover
     property int current: 0
@@ -21,6 +22,8 @@ FocusScope {
     property int panePlanet: -3
     property string paneStatus
     property bool paneStatusOk: false
+    property real paneHeight: 0
+    property color scrimColor: Kit.Tokens.scrim
     property bool menu: false
     property bool power: false
     property bool dialog: false
@@ -140,6 +143,7 @@ FocusScope {
                 rows: root.rows
                 title: root.title
                 breadcrumb: root.breadcrumb
+                subtitle: root.subtitle
                 footer: root.footer
                 current: root.current
                 paneLines: root.paneLines
@@ -151,6 +155,8 @@ FocusScope {
                 paneStatus: root.paneStatus
                 paneStatusOk: root.paneStatusOk
                 paneDrawn: root.paneDrawn
+                paneHeight: root.paneHeight
+                scrimColor: root.scrimColor
                 menu: root.menu
                 hasContinue: root.hasContinue
                 continueTitle: root.continueTitle

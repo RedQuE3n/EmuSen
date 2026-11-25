@@ -2,10 +2,9 @@
 #![allow(dead_code)]
 
 use crate::common::{draw_covers, sandbox, wait_for};
-use crate::eclipse_board::{held, object, painted, read, rows, tokens, Row};
+use crate::eclipse_board::{hold_card as hold_board, object, painted, picture, read, tokens};
 use cxx_qt_lib::QString;
 use emusen_client_fixture::library;
-use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::input::UiButton;
 use emusen_kit_core::tokens::Colour;
 use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
@@ -13,10 +12,8 @@ use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
 use emusen_qt_models::{home_card, words};
-use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::{Harness, Scene};
 use serde_json::{json, Value};
-use std::path::Path;
 
 const ECLIPSE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../themes/eclipse");
 const DAY: i64 = 86_400;
@@ -44,39 +41,6 @@ fn theme_object(scene: &mut Scene<'_>, name: &str) -> u64 {
     tree.nodes[tree.find_named(name).unwrap_or_else(|| panic!("{name} is placed")) as usize].id.parse().unwrap()
 }
 
-fn words_under(tree: &emusen_qt_test::tree::Tree, name: &str) -> Vec<String> {
-    let Some(top) = tree.nodes.iter().rposition(|n| n.name == name && n.visible) else { return Vec::new() };
-    let top = tree.nodes[top].id.clone();
-    let under = |n: &emusen_qt_test::tree::Node| {
-        let mut at = n.parent.clone();
-        while let Some(p) = tree.nodes.iter().find(|p| p.id == at) {
-            if p.id == top {
-                return true;
-            }
-            at = p.parent.clone();
-        }
-        false
-    };
-    tree.nodes.iter().filter(|n| n.visible && n.ty.contains("Text") && under(n)).filter_map(|n| n.text.clone()).filter(|t| !t.is_empty()).collect()
-}
-
-fn glyphs(tree: &emusen_qt_test::tree::Tree, names: &[&str]) -> Vec<String> {
-    names
-        .iter()
-        .map(|g| {
-            let g = tree.nodes.iter().rposition(|n| n.name == *g && n.visible);
-            let child = g.and_then(|g| tree.nodes.iter().position(|n| n.parent == tree.nodes[g].id));
-            child
-                .map(|c| {
-                    let id: u64 = tree.nodes[c].id.parse().unwrap();
-                    let p = |q: &str| emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(tree.nodes[c].name.as_str()), &QString::from(q)).to_string();
-                    if p("named") == "true" { p("word") } else { p("letter") }
-                })
-                .unwrap_or_default()
-        })
-        .collect()
-}
-
 fn card_rows(scene: &mut Scene<'_>) -> Vec<(String, String)> {
     crate::common::console::card_words(scene)
 }
@@ -92,66 +56,7 @@ fn hold_card(
     differences: &mut Vec<String>,
 ) {
     let tokens = tokens(theme_object(scene, screen));
-    let (board_height, all_rows) = rows(table);
-    let k = DESIGN_HEIGHT / board_height;
-    for (width, height) in SIZES {
-        scene.resize(width, height);
-        scene.wait(300);
-        let tree = scene.tree();
-        let unit: f64 = read(&tree, canvas, "unit").parse().expect("card canvas unit");
-        let canvas_width = width as f64 / unit;
-        let at = format!("{canvas} {width}x{height}");
-        let (present, missing): (Vec<Row>, Vec<Row>) = all_rows.iter().cloned().partition(|r| r.status != "built" || tree.find_named(&r.name).is_some());
-        differences.extend(missing.iter().map(|r| format!("{at}: {} is not drawn", r.name)));
-        held(&tree, &present, k, unit, canvas_width, &tokens, &at, &|_, _, _| false, differences);
-        for (name, want, upper) in words {
-            let have = read(&tree, name, "text");
-            let drawn = if *upper { have.to_uppercase() } else { have.clone() };
-            if drawn != *want {
-                differences.push(format!("{at}: {name} says {drawn:?} where the board says {want:?}"));
-            }
-        }
-        let line = words_under(&tree, "cardHelp");
-        if line != help {
-            differences.push(format!("{at}: help line says {line:?} where the board says {help:?}"));
-        }
-        let gnames: Vec<String> = help.iter().map(|w| format!("ownGlyph-{w}")).collect();
-        let letters = glyphs(&tree, &gnames.iter().map(String::as_str).collect::<Vec<_>>());
-        if letters != help_glyphs {
-            differences.push(format!("{at}: help glyphs read {letters:?} where the board draws {help_glyphs:?}"));
-        }
-        if let Some(root) = tree.nodes.iter().rposition(|n| n.name == canvas && n.visible) {
-            let cid = tree.nodes[root].id.clone();
-            let inside = |n: &emusen_qt_test::tree::Node| {
-                let mut at_id = n.parent.clone();
-                while let Some(p) = tree.nodes.iter().find(|p| p.id == at_id) {
-                    if p.id == cid {
-                        return true;
-                    }
-                    at_id = p.parent.clone();
-                }
-                false
-            };
-            for n in tree.nodes.iter().filter(|n| n.visible && n.text.is_some() && !n.name.is_empty() && inside(n)) {
-                if read(&tree, &n.name, "truncated") == "true" {
-                    differences.push(format!("{at}: {} is cut: {:?}", n.name, read(&tree, &n.name, "text")));
-                }
-            }
-        }
-    }
-    scene.resize(1280, 800);
-    scene.wait(300);
-}
-
-fn picture(scene: &mut Scene<'_>, name: &str) {
-    let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") else { return };
-    std::fs::create_dir_all(&folder).unwrap();
-    scene.resize(1920, 1200);
-    scene.wait(500);
-    let path = Path::new(&folder).join(name);
-    assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
-    scene.resize(1280, 800);
-    scene.wait(300);
+    hold_board(scene, canvas, &tokens, table, words, help, help_glyphs, differences);
 }
 
 fn startable_board() -> Value {

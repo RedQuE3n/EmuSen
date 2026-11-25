@@ -2,8 +2,9 @@
 //! `service`: each entry names its session through the table it was handed (EmuSen_Backend.md §29.3, §29.21;
 //! the twins went at the frontend API's 2.0, EmuSen_RustPlatform.md §47.23).
 
+use std::collections::HashMap;
 use std::ffi::c_void;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use emusen_crystal::abi::{self, emusen_crystal_runtime};
 use emusen_crystal::runtime::Runtime;
@@ -30,29 +31,46 @@ struct Slot {
     binding: Binding,
 }
 
-/// The tables made for one session: the full one and the read-only one.
-struct Tables {
-    rt: usize,
-    id: u32,
-    full: Box<Slot>,
-    read_only: Box<Slot>,
+/// Heap-owned slot whose self-referential `table.ctx -> binding` pointer stays valid until drop.
+struct OwnedSlot(*mut Slot);
+
+/// SAFETY: a slot's pointers stay fixed for its runtime's life; callers only read through the table.
+unsafe impl Send for OwnedSlot {}
+
+impl OwnedSlot {
+    fn new(rt: *const Runtime, id: u32, read_only: bool) -> Self {
+        let raw = Box::into_raw(Box::new(Slot { table: template(), binding: Binding { rt, id, read_only } }));
+        // SAFETY: `raw` is uniquely owned here and stays at this address until `Drop`.
+        unsafe { (*raw).table.ctx = std::ptr::addr_of_mut!((*raw).binding).cast() };
+        OwnedSlot(raw)
+    }
+
+    fn table_ptr(&self) -> *const emusen_session_v1 {
+        // SAFETY: `self.0` stays allocated until `forget` drops the owning map entry.
+        unsafe { std::ptr::addr_of!((*self.0).table) }
+    }
 }
 
-/// SAFETY: a table's pointers are the runtime's and the binding's own; a caller reaches them only through the table.
-unsafe impl Send for Tables {}
+impl Drop for OwnedSlot {
+    fn drop(&mut self) {
+        // SAFETY: `self.0` was allocated by `Box::into_raw` in `OwnedSlot::new`.
+        drop(unsafe { Box::from_raw(self.0) });
+    }
+}
 
-/// Every table handed out, freed with its runtime.
-static TABLES: Mutex<Vec<Tables>> = Mutex::new(Vec::new());
+/// The tables lazily made for one session: the full one and the read-only one.
+#[derive(Default)]
+struct Tables {
+    full: Option<OwnedSlot>,
+    read_only: Option<OwnedSlot>,
+}
+
+/// Every table handed out, keyed by runtime and session id, freed with its runtime.
+static TABLES: LazyLock<Mutex<HashMap<usize, HashMap<u32, Tables>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// The runtime's tables let go as it is freed.
 pub(crate) fn forget(rt: *mut emusen_crystal_runtime) {
-    TABLES.lock().unwrap_or_else(|p| p.into_inner()).retain(|t| t.rt != rt as usize);
-}
-
-fn slot(rt: *const Runtime, id: u32, read_only: bool) -> Box<Slot> {
-    let mut s = Box::new(Slot { table: template(), binding: Binding { rt, id, read_only } });
-    s.table.ctx = &mut s.binding as *mut Binding as *mut c_void;
-    s
+    TABLES.lock().unwrap_or_else(|p| p.into_inner()).remove(&(rt as usize));
 }
 
 /// A table's call: the session it serves, its words in the table's `last_error`.
@@ -685,14 +703,39 @@ pub unsafe extern "C" fn emusen_crystal_session_service(rt: *mut emusen_crystal_
         }
     };
     let mut all = TABLES.lock().unwrap_or_else(|p| p.into_inner());
-    let at = match all.iter().position(|t| t.rt == rt as usize && t.id == id) {
-        Some(at) => at,
-        None => {
-            let runtime = rt as *const Runtime;
-            all.push(Tables { rt: rt as usize, id, full: slot(runtime, id, false), read_only: slot(runtime, id, true) });
-            all.len() - 1
-        }
+    let entry = all.entry(rt as usize).or_default().entry(id).or_default();
+    let runtime = rt as *const Runtime;
+    let chosen = if flags & abi::SERVICE_READ_ONLY != 0 {
+        entry.read_only.get_or_insert_with(|| OwnedSlot::new(runtime, id, true))
+    } else {
+        entry.full.get_or_insert_with(|| OwnedSlot::new(runtime, id, false))
     };
-    let t = &all[at];
-    if flags & abi::SERVICE_READ_ONLY != 0 { &t.read_only.table } else { &t.full.table }
+    chosen.table_ptr()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crystal::{emusen_crystal_free, empty_runtime_for_tests};
+    use emusen_crystal::abi::{SERVICE_NO_GAME, SERVICE_READ_ONLY};
+
+    #[test]
+    fn runtime_tables_are_allocated_lazily_and_reclaimed_on_free() {
+        for _ in 0..8 {
+            let rt = empty_runtime_for_tests();
+            let key = rt as usize;
+            let full = unsafe { emusen_crystal_session_service(rt, 0, SERVICE_NO_GAME) };
+            assert!(!full.is_null());
+            assert_eq!(unsafe { emusen_crystal_session_service(rt, 0, SERVICE_NO_GAME) }, full);
+            {
+                let all = TABLES.lock().unwrap_or_else(|p| p.into_inner());
+                let entry = &all[&key][&0];
+                assert!(entry.full.is_some() && entry.read_only.is_none());
+            }
+            let ro = unsafe { emusen_crystal_session_service(rt, 0, SERVICE_NO_GAME | SERVICE_READ_ONLY) };
+            assert!(!ro.is_null() && ro != full);
+            assert_eq!(unsafe { emusen_crystal_free(rt) }, 0);
+            assert!(!TABLES.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&key));
+        }
+    }
 }

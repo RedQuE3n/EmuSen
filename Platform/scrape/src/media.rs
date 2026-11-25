@@ -3,7 +3,7 @@
 //! so a game shows the same cover in each. See EmuSen_Settings_Reference.md §4.60, §4.65 and EmuSen_Backend.md §30.6.
 
 use std::path::Path;
-use crate::{Error, Scraper};
+use crate::{Error, ScraperInner};
 use crate::consoles::{self, Core};
 use crate::kinds;
 use emusen_galaxia::files::file_exists;
@@ -109,14 +109,14 @@ pub fn openemu_cover(root: &str, console: &str, title: &str) -> Option<String> {
     [".png", ".jpg", ".jpeg"].iter().map(|ext| Path::new(root).join(console).join(&format!("{stem}{ext}")).to_string_lossy().into_owned()).find(|p| file_exists(p))
 }
 
-impl Scraper {
+impl ScraperInner {
     fn system_ids(cores: &[Core]) -> Vec<String> {
         cores.iter().flat_map(|c| c.systems.iter().cloned()).collect()
     }
 
     /// The table's system the runtime's shelves would put a file on, among the cores' systems.
     pub(crate) fn route(&self, rom: &str, cores: &[Core]) -> Option<&'static emusen_systems::System> {
-        let ids = Scraper::system_ids(cores);
+        let ids = ScraperInner::system_ids(cores);
         emusen_library::scan::route(rom, &emusen_library::scan::Systems::named(&ids)).and_then(|id| emusen_systems::find(&id))
     }
 
@@ -309,7 +309,7 @@ fn stamp_in(root: &str, system: &str) -> String {
         .join(",")
 }
 
-impl Scraper {
+impl ScraperInner {
     /// `MediaSources.Present`: the types some game of a shelf has, from the store and an ES-DE folder, and a cover from
     /// any source counted too, as shown, the player's choices with it.
     pub fn present(&self, system: &str, games: &[(String, String, bool)]) -> Result<Vec<String>, Error> {

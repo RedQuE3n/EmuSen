@@ -11,6 +11,7 @@ FocusScope {
     required property var rows
     property string title
     property string breadcrumb
+    property string subtitle
     property string footer
     property int current: 0
     property var paneLines
@@ -22,6 +23,8 @@ FocusScope {
     property string paneStatus
     property bool paneStatusOk: false
     property bool paneDrawn: false
+    property real paneHeight: 0
+    property color scrimColor: Kit.Tokens.scrim
     property bool menu: false
     property bool hasContinue: false
     property string continueTitle
@@ -47,7 +50,7 @@ FocusScope {
     Rectangle {
         objectName: "AdaptiveCardScrim"
         anchors.fill: parent
-        color: Kit.Tokens.scrim
+        color: root.scrimColor
     }
     Item {
         id: leftSlide
@@ -165,6 +168,21 @@ FocusScope {
                     lineHeight: 53
                     lineHeightMode: Text.FixedHeight
                 }
+                CardLine {
+                    objectName: "cardSubtitle"
+                    visible: !root.menu && root.subtitle.length > 0
+                    unit: root.unit
+                    boardLine: true
+                    boardLineHeight: 30.45
+                    width: 520 * root.unit
+                    text: root.subtitle
+                    color: "#C9CDDB"
+                    size: 21
+                    weight: Font.Light
+                    wrapMode: Text.WordWrap
+                    lineHeight: 30.45
+                    lineHeightMode: Text.FixedHeight
+                }
             }
             Item {
                 id: rowsArea
@@ -279,7 +297,7 @@ FocusScope {
         x: 800 * root.unit
         y: 210 * root.unit
         width: 760 * root.unit
-        height: root.paneDrawn ? Math.max(detailColumn.implicitHeight + 72 * root.unit, paneArea.implicitHeight + 72 * root.unit) : detailColumn.implicitHeight + 72 * root.unit
+        height: root.paneDrawn && root.paneHeight > 0 ? root.paneHeight + 72 * root.unit : detailColumn.implicitHeight + 72 * root.unit
         radius: 28 * root.unit
         color: Qt.alpha(Kit.Tokens.surface, 0.95)
         border.width: 1 * root.unit
@@ -287,6 +305,7 @@ FocusScope {
         Column {
             id: detailColumn
             objectName: "AdaptiveDetail"
+            visible: !root.paneDrawn
             x: 36 * root.unit
             y: 36 * root.unit
             width: detailCard.width - 72 * root.unit

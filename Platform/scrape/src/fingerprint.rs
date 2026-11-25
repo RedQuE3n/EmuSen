@@ -2,13 +2,13 @@
 //! its full MD5, CRC32 and SHA-1 follow later on a thread of the lowest priority that runs only while no game is on
 //! screen and gives way the moment one starts. See EmuSen_LibraryTools.md §9.12.
 
-use crate::Scraper;
+use crate::ScraperInner;
 use emusen_galaxia::files::file_info;
 use sha1::{Digest, Sha1};
 use std::collections::HashSet;
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -58,24 +58,13 @@ pub struct Background {
     thread: Mutex<Option<JoinHandle<()>>>,
 }
 
-/// A handle's address, sent to its own thread; the handle joins it before it is freed.
-#[derive(Clone, Copy)]
-struct Handle(*const Scraper);
-unsafe impl Send for Handle {}
-
-impl Handle {
-    fn get(&self) -> &'static Scraper {
-        unsafe { &*self.0 }
-    }
-}
-
-impl Scraper {
+impl ScraperInner {
     fn playing(&self) -> bool {
         *self.background.playing.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     /// The host's word that a game is on screen or no longer is; the owed checksums resume when none is.
-    pub fn set_playing(&self, playing: bool) {
+    pub(crate) fn set_playing(self: &Arc<Self>, playing: bool) {
         *self.background.playing.lock().unwrap_or_else(|p| p.into_inner()) = playing;
         self.background.changed.notify_all();
         if !playing {
@@ -84,17 +73,17 @@ impl Scraper {
     }
 
     /// Starts the background hashing where checksums are owed and none is running.
-    pub(crate) fn hash_later(&self) {
+    pub(crate) fn hash_later(self: &Arc<Self>) {
         let b = &self.background;
         if b.stop.load(Ordering::SeqCst) || self.store().unhashed().map_or(true, |u| u.is_empty()) || b.live.swap(true, Ordering::SeqCst) {
             return;
         }
-        let me = Handle(self as *const Scraper);
+        let me = Arc::clone(self);
         let mut thread = b.thread.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(old) = thread.take() {
             let _ = old.join();
         }
-        match std::thread::Builder::new().name("scrape checksums".into()).spawn(move || me.get().hash_owed()) {
+        match std::thread::Builder::new().name("scrape checksums".into()).spawn(move || me.hash_owed()) {
             Ok(h) => *thread = Some(h),
             Err(_) => b.live.store(false, Ordering::SeqCst),
         }

@@ -94,6 +94,8 @@ pub struct Facts {
     pub slot: u32,
     /// Slots 1 to 8, as far as they were read.
     pub slots: Vec<SlotFact>,
+    /// Short slot timestamps for Eclipse Pause Card, keyed by slot number (EclipsePause:51).
+    pub slot_when: std::collections::BTreeMap<u32, String>,
     /// Why Rewind cannot open, where it cannot.
     pub rewind_why: Option<String>,
     /// How far back the reel reaches, in seconds.
@@ -169,6 +171,7 @@ impl Default for Facts {
         Facts {
             slot: 1,
             slots: Vec::new(),
+            slot_when: std::collections::BTreeMap::new(),
             rewind_why: None,
             rewind_seconds: 0.0,
             held: Vec::new(),
@@ -191,7 +194,7 @@ impl Facts {
     pub fn to_json(&self) -> String {
         let slots: Vec<Value> =
             self.slots.iter().map(|s| json!({ "slot": s.slot, "exists": s.exists, "when": s.when, "picture": s.picture })).collect();
-        json!({ "slot": self.slot, "slots": slots, "rewindWhy": self.rewind_why, "rewindSeconds": self.rewind_seconds,
+        json!({ "slot": self.slot, "slots": slots, "slotWhen": self.slot_when, "rewindWhy": self.rewind_why, "rewindSeconds": self.rewind_seconds,
                 "held": self.held, "now": self.now, "hz": self.hz, "speed": self.speed, "pictures": self.pictures,
                 "path": self.path, "system": self.system, "secondPlayer": self.second_player, "cards": self.cards.to_json(),
                 "cheats": self.cheats.iter().map(|c| json!({ "description": c.description, "on": c.on })).collect::<Vec<_>>(),
@@ -217,6 +220,7 @@ impl Facts {
         Facts {
             slot: v["slot"].as_u64().map_or(d.slot, |n| n as u32),
             slots,
+            slot_when: serde_json::from_value(v["slotWhen"].clone()).unwrap_or_default(),
             rewind_why: v["rewindWhy"].as_str().map(str::to_string),
             rewind_seconds: v["rewindSeconds"].as_f64().unwrap_or(d.rewind_seconds),
             held: v["held"].as_array().map_or_else(Vec::new, |a| a.iter().filter_map(Value::as_u64).collect()),
@@ -533,11 +537,13 @@ pub struct Card {
     pub controllers: Vec<crate::settings_controllers::GameRow>,
     /// Display's or Sound's rows, as Settings' description gives them (`SettingsModel.cardSettings`).
     pub settings: CardRows,
+    /// Whether Eclipse Pause Card breadcrumbs, dividers, subtitle and help bar are active.
+    pub eclipse: bool,
 }
 
 impl Default for Card {
     fn default() -> Self {
-        Card { page: Page::First, current: 0, reel: None, facts: Facts::default(), shelf: Vec::new(), controllers: Vec::new(), settings: CardRows::default() }
+        Card { page: Page::First, current: 0, reel: None, facts: Facts::default(), shelf: Vec::new(), controllers: Vec::new(), settings: CardRows::default(), eclipse: false }
     }
 }
 
@@ -567,15 +573,17 @@ impl Card {
                     row(REWIND, "Rewind", rewind_value(facts)),
                     Row { steps: true, ..row(SAVE, "Save State", slot.clone()) },
                     Row { steps: true, ..row(LOAD, "Load State", slot) },
-                    Row { steps: true, ..row(SPEED, "Speed", speed_value(facts.speed)) },
+                    Row { steps: true, section_end: self.eclipse, ..row(SPEED, "Speed", speed_value(facts.speed)) },
                 ];
                 if facts.discs.can_change {
                     rows.push(Row { opens: true, ..row(CHANGE_DISC, "Change Disc", String::new()) });
                 } else if facts.second_player {
                     rows.push(row(SWAP, "Swap Players 1 and 2", String::new()));
                 }
-                if let Some(last) = rows.last_mut() {
-                    last.section_end = true;
+                if !self.eclipse {
+                    if let Some(last) = rows.last_mut() {
+                        last.section_end = true;
+                    }
                 }
                 rows.push(Row { opens: true, ..row(OPTIONS, "Game Options", String::new()) });
                 rows.push(Row { opens: true, ..row(LEAVE, "Leave", String::new()) });
@@ -627,7 +635,7 @@ impl Card {
                 .map(|r| row(MEMORY_CARD, &r.label, r.value))
                 .collect(),
             Page::Leave => vec![
-                row(LIBRARY, "Back to Library", String::new()),
+                Row { section_end: self.eclipse, ..row(LIBRARY, "Back to Library", String::new()) },
                 row(RESTART, "Restart Game...", String::new()),
                 row(QUIT_GAME, "Quit Game...", String::new()),
                 row(QUIT_EMUSEN, "Quit EmuSen...", String::new()),
@@ -682,6 +690,31 @@ impl Card {
             Page::Ask(ask) => ask.page().breadcrumb,
             _ => self.named(game),
         }
+    }
+
+    /// Breadcrumb for the active theme: Eclipse's PAUSED trail or reference theme's breadcrumb.
+    pub fn breadcrumb_for(&self, game: &str, console: &str) -> String {
+        if !self.eclipse {
+            return self.breadcrumb(game);
+        }
+        let sys = if !console.is_empty() { console } else { &self.facts.cards.console };
+        match self.page {
+            Page::First => crate::words::line(&[PAUSED, sys]),
+            _ => crate::words::line(&[PAUSED, sys, &self.named(game)]),
+        }
+    }
+
+    /// Question sentence shown under the heading on Eclipse Pause Ask pages (EclipsePauseAsk:36).
+    pub fn subtitle(&self) -> String {
+        match self.page {
+            Page::Ask(ask) if self.eclipse => ask.page().breadcrumb,
+            _ => String::new(),
+        }
+    }
+
+    /// Footer row position ("4 of 8") for Eclipse Pause Card.
+    pub fn position_line(&self) -> String {
+        crate::words::position_line(self.current, self.rows().len())
     }
 
     fn key_at(&self, index: usize) -> Option<&'static str> {
@@ -870,10 +903,10 @@ impl Card {
         Outcome::Shown
     }
 
-    /// The help bar the page shows: the first page's, with Change slot on Save and Load; the reel's; any other page's.
+    /// The help bar the page shows: Eclipse Pause keeps the 4-entry bar on Save/Load; reference shows Change slot.
     pub fn help(&self) -> Screen {
         match (self.page, self.key_at(self.current)) {
-            (Page::First, Some(SAVE | LOAD)) => Screen::PauseSlots,
+            (Page::First, Some(SAVE | LOAD)) if !self.eclipse => Screen::PauseSlots,
             (Page::First, _) => Screen::Pause,
             (Page::Reel, _) => Screen::PauseReel,
             (Page::Disc, _) => Screen::PauseDisc,
@@ -1003,10 +1036,19 @@ impl Card {
             .map(|slot| {
                 let fact = facts.slot_fact(slot);
                 let saved = fact.is_some_and(|f| f.exists);
+                let when = if saved {
+                    self.eclipse
+                        .then(|| facts.slot_when.get(&slot).filter(|w| !w.is_empty()).cloned())
+                        .flatten()
+                        .or_else(|| fact.map(|f| f.when.clone()))
+                        .unwrap_or_default()
+                } else {
+                    EMPTY.to_string()
+                };
                 Tile {
                     picture: fact.filter(|_| saved).map(|f| f.picture.clone()).unwrap_or_default(),
                     name: format!("Slot {slot}"),
-                    when: if saved { fact.map(|f| f.when.clone()).unwrap_or_default() } else { EMPTY.to_string() },
+                    when,
                     ringed: slot == current,
                 }
             })
@@ -1051,9 +1093,20 @@ impl Card {
                 row(OWN_DISC, &name, if inserted { "Inserted".to_string() } else if discs.unread { UNREAD_DISC.to_string() } else { String::new() })
             })
             .collect();
+        let own = rows.len();
         rows.extend(self.others().into_iter().map(|g| row(OTHER_DISC, &g.title, String::new())));
-        if discs.index.is_some() || discs.unread {
+        let has_tray = discs.index.is_some() || discs.unread;
+        if has_tray {
             rows.push(row(TRAY, "Eject disc", String::new()));
+        }
+        if self.eclipse {
+            if own > 0 && rows.len() > own {
+                rows[own - 1].section_end = true;
+            }
+            if has_tray && rows.len() >= 2 {
+                let before_tray = rows.len() - 2;
+                rows[before_tray].section_end = true;
+            }
         }
         rows
     }

@@ -5,12 +5,13 @@ use crate::common::wait_for;
 use crate::eclipse_board::{held, read, rows};
 use crate::eclipse_pad::{focused, press};
 use crate::eclipse_settings_oracle::{at, centre, help_line, lines_held, paused_frame, pictures, settings, settle, shown};
+use cxx_qt_lib::{QString, QVariant};
 use emusen_client_fixture::scraper::RecordedScraper;
 use emusen_client_fixture::{library, World};
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::input::{PadControl, UiButton};
 use emusen_kit_core::tokens::Colour;
-use emusen_platform_client::galaxia::consts::{DIR_MEDIA, DIR_SHADERS, FILE_GAMES, FILE_GRAPHICS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
+use emusen_platform_client::galaxia::consts::{DIR_MEDIA, DIR_SHADERS, DIR_THEMES, FILE_GAMES, FILE_GRAPHICS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::scrape::ScraperConfig;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
@@ -181,7 +182,7 @@ fn seed_queued_scrape(platform: &Arc<Platform>, roms: &[PathBuf]) {
 }
 
 /// The program in a made-up s7 world with 12 SNES ROMs, CRT levers, a slang preset and Eclipse active on Settings.
-fn with_s7(tag: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPad, &Arc<Platform>, &[PathBuf])) {
+fn with_s7(harness: &mut emusen_qt_test::Harness, tag: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPad, &Arc<Platform>, &[PathBuf])) {
     std::env::set_var("LC_ALL", "en_US.UTF-8");
     let world = World::new(tag);
     let snes = world.dir("Roms/snes");
@@ -239,7 +240,6 @@ fn with_s7(tag: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPad, &Arc<Pla
 
     let sdl = Sdl::open();
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
-    let mut harness = emusen_qt_test::Harness::new();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
@@ -270,7 +270,13 @@ fn with_s7(tag: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPad, &Arc<Pla
 
 /// Boards #59 (Shader levers), #60 (Shader parameters), #62 (Scraping account & run) and #61 (Themes).
 pub fn s7(backend: &str) {
-    with_s7("qt-app-eclipse-settings-s7", |scene, sdl, pad, platform, roms| {
+    let mut harness = emusen_qt_test::Harness::new();
+    s7_with(&mut harness, backend);
+}
+
+/// Runs boards #59-#62 checks on an existing test harness.
+pub fn s7_with(harness: &mut emusen_qt_test::Harness, backend: &str) {
+    with_s7(harness, "qt-app-eclipse-settings-s7", |scene, sdl, pad, platform, roms| {
         let mut differences = Vec::new();
         let page_help = &["Value", "Change", "Back", "Home"];
 
@@ -597,10 +603,236 @@ pub fn s7(backend: &str) {
 
         assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));
 
-        // Choosing EmuSen transitions cleanly back to the reference theme's Settings.
+        // Choosing EmuSen transitions cleanly back to the reference theme's Settings on row 2 (Themes).
         focus_id(scene, sdl, pad, "theme:emusen");
         press_handoff(scene, sdl, pad, "reference Settings active after choosing EmuSen", |s| s.property("settingsSlot", "active") == "true" && s.property("program", "theme").is_empty());
         assert_eq!(scene.property("screens", "shown"), "Settings");
+        assert_eq!(scene.property("settingsModel", "focused"), "2", "focus lands on Themes (row 2) after switching back from Eclipse Page::Themes");
         scene.assert_quiet();
     });
+}
+
+/// Opens the offline scraper so login attempts fail offline without touching the network.
+fn open_offline_scraper(platform: &Arc<Platform>) {
+    let root = platform.directory(DIR_MEDIA).unwrap().expect("media dir");
+    let games_db = platform.file(FILE_GAMES).ok().map(|p| p.to_string_lossy().into_owned());
+    let sqlite = Lent::open(SQLITE).expect("libsqlite3");
+    let config = ScraperConfig {
+        root: root.to_string_lossy().into_owned(),
+        games_db,
+        settings: json!({ "openemu": false, "developer_files": true, "sources_alone": false, "test": { "offline": true } }),
+        ..ScraperConfig::default()
+    };
+    platform.scraper_open(&config, Some(&sqlite)).expect("open offline scraper");
+}
+
+/// Opens Settings from Eclipse Home via Start -> Home Card -> Settings.
+fn open_eclipse_settings(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad) {
+    press(scene, sdl, pad, PadControl::Start);
+    wait_for(scene, "screens", "shown", "HomeCard", 2000);
+    scene.wait(300);
+    for _ in 0..12 {
+        let tree = scene.tree();
+        let is_settings = scene.focus(&tree).is_some_and(|i| {
+            let row_id = &tree.nodes[i as usize].id;
+            tree.nodes.iter().any(|n| n.parent == *row_id && n.name == "label" && n.text.as_deref() == Some("Settings"))
+        });
+        if is_settings {
+            break;
+        }
+        scene.pad(UiButton::Down);
+        scene.wait(40);
+    }
+    scene.pad(UiButton::Accept);
+    scene.run_pad_clock();
+    wait_for(scene, "screens", "shown", "Settings", 2000);
+    until(scene, "Eclipse draws Settings", |s| s.property("theme", "settings") == "true");
+    until(scene, "Eclipse Settings row focused", |s| focused(s).starts_with("row."));
+}
+
+/// Software regression tests for store-installed theme preview PNGs, X Check, password masking, clearing, notice X routing, and Themes focus.
+pub fn s7_regressions(harness: &mut emusen_qt_test::Harness) {
+    std::env::set_var("LC_ALL", "en_US.UTF-8");
+    let world = World::new("qt-app-eclipse-s7-regressions");
+    let snes = world.dir("Roms/snes");
+    std::fs::write(snes.join("Aurora Drift.sfc"), vec![1u8; 4096]).unwrap();
+    let platform = Arc::new(Platform::load(library()).unwrap());
+    let mut app = platform.model_new(MODEL_APP_SETTINGS).unwrap();
+    app["RomDirectory"] = json!(world.root.join("Roms").to_str().unwrap());
+    app["EmuSenTheme"] = json!("eclipse");
+    app["OpenEmuFallback"] = json!(false);
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &app).unwrap();
+    RecordedScraper::developer(&world.root.join("Config"));
+    open_offline_scraper(&platform);
+
+    let themes_dir = platform.directory(DIR_THEMES).unwrap().expect("themes dir");
+    let user_theme = themes_dir.join("aurora");
+    std::fs::create_dir_all(user_theme.join("screens")).unwrap();
+    std::fs::create_dir_all(user_theme.join("assets/previews")).unwrap();
+    std::fs::write(
+        user_theme.join("theme.json"),
+        serde_json::to_string_pretty(&json!({
+            "schema": 1,
+            "api": "1.21",
+            "name": "Aurora",
+            "author": "EmuSen Project",
+            "licence": "GPL-3.0-or-later",
+            "variants": ["dark"],
+            "fontSizes": [1],
+            "screens": ["home"],
+            "previews": ["assets/previews/home.png"]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    std::fs::write(user_theme.join("screens/Home.qml"), "import QtQuick\nimport EmuSen.Theme 1.0\n\nThemeScreen {\n    objectName: \"Home\"\n}\n").unwrap();
+    std::fs::write(user_theme.join("assets/previews/home.png"), include_bytes!("../../../themes/emusen/assets/previews/home.png")).unwrap();
+
+    let audit = world.root.join("audit.sh");
+    std::fs::write(&audit, "#!/bin/bash\nexit 0\n").unwrap();
+    assert!(std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap().success());
+    let prev_audit = std::env::var_os("EMUSEN_THEME_AUDIT");
+    std::env::set_var("EMUSEN_THEME_AUDIT", &audit);
+
+    let sdl = Sdl::open();
+    let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
+    let start = emusen_qt::start::read(library());
+    assert!(start.cover_stores.iter().any(|s| s == themes_dir.to_str().unwrap()), "start::read appends DIR_THEMES to cover_stores");
+    let mut initial = emusen_qt::start::initial(&start);
+    initial.insert(QString::from("splash"), QVariant::from(&false));
+    initial.insert(QString::from("onlyPads"), QVariant::from(&QString::from(&pad.id.to_string())));
+
+    let mut scene = harness.load_initial(MAIN_URL, 1280, 800, &initial, |_| {});
+    assert!(scene.set_property("folders", "catching", "true"));
+    wait_for(&mut scene, "library", "loading", "false", 10000);
+    wait_for(&mut scene, "settingsModel", "ready", "true", 5000);
+    wait_for(&mut scene, "pads", "connected", "1", 5000);
+    wait_for(&mut scene, "host.theme", "ready", "true", 5000);
+    until(&mut scene, "Eclipse theme active", |s| s.property("theme", "home") == "true");
+    scene.run_pad_clock();
+
+    // Open Settings -> Library -> Themes and inspect the store-installed Aurora theme preview + X Check.
+    until(&mut scene, "Eclipse Home focused", |s| !focused(s).is_empty());
+    open_eclipse_settings(&mut scene, &sdl, &pad);
+    for _ in 0..4 {
+        press(&mut scene, &sdl, &pad, PadControl::RightShoulder);
+        settle(&mut scene);
+    }
+    assert_eq!(at(&mut scene).1, "library");
+    focus_id(&mut scene, &sdl, &pad, "themes");
+    press(&mut scene, &sdl, &pad, PadControl::South);
+    settle(&mut scene);
+    focus_id(&mut scene, &sdl, &pad, "theme:aurora");
+    until(&mut scene, "Aurora preview PNG rendered", |s| shown(s, "asideThemeImage") && !shown(s, "asideThemeSwatch"));
+    assert!(scene.property("theme", "warnings").is_empty(), "{}", scene.property("theme", "warnings"));
+    scene.assert_quiet();
+
+    press(&mut scene, &sdl, &pad, PadControl::West);
+    until(&mut scene, "Aurora X Check completes", |s| read(&s.tree(), "rowWords.2", "text") == "Checked");
+    assert_eq!(read(&scene.tree(), "asideSentence", "text"), "Checked: nothing found.");
+
+    // Move to Library -> Scraping: verify actionable notice does not steal pad X (Done), masking, and clearing.
+    press(&mut scene, &sdl, &pad, PadControl::East);
+    settle(&mut scene);
+    focus_id(&mut scene, &sdl, &pad, "scraperun");
+    press(&mut scene, &sdl, &pad, PadControl::South);
+    settle(&mut scene);
+    focus_id(&mut scene, &sdl, &pad, "scrape:login");
+    press_handoff(&mut scene, &sdl, &pad, "Log in username prompt", |s| s.property("settingsModel", "typing") == "true" && s.property("settingsModel", "typingSecret") == "false");
+    until(&mut scene, "settingsKeyboard focused", |s| s.property("settingsKeyboard", "activeFocus") == "true");
+    for ch in "member".chars() {
+        scene.key(ch.to_ascii_uppercase() as i32, 0);
+        scene.wait(20);
+    }
+
+    let snes_dir = snes.to_string_lossy().into_owned();
+    let presenter_ptr = scene.object("noticePresenter");
+    let presenter = unsafe { std::pin::Pin::new_unchecked(&mut *(presenter_ptr as *mut emusen_qt_models::notice_presenter::qobject::NoticePresenter)) };
+    presenter.present(&QString::from("Save failed"), &QString::from("Folder action attached."), true, &QString::from("Open its folder"), &QString::from(snes_dir.as_str()));
+    let notices_ptr = scene.object("notices");
+    let notices = unsafe { std::pin::Pin::new_unchecked(&mut *(notices_ptr as *mut emusen_kit_qt::notices::qobject::NoticeModel)) };
+    notices.raise(&QString::from("Save failed\nFolder action attached."), true, false);
+    wait_for(&mut scene, "notices", "shown", "true", 2000);
+    assert_eq!(scene.property("noticePresenter", "hasAction"), "true");
+
+    let west = sdl_button(PadControl::West).unwrap();
+    sdl.press(&pad, west, true);
+    until(&mut scene, "pad X advances ScrapeUser to ScrapePassword", |s| s.property("settingsModel", "typingSecret") == "true");
+    sdl.press(&pad, west, false);
+    assert_eq!(scene.property("settingsModel", "typing"), "true");
+    let folders = unsafe { &*(scene.object("folders") as *const emusen_qt_models::folders::ffi::Folders) };
+    assert!(folders.caught().is_empty(), "actionable notice must not intercept X while typing");
+    let notices = unsafe { std::pin::Pin::new_unchecked(&mut *(notices_ptr as *mut emusen_kit_qt::notices::qobject::NoticeModel)) };
+    notices.expire();
+    wait_for(&mut scene, "notices", "shown", "false", 2000);
+
+    until(&mut scene, "deferred typeWords clears username", |s| s.property("settingsThemeTypist", "text").is_empty());
+    for ch in "pw".chars() {
+        scene.key(ch.to_ascii_uppercase() as i32, 0);
+        scene.wait(20);
+    }
+    until(&mut scene, "password typed into KeyboardModel", |s| s.property("settingsThemeTypist", "text") == "pw");
+    assert_eq!(read(&scene.tree(), "settingsTyped", "text"), "••", "Eclipse typing overlay masks password");
+    sdl.press(&pad, west, true);
+    until(&mut scene, "pad X closes ScrapePassword", |s| s.property("settingsModel", "typing") == "false");
+    sdl.press(&pad, west, false);
+    until(&mut scene, "Eclipse KeyboardModel text cleared after Done", |s| s.property("settingsThemeTypist", "text").is_empty());
+    until(&mut scene, "Settings row regains focus after Done", |s| focused(s).starts_with("row."));
+
+    // Closing Settings mid-password clears typing, pending_user, and KeyboardModel.text.
+    press_handoff(&mut scene, &sdl, &pad, "Log in username prompt reopen", |s| s.property("settingsModel", "typing") == "true" && s.property("settingsModel", "typingSecret") == "false");
+    type_and_submit(&mut scene, "member");
+    until(&mut scene, "Log in password prompt reopen", |s| s.property("settingsModel", "typingSecret") == "true" && s.property("settingsThemeTypist", "text").is_empty());
+    scene.key('P' as i32, 0);
+    until(&mut scene, "password char entered", |s| s.property("settingsThemeTypist", "text") == "p");
+    let screens = unsafe { std::pin::Pin::new_unchecked(&mut *(scene.object("screens") as *mut emusen_qt_models::screens::qobject::Screens)) };
+    screens.home();
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
+    wait_for(&mut scene, "settingsModel", "typing", "false", 2000);
+    until(&mut scene, "Eclipse KeyboardModel text cleared on close", |s| s.property("settingsThemeTypist", "text").is_empty());
+    assert!(settings(&mut scene).view().scrape.pending_user.is_none());
+
+    // Reopen Settings -> Library -> Themes, switch to EmuSen, verify Reference Settings focuses row 2 (Themes), then test Reference masking & clearing.
+    until(&mut scene, "Eclipse Home focused again", |s| !focused(s).is_empty());
+    open_eclipse_settings(&mut scene, &sdl, &pad);
+    if at(&mut scene).1 == "scrapeRun" {
+        press(&mut scene, &sdl, &pad, PadControl::East);
+        settle(&mut scene);
+    }
+    assert_eq!(at(&mut scene).1, "library");
+    focus_id(&mut scene, &sdl, &pad, "themes");
+    press(&mut scene, &sdl, &pad, PadControl::South);
+    settle(&mut scene);
+    focus_id(&mut scene, &sdl, &pad, "theme:emusen");
+    press_handoff(&mut scene, &sdl, &pad, "Reference Settings active on row 2", |s| s.property("settingsSlot", "active") == "true" && s.property("program", "theme").is_empty());
+    assert_eq!(scene.property("settingsModel", "focused"), "2", "focus lands on Themes (row 2)");
+
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "settingsModel", "focused", "4", 1000);
+    scene.pad(UiButton::Accept);
+    until(&mut scene, "Reference ScrapeRun opens", |s| settings(s).view().page_key() == "scrapeRun");
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "settingsModel", "focused", "1", 1000);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "settingsModel", "typing", "true", 2000);
+    assert_eq!(scene.property("settingsModel", "typingSecret"), "false");
+    type_and_submit(&mut scene, "member");
+    until(&mut scene, "Reference ScrapePassword prompt", |s| s.property("settingsModel", "typingSecret") == "true" && s.property("settingsTypist", "text").is_empty());
+    for ch in "pw".chars() {
+        scene.key(ch.to_ascii_uppercase() as i32, 0);
+        scene.wait(20);
+    }
+    until(&mut scene, "Reference password typed", |s| s.property("settingsTypist", "text") == "pw");
+    assert_eq!(read(&scene.tree(), "settingsTyped", "text"), "••", "Reference Settings masks password with bullets");
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "settingsModel", "typing", "false", 2000);
+    until(&mut scene, "Reference KeyboardModel text cleared after Done", |s| s.property("settingsTypist", "text").is_empty());
+
+    scene.assert_quiet();
+    sdl.detach(pad);
+    match prev_audit {
+        Some(v) => std::env::set_var("EMUSEN_THEME_AUDIT", v),
+        None => std::env::remove_var("EMUSEN_THEME_AUDIT"),
+    }
 }

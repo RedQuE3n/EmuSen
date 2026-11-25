@@ -323,7 +323,13 @@ Kit.NormalizedCanvas {
     // A profile's name typed on the docked keyboard, as the page asks (EmuSen_Qt.md §7.7.H): Done gives it to the page.
     Kit.KeyboardModel {
         id: typist
+        objectName: "settingsTypist"
         onClosed: screen.settings.typed(typist.text)
+    }
+    Timer {
+        interval: 0
+        running: !screen.typing && typist.text.length > 0
+        onTriggered: typist.setText("", 0)
     }
     readonly property bool typing: screen.settings.typing
     Kit.Frame {
@@ -361,7 +367,7 @@ Kit.NormalizedCanvas {
             }
             Text {
                 objectName: "settingsTyped"
-                text: typist.text
+                text: screen.settings.typingDisplay(typist.text, screen.settings.typingSecret)
                 color: Kit.Tokens.text
                 font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontRow

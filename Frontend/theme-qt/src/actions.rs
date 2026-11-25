@@ -105,7 +105,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "settingsBack"]
         fn settings_back(self: Pin<&mut ThemeActions>) -> bool;
-        /// Selects an inline kind pill on Settings -> Library -> Themes (1.20, board #61).
+        /// Selects an inline kind pill on Settings -> Library -> Themes (1.21, board #61).
         #[qinvokable]
         #[cxx_name = "settingsInlinePill"]
         fn settings_inline_pill(self: Pin<&mut ThemeActions>, index: i32) -> bool;

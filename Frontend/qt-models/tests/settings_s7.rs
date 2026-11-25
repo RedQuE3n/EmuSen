@@ -246,3 +246,18 @@ fn s7_62_scrape_run_projects_six_rows_two_step_login_and_actions() {
     assert_eq!(v.choose(0), Outcome::ScrapeCheck);
     assert_eq!(v.choose(1), Outcome::ScrapeSignOut);
 }
+
+#[test]
+fn s7_62_scrape_password_preserves_whitespace_while_other_inputs_trim() {
+    let mut v = view_for(json!({}), true);
+    assert!(matches!(v.typed(&Typed::ScrapeUser, "  alice  "), Outcome::Type { typed: Typed::ScrapePassword, .. }));
+    assert_eq!(v.scrape.pending_user.as_deref(), Some("alice"));
+    assert_eq!(v.typed(&Typed::ScrapePassword, "  pass word  "), Outcome::ScrapeSignIn { user: "alice".into(), password: "  pass word  ".into() });
+    assert!(matches!(v.typed(&Typed::ScrapeUser, "bob"), Outcome::Type { typed: Typed::ScrapePassword, .. }));
+    assert_eq!(v.typed(&Typed::ScrapePassword, "   "), Outcome::ScrapeSignIn { user: "bob".into(), password: "   ".into() });
+    assert!(matches!(v.typed(&Typed::ScrapeUser, "carol"), Outcome::Type { typed: Typed::ScrapePassword, .. }));
+    assert_eq!(v.typed(&Typed::ScrapePassword, ""), Outcome::Nothing);
+    assert!(v.scrape.pending_user.is_none());
+    assert_eq!(v.typed(&Typed::SearchParameters, "  mask  "), Outcome::Shown);
+    assert_eq!(v.param_search, "mask");
+}

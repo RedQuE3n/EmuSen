@@ -8,5 +8,7 @@ mod eclipse_settings_s7_pages;
 
 #[test]
 fn qt_3_4_11_eclipse_s_settings_draws_levers_shader_params_themes_and_scrape_run_as_their_boards() {
-    eclipse_settings_s7_pages::s7("software");
+    let mut harness = emusen_qt_test::Harness::new();
+    eclipse_settings_s7_pages::s7_with(&mut harness, "software");
+    eclipse_settings_s7_pages::s7_regressions(&mut harness);
 }

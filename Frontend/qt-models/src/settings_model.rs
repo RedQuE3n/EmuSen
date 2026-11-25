@@ -167,10 +167,10 @@ pub mod qobject {
         #[cxx_name = "sampleScale"]
         fn sample_scale(self: &SettingsModel, index: i32) -> f64;
 
-        /// Formats typed text for the typing overlay, masking characters when `typingSecret` is true.
+        /// Formats typed text for the typing overlay, masking characters when `secret` is true.
         #[qinvokable]
         #[cxx_name = "typingDisplay"]
-        fn typing_display(self: &SettingsModel, text: &QString) -> QString;
+        fn typing_display(self: &SettingsModel, text: &QString, secret: bool) -> QString;
 
         /// Left (-1) or Right (+1) on a row: whether it did anything.
         #[qinvokable]
@@ -420,6 +420,10 @@ pub struct SettingsModelRust {
     rows: Vec<settings::Row>,
     /// The reads asked for, so an older read that finishes late is dropped.
     asked: u64,
+    /// The scrape mutations asked for, so an older scrape task finishing late is dropped.
+    scrape_asked: u64,
+    /// The typing prompts asked for, so a deferred `typeWords` from a closed prompt is dropped.
+    type_asked: u64,
     /// Whether the last read asked for is still to come back.
     reading: bool,
     game_pads: u64,
@@ -509,6 +513,8 @@ impl Default for SettingsModelRust {
             rows: view.rows(),
             view,
             asked: 0,
+            scrape_asked: 0,
+            type_asked: 0,
             reading: false,
             game_pads: 0,
             bindings_shown: false,
@@ -546,6 +552,20 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
                 if model.open {
                     model.read_if_named();
                 } else {
+                    let was_typing = {
+                        let mut r = model.as_mut().rust_mut();
+                        r.scrape_asked = r.scrape_asked.wrapping_add(1);
+                        r.type_asked = r.type_asked.wrapping_add(1);
+                        r.view.scrape.pending_user = None;
+                        r.typed_for = None;
+                        let was = r.typing || r.typing_secret;
+                        r.typing = false;
+                        r.typing_secret = false;
+                        was
+                    };
+                    if was_typing {
+                        model.as_mut().asked();
+                    }
                     if model.view.consoles_with_games() {
                         model.as_mut().rust_mut().view.reset_consoles_filter();
                         model.as_mut().shown(true);
@@ -598,6 +618,7 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
                 if !themed && matches!(model.view.page(), Some(settings::Page::Themes)) {
                     if let Some(row) = model.as_mut().rust_mut().view.back() {
                         model.as_mut().shown(true);
+                        model.as_mut().set_focused(row as i32);
                         model.refocus(row as i32);
                         return;
                     }
@@ -683,9 +704,9 @@ impl qobject::SettingsModel {
         usize::try_from(index).ok().and_then(|i| self.sample_scales.get(i)).copied().unwrap_or(1.0)
     }
 
-    /// Formats typed text for the typing overlay, masking passwords when `typing_secret` is true.
-    pub fn typing_display(&self, text: &QString) -> QString {
-        if *self.typing_secret() {
+    /// Formats typed text for the typing overlay, masking characters when `secret` is true.
+    pub fn typing_display(&self, text: &QString, secret: bool) -> QString {
+        if secret {
             QString::from("•".repeat(text.to_string().chars().count()).as_str())
         } else {
             text.clone()
@@ -934,17 +955,24 @@ impl qobject::SettingsModel {
                 }
             }
             Outcome::Type { title, prompt, start, typed } => {
-                {
+                let asked = {
                     let secret = matches!(typed, crate::settings_controllers::Typed::ScrapePassword);
                     let mut r = self.as_mut().rust_mut();
+                    r.type_asked = r.type_asked.wrapping_add(1);
                     r.typed_for = Some(typed);
                     r.typing = true;
                     r.typing_secret = secret;
                     r.typing_title = QString::from(title.as_str());
                     r.typing_prompt = QString::from(prompt.as_str());
-                }
+                    r.type_asked
+                };
                 self.as_mut().asked();
-                self.type_words(QString::from(start.as_str()));
+                let qt = self.qt_thread();
+                let _ = qt.queue(move |model| {
+                    if model.type_asked == asked && model.typing {
+                        model.type_words(QString::from(start.as_str()));
+                    }
+                });
             }
             Outcome::UseTheme(id) => self.use_theme_in_settings(id),
             Outcome::ThemeCheck(id) => self.check_theme_in_settings(id),
@@ -1205,13 +1233,16 @@ impl qobject::SettingsModel {
 
     pub fn typed(mut self: Pin<&mut Self>, words: &QString) {
         let Some(typed) = self.as_mut().rust_mut().typed_for.take() else { return };
-        {
-            let mut r = self.as_mut().rust_mut();
-            r.typing = false;
-            r.typing_secret = false;
-        }
-        self.as_mut().asked();
         let outcome = self.as_mut().rust_mut().view.typed(&typed, &words.to_string());
+        if !matches!(outcome, Outcome::Type { .. }) {
+            {
+                let mut r = self.as_mut().rust_mut();
+                r.type_asked = r.type_asked.wrapping_add(1);
+                r.typing = false;
+                r.typing_secret = false;
+            }
+            self.as_mut().asked();
+        }
         self.outcome(outcome);
     }
 
@@ -1377,6 +1408,9 @@ impl qobject::SettingsModel {
             }
         }
         self.as_mut().shown(false);
+        if self.reading {
+            self.as_mut().refresh();
+        }
         if kind == crate::themes::Kind::EmuSen {
             let host_folder = crate::themes::resolve(&id, store.as_deref()).host_folder();
             self.as_mut().theme_used(QString::from(host_folder.as_str()));
@@ -1432,6 +1466,9 @@ impl qobject::SettingsModel {
                     }
                 }
                 self.as_mut().shown(false);
+                if self.reading {
+                    self.as_mut().refresh();
+                }
                 self.theme_restyled(true);
             }
             Err(words) => self.said(format!("The choice could not be stored: {words}")),
@@ -1440,6 +1477,8 @@ impl qobject::SettingsModel {
 
     /// Reads live ScreenScraper account, queue, run and quota state from emusen.scrape (#62).
     fn refresh_scrape(mut self: Pin<&mut Self>) {
+        let asked = self.scrape_asked.wrapping_add(1);
+        self.as_mut().rust_mut().scrape_asked = asked;
         if let Ok(source) = ClientSettings::open(&self.platform_library.to_string()) {
             let snap = source.scrape_snapshot();
             let mut r = self.as_mut().rust_mut();
@@ -1458,6 +1497,8 @@ impl qobject::SettingsModel {
         clear_said: bool,
         work: impl FnOnce(&ClientSettings) -> Result<Option<String>, String> + Send + 'static,
     ) {
+        let asked = self.scrape_asked.wrapping_add(1);
+        self.as_mut().rust_mut().scrape_asked = asked;
         let library = self.platform_library.to_string();
         let qt = self.qt_thread();
         if checking {
@@ -1467,10 +1508,15 @@ impl qobject::SettingsModel {
         std::thread::spawn(move || {
             let answer = ClientSettings::open(&library).and_then(|s| Ok((work(&s), s.scrape_snapshot())));
             let _ = qt.queue(move |mut model| {
+                if model.scrape_asked != asked {
+                    return;
+                }
                 match answer {
                     Ok((Ok(note), snap)) => {
                         let mut r = model.as_mut().rust_mut();
+                        let pending = r.view.scrape.pending_user.clone();
                         r.view.scrape = snap;
+                        r.view.scrape.pending_user = pending;
                         if let Some(said) = note {
                             r.view.scrape.status_note = said;
                         }
@@ -1480,7 +1526,9 @@ impl qobject::SettingsModel {
                     }
                     Ok((Err(why), snap)) => {
                         let mut r = model.as_mut().rust_mut();
+                        let pending = r.view.scrape.pending_user.clone();
                         r.view.scrape = snap;
+                        r.view.scrape.pending_user = pending;
                         r.view.scrape.status_note = why;
                     }
                     Err(why) => model.as_mut().rust_mut().view.scrape.status_note = why,
@@ -1490,23 +1538,30 @@ impl qobject::SettingsModel {
         });
     }
 
+    /// Runs a synchronous ScreenScraper action and surfaces any platform or service error on the page.
+    fn run_scrape_sync(mut self: Pin<&mut Self>, clear_said: bool, work: impl FnOnce(&ClientSettings) -> Result<(), String>) {
+        let asked = self.scrape_asked.wrapping_add(1);
+        self.as_mut().rust_mut().scrape_asked = asked;
+        match ClientSettings::open(&self.platform_library.to_string()).and_then(|source| work(&source).map(|()| source.scrape_snapshot())) {
+            Ok(snap) => {
+                self.as_mut().rust_mut().view.scrape = snap;
+                if clear_said {
+                    self.as_mut().said(String::new());
+                }
+            }
+            Err(why) => self.as_mut().rust_mut().view.scrape.status_note = why,
+        }
+        self.shown(false);
+    }
+
     /// Signs into a ScreenScraper account off the GUI thread (#62).
     fn scrape_sign_in(self: Pin<&mut Self>, user: String, password: String) {
         self.run_scrape_task(true, true, move |s| s.scrape_sign_in(&user, &password).map(|val| scrape_account_note(&val, "Could not sign in.")));
     }
 
     /// Signs out of the saved ScreenScraper account (#62).
-    fn scrape_sign_out(mut self: Pin<&mut Self>) {
-        if let Ok(source) = ClientSettings::open(&self.platform_library.to_string()) {
-            match source.scrape_sign_out() {
-                Ok(_) => {
-                    self.as_mut().rust_mut().view.scrape = source.scrape_snapshot();
-                    self.as_mut().said(String::new());
-                }
-                Err(why) => self.as_mut().rust_mut().view.scrape.status_note = why,
-            }
-        }
-        self.shown(false);
+    fn scrape_sign_out(self: Pin<&mut Self>) {
+        self.run_scrape_sync(true, |s| s.scrape_sign_out().map(|_| ()));
     }
 
     /// Re-verifies the saved ScreenScraper account off the GUI thread (#62).
@@ -1521,14 +1576,8 @@ impl qobject::SettingsModel {
     }
 
     /// Cancels an active scrape run (#62).
-    fn scrape_cancel(mut self: Pin<&mut Self>) {
-        if let Ok(source) = ClientSettings::open(&self.platform_library.to_string()) {
-            match source.scrape_cancel() {
-                Ok(_) => self.as_mut().rust_mut().view.scrape = source.scrape_snapshot(),
-                Err(why) => self.as_mut().rust_mut().view.scrape.status_note = why,
-            }
-        }
-        self.shown(false);
+    fn scrape_cancel(self: Pin<&mut Self>) {
+        self.run_scrape_sync(false, |s| s.scrape_cancel().map(|_| ()));
     }
 
     /// The focused row's pane.

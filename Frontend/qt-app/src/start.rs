@@ -115,6 +115,9 @@ pub fn read(library: &Path) -> Start {
     }
     let args: Vec<String> = std::env::args().collect();
     let store = platform.as_ref().and_then(|p| p.directory(DIR_THEMES).ok().flatten());
+    if let Some(dir) = &store {
+        cover_stores.push(dir.to_string_lossy().into_owned());
+    }
     let named = theme(&args, std::env::var("EMUSEN_THEME").ok());
     let (theme, theme_words) = if named.is_empty() { chosen_theme(&settings, store.as_deref()) } else { (named, String::new()) };
     let windowed = platform.clone().and_then(|p| Windowed::read(&ClientSettings::on(p)).ok().flatten());

@@ -209,6 +209,7 @@ fn judge_resource(url: &str, kind: Kind) -> String {
     let theme_preview = kind == Kind::Url
         && path.starts_with("/emusen/themes/")
         && path.contains("/assets/previews/")
+        && !path.split('/').any(|s| s == "..")
         && matches!(path.rsplit('.').next(), Some("png" | "jpg" | "jpeg" | "webp"));
     if style || qt_own || theme_preview || RESOURCES.iter().any(|r| path.starts_with(r)) || QT_FILES.contains(&path.as_str()) {
         return String::new();

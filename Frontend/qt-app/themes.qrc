@@ -37,7 +37,6 @@
         <file alias="parts/Encore.qml">../themes/eclipse/parts/Encore.qml</file>
         <file alias="parts/PlanetInk.qml">../themes/eclipse/parts/PlanetInk.qml</file>
         <file alias="parts/PlanetSphere.qml">../themes/eclipse/parts/PlanetSphere.qml</file>
-        <file alias="parts/ScrapeRow.qml">../themes/eclipse/parts/ScrapeRow.qml</file>
         <file alias="parts/SplashCorona.qml">../themes/eclipse/parts/SplashCorona.qml</file>
         <file alias="parts/Blend.qml">../themes/eclipse/parts/Blend.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>

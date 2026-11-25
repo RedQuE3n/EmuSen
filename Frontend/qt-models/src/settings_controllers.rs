@@ -563,18 +563,18 @@ impl SettingsView {
 
     /// A typed answer taken: profile actions, shader parameter search, or ScreenScraper sign-in steps.
     pub fn typed(&mut self, typed: &Typed, words: &str) -> Outcome {
-        let words = words.trim();
+        let trimmed = words.trim();
         match typed {
             Typed::SearchParameters => {
-                self.param_search = words.to_owned();
+                self.param_search = trimmed.to_owned();
                 return Outcome::Shown;
             }
             Typed::ScrapeUser => {
-                if words.is_empty() {
+                if trimmed.is_empty() {
                     self.scrape.pending_user = None;
                     return Outcome::Nothing;
                 }
-                self.scrape.pending_user = Some(words.to_owned());
+                self.scrape.pending_user = Some(trimmed.to_owned());
                 return Outcome::Type { title: "Log in".to_owned(), prompt: "Your ScreenScraper password.".to_owned(), start: String::new(), typed: Typed::ScrapePassword };
             }
             Typed::ScrapePassword => {
@@ -586,16 +586,16 @@ impl SettingsView {
             }
             _ => {}
         }
-        if words.is_empty() {
+        if trimmed.is_empty() {
             return Outcome::Nothing;
         }
         match typed {
-            Typed::NewProfile { console, from } => Outcome::Bindings(vec![self.read.bindings.create(console, words, from)]),
+            Typed::NewProfile { console, from } => Outcome::Bindings(vec![self.read.bindings.create(console, trimmed, from)]),
             Typed::Rename { console, profile } => {
-                let file = self.read.bindings.rename(console, profile, words);
+                let file = self.read.bindings.rename(console, profile, trimmed);
                 if let Some(last) = self.pages.last_mut() {
                     if last.0 == Page::Profile(console.clone(), profile.clone()) {
-                        *last = (Page::Profile(console.clone(), words.to_owned()), words.to_owned(), last.2);
+                        *last = (Page::Profile(console.clone(), trimmed.to_owned()), trimmed.to_owned(), last.2);
                     }
                 }
                 Outcome::Bindings(vec![file])

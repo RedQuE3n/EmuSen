@@ -202,7 +202,7 @@ Window {
                     referenceHost.feed.push(button, false)
                     Kit.PadRouter.push(button, false)
                 }
-                settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : (down && noticePresenter.takePad(button)) ? undefined : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
+                settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : (!(settingsModel.typing || screens.shown === Screens.Search) && down && noticePresenter.takePad(button)) ? undefined : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
             }
             onSeatsChanged: settingsModel.seatsChanged()
             // A pad come or gone, told where Controller notices is on, over a game too (EmuSen_Input.md §8.13.5).
@@ -588,12 +588,17 @@ Window {
         // Docked keyboard overlay for Profiles, Shader parameters search and ScreenScraper log-in while Eclipse draws Settings.
         Kit.KeyboardModel {
             id: settingsThemeTypist
+            objectName: "settingsThemeTypist"
             onClosed: settingsModel.typed(settingsThemeTypist.text)
+        }
+        Timer {
+            interval: 0
+            running: !settingsModel.typing && settingsThemeTypist.text.length > 0
+            onTriggered: settingsThemeTypist.setText("", 0)
         }
         Loader {
             id: settingsThemeTypingScope
             anchors.fill: parent
-            z: 10
             active: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.typing
             focus: active
             onActiveChanged: if (!active && chosenTheme.focus) chosenTheme.forceActiveFocus()
@@ -634,7 +639,7 @@ Window {
                         }
                         Text {
                             objectName: "settingsTyped"
-                            text: settingsModel.typingDisplay(settingsThemeTypist.text)
+                            text: settingsModel.typingDisplay(settingsThemeTypist.text, settingsModel.typingSecret)
                             color: Kit.Tokens.text
                             font.family: Kit.Tokens.faceText
                             font.pixelSize: Kit.Tokens.fontRow

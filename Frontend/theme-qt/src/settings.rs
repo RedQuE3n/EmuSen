@@ -91,7 +91,7 @@ pub mod qobject {
         /// From 1.18 (boards #52-#56): Eclipse secondary aside lines and rounded-box Start glyph flag.
         #[qproperty(QStringList, board_lines, cxx_name = "boardLines", READ, NOTIFY = shown)]
         #[qproperty(bool, box_menu, cxx_name = "boxMenu", READ, NOTIFY = shown)]
-        /// From 1.20 (boards #59-#62): board crumb line, inline kind pills, theme preview card and metadata line.
+        /// From 1.21 (boards #59-#62): board crumb line, inline kind pills, theme preview card and metadata line.
         #[qproperty(QString, board_trail_line, cxx_name = "boardTrailLine", READ, NOTIFY = shown)]
         #[qproperty(QStringList, inline_pills, cxx_name = "inlinePills", READ, NOTIFY = shown)]
         #[qproperty(i32, inline_pill, cxx_name = "inlinePill", READ, NOTIFY = shown)]

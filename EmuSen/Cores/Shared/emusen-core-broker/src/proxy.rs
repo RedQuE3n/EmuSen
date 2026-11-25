@@ -1062,11 +1062,11 @@ mod tests {
     #[test]
     fn augment_info_handles_capabilities_ordering_whitespace_and_extra_members() {
         let empty_caps = "{\n  \"capabilities\" : [ ] ,\n  \"id\" : \"c\"\n}";
-        let (out, by_path) = augment_info(empty_caps, true, r#""libretro":{"file":"a.so","sha256":"00"}"#).unwrap();
+        let (out, by_path) = augment_info(empty_caps, true, r#""libretro":{"file":"sample_core","sha256":"00"}"#).unwrap();
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
         assert!(!by_path);
         assert_eq!(v["capabilities"], serde_json::json!(["EXPECT"]));
-        assert_eq!(v["libretro"]["file"], "a.so");
+        assert_eq!(v["libretro"]["file"], "sample_core");
 
         let non_empty = r#"{ "description": "mentions \"image_path\" in prose", "capabilities": [ "RESET", "MEDIA" ] }"#;
         let (out, by_path) = augment_info(non_empty, true, "").unwrap();

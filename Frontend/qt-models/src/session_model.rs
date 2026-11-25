@@ -8,7 +8,7 @@ use crate::settings_source::ClientSettings;
 use crate::session::{GameIo, Opening, Report, Session};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{DateFormat, QDateTime, QRectF, QString};
+use cxx_qt_lib::{DateFormat, QByteArray, QDateTime, QRectF, QString};
 use crate::input::GameInput;
 use crate::pause::{self, SlotFact};
 use crate::resume::{self, Answer, Start};
@@ -27,6 +27,8 @@ use std::sync::Arc;
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
+        include!("cxx-qt-lib/qbytearray.h");
+        type QByteArray = cxx_qt_lib::QByteArray;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qrectf.h");
@@ -206,6 +208,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "loadState"]
         fn load_state(self: Pin<&mut SessionModel>, slot: u32);
+
+        /// Read-only paused game RGBA snapshot as `[w_le, h_le, rgba...]`, or empty when inactive.
+        #[qinvokable]
+        #[cxx_name = "pausedFrameRgba"]
+        fn paused_frame_rgba_bytes(&self) -> QByteArray;
 
         /// The picture on show written to the screenshots folder, off the GUI thread.
         #[qinvokable]
@@ -1483,6 +1490,26 @@ impl qobject::SessionModel {
         if self.jobs == 0 && std::mem::take(&mut self.as_mut().rust_mut().resume_waiting) {
             self.resume();
         }
+    }
+
+    pub fn paused_frame_rgba(&self) -> Option<(Vec<u8>, i32, i32)> {
+        if !self.running {
+            return None;
+        }
+        let guard = self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+        let (runtime, session) = guard?;
+        pictures::picture(&runtime, session, "now")
+    }
+
+    pub fn paused_frame_rgba_bytes(&self) -> QByteArray {
+        let Some((rgba, width, height)) = self.paused_frame_rgba() else {
+            return QByteArray::default();
+        };
+        let mut packed = Vec::with_capacity(8 + rgba.len());
+        packed.extend_from_slice(&(width as u32).to_le_bytes());
+        packed.extend_from_slice(&(height as u32).to_le_bytes());
+        packed.extend_from_slice(&rgba);
+        QByteArray::from(packed.as_slice())
     }
 }
 

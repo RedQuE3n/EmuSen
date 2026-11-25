@@ -372,20 +372,18 @@ pub fn s7_with(harness: &mut emusen_qt_test::Harness, backend: &str) {
         settle(scene);
         assert_eq!(at(scene).1, "display");
 
-        // Board #60: Display -> Shaders -> Super Nintendo -> CRT Royale -> Parameters.
+        // Board #60: Display -> Shaders (#20) -> CRT Royale -> All 4 settings -> Parameters (#60).
         focus_id(scene, sdl, pad, "shaders");
-        press(scene, sdl, pad, PadControl::South);
-        settle(scene);
-        focus_id(scene, sdl, pad, "shaders:SNES");
-        press(scene, sdl, pad, PadControl::South);
-        settle(scene);
-        focus_id(scene, sdl, pad, "shader:slang:crt/CRT_Royale.slangp");
-        press(scene, sdl, pad, PadControl::South);
-        until(scene, "CRT Royale parameters door appears", |s| settings(s).shown_rows().iter().any(|r| r.id == "shaders:params"));
-        focus_id(scene, sdl, pad, "shaders:params");
-        press(scene, sdl, pad, PadControl::South);
-        settle(scene);
-        assert_eq!(at(scene), (0, "shaderParams:SNES".to_owned()));
+        press_handoff(scene, sdl, pad, "#20 shaders opens", |s| s.property("settingsModel", "shadersShown") == "true" && shown(s, "shadersEclipseCanvas"));
+        let (sx, sy) = centre(scene, "sourceTab.1");
+        scene.click(sx, sy);
+        until(scene, "libretro CRT_Royale shown", |s| read(&s.tree(), "shaderRowName.0", "text") == "CRT Royale");
+        let (rx, ry) = centre(scene, "shaderRow.0");
+        scene.click(rx, ry);
+        until(scene, "All 4 settings link ready", |s| read(&s.tree(), "allSettingsWords", "text") == "All 4 settings");
+        let (ax, ay) = centre(scene, "allSettingsWords");
+        scene.click(ax, ay);
+        until(scene, "#60 Parameters page open", |s| s.property("settingsModel", "shadersShown") == "false" && at(s) == (0, "shaderParams:SNES".to_owned()));
 
         press(scene, sdl, pad, PadControl::Down);
         press(scene, sdl, pad, PadControl::Down);
@@ -456,11 +454,16 @@ pub fn s7_with(harness: &mut emusen_qt_test::Harness, backend: &str) {
             differences.push(format!("ShaderParams Reset all gave scanline={:?} brightness={:?}", read(&scene.tree(), "rowWords.2", "text"), read(&scene.tree(), "rowWords.5", "text")));
         }
         paused_frame(scene, false);
-        for _ in 0..3 {
-            press(scene, sdl, pad, PadControl::East);
-            settle(scene);
-        }
-        assert_eq!(at(scene).1, "display");
+        scene.run_pad_clock();
+        let back = sdl_button(PadControl::East).unwrap();
+        sdl.press(pad, back, true);
+        until(scene, "B returns from #60 to #20", |s| s.property("settingsModel", "shadersShown") == "true");
+        sdl.press(pad, back, false);
+        settle(scene);
+        sdl.press(pad, back, true);
+        until(scene, "B returns from #20 to display", |s| s.property("settingsModel", "shadersShown") == "false" && at(s).1 == "display");
+        sdl.press(pad, back, false);
+        settle(scene);
 
         // Board #62: Library -> Account and run (seed 12 real queued games in emusen.scrape first).
         seed_queued_scrape(platform, roms);

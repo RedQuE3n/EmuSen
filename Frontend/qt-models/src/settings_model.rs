@@ -20,6 +20,8 @@ pub mod qobject {
     }
 
     unsafe extern "C++" {
+        include!("cxx-qt-lib/qbytearray.h");
+        type QByteArray = cxx_qt_lib::QByteArray;
         include!("cxx-qt-lib/qhash.h");
         type QHash_i32_QByteArray = cxx_qt_lib::QHash<cxx_qt_lib::QHashPair_i32_QByteArray>;
         include!("cxx-qt-lib/qvariant.h");
@@ -137,6 +139,13 @@ pub mod qobject {
         #[qproperty(QStringList, built_ins, cxx_name = "builtIns")]
         /// Whether an EmuSen theme draws Settings, enabling Eclipse's board-projected pages.
         #[qproperty(bool, themed_settings, cxx_name = "themedSettings")]
+        /// Eclipse `#20` Shaders overlay state and live Serenity preview feed.
+        #[qproperty(bool, shaders_shown, cxx_name = "shadersShown", READ, NOTIFY = shaders_changed)]
+        #[qproperty(QString, shaders_board, cxx_name = "shadersBoard", READ, NOTIFY = shaders_changed)]
+        #[qproperty(QString, shaders_help, cxx_name = "shadersHelp", READ, NOTIFY = shaders_changed)]
+        #[qproperty(u64, shader_preview_feed, cxx_name = "shaderPreviewFeed", READ, NOTIFY = shader_preview_changed)]
+        #[qproperty(QString, shader_preview_source, cxx_name = "shaderPreviewSource", READ, NOTIFY = shader_preview_changed)]
+        #[qproperty(bool, shader_preview_pending, cxx_name = "shaderPreviewPending", READ, NOTIFY = shader_preview_changed)]
         /// Why a read or a save failed, in the platform's words; empty when it did not.
         #[qproperty(QString, problem, READ, NOTIFY)]
         type SettingsModel = super::SettingsModelRust;
@@ -377,6 +386,98 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "themeRestyled"]
         fn theme_restyled(self: Pin<&mut SettingsModel>, esde: bool);
+
+        #[qsignal]
+        #[cxx_name = "shadersChanged"]
+        fn shaders_changed(self: Pin<&mut SettingsModel>);
+
+        #[qsignal]
+        #[cxx_name = "shaderPreviewChanged"]
+        fn shader_preview_changed(self: Pin<&mut SettingsModel>);
+
+        #[qsignal]
+        #[cxx_name = "shaderPreviewReady"]
+        fn shader_preview_ready(self: Pin<&mut SettingsModel>);
+
+        #[qsignal]
+        #[cxx_name = "shadersPreviewDebounce"]
+        fn shaders_preview_debounce(self: Pin<&mut SettingsModel>);
+
+        #[qinvokable]
+        #[cxx_name = "shadersInit"]
+        fn shaders_init(self: Pin<&mut SettingsModel>, host_feed: u64, paused_bytes: &QByteArray);
+
+        #[qinvokable]
+        #[cxx_name = "shadersRelease"]
+        fn shaders_release(self: Pin<&mut SettingsModel>);
+
+        #[qinvokable]
+        #[cxx_name = "commitShaderPreview"]
+        fn commit_shader_preview(self: Pin<&mut SettingsModel>);
+
+        #[qinvokable]
+        #[cxx_name = "shadersPadButton"]
+        fn shaders_pad_button(self: Pin<&mut SettingsModel>, button: PadButton, down: bool, repeat: bool) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "shadersKeyNav"]
+        fn shaders_key_nav(self: Pin<&mut SettingsModel>, code: i32) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "shadersSource"]
+        fn shaders_source(self: Pin<&mut SettingsModel>, index: i32);
+
+        #[qinvokable]
+        #[cxx_name = "shadersCategory"]
+        fn shaders_category(self: Pin<&mut SettingsModel>, index: i32);
+
+        #[qinvokable]
+        #[cxx_name = "shadersFocusPreset"]
+        fn shaders_focus_preset(self: Pin<&mut SettingsModel>, index: i32, activate: bool);
+
+        #[qinvokable]
+        #[cxx_name = "shadersScope"]
+        fn shaders_scope(self: Pin<&mut SettingsModel>, index: i32);
+
+        #[qinvokable]
+        #[cxx_name = "shadersToggleFavourite"]
+        fn shaders_toggle_favourite(self: Pin<&mut SettingsModel>, index: i32);
+
+        #[qinvokable]
+        #[cxx_name = "shadersSearch"]
+        fn shaders_search(self: Pin<&mut SettingsModel>);
+
+        #[qinvokable]
+        #[cxx_name = "shadersAllSettings"]
+        fn shaders_all_settings(self: Pin<&mut SettingsModel>);
+
+        #[qinvokable]
+        #[cxx_name = "shadersAskRemove"]
+        fn shaders_ask_remove(self: Pin<&mut SettingsModel>);
+
+        #[qinvokable]
+        #[cxx_name = "shadersConfirmRemove"]
+        fn shaders_confirm_remove(self: Pin<&mut SettingsModel>, confirm: bool);
+
+        #[qinvokable]
+        #[cxx_name = "shadersStepSlider"]
+        fn shaders_step_slider(self: Pin<&mut SettingsModel>, slot: i32, by: i32);
+
+        #[qinvokable]
+        #[cxx_name = "shadersSlideSlider"]
+        fn shaders_slide_slider(self: Pin<&mut SettingsModel>, slot: i32, norm: f64);
+
+        #[qinvokable]
+        #[cxx_name = "shadersSetSplit"]
+        fn shaders_set_split(self: Pin<&mut SettingsModel>, norm: f64);
+
+        #[qinvokable]
+        #[cxx_name = "shadersHoldCompare"]
+        fn shaders_hold_compare(self: Pin<&mut SettingsModel>, down: bool);
+
+        #[qinvokable]
+        #[cxx_name = "shadersBack"]
+        fn shaders_back(self: Pin<&mut SettingsModel>);
     }
 
     unsafe extern "RustQt" {
@@ -486,6 +587,14 @@ pub struct SettingsModelRust {
     typing_secret: bool,
     built_ins: QStringList,
     themed_settings: bool,
+    shaders_shown: bool,
+    shaders_board: QString,
+    shaders_help: QString,
+    shader_preview_feed: u64,
+    shader_preview_source: QString,
+    shader_preview_pending: bool,
+    shaders_state: Option<crate::settings_shaders::ShadersBoard>,
+    shader_preview: crate::shader_preview::ShaderPreview,
     /// The page's question waiting for typed words.
     typed_for: Option<crate::settings_controllers::Typed>,
     /// Each pad's buttons at the last read of the seats, so a press listened for is the one newly down.
@@ -500,6 +609,12 @@ fn list(words: impl Iterator<Item = String>) -> QStringList {
         out.append(QString::from(w.as_str()));
     }
     QStringList::from(&out)
+}
+
+impl Drop for SettingsModelRust {
+    fn drop(&mut self) {
+        self.shader_preview.release();
+    }
 }
 
 impl Default for SettingsModelRust {
@@ -579,6 +694,14 @@ impl Default for SettingsModelRust {
             typing_secret: false,
             built_ins: QStringList::default(),
             themed_settings: false,
+            shaders_shown: false,
+            shaders_board: QString::from("{}"),
+            shaders_help: QString::from("[]"),
+            shader_preview_feed: 0,
+            shader_preview_source: QString::default(),
+            shader_preview_pending: false,
+            shaders_state: None,
+            shader_preview: crate::shader_preview::ShaderPreview::default(),
             typed_for: None,
             pressed: Vec::new(),
         }
@@ -611,8 +734,9 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
                         model.as_mut().shown(true);
                     }
                     if std::mem::take(&mut model.as_mut().rust_mut().saved_since_open) {
-                        model.saved();
+                        model.as_mut().saved();
                     }
+                    model.as_mut().close_shaders_state();
                 }
             })
             .release();
@@ -626,6 +750,7 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
             .release();
         self.as_mut()
             .on_section_changed(|mut model| {
+                model.as_mut().close_shaders_state();
                 let section = model.section.max(0) as usize;
                 model.as_mut().rust_mut().view.choose_section(section);
                 model.shown(true);
@@ -808,12 +933,23 @@ impl qobject::SettingsModel {
                         r.view.scrape = scrape;
                         r.view.scrape.status_note = note;
                         r.view.scrape.pending_user = pending;
+                        let library = r.platform_library.to_string();
+                        if let Some(mut board) = r.shaders_state.take() {
+                            board.sync_preview_stored(&r.view, &library);
+                            r.shaders_state = Some(board);
+                        }
                         model.as_mut().said(String::new());
                     }
                     Err(words) => model.as_mut().said(format!("The settings could not be read: {words}")),
                 }
                 model.as_mut().applied();
-                model.shown(false);
+                model.as_mut().shown(false);
+                if model.shaders_state.is_some() {
+                    model.as_mut().sync_shaders_view();
+                    if model.shaders_shown {
+                        model.as_mut().sync_shaders_preview(false);
+                    }
+                }
             });
         });
     }
@@ -846,7 +982,12 @@ impl qobject::SettingsModel {
     }
 
     pub fn choose(mut self: Pin<&mut Self>, row: i32) -> bool {
-        let outcome = self.as_mut().rust_mut().view.choose(row.max(0) as usize);
+        let index = row.max(0) as usize;
+        if self.themed_settings && self.view.is_shaders_door(index) {
+            self.open_shaders_board(index);
+            return true;
+        }
+        let outcome = self.as_mut().rust_mut().view.choose(index);
         self.outcome(outcome)
     }
 
@@ -856,12 +997,28 @@ impl qobject::SettingsModel {
     }
 
     pub fn back(mut self: Pin<&mut Self>) -> bool {
+        if self.shaders_shown && self.shaders_state.is_some() {
+            self.close_shaders_to_display();
+            return true;
+        }
         if self.as_mut().rust_mut().view.back_taken() {
             self.shown(false);
             return true;
         }
         match self.as_mut().rust_mut().view.back() {
             Some(row) => {
+                if self.shaders_state.as_ref().is_some_and(|b| b.return_params) {
+                    if let Some(mut board) = self.as_mut().rust_mut().shaders_state.take() {
+                        board.return_params = false;
+                        board.confirm_remove = false;
+                        let library = self.platform_library.to_string();
+                        board.sync_preview_stored(&self.view, &library);
+                        self.as_mut().rust_mut().shaders_state = Some(board);
+                    }
+                    self.as_mut().sync_shaders_view();
+                    self.sync_shaders_preview(true);
+                    return true;
+                }
                 self.as_mut().shown(true);
                 self.refocus(row as i32);
                 true
@@ -1283,6 +1440,17 @@ impl qobject::SettingsModel {
 
     pub fn typed(mut self: Pin<&mut Self>, words: &QString) {
         let Some(typed) = self.as_mut().rust_mut().typed_for.take() else { return };
+        if self.shaders_shown && matches!(typed, crate::settings_controllers::Typed::SearchParameters) {
+            {
+                let mut r = self.as_mut().rust_mut();
+                r.type_asked = r.type_asked.wrapping_add(1);
+                r.typing = false;
+                r.typing_secret = false;
+            }
+            self.as_mut().asked();
+            self.shaders_apply_search(words.to_string());
+            return;
+        }
         let outcome = self.as_mut().rust_mut().view.typed(&typed, &words.to_string());
         if !matches!(outcome, Outcome::Type { .. }) {
             {
@@ -1782,6 +1950,440 @@ impl qobject::SettingsModel {
             self.as_mut().rust_mut().samples = samples;
             self.as_mut().samples_changed();
         }
+    }
+
+    fn open_shaders_board(mut self: Pin<&mut Self>, return_row: usize) {
+        let library = self.platform_library.to_string();
+        let board = crate::settings_shaders::ShadersBoard::open(&self.view, &library, return_row);
+        self.as_mut().rust_mut().shaders_state = Some(board);
+        self.as_mut().sync_shaders_view();
+    }
+
+    fn close_shaders_state(mut self: Pin<&mut Self>) {
+        let had = self.shaders_state.is_some() || self.shaders_shown || self.shader_preview_feed != 0;
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.shaders_state = None;
+            r.shaders_shown = false;
+            r.shader_preview.release();
+            r.shader_preview_feed = 0;
+            r.shader_preview_pending = false;
+            r.shaders_board = QString::from("{}");
+            r.shaders_help = QString::from("[]");
+        }
+        if had {
+            self.as_mut().shaders_changed();
+            self.as_mut().shader_preview_changed();
+        }
+    }
+
+    fn close_shaders_to_display(mut self: Pin<&mut Self>) {
+        let return_row = self.shaders_state.as_ref().map(|b| b.return_row);
+        self.as_mut().close_shaders_state();
+        if let Some(row) = return_row {
+            self.refocus(row as i32);
+        }
+    }
+
+    fn sync_shaders_view(mut self: Pin<&mut Self>) {
+        let library = self.platform_library.to_string();
+        let (shown, board_json, help_json) = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(mut board) = r.shaders_state.take() else {
+                r.shaders_shown = false;
+                r.shaders_board = QString::from("{}");
+                r.shaders_help = QString::from("[]");
+                return;
+            };
+            let shown = !board.return_params;
+            let json = board.to_json(&r.view, &library, board.comparing);
+            let help = json["footerHelp"].to_string();
+            let board_str = json.to_string();
+            r.shaders_state = Some(board);
+            (shown, QString::from(board_str.as_str()), QString::from(help.as_str()))
+        };
+        let changed = self.shaders_shown != shown || self.shaders_board != board_json || self.shaders_help != help_json;
+        if changed {
+            let mut r = self.as_mut().rust_mut();
+            r.shaders_shown = shown;
+            r.shaders_board = board_json;
+            r.shaders_help = help_json;
+            self.as_mut().shaders_changed();
+        }
+    }
+
+    fn sync_shaders_preview(mut self: Pin<&mut Self>, immediate: bool) {
+        let library = self.platform_library.to_string();
+        let target = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(mut board) = r.shaders_state.take() else { return };
+            let target = board.preview_target(&r.view, &library);
+            r.shaders_state = Some(board);
+            target
+        };
+        let (scheduled, committed, feed_addr, src, pending) = {
+            let mut r = self.as_mut().rust_mut();
+            let scheduled = r.shader_preview.schedule(target);
+            let committed = if immediate && (scheduled || r.shader_preview.has_pending()) {
+                r.shader_preview.commit(&library)
+            } else {
+                false
+            };
+            let feed_addr = r.shader_preview.feed_address();
+            let src = QString::from(r.shader_preview.unfiltered_url());
+            let pending = r.shader_preview.has_pending();
+            (scheduled, committed, feed_addr, src, pending)
+        };
+        let props_changed = self.shader_preview_feed != feed_addr || self.shader_preview_source != src || self.shader_preview_pending != pending;
+        if props_changed {
+            let mut r = self.as_mut().rust_mut();
+            r.shader_preview_feed = feed_addr;
+            r.shader_preview_source = src;
+            r.shader_preview_pending = pending;
+            self.as_mut().shader_preview_changed();
+        }
+        if !immediate && scheduled {
+            self.as_mut().shaders_preview_debounce();
+        }
+        if committed {
+            self.as_mut().shader_preview_ready();
+        }
+    }
+
+    fn mutate_shaders(mut self: Pin<&mut Self>, immediate: bool, f: impl FnOnce(&mut crate::settings_shaders::ShadersBoard, &mut SettingsView, &str) -> crate::settings_shaders::ShadersOutcome) {
+        let library = self.platform_library.to_string();
+        let outcome = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(mut board) = r.shaders_state.take() else { return };
+            let out = f(&mut board, &mut r.view, &library);
+            r.shaders_state = Some(board);
+            out
+        };
+        self.apply_shaders_outcome(outcome, immediate);
+    }
+
+    fn apply_shaders_outcome(mut self: Pin<&mut Self>, outcome: crate::settings_shaders::ShadersOutcome, immediate: bool) {
+        use crate::settings_shaders::ShadersOutcome;
+        match outcome {
+            ShadersOutcome::None => return,
+            ShadersOutcome::Changed | ShadersOutcome::RemoveConfirmed => {}
+            ShadersOutcome::Saved(out) => {
+                self.as_mut().carry(out);
+            }
+            ShadersOutcome::Search { title, prompt, start } => {
+                self.as_mut().carry(Outcome::Type { title, prompt, start, typed: crate::settings_controllers::Typed::SearchParameters });
+                return;
+            }
+            ShadersOutcome::OpenSettingsPage { console, stored, return_row } => {
+                let outcome = self.as_mut().rust_mut().view.open_shader_settings_page(&console, &stored, return_row);
+                self.as_mut().sync_shaders_view();
+                self.as_mut().outcome(outcome);
+                return;
+            }
+        }
+        self.as_mut().sync_shaders_view();
+        self.sync_shaders_preview(immediate);
+    }
+
+    fn shaders_apply_search(self: Pin<&mut Self>, query: String) {
+        self.mutate_shaders(false, |board, view, library| {
+            board.search = query;
+            board.focused_preset = 0;
+            board.sync_preview_stored(view, library);
+            crate::settings_shaders::ShadersOutcome::Changed
+        });
+    }
+
+    pub fn shaders_init(mut self: Pin<&mut Self>, host_feed: u64, paused_bytes: &QByteArray) {
+        if self.shaders_state.is_none() {
+            return;
+        }
+        let library = self.platform_library.to_string();
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.shader_preview.attach(host_feed, &library, paused_bytes.as_slice());
+        }
+        self.as_mut().sync_shaders_view();
+        self.sync_shaders_preview(true);
+    }
+
+    pub fn shaders_release(mut self: Pin<&mut Self>) {
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.shader_preview.release();
+            r.shader_preview_feed = 0;
+            r.shader_preview_pending = false;
+        }
+        self.shader_preview_changed();
+    }
+
+    pub fn commit_shader_preview(mut self: Pin<&mut Self>) {
+        if self.shaders_state.is_none() {
+            return;
+        }
+        let library = self.platform_library.to_string();
+        let (committed, pending, problem) = {
+            let mut r = self.as_mut().rust_mut();
+            let committed = r.shader_preview.commit(&library);
+            let pending = r.shader_preview.has_pending();
+            let problem = r.shader_preview.problem().to_owned();
+            (committed, pending, problem)
+        };
+        if self.shader_preview_pending != pending {
+            self.as_mut().rust_mut().shader_preview_pending = pending;
+            self.as_mut().shader_preview_changed();
+        }
+        if !problem.is_empty() {
+            self.as_mut().said(problem);
+        }
+        if committed {
+            self.shader_preview_ready();
+        }
+    }
+
+    pub fn shaders_pad_button(self: Pin<&mut Self>, button: qobject::PadButton, down: bool, repeat: bool) -> bool {
+        let Some(ui) = emusen_kit_qt::kinds::ui_button(button) else { return false };
+        self.shaders_ui_button(ui, down, repeat)
+    }
+
+    pub fn shaders_key_nav(self: Pin<&mut Self>, code: i32) -> bool {
+        use emusen_kit_core::input::UiButton;
+        let ui = match code {
+            0 => UiButton::Up,
+            1 => UiButton::Down,
+            2 => UiButton::Left,
+            3 => UiButton::Right,
+            4 => UiButton::Accept,
+            5 => UiButton::Back,
+            6 => UiButton::Search,
+            7 => UiButton::PageUp,
+            8 => UiButton::PageDown,
+            10 => UiButton::First,
+            11 => UiButton::Last,
+            _ => return false,
+        };
+        self.shaders_ui_button(ui, true, false)
+    }
+
+    fn shaders_ui_button(self: Pin<&mut Self>, ui: emusen_kit_core::input::UiButton, down: bool, repeat: bool) -> bool {
+        use emusen_kit_core::input::UiButton;
+        if !self.shaders_shown || self.shaders_state.is_none() {
+            return false;
+        }
+        if ui == UiButton::Screensaver && !repeat {
+            self.shaders_hold_compare(down);
+            return true;
+        }
+        if !down {
+            return false;
+        }
+        let dir = match ui {
+            UiButton::Left => Some((-1, 0)),
+            UiButton::Right => Some((1, 0)),
+            UiButton::Up => Some((0, -1)),
+            UiButton::Down => Some((0, 1)),
+            _ => None,
+        };
+        if let Some((dx, dy)) = dir {
+            if let Some((slot, true)) = self.shaders_state.as_ref().map(|b| (b.focused_slider as i32, b.focus_zone == 6 && dx != 0)) {
+                self.shaders_step_slider(slot, dx);
+                return true;
+            }
+            self.mutate_shaders(false, |board, view, library| board.nav(view, library, dx, dy));
+            return true;
+        }
+        if ui == UiButton::PageUp || ui == UiButton::PageDown {
+            let delta = if ui == UiButton::PageUp { -0.08 } else { 0.08 };
+            self.mutate_shaders(false, |board, _, _| if board.step_split(delta) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None });
+            return true;
+        }
+        if repeat {
+            return false;
+        }
+        match ui {
+            UiButton::Accept => {
+                self.mutate_shaders(false, |board, view, library| board.accept(view, library));
+                true
+            }
+            UiButton::Back => {
+                self.close_shaders_to_display();
+                true
+            }
+            UiButton::Search => {
+                self.shaders_toggle_favourite(-1);
+                true
+            }
+            UiButton::First | UiButton::Last => {
+                let by = if ui == UiButton::First { -1 } else { 1 };
+                self.mutate_shaders(false, |board, view, library| {
+                    if board.step_console(view, library, by) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None }
+                });
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn shaders_source(self: Pin<&mut Self>, index: i32) {
+        self.mutate_shaders(true, |board, view, library| {
+            board.focus_zone = 0;
+            board.set_source(view, library, index.max(0) as usize);
+            crate::settings_shaders::ShadersOutcome::Changed
+        });
+    }
+
+    pub fn shaders_category(self: Pin<&mut Self>, index: i32) {
+        self.mutate_shaders(true, |board, view, library| {
+            board.focus_zone = 1;
+            board.set_category(view, library, index.max(0) as usize);
+            crate::settings_shaders::ShadersOutcome::Changed
+        });
+    }
+
+    pub fn shaders_focus_preset(self: Pin<&mut Self>, index: i32, activate: bool) {
+        self.mutate_shaders(activate, |board, view, library| {
+            let visible = board.visible_items(view).len();
+            if visible == 0 {
+                return crate::settings_shaders::ShadersOutcome::None;
+            }
+            board.focus_zone = 4;
+            board.focused_preset = (index.max(0) as usize).min(visible - 1);
+            board.sync_preview_stored(view, library);
+            if activate {
+                let out = board.apply_current(view);
+                if out == Outcome::Nothing { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::Saved(out) }
+            } else {
+                crate::settings_shaders::ShadersOutcome::Changed
+            }
+        });
+    }
+
+    pub fn shaders_scope(self: Pin<&mut Self>, index: i32) {
+        self.mutate_shaders(true, |board, view, library| {
+            board.focus_zone = 5;
+            board.set_scope(view, library, index.max(0) as usize);
+            crate::settings_shaders::ShadersOutcome::Changed
+        });
+    }
+
+    pub fn shaders_toggle_favourite(self: Pin<&mut Self>, index: i32) {
+        self.mutate_shaders(false, |board, view, library| {
+            if index >= 0 {
+                let visible = board.visible_items(view).len();
+                if visible > 0 {
+                    board.focus_zone = 4;
+                    board.focused_preset = (index as usize).min(visible - 1);
+                    board.sync_preview_stored(view, library);
+                }
+            }
+            if board.toggle_favourite(view, library) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None }
+        });
+    }
+
+    pub fn shaders_search(self: Pin<&mut Self>) {
+        self.mutate_shaders(false, |board, view, library| {
+            board.focus_zone = 3;
+            board.accept(view, library)
+        });
+    }
+
+    pub fn shaders_all_settings(self: Pin<&mut Self>) {
+        self.mutate_shaders(false, |board, view, library| {
+            board.focus_zone = 7;
+            board.accept(view, library)
+        });
+    }
+
+    pub fn shaders_ask_remove(self: Pin<&mut Self>) {
+        self.mutate_shaders(false, |board, view, library| {
+            board.focus_zone = 2;
+            board.accept(view, library)
+        });
+    }
+
+    pub fn shaders_confirm_remove(mut self: Pin<&mut Self>, confirm: bool) {
+        if !confirm {
+            self.mutate_shaders(false, |board, _, _| {
+                board.confirm_remove = false;
+                crate::settings_shaders::ShadersOutcome::Changed
+            });
+            return;
+        }
+        let library = self.platform_library.to_string();
+        let res = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(mut board) = r.shaders_state.take() else { return };
+            let out = board.remove_pack(&mut r.view, &library);
+            r.shaders_state = Some(board);
+            out
+        };
+        match res {
+            Ok(()) => {
+                self.as_mut().said(String::new());
+                self.as_mut().sync_shaders_view();
+                self.as_mut().sync_shaders_preview(true);
+                self.carry(Outcome::Reread);
+            }
+            Err(words) => {
+                self.as_mut().said(words);
+                self.sync_shaders_view();
+            }
+        }
+    }
+
+    fn shaders_update_slider(mut self: Pin<&mut Self>, slot: i32, res: Option<(String, f32, Outcome)>) {
+        let Some((id, val, outcome)) = res else { return };
+        self.as_mut().rust_mut().shader_preview.set_live_value(&id, val);
+        if let Some(board) = self.as_mut().rust_mut().shaders_state.as_mut() {
+            board.focus_zone = 6;
+            board.focused_slider = slot.max(0) as usize;
+        }
+        self.as_mut().sync_shaders_view();
+        self.as_mut().shader_preview_ready();
+        self.carry(outcome);
+    }
+
+    pub fn shaders_step_slider(mut self: Pin<&mut Self>, slot: i32, by: i32) {
+        let library = self.platform_library.to_string();
+        let res = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(mut board) = r.shaders_state.take() else { return };
+            let out = board.step_slider(&mut r.view, &library, slot.max(0) as usize, by);
+            r.shaders_state = Some(board);
+            out
+        };
+        self.shaders_update_slider(slot, res);
+    }
+
+    pub fn shaders_slide_slider(mut self: Pin<&mut Self>, slot: i32, norm: f64) {
+        let library = self.platform_library.to_string();
+        let res = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(mut board) = r.shaders_state.take() else { return };
+            let out = board.slide_slider(&mut r.view, &library, slot.max(0) as usize, norm);
+            r.shaders_state = Some(board);
+            out
+        };
+        self.shaders_update_slider(slot, res);
+    }
+
+    pub fn shaders_set_split(self: Pin<&mut Self>, norm: f64) {
+        self.mutate_shaders(false, |board, _, _| if board.set_split(norm) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None });
+    }
+
+    pub fn shaders_hold_compare(self: Pin<&mut Self>, down: bool) {
+        self.mutate_shaders(false, |board, _, _| {
+            if board.comparing == down {
+                crate::settings_shaders::ShadersOutcome::None
+            } else {
+                board.comparing = down;
+                crate::settings_shaders::ShadersOutcome::Changed
+            }
+        });
+    }
+
+    pub fn shaders_back(self: Pin<&mut Self>) {
+        self.close_shaders_to_display();
     }
 }
 

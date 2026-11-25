@@ -601,6 +601,26 @@ Window {
                 inputs: !program.splashShown
             }
         }
+        // Eclipse Screen filter (#20), program-drawn over themed Settings.
+        Loader {
+            id: settingsEclipseShaders
+            objectName: "settingsEclipseShaders"
+            anchors.fill: parent
+            active: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.shadersShown
+            focus: active && !settingsModel.typing
+            onFocusChanged: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
+            onLoaded: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
+            onActiveChanged: if (!active && screens.shown === Screens.Settings && chosenTheme.focus) chosenTheme.forceActiveFocus()
+            sourceComponent: ShadersEclipse {
+                settings: settingsModel
+                session: player.session
+                hostFeed: program.feed
+                padFamily: program.padFamily
+                battery: machineBattery.level
+                clockText: clock.shortTime
+                inputs: !program.splashShown
+            }
+        }
         // Docked keyboard overlay for Profiles, Shader parameters search and ScreenScraper log-in while Eclipse draws Settings.
         Kit.KeyboardModel {
             id: settingsThemeTypist

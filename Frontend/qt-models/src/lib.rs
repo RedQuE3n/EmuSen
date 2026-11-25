@@ -72,6 +72,7 @@ pub mod settings_shaders;
 pub mod settings_shown;
 pub mod settings_source;
 pub mod settings_themes;
+pub mod shader_preview;
 pub mod themes;
 pub mod themes_model;
 pub mod tool_model;

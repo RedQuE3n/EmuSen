@@ -41,13 +41,16 @@
         <file alias="parts/Blend.qml">../themes/eclipse/parts/Blend.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
         <file alias="parts/Chevron.qml">../themes/eclipse/parts/Chevron.qml</file>
+        <file alias="parts/CoverCard.qml">../themes/eclipse/parts/CoverCard.qml</file>
         <file alias="parts/EmptyCard.qml">../themes/eclipse/parts/EmptyCard.qml</file>
         <file alias="parts/GameInk.qml">../themes/eclipse/parts/GameInk.qml</file>
         <file alias="parts/MediaCard.qml">../themes/eclipse/parts/MediaCard.qml</file>
         <file alias="parts/PageRow.qml">../themes/eclipse/parts/PageRow.qml</file>
+        <file alias="parts/Pen.qml">../themes/eclipse/parts/Pen.qml</file>
         <file alias="parts/Horizon.qml">../themes/eclipse/parts/Horizon.qml</file>
         <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>
         <file alias="parts/Limb.qml">../themes/eclipse/parts/Limb.qml</file>
+        <file alias="parts/ScrapeRow.qml">../themes/eclipse/parts/ScrapeRow.qml</file>
         <file alias="parts/SettingsAside.qml">../themes/eclipse/parts/SettingsAside.qml</file>
         <file alias="parts/SettingsChips.qml">../themes/eclipse/parts/SettingsChips.qml</file>
         <file alias="parts/SettingsConsoleCard.qml">../themes/eclipse/parts/SettingsConsoleCard.qml</file>

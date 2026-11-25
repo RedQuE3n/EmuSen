@@ -32,11 +32,15 @@ pub struct DeviceHandle {
     marks: Mutex<Vec<Mark>>,
 }
 
+fn device_of(handle: Option<&DeviceHandle>) -> Result<Device, (i32, String)> {
+    let handle = handle.ok_or_else(|| (status::NULL, "no handle".to_string()))?;
+    locked(&handle.device).clone().ok_or_else(|| (status::DEVICE, "The device has been closed.".to_string()))
+}
+
 /// # Safety
 /// `h` from `emusen_serenity_device_new`, not freed, or null.
 unsafe fn device(h: *const DeviceHandle) -> Result<Device, i32> {
-    let handle = unsafe { h.as_ref() }.ok_or_else(|| fail(status::NULL, "no handle"))?;
-    locked(&handle.device).clone().ok_or_else(|| fail(status::DEVICE, "The device has been closed."))
+    device_of(unsafe { h.as_ref() }).map_err(|(code, words)| fail(code, words))
 }
 
 /// The device whose name holds `name` whatever its case (null or empty for any), a discrete one before an integrated
@@ -245,7 +249,31 @@ pub struct LendInfo {
 }
 
 pub struct LendHandle {
-    lend: Lend,
+    pub(crate) lend: Lend,
+}
+
+fn lend_on(device: &Device) -> Result<Box<LendHandle>, (i32, String)> {
+    let lend = Lend::new(device).map_err(|words| (status::DEVICE, words))?;
+    Ok(Box::new(LendHandle { lend }))
+}
+
+pub(crate) fn lend_new(d: Option<&DeviceHandle>) -> Result<Box<LendHandle>, (i32, String)> {
+    let device = device_of(d)?;
+    lend_on(&device)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn lend_take(h: Option<&LendHandle>, buffer: u64, offset: u64, width: i32, height: i32, stride: i32, ready: u64, value: u64) -> Result<bool, (i32, String)> {
+    let handle = h.ok_or_else(|| (status::NULL, "no lend".to_string()))?;
+    if width < 1 || height < 1 || stride < 1 {
+        return Err((status::BAD_ARGUMENT, "a picture is at least one by one".to_string()));
+    }
+    handle.lend.take(buffer, offset, width as u32, height as u32, stride as u32, ready, value).map_err(|words| (status::DEVICE, words))
+}
+
+pub(crate) fn lend_settle(h: Option<&LendHandle>) -> Result<(), (i32, String)> {
+    let handle = h.ok_or_else(|| (status::NULL, "no lend".to_string()))?;
+    handle.lend.settle().map_err(|words| (status::DEVICE, words))
 }
 
 /// The device lent to one core machine, `out` filled with what the core is given; null when the device cannot lend,
@@ -261,14 +289,14 @@ pub unsafe extern "C" fn emusen_serenity_lend_new(d: *const DeviceHandle, out: *
         if (out.size as usize) < std::mem::size_of::<LendInfo>() {
             return Err(fail(status::BAD_ARGUMENT, "the lend's struct is too small"));
         }
-        let lend = Lend::new(&device).map_err(|words| fail(status::DEVICE, words))?;
-        let l = lend.lent();
+        let handle = lend_on(&device).map_err(|(code, words)| fail(code, words))?;
+        let l = handle.lend.lent();
         (out.api_version, out.get_instance_proc_addr, out.instance, out.physical_device, out.device) = (l.api, l.get_instance_proc_addr as u64, l.instance, l.physical, l.device);
         (out.queue_family, out.queue_index, out.host_queue_family, out.reserved, out.done) = (l.family, l.queue, l.host_family, 0, l.done);
-        Ok(LendHandle { lend })
+        Ok(handle)
     })();
     match made {
-        Ok(handle) => Box::into_raw(Box::new(handle)),
+        Ok(handle) => Box::into_raw(handle),
         Err(_) => std::ptr::null_mut(),
     }
 }
@@ -279,13 +307,9 @@ pub unsafe extern "C" fn emusen_serenity_lend_new(d: *const DeviceHandle, out: *
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_lend_take(h: *const LendHandle, buffer: u64, offset: u64, width: i32, height: i32, stride: i32, ready: u64, value: u64) -> i32 {
-    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no lend") };
-    if width < 1 || height < 1 || stride < 1 {
-        return fail(status::BAD_ARGUMENT, "a picture is at least one by one");
-    }
-    match handle.lend.take(buffer, offset, width as u32, height as u32, stride as u32, ready, value) {
+    match lend_take(unsafe { h.as_ref() }, buffer, offset, width, height, stride, ready, value) {
         Ok(taken) => taken as i32,
-        Err(words) => fail(status::DEVICE, words),
+        Err((code, words)) => fail(code, words),
     }
 }
 
@@ -295,10 +319,9 @@ pub unsafe extern "C" fn emusen_serenity_lend_take(h: *const LendHandle, buffer:
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_lend_settle(h: *const LendHandle) -> i32 {
-    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no lend") };
-    match handle.lend.settle() {
+    match lend_settle(unsafe { h.as_ref() }) {
         Ok(()) => 0,
-        Err(words) => fail(status::DEVICE, words),
+        Err((code, words)) => fail(code, words),
     }
 }
 
@@ -713,6 +736,19 @@ pub struct RingHandle {
     pub(crate) ring: Ring,
 }
 
+fn ring_on(device: &Device, width: u32, height: u32, count: u32) -> Result<Box<RingHandle>, (i32, String)> {
+    if width == 0 || height == 0 || !(1..=16).contains(&count) {
+        return Err((status::BAD_ARGUMENT, "a ring holds one to sixteen images of at least one by one".to_string()));
+    }
+    let ring = device.create_ring(width, height, count as usize).map_err(|words| (status::DEVICE, words))?;
+    Ok(Box::new(RingHandle { ring }))
+}
+
+pub(crate) fn ring_new(d: Option<&DeviceHandle>, width: u32, height: u32, count: u32) -> Result<Box<RingHandle>, (i32, String)> {
+    let device = device_of(d)?;
+    ring_on(&device, width, height, count)
+}
+
 /// A ring of `count` images `width` by `height` made on the device and exported, `out` filled; null when the device
 /// cannot make one, with the words why (core ABI 1.18's `DEVICE_RING`, EmuSen_LibretroHost.md §10f).
 ///
@@ -726,15 +762,12 @@ pub unsafe extern "C" fn emusen_serenity_ring_new(d: *const DeviceHandle, width:
         if (out.size as usize) < std::mem::size_of::<RingInfo>() {
             return Err(fail(status::BAD_ARGUMENT, "the ring's struct is too small"));
         }
-        if width == 0 || height == 0 || !(1..=16).contains(&count) {
-            return Err(fail(status::BAD_ARGUMENT, "a ring holds one to sixteen images of at least one by one"));
-        }
-        let ring = device.create_ring(width, height, count as usize).map_err(|words| fail(status::DEVICE, words))?;
-        (out.count, out.ready, out.done, out.device_uuid, out.driver_uuid) = (count, ring.ready_fd as i64, ring.done_fd as i64, ring.device_uuid, ring.driver_uuid);
-        Ok(RingHandle { ring })
+        let handle = ring_on(&device, width, height, count).map_err(|(code, words)| fail(code, words))?;
+        (out.count, out.ready, out.done, out.device_uuid, out.driver_uuid) = (count, handle.ring.ready_fd as i64, handle.ring.done_fd as i64, handle.ring.device_uuid, handle.ring.driver_uuid);
+        Ok(handle)
     })();
     match made {
-        Ok(handle) => Box::into_raw(Box::new(handle)),
+        Ok(handle) => Box::into_raw(handle),
         Err(_) => std::ptr::null_mut(),
     }
 }

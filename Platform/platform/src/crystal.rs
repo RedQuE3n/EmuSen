@@ -131,7 +131,10 @@ pub unsafe extern "C" fn emusen_crystal_free(rt: *mut emusen_crystal_runtime) ->
         return fail(svc::NULL, "a null runtime");
     }
     crate::session_table::forget(rt);
-    drop(unsafe { Box::from_raw(rt as *mut Runtime) });
+    let owned = unsafe { Box::from_raw(rt as *mut Runtime) };
+    let events = owned.events.clone();
+    drop(owned);
+    HANDLES.lock().unwrap_or_else(|p| p.into_inner()).retain(|_, h| !std::sync::Arc::ptr_eq(&h.events, &events));
     0
 }
 
@@ -748,17 +751,17 @@ struct Held {
     events: std::sync::Arc<emusen_crystal::events::Events>,
 }
 
-/// The handles given out and not yet ended, so a handle is checked before it is read.
-static HANDLES: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
+/// The live subscriptions keyed by opaque non-zero tokens so callers hold strong Arcs across waits.
+static HANDLES: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<usize, std::sync::Arc<Held>>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+static NEXT_HANDLE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(8);
 
-/// # Safety
-/// `sub` a handle this library gave, or anything: it is looked up before it is read.
-unsafe fn subscription<'a>(sub: *mut emusen_crystal_subscription) -> Result<&'a Held, i32> {
+/// Looks up a subscription handle, cloning its strong Arc under the table lock.
+fn subscription(sub: *mut emusen_crystal_subscription) -> Result<std::sync::Arc<Held>, i32> {
     if sub.is_null() {
         return Err(fail(svc::NULL, "a null subscription"));
     }
-    let known = HANDLES.lock().unwrap_or_else(|p| p.into_inner()).contains(&(sub as usize));
-    let held = if known { Some(unsafe { &*(sub as *const Held) }) } else { None };
+    let held = HANDLES.lock().unwrap_or_else(|p| p.into_inner()).get(&(sub as usize)).cloned();
     match held {
         Some(h) if h.sub.live.load(std::sync::atomic::Ordering::Acquire) => Ok(h),
         _ => Err(fail(svc::NULL, "not a subscription")),
@@ -774,10 +777,16 @@ pub unsafe extern "C" fn emusen_crystal_subscribe(rt: *mut emusen_crystal_runtim
         if session != 0 {
             r.sessions.get(session).map_err(|(st, w)| fail(st, w))?;
         }
-        let held = Box::new(Held { sub: r.events.subscribe(session, kinds), events: r.events.clone() });
-        let handle = Box::into_raw(held) as *mut emusen_crystal_subscription;
-        HANDLES.lock().unwrap_or_else(|p| p.into_inner()).push(handle as usize);
-        Ok(handle)
+        let held = std::sync::Arc::new(Held { sub: r.events.subscribe(session, kinds), events: r.events.clone() });
+        let mut map = HANDLES.lock().unwrap_or_else(|p| p.into_inner());
+        let key = loop {
+            let candidate = NEXT_HANDLE.fetch_add(8, std::sync::atomic::Ordering::Relaxed);
+            if candidate != 0 && !map.contains_key(&candidate) {
+                break candidate;
+            }
+        };
+        map.insert(key, held);
+        Ok(std::ptr::without_provenance_mut(key))
     };
     made().unwrap_or(std::ptr::null_mut())
 }
@@ -786,7 +795,7 @@ pub unsafe extern "C" fn emusen_crystal_subscribe(rt: *mut emusen_crystal_runtim
 /// `sub` a subscription's handle; `out` null or valid for `len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_subscription_drain(sub: *mut emusen_crystal_subscription, out: *mut u8, len: usize) -> i64 {
-    match unsafe { subscription(sub) } {
+    match subscription(sub) {
         Ok(h) => {
             let into = if out.is_null() { None } else { Some(unsafe { std::slice::from_raw_parts_mut(out, len) }) };
             h.sub.drain(into) as i64
@@ -799,7 +808,7 @@ pub unsafe extern "C" fn emusen_crystal_subscription_drain(sub: *mut emusen_crys
 /// `sub` a subscription's handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_subscription_wait(sub: *mut emusen_crystal_subscription, timeout_ms: u32) -> i32 {
-    match unsafe { subscription(sub) } {
+    match subscription(sub) {
         Ok(h) => h.sub.wait(timeout_ms) as i32,
         Err(status) => status,
     }
@@ -809,14 +818,16 @@ pub unsafe extern "C" fn emusen_crystal_subscription_wait(sub: *mut emusen_cryst
 /// `sub` a subscription's handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_unsubscribe(sub: *mut emusen_crystal_subscription) -> i32 {
-    match unsafe { subscription(sub) } {
-        Ok(h) => {
+    if sub.is_null() {
+        return fail(svc::NULL, "a null subscription");
+    }
+    let removed = HANDLES.lock().unwrap_or_else(|p| p.into_inner()).remove(&(sub as usize));
+    match removed {
+        Some(h) if h.sub.live.load(std::sync::atomic::Ordering::Acquire) => {
             h.events.remove(&h.sub);
-            HANDLES.lock().unwrap_or_else(|p| p.into_inner()).retain(|x| *x != sub as usize);
-            drop(unsafe { Box::from_raw(sub as *mut Held) });
             0
         }
-        Err(status) => status,
+        _ => fail(svc::NULL, "not a subscription"),
     }
 }
 
@@ -898,92 +909,74 @@ pub unsafe extern "C" fn emusen_crystal_game_setting_set(rt: *mut emusen_crystal
 /// The runtime's lender over Serenity's lend of the presenter's device, `PlatformLend`.
 struct SerenityLender;
 
-/// The platform library's last words, as `emusen_platform_last_error` gives them.
-fn platform_words() -> String {
-    let mut words = vec![0u8; 4096];
-    let n = unsafe { crate::emusen_platform_last_error(words.as_mut_ptr(), words.len()) }.clamp(0, 4096) as usize;
-    String::from_utf8_lossy(&words[..n]).into_owned()
-}
-
 impl emusen_crystal::lend::Lender for SerenityLender {
     fn make(&self, device: usize) -> Result<(usize, emusen_native::core::sys::DeviceLend), String> {
-        let mut info = crate::serenity_device::LendInfo {
-            size: std::mem::size_of::<crate::serenity_device::LendInfo>() as u32,
-            api_version: 0,
-            get_instance_proc_addr: 0,
-            instance: 0,
-            physical_device: 0,
-            device: 0,
-            queue_family: 0,
-            queue_index: 0,
-            host_queue_family: 0,
-            reserved: 0,
-            done: 0,
-        };
-        let made = unsafe { crate::serenity_device::emusen_serenity_lend_new(device as *const _, &mut info) };
-        if made.is_null() {
-            return Err(platform_words());
-        }
-        let proc_addr: Option<unsafe extern "C" fn()> = if info.get_instance_proc_addr == 0 { None } else { Some(unsafe { std::mem::transmute::<usize, unsafe extern "C" fn()>(info.get_instance_proc_addr as usize) }) };
+        let dev = unsafe { (device as *const crate::serenity_device::DeviceHandle).as_ref() };
+        let handle = crate::serenity_device::lend_new(dev).map_err(|(_, w)| w)?;
+        let l = handle.lend.lent();
         let lend = emusen_native::core::sys::DeviceLend {
             size: std::mem::size_of::<emusen_native::core::sys::DeviceLend>() as u32,
-            api_version: info.api_version,
-            get_instance_proc_addr: proc_addr,
-            instance: info.instance,
-            physical_device: info.physical_device,
-            device: info.device,
-            queue_family: info.queue_family,
-            queue_index: info.queue_index,
-            host_queue_family: info.host_queue_family,
+            api_version: l.api,
+            get_instance_proc_addr: Some(handle.lend.proc_addr()),
+            instance: l.instance,
+            physical_device: l.physical,
+            device: l.device,
+            queue_family: l.family,
+            queue_index: l.queue,
+            host_queue_family: l.host_family,
             reserved: 0,
-            done: info.done,
+            done: l.done,
         };
-        Ok((made as usize, lend))
+        Ok((Box::into_raw(handle) as usize, lend))
     }
 
     fn take(&self, lend: usize, f: &emusen_native::core::sys::DeviceFrame) -> Result<bool, String> {
-        match unsafe { crate::serenity_device::emusen_serenity_lend_take(lend as *const _, f.buffer, f.offset, f.width, f.height, f.stride, f.ready, f.value) } {
-            status if status < 0 => Err(platform_words()),
-            status => Ok(status == 1),
-        }
+        let handle = unsafe { (lend as *const crate::serenity_device::LendHandle).as_ref() };
+        crate::serenity_device::lend_take(handle, f.buffer, f.offset, f.width, f.height, f.stride, f.ready, f.value).map_err(|(_, w)| w)
     }
 
     fn settle(&self, lend: usize) -> Result<(), String> {
-        if unsafe { crate::serenity_device::emusen_serenity_lend_settle(lend as *const _) } < 0 { Err(platform_words()) } else { Ok(()) }
+        let handle = unsafe { (lend as *const crate::serenity_device::LendHandle).as_ref() };
+        crate::serenity_device::lend_settle(handle).map_err(|(_, w)| w)
     }
 
     fn free(&self, lend: usize) {
-        unsafe { crate::serenity_device::emusen_serenity_lend_free(lend as *mut _) };
+        let handle = lend as *mut crate::serenity_device::LendHandle;
+        if !handle.is_null() {
+            drop(unsafe { Box::from_raw(handle) });
+        }
     }
 
     fn make_ring(&self, device: usize, width: u32, height: u32, count: u32) -> Result<emusen_crystal::lend::MachineRing, String> {
-        use crate::serenity_device::{RingImageInfo, RingInfo};
-        let mut info = RingInfo { size: std::mem::size_of::<RingInfo>() as u32, count: 0, ready: 0, done: 0, device_uuid: [0; 16], driver_uuid: [0; 16] };
-        let made = unsafe { crate::serenity_device::emusen_serenity_ring_new(device as *const _, width, height, count, &mut info) };
-        if made.is_null() {
-            return Err(platform_words());
-        }
-        let mut ring = emusen_crystal::lend::MachineRing { lender: None, handle: made as usize, images: Vec::new(), ready: info.ready as u64, done: info.done as u64, device_uuid: info.device_uuid, driver_uuid: info.driver_uuid, width, height, last_value: 0 };
-        for index in 0..info.count {
-            let mut i = RingImageInfo { size: std::mem::size_of::<RingImageInfo>() as u32, memory_type: 0, handle: 0, allocation_size: 0, width: 0, height: 0, format: 0, usage: 0 };
-            if unsafe { crate::serenity_device::emusen_serenity_ring_image(made, index, &mut i) } < 0 {
-                let words = platform_words();
-                unsafe { crate::serenity_device::emusen_serenity_ring_free(made) };
-                return Err(words);
-            }
-            ring.images.push(emusen_native::core::sys::RingImage { size: std::mem::size_of::<emusen_native::core::sys::RingImage>() as u32, memory_type: i.memory_type, handle: i.handle, allocation_size: i.allocation_size, width: i.width, height: i.height, format: i.format, usage: i.usage });
-        }
-        Ok(ring)
+        let dev = unsafe { (device as *const crate::serenity_device::DeviceHandle).as_ref() };
+        let handle = crate::serenity_device::ring_new(dev, width, height, count).map_err(|(_, w)| w)?;
+        let images = handle
+            .ring
+            .images
+            .iter()
+            .map(|i| emusen_native::core::sys::RingImage {
+                size: std::mem::size_of::<emusen_native::core::sys::RingImage>() as u32,
+                memory_type: i.memory_type,
+                handle: i.handle as u64,
+                allocation_size: i.allocation_size,
+                width: i.width,
+                height: i.height,
+                format: i.format,
+                usage: i.usage,
+            })
+            .collect();
+        let (ready, done, device_uuid, driver_uuid) = (handle.ring.ready_fd as u64, handle.ring.done_fd as u64, handle.ring.device_uuid, handle.ring.driver_uuid);
+        Ok(emusen_crystal::lend::MachineRing { lender: None, handle: Box::into_raw(handle) as usize, images, ready, done, device_uuid, driver_uuid, width, height, last_value: 0 })
     }
 
     fn free_ring(&self, ring: usize, value: u64) {
         let handle = ring as *mut crate::serenity_device::RingHandle;
-        if let Some(h) = unsafe { handle.as_ref() }
-            && let Err(words) = h.ring.release_after_crash(value)
-        {
-            emusen_crystal::error_log::warning("picture", &format!("a ring's ready could not be raised before it was freed: {words}"));
+        if !handle.is_null() {
+            let owned = unsafe { Box::from_raw(handle) };
+            if let Err(words) = owned.ring.release_after_crash(value) {
+                emusen_crystal::error_log::warning("picture", &format!("a ring's ready could not be raised before it was freed: {words}"));
+            }
         }
-        unsafe { crate::serenity_device::emusen_serenity_ring_free(handle) };
     }
 }
 
@@ -1066,5 +1059,105 @@ pub unsafe extern "C" fn emusen_crystal_record_stop(rt: *mut emusen_crystal_runt
     match stopped() {
         Ok(folder) => unsafe { put(folder.as_bytes(), out, len) },
         Err(status) => status as i64,
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn empty_runtime_for_tests() -> *mut emusen_crystal_runtime {
+    let none = "[]";
+    let config = emusen_crystal_config {
+        size: std::mem::size_of::<emusen_crystal_config>() as u32,
+        flags: 0,
+        sqlite: std::ptr::null_mut(),
+        cores: none.as_ptr(),
+        cores_len: none.len(),
+        player_cores: none.as_ptr(),
+        player_cores_len: none.len(),
+    };
+    let rt = unsafe { emusen_crystal_new(&config) };
+    assert!(!rt.is_null());
+    rt
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Barrier};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn subscription_wait_wakes_cleanly_when_unsubscribed_concurrently() {
+        let rt = empty_runtime_for_tests();
+        let sub = unsafe { emusen_crystal_subscribe(rt, 0, 0) };
+        assert!(!sub.is_null());
+        let addr = sub as usize;
+        let ready = Arc::new(Barrier::new(2));
+        let ready_wait = ready.clone();
+        let waiter = std::thread::spawn(move || {
+            ready_wait.wait();
+            let started = Instant::now();
+            let code = unsafe { emusen_crystal_subscription_wait(std::ptr::without_provenance_mut(addr), 10_000) };
+            (code, started.elapsed())
+        });
+        ready.wait();
+        std::thread::sleep(Duration::from_millis(25));
+        assert_eq!(unsafe { emusen_crystal_unsubscribe(sub) }, 0);
+        let (code, elapsed) = waiter.join().unwrap();
+        assert_eq!(code, 0, "unsubscribed waiter returns 0 rather than hanging or faulting");
+        assert!(elapsed < Duration::from_secs(2), "waiter woke promptly: {elapsed:?}");
+        assert_eq!(unsafe { emusen_crystal_subscription_wait(sub, 10) }, svc::NULL);
+
+        for _ in 0..64 {
+            let sub = unsafe { emusen_crystal_subscribe(rt, 0, 0) };
+            assert!(!sub.is_null());
+            let addr = sub as usize;
+            let gate = Arc::new(Barrier::new(2));
+            let gate_w = gate.clone();
+            let t = std::thread::spawn(move || {
+                gate_w.wait();
+                unsafe { emusen_crystal_subscription_wait(std::ptr::without_provenance_mut(addr), 2_000) }
+            });
+            gate.wait();
+            assert_eq!(unsafe { emusen_crystal_unsubscribe(sub) }, 0);
+            let res = t.join().unwrap();
+            assert!(res == 0 || res == svc::NULL, "unexpected wait status: {res}");
+        }
+        assert_eq!(unsafe { emusen_crystal_free(rt) }, 0);
+    }
+
+    #[test]
+    fn concurrent_double_unsubscribe_succeeds_exactly_once() {
+        let rt = empty_runtime_for_tests();
+        for _ in 0..100 {
+            let sub = unsafe { emusen_crystal_subscribe(rt, 0, 0) };
+            assert!(!sub.is_null());
+            let addr = sub as usize;
+            let gate = Arc::new(Barrier::new(2));
+            let g1 = gate.clone();
+            let t1 = std::thread::spawn(move || {
+                g1.wait();
+                unsafe { emusen_crystal_unsubscribe(std::ptr::without_provenance_mut(addr)) }
+            });
+            let t2 = std::thread::spawn(move || {
+                gate.wait();
+                unsafe { emusen_crystal_unsubscribe(std::ptr::without_provenance_mut(addr)) }
+            });
+            let mut results = [t1.join().unwrap(), t2.join().unwrap()];
+            results.sort();
+            assert_eq!(results, [svc::NULL, 0], "exactly one caller must win unsubscribe");
+        }
+        assert_eq!(unsafe { emusen_crystal_free(rt) }, 0);
+    }
+
+    #[test]
+    fn runtime_free_evicts_unclosed_subscription_handles() {
+        let rt = empty_runtime_for_tests();
+        let sub = unsafe { emusen_crystal_subscribe(rt, 0, 0) };
+        assert!(!sub.is_null());
+        let key = sub as usize;
+        assert!(HANDLES.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&key));
+        assert_eq!(unsafe { emusen_crystal_free(rt) }, 0);
+        assert!(!HANDLES.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&key));
+        assert_eq!(unsafe { emusen_crystal_unsubscribe(sub) }, svc::NULL);
     }
 }

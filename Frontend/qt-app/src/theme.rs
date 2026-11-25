@@ -347,13 +347,17 @@ impl ActionSink for Sink {
     fn act(&mut self, action: &Action) -> bool {
         // Safety: the cell holds the feed while it lives and null after; the theme's engine runs on the feed's thread.
         let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
-        // X back to default, Consoles Y filter, and LT/RT letter jump on a theme's Settings (R-20261116-22).
-        if matches!(action, Action::Act(key) if matches!(key.as_str(), help::DEFAULT | help::CONSOLES_FILTER | help::CONSOLES_LETTER_BACK | help::CONSOLES_LETTER_ON)) {
+        // X back to default, Hotkeys X clear, Consoles Y filter, and LT/RT letter jump on a theme's Settings (R-20261116-22).
+        if matches!(action, Action::Act(key) if matches!(key.as_str(), help::DEFAULT | help::CLEAR | help::CONSOLES_FILTER | help::CONSOLES_LETTER_BACK | help::CONSOLES_LETTER_ON)) {
             let settings = feed.taken(Role::Settings).then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
             return settings.is_some_and(|s| match action {
                 Action::Act(key) if key == help::DEFAULT => {
                     let row = (*s.focused()).max(s.view().firmware_need_count() as i32);
                     s.to_default(row)
+                }
+                Action::Act(key) if key == help::CLEAR => {
+                    s.act(&QString::from(help::CLEAR));
+                    true
                 }
                 Action::Act(key) if key == help::CONSOLES_FILTER => s.toggle_consoles_with_games(),
                 Action::Act(key) if key == help::CONSOLES_LETTER_BACK => s.jump_console_letter(-1),

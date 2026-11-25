@@ -288,7 +288,7 @@ ThemeScreen {
                         model: root.help
                         ink: ink.help
                         keyPairs: true
-                        boxMenu: Settings.cardsHelp
+                        boxMenu: Settings.boxMenu
                         // The boards' foot: its row 40 px over the bottom, 38 px tall for a ringed glyph (G:114).
                         middle: 1141
                         Line {

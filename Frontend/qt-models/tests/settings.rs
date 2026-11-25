@@ -541,3 +541,41 @@ fn qt_3_4_11_the_trail_line_names_every_level_above_the_page_as_the_boards_join_
     assert_eq!(view.trail_line(), "Library", "one level above: the section alone");
     assert_eq!(view.trail(), ["Library", "Collections"]);
 }
+
+#[test]
+fn qt_3_4_11_sound_output_opens_device_list_saves_choice_and_projects_board_56() {
+    let source = fake(json!({"SoundOutputDevice": "Speakers"}), json!({}));
+    let mut view = view(&source);
+    view.read.outputs = vec!["Living room television".into(), "Headphones".into()];
+    view.read.app["SoundOutputDevice"] = json!("Living room television");
+    section(&mut view, "Sound");
+    let out = index(&view, "output");
+    assert_eq!(view.rows()[out].kind, RowKind::Steps);
+    assert_eq!(view.choose(out), Outcome::Opened);
+    assert_eq!(view.page_key(), "output");
+    assert_eq!(view.trail(), ["Sound", "Output"]);
+    assert_eq!(view.help(), emusen_qt_models::help::Screen::SettingsChoices);
+    let rows = view.rows();
+    assert_eq!(rows.len(), 3);
+    assert_eq!((rows[0].label.as_str(), rows[0].value.as_str(), rows[0].marked), ("System default", "", false));
+    assert_eq!((rows[1].label.as_str(), rows[1].value.as_str(), rows[1].marked), ("Living room television", "● In use", true));
+    assert_eq!((rows[2].label.as_str(), rows[2].value.as_str(), rows[2].marked), ("Headphones", "", false));
+    let facets = view.facets();
+    let board_rows = view.board_rows(&rows, &facets);
+    assert_eq!(board_rows[0].about, "The game and the interface's sounds play where the system sends sound.");
+    assert_eq!(board_rows[1].about, "The game and the interface's sounds play on Living room television.");
+    assert_eq!(board_rows[2].about, "The game and the interface's sounds play on Headphones.");
+    let aside = view.board_aside(1, &rows, &board_rows, &view.pane(1));
+    assert_eq!(aside.about_heading, "Output");
+    assert_eq!(aside.sentence, "The game and the interface's sounds play on Living room television.");
+    assert_eq!(aside.muted, ["A device not connected when EmuSen starts falls back to the system default."]);
+    assert_eq!(aside.page_glow, "#B8862B");
+    assert!(aside.box_menu && aside.wrap_about && !aside.cards_help);
+    let Outcome::Saved(Model::App, doc) = view.choose(2) else { panic!("choosing Headphones saves AppSettings") };
+    assert_eq!(doc["SoundOutputDevice"], json!("Headphones"));
+    assert_eq!(view.page_key(), "output", "stays on Output moving the active mark");
+    assert_eq!(view.rows()[2].value, "● In use");
+    assert_eq!(view.rows()[1].value, "");
+    assert_eq!(view.back(), Some(out));
+    assert_eq!(view.rows()[out].value, "Headphones");
+}

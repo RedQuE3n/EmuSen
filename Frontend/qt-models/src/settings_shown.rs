@@ -64,6 +64,7 @@ pub struct BoardAside {
     pub heading: String,
     pub about_heading: String,
     pub sentence: String,
+    pub lines: Vec<String>,
     pub muted: Vec<String>,
     pub consoles_subtitle: String,
     pub page_glow: String,
@@ -73,6 +74,7 @@ pub struct BoardAside {
     pub firmware_files: Vec<firmware::FileStatus>,
     pub wrap_about: bool,
     pub cards_help: bool,
+    pub box_menu: bool,
 }
 
 /// What a row shows beyond its words: its about line, a switch's state (none for a row of another kind), a console's tile.
@@ -148,6 +150,7 @@ impl Page {
             Page::ShaderConsoles { levers: true } => ("leverConsoles", vec![]),
             Page::Shaders(c) => ("shaders", vec![c]),
             Page::Levers(c) => ("levers", vec![c]),
+            Page::Output => ("output", vec![]),
         };
         std::iter::once(kind).chain(of).collect::<Vec<_>>().join(":")
     }
@@ -235,6 +238,66 @@ impl SettingsView {
                 }
             }
             return out;
+        }
+        match self.page() {
+            Some(Page::Players) => {
+                if let Some(i) = entry["pad"].as_u64() {
+                    let none = self.seats.pads.get(i as usize).is_some_and(|p| p.player == 0);
+                    out.about = self.cw(if none { "pad_none" } else { "pad_seated" });
+                } else if entry.get("kept").is_some() {
+                    out.about = "Kept for this controller, which gets the number back when it reconnects.".to_owned();
+                }
+                return out;
+            }
+            Some(Page::Profiles) => {
+                let console = self.pad_console();
+                let name = console.as_deref().map(|c| self.console_name(c)).unwrap_or_default();
+                if entry["pconsole"] == true {
+                    out.about = self.cw("console_hint");
+                } else if let Some(profile) = entry["profile"].as_str() {
+                    out.about = if profile == self.read.bindings.default_profile {
+                        self.cw("default_hint")
+                    } else {
+                        self.cw("own_hint").replace("{console}", &name)
+                    };
+                } else if entry["newprofile"] == true {
+                    let chosen = console.as_deref().map(|c| self.read.bindings.console_default(c)).unwrap_or_else(|| self.read.bindings.default_profile.clone());
+                    out.about = self.cw("new_hint").replace("{chosen}", &chosen).replace("{console}", &name);
+                    out.value = "…".to_owned();
+                }
+                return out;
+            }
+            Some(Page::Profile(console, profile)) => {
+                let name = self.console_name(console);
+                let is_default = *profile == self.read.bindings.default_profile;
+                if entry["pbindings"] == true {
+                    out.about = self.cw("pbindings_hint").replace("{console}", &name);
+                } else if entry["pdefault"] == true {
+                    out.about = self.cw("pdefault_hint").replace("{console}", &name).replace("{profile}", profile);
+                } else if entry["prename"] == true {
+                    out.about = self.cw(if is_default { "rename_default" } else { "rename_hint" });
+                    if !is_default {
+                        out.value = "…".to_owned();
+                    }
+                } else if entry["pdelete"] == true {
+                    out.about = self.cw(if is_default { "delete_default" } else { "delete_hint" }).replace("{profile}", profile);
+                }
+                return out;
+            }
+            Some(Page::Hotkeys) => {
+                if let Some(action) = entry["hotkey"].as_str() {
+                    let held = emusen_qt_endymion::hotkeys::Hotkey::named(action).is_some_and(emusen_qt_endymion::hotkeys::Hotkey::held);
+                    out.about = self.cw(if held { "hotkey_held" } else { "hotkey_press" });
+                }
+                return out;
+            }
+            Some(Page::Output) => {
+                if entry["output"].is_string() {
+                    out.about = self.output_sentence(&out.label);
+                }
+                return out;
+            }
+            _ => {}
         }
         let Some(console) = self.console() else { return out };
         match self.page() {
@@ -349,10 +412,16 @@ impl SettingsView {
                 planet_of(&engine.name, engine.libretro, c.runs())
             });
             planet_shade(planet).to_owned()
+        } else if matches!(self.page(), Some(Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys)) {
+            "#3F6FE0".to_owned()
+        } else if matches!(self.page(), Some(Page::Output)) {
+            "#B8862B".to_owned()
         } else {
             String::new()
         };
         let cards_page = matches!(self.page(), Some(Page::Cards(_) | Page::Drawer(..) | Page::Saves(..) | Page::Save(..) | Page::Delete(..)));
+        let s6_page = matches!(self.page(), Some(Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys | Page::Output));
+        let s6_cards_help = matches!(self.page(), Some(Page::Players | Page::Profiles | Page::Profile(..)));
         let mut out = BoardAside {
             heading,
             about_heading: if pane.preview == crate::settings::Preview::Chips {
@@ -361,6 +430,7 @@ impl SettingsView {
                 board_rows.get(focused).map(|r| r.label.clone()).unwrap_or_default()
             },
             sentence: if pane.preview == crate::settings::Preview::Chips { String::new() } else { pane.sentence.clone() },
+            lines: pane.lines.clone(),
             muted: pane.muted.clone(),
             consoles_subtitle,
             page_glow,
@@ -368,9 +438,53 @@ impl SettingsView {
             card_title: String::new(),
             card_subtitle: String::new(),
             firmware_files: Vec::new(),
-            wrap_about: cards_page,
-            cards_help: cards_page,
+            wrap_about: cards_page || s6_page,
+            cards_help: cards_page || s6_cards_help,
+            box_menu: cards_page || s6_page,
         };
+        match self.page() {
+            Some(Page::Players) => {
+                out.about_heading = self.heading();
+                let (sentence, lines, muted) = self.players_summary(false);
+                out.sentence = sentence;
+                out.lines = lines;
+                out.muted = muted;
+                return out;
+            }
+            Some(Page::Profiles) => {
+                if let Some(console) = self.pad_console() {
+                    let count = words::counted(self.read.bindings.profiles(&console).len(), &self.cw("profile"), &self.cw("profiles"));
+                    let summary = self
+                        .cw("profiles_line")
+                        .replace("{console}", &self.console_name(&console))
+                        .replace("{count}", &count)
+                        .replace("{chosen}", &self.read.bindings.console_default(&console));
+                    out.muted.push(summary);
+                }
+                return out;
+            }
+            Some(Page::Profile(..)) => {
+                out.muted = vec![self.cw("profiles_muted")];
+                return out;
+            }
+            Some(Page::Hotkeys) => {
+                out.sentence = pane.lines.first().cloned().unwrap_or_default();
+                let mut lines = Vec::new();
+                if !pane.sentence.is_empty() {
+                    lines.push(pane.sentence.clone());
+                }
+                if pane.lines.len() > 1 {
+                    lines.extend(pane.lines[1..].iter().cloned());
+                }
+                out.lines = lines;
+                return out;
+            }
+            Some(Page::Output) => {
+                out.about_heading = self.heading();
+                return out;
+            }
+            _ => {}
+        }
         let Some(console) = self.console() else { return out };
         let other_cores = |chosen: &str| -> Vec<String> {
             console

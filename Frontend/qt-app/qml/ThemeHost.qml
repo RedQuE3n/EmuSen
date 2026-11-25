@@ -321,8 +321,9 @@ Item {
         role: Host.ThemeHost.Game
         host: host
         wanted: themed.pageModel !== null
-        inputs: themed.inputs
-        shown: themed.screens.shown === Screens.Page && (themed.pageModel?.themeDraws ?? true)
+        inputs: themed.inputs && !(themed.pageModel?.asking ?? false)
+        backdrop: themed.pageModel?.asking ?? false
+        shown: themed.screens.shown === Screens.Page && ((themed.pageModel?.themeDraws ?? true) || (themed.pageModel?.asking ?? false))
     }
     Binding {
         target: themed.pageModel

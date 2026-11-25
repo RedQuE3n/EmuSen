@@ -10,6 +10,8 @@ Kit.NormalizedCanvas {
     property int padFamily
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
+    // True when a theme's GamePage stays visible as backdrop behind a program Question dialog.
+    property bool themedBackdrop: false
     // B on the page, and the declared actions the screens answer (Start).
     signal backed()
     signal acted(string key)
@@ -35,11 +37,11 @@ Kit.NormalizedCanvas {
         id: frame
         objectName: "pageFrame"
         anchors.fill: parent
-        // Cover art stands in its place while it is open.
-        visible: !screen.page.coverArt
+        // Cover art or a themed GamePage backdrop stands in its place while open.
+        visible: !screen.page.coverArt && !screen.themedBackdrop
         form: Kit.Forms.BigScreen
         // The viewer and the keyboard take the keys while they are open; a question over the viewer still takes focus on frame.
-        focus: screen.inputs && (!screen.page.viewing || screen.page.asking) && !screen.page.typing && !screen.page.coverArt
+        focus: screen.inputs && !screen.themedBackdrop && (!screen.page.viewing || screen.page.asking) && !screen.page.typing && !screen.page.coverArt
         padFamily: screen.padFamily
         helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
@@ -114,30 +116,39 @@ Kit.NormalizedCanvas {
             target: frame.controller
             function onBackDeclined() { screen.page.back() }
         }
-        // Asked before deleting a state or hiding the game: No first and focused, B answers No (EmuSen_Interface.md §15.6).
-        Kit.Question {
-            id: question
-            objectName: "pageQuestion"
-            controller: frame.controller
-            title: screen.page.questionTitle
-            sentences: screen.page.questionSentences
-            choices: screen.page.questionChoices
-            backIndex: screen.page.questionBack
-            padFamily: screen.padFamily
-            titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
-            bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
-            captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
-            rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
-            helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
-            help: HelpModel {
-                screen: HelpModel.Question
-            }
-            onChosen: (index) => screen.page.answer(index)
+    }
+    // Transparent focus carrier for program Question dialogs rendered over a themed GamePage backdrop.
+    Kit.Frame {
+        id: modalFrame
+        anchors.fill: parent
+        visible: screen.themedBackdrop
+        form: Kit.Forms.BigScreen
+        surfaceDrawn: false
+        helpShown: false
+        focus: screen.inputs && screen.themedBackdrop
+        controller.navigationShown: false
+    }
+    // Asked before deleting a state or hiding the game: safe choice first and focused, B answers backIndex.
+    QuestionHost {
+        id: question
+        objectName: "pageQuestion"
+        controller: screen.themedBackdrop ? modalFrame.controller : frame.controller
+        title: screen.page.questionTitle
+        sentences: screen.page.questionSentences
+        choices: screen.page.questionChoices
+        picture: screen.page.questionPicture
+        backIndex: screen.page.questionBack
+        padFamily: screen.padFamily
+        titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
+        bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
+        captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
+        rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
+        help: HelpModel {
+            screen: HelpModel.Question
         }
-        // Opened each time it is asked while the page is shown, so one asked under a theme's screen opens as the page appears (EmuSen_Qt.md §3.4.12); a Binding, since B closing the popup would undo a plain one.
-        Binding {
-            question.visible: screen.page.asking && screen.visible
-        }
+        showing: screen.page.asking && screen.visible
+        onChosen: (index) => screen.page.answer(index)
     }
     // Details ▸ Cover art: the game's covers as cards four across, the one in use marked, the focused one large in the
     // pane beside, as the Eclipse board draws it (EmuSen_Interface.md §18.2; EmuSen_Qt.md §7.8.5).

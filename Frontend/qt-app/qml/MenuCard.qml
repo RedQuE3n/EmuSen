@@ -25,6 +25,9 @@ FocusScope {
     property real paneHeight: 0
     property color scrimColor: Kit.Tokens.scrim
     property bool menu: false
+    property bool power: false
+    property bool dialog: false
+    property list<string> choices
     property bool hasContinue: false
     property string continueTitle
     property string continueSubtitle
@@ -127,8 +130,8 @@ FocusScope {
         }
         Loader {
             id: eclipseLoader
-            active: root.eclipse
-            focus: root.eclipse
+            active: root.eclipse && !root.power && !root.dialog
+            focus: active
             x: -frame.safeX
             y: -frame.safeY
             width: root.width
@@ -169,6 +172,48 @@ FocusScope {
                 onStepped: (index, by, held) => root.stepped(index, by, held)
                 onFocused: (index) => root.focused(index)
                 onKeyed: (key) => root.keyed(key)
+            }
+        }
+        Loader {
+            id: powerLoader
+            active: root.eclipse && root.power
+            focus: active
+            x: -frame.safeX
+            y: -frame.safeY
+            width: root.width
+            height: root.height
+            sourceComponent: PowerDialogEclipse {
+                focus: true
+                controller: frame.controller
+                rows: root.rows
+                title: root.title
+                subtitle: root.subtitle
+                current: root.current
+                help: root.help
+                padFamily: root.padFamily
+                pixelScale: root.pixelScale
+                onChosen: (index) => root.chosen(index)
+                onFocused: (index) => root.focused(index)
+            }
+        }
+        Loader {
+            id: dialogLoader
+            active: root.eclipse && root.dialog
+            focus: active
+            x: -frame.safeX
+            y: -frame.safeY
+            width: root.width
+            height: root.height
+            sourceComponent: QuestionDialogView {
+                focus: true
+                controller: frame.controller
+                title: root.title
+                message: root.subtitle
+                choices: root.choices
+                backIndex: 0
+                padFamily: root.padFamily
+                pixelScale: root.pixelScale
+                onChosen: (index) => root.chosen(index)
             }
         }
     }

@@ -70,6 +70,14 @@ pub mod qobject {
         #[qproperty(bool, eclipse)]
         /// True on Eclipse's Home Card menu root page.
         #[qproperty(bool, menu, READ, NOTIFY)]
+        /// True on Eclipse's circular Power dialog (board #15).
+        #[qproperty(bool, power, READ, NOTIFY)]
+        /// True on Eclipse's circular Question dialog (board #14).
+        #[qproperty(bool, dialog, READ, NOTIFY)]
+        /// Subtitle beneath the title on Eclipse circular Power/Question dialogs.
+        #[qproperty(QString, subtitle, READ, NOTIFY)]
+        /// Choice labels for Eclipse circular Question dialogs.
+        #[qproperty(QStringList, choices, READ, NOTIFY)]
         /// Footer row position ("2 of 7") for Eclipse cards.
         #[qproperty(QString, position_line, cxx_name = "positionLine", READ, NOTIFY)]
         /// Optional core name, planet index (-3 for none) and firmware status in the detail card.
@@ -177,6 +185,10 @@ pub struct CardModelRust {
     help: i32,
     eclipse: bool,
     menu: bool,
+    power: bool,
+    dialog: bool,
+    subtitle: QString,
+    choices: QStringList,
     position_line: QString,
     pane_core: QString,
     pane_planet: i32,
@@ -210,6 +222,10 @@ impl Default for CardModelRust {
             help: crate::help_model::shown_screen(crate::help::Screen::Card),
             eclipse: false,
             menu: false,
+            power: false,
+            dialog: false,
+            subtitle: QString::default(),
+            choices: QStringList::default(),
             position_line: QString::default(),
             pane_core: QString::default(),
             pane_planet: -3,
@@ -411,6 +427,8 @@ impl qobject::CardModel {
         let same = self.page.to_string() == key
             && self.page_shown.rows.len() == shown.rows.len()
             && self.page_shown.menu == shown.menu
+            && self.page_shown.power == shown.power
+            && self.page_shown.dialog == shown.dialog
             && self.page_shown.continue_card.is_some() == shown.continue_card.is_some()
             && !shown.rows.is_empty();
         if same {
@@ -455,6 +473,26 @@ impl qobject::CardModel {
         if self.menu != menu {
             self.as_mut().rust_mut().menu = menu;
             self.as_mut().menu_changed();
+        }
+        let power = self.page_shown.power;
+        if self.power != power {
+            self.as_mut().rust_mut().power = power;
+            self.as_mut().power_changed();
+        }
+        let dialog = self.page_shown.dialog;
+        if self.dialog != dialog {
+            self.as_mut().rust_mut().dialog = dialog;
+            self.as_mut().dialog_changed();
+        }
+        let subtitle = QString::from(self.page_shown.subtitle.as_str());
+        if self.subtitle != subtitle {
+            self.as_mut().rust_mut().subtitle = subtitle;
+            self.as_mut().subtitle_changed();
+        }
+        let choices = list(self.page_shown.rows.iter().map(|r| r.label.clone()));
+        if self.choices != choices {
+            self.as_mut().rust_mut().choices = choices;
+            self.as_mut().choices_changed();
         }
         let has_continue = self.page_shown.continue_card.is_some();
         let (c_title, c_sub, c_pic) = self.page_shown.continue_card.as_ref().map_or_else(

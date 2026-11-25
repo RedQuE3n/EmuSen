@@ -21,6 +21,13 @@ pub fn path(name: &str) -> &'static str {
         "menu.settings" => "M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4M4 12h16",
         "menu.power" => "M12 3v9M7 6.5a8 8 0 1 0 10 0",
         "menu.quit" => "M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9",
+        "notice.warning" => "M12 4l9 16H3zM12 10v5M12 17.5h.01",
+        "notice.ok" => "M4.5 12.5l5 5 10-10",
+        "power.sleep" => "M20 14.500A8.500 8.500 0 0 1 9.500 4a8.500 8.500 0 1 0 10.500 10.500z",
+        "power.restart" => "M4 12a8 8 0 1 0 2.600-5.900M4 4v4.500h4.500",
+        "power.shutdown" => "M12 3v9M7 6.500a8 8 0 1 0 10 0",
+        "power.desktop" => "M4 5h16v11H4zM9 20h6M12 16v4",
+        "power.quit" => "M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9",
         _ => emusen_kit_core::planet_mark::path(name),
     }
 }

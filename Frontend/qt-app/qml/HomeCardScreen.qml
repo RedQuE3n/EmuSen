@@ -55,6 +55,10 @@ Kit.NormalizedCanvas {
         paneStatus: homeCardModel.paneStatus
         paneStatusOk: homeCardModel.paneStatusOk
         menu: homeCardModel.menu
+        power: homeCardModel.power
+        dialog: homeCardModel.dialog
+        subtitle: homeCardModel.subtitle
+        choices: homeCardModel.choices
         hasContinue: homeCardModel.hasContinue
         continueTitle: homeCardModel.continueTitle
         continueSubtitle: homeCardModel.continueSubtitle

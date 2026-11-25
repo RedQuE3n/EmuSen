@@ -93,6 +93,12 @@ pub struct Page {
     pub footer: String,
     /// True on Eclipse's Home Card menu root (compact header, icon rows, no detail card or footer bar).
     pub menu: bool,
+    /// True on Eclipse's circular Power dialog (board #15).
+    pub power: bool,
+    /// True on Eclipse's circular Question dialog (board #14, e.g. Quit EmuSen confirmation).
+    pub dialog: bool,
+    /// Optional subtitle shown beneath the title on Eclipse circular Power/Question dialogs.
+    pub subtitle: String,
     /// Optional Continue card shown as row 0 on Eclipse's Home Card when a game is suspended.
     pub continue_card: Option<ContinueCard>,
 }

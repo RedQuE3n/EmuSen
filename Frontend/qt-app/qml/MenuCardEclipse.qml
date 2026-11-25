@@ -46,7 +46,7 @@ FocusScope {
     signal stepped(int index, int by, bool held)
     signal focused(int index)
     signal keyed(int key)
-    onCurrentChanged: list.currentIndex = root.current
+    onCurrentChanged: if (list.currentIndex !== root.current) list.currentIndex = root.current
     Rectangle {
         objectName: "AdaptiveCardScrim"
         anchors.fill: parent
@@ -205,7 +205,7 @@ FocusScope {
                     highlightMoveDuration: Kit.Tokens.instant
                     highlightResizeDuration: Kit.Tokens.instant
                     Accessible.role: Accessible.List
-                    onCurrentIndexChanged: root.focused(list.currentIndex)
+                    onCurrentIndexChanged: if (list.currentIndex !== root.current) root.focused(list.currentIndex)
                     delegate: MenuRowEclipse {
                         id: row
                         required property int index

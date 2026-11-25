@@ -1,21 +1,24 @@
-//! Shared oracle for Eclipse's Pause Card across boards #6, #35, #36, #37 and #38 (R-20261113-5).
+//! Shared oracle for Eclipse's Pause Card across boards #6 and #35-#43 (R-20261113-5).
 #![allow(dead_code)]
 
-use crate::common::console::card_words;
+use crate::common::console::{card_words, until};
 use crate::common::{approved_console_core, draw_covers, sandbox, wait_for};
-use crate::eclipse_board::{hold_card, kit_tokens, object, painted, picture, read, same};
+use crate::eclipse_board::{hold_card, kit_tokens, object, painted, picture, read, same, words_under};
 use cxx_qt_lib::QString;
 use emusen_client_fixture::library;
+use emusen_crystal_client::shapes::{SettingRow, ShownWith};
 use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::input::UiButton;
 use emusen_kit_core::tokens::Colour;
-use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
+use emusen_platform_client::galaxia::consts::{FILE_GRAPHICS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
+use emusen_qt_models::cards::{Card as MediaCard, Medium, Slot};
 use emusen_qt_models::cheats::Switch;
-use emusen_qt_models::pause::{DiscFacts, Facts, SlotFact};
+use emusen_qt_models::pause::{CardFacts, DiscFacts, Facts, SlotFact};
 use emusen_qt_models::words;
 use emusen_qt_test::tree::Tree;
+use emusen_qt_test::virtual_pad::Sdl;
 use emusen_qt_test::{Harness, Scene};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -27,6 +30,11 @@ const TABLE_OPTIONS: &str = include_str!("../eclipse/pause_options.tsv");
 const TABLE_LEAVE: &str = include_str!("../eclipse/pause_leave.tsv");
 const TABLE_ASK: &str = include_str!("../eclipse/pause_ask.tsv");
 const TABLE_DISC: &str = include_str!("../eclipse/pause_disc.tsv");
+const TABLE_CONTROLLERS: &str = include_str!("../eclipse/pause_controllers.tsv");
+const TABLE_DISPLAY: &str = include_str!("../eclipse/pause_display.tsv");
+const TABLE_SOUND: &str = include_str!("../eclipse/pause_sound.tsv");
+const TABLE_CARDS: &str = include_str!("../eclipse/pause_cards.tsv");
+const TABLE_DRAWER: &str = include_str!("../eclipse/pause_drawer.tsv");
 
 fn midnight() -> i64 {
     words::now().div_euclid(DAY) * DAY
@@ -64,8 +72,75 @@ fn base_facts(tower_path: &str, slot1: &str, slot2: &str) -> Facts {
         cheats: vec![Switch { description: "Infinite lives".into(), on: false }],
         ..Facts::default()
     };
-    facts.cards.console = "PlayStation".into();
+    facts.cards = card_facts(&["Card 1", "Card 2", "Card 3"], 2);
     facts
+}
+
+fn card_facts(labels: &[&str], held_count: usize) -> CardFacts {
+    let drawer_cards: Vec<MediaCard> = labels
+        .iter()
+        .enumerate()
+        .map(|(i, name)| MediaCard {
+            path: format!("/cards/{name}.mcd"),
+            name: (*name).into(),
+            label: (*name).into(),
+            games_own: false,
+            held_by: (i < held_count).then(|| "Tower Set".to_owned()),
+        })
+        .collect();
+    let choices: Vec<String> = labels.iter().map(|s| (*s).to_owned()).collect();
+    CardFacts {
+        console: "PlayStation".into(),
+        media: vec![Medium {
+            medium: "psx.card".into(),
+            title: "Memory Card".into(),
+            noun: "Card".into(),
+            noun_in_text: "card".into(),
+            extension: ".mcd".into(),
+            kind: "card".into(),
+            capacity: Some(15),
+            unit: Some("block".into()),
+            mode: "named".into(),
+            mode_key: "Cards".into(),
+            slots: vec![
+                Slot { label: "Slot 1".into(), name: "Card 1".into(), path: "/cards/Card 1.mcd".into() },
+                Slot { label: "Slot 2".into(), name: "Card 2".into(), path: "/cards/Card 2.mcd".into() },
+            ],
+            cards: drawer_cards,
+            next_name: format!("Card {}", labels.len() + 1),
+            opened: Vec::new(),
+        }],
+        schema: vec![
+            SettingRow {
+                key: "Cards".into(),
+                label: "Mode".into(),
+                kind: "choice".into(),
+                default: Some("named".into()),
+                choices: Some(vec!["shared".into(), "named".into(), "per_game".into()]),
+                choice_labels: Some(vec!["Shared".into(), "Named".into(), "Per game".into()]),
+                ..SettingRow::default()
+            },
+            SettingRow {
+                key: "Card1".into(),
+                label: "Slot 1".into(),
+                kind: "choice".into(),
+                default: Some("Card 1".into()),
+                choices: Some(choices.clone()),
+                shown_with: Some(ShownWith { key: "Cards".into(), value: "named".into() }),
+                ..SettingRow::default()
+            },
+            SettingRow {
+                key: "Card2".into(),
+                label: "Slot 2".into(),
+                kind: "choice".into(),
+                default: Some("Card 2".into()),
+                choices: Some(choices),
+                shown_with: Some(ShownWith { key: "Cards".into(), value: "named".into() }),
+                ..SettingRow::default()
+            },
+        ],
+        values: BTreeMap::from([("Cards".into(), "named".into()), ("Card1".into(), "Card 1".into()), ("Card2".into(), "Card 2".into())]),
+    }
 }
 
 fn check_resume_glyphs(tree: &Tree, unit: f64, differences: &mut Vec<String>) {
@@ -87,7 +162,7 @@ fn check_resume_glyphs(tree: &Tree, unit: f64, differences: &mut Vec<String>) {
     }
 }
 
-/// Runs all 5 Eclipse Pause Card boards (#6, #35-#38), interactions, and undrawn states on the active backend.
+/// Runs all 10 Eclipse Pause Card boards (#6, #35-#43), interactions, and undrawn states on the active backend.
 pub fn pause(backend: &str) {
     std::env::set_var("LC_ALL", "en_US.UTF-8");
     std::env::set_var("TZ", "UTC");
@@ -119,15 +194,29 @@ pub fn pause(backend: &str) {
     let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     settings["EsdeMediaDirectory"] = json!(media.to_str().unwrap());
     settings["OpenEmuFallback"] = json!(false);
+    settings["Volume"] = json!(0.6);
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    let gfx_file = platform.file(FILE_GRAPHICS).unwrap();
+    let gfx_name = gfx_file.file_name().unwrap().to_str().unwrap();
+    let mut gfx = platform.model_load(MODEL_GRAPHICS_CONFIG, None, gfx_name).unwrap().unwrap_or_else(|| platform.model_new(MODEL_GRAPHICS_CONFIG).unwrap());
+    gfx["Consoles"]["PlayStation"]["ScreenFilter"] = json!("CRT");
+    gfx["Consoles"]["PlayStation"]["Overscan"] = json!("tv");
+    gfx["Consoles"]["PlayStation"]["PictureShape"] = json!("tv");
+    gfx["ShaderParameters"]["PlayStation"]["CRT"]["quality"] = json!("1");
+    platform.model_save(MODEL_GRAPHICS_CONFIG, None, gfx_name, &gfx).unwrap();
 
+    let sdl = Sdl::open();
+    let pad = sdl.attach("Wireless Controller", 0x045e, 0x028e);
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
+    assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));
     assert!(scene.set_property("program", "coverStores", media.to_str().unwrap()));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     assert!(scene.set_property("program", "theme", &std::fs::canonicalize(ECLIPSE).unwrap().display().to_string()));
     wait_for(&mut scene, "library", "loading", "false", 10000);
+    wait_for(&mut scene, "settingsModel", "ready", "true", 5000);
+    until(&mut scene, 10, "virtual pad connected", |s| s.property("pads", "connected") == "1");
     wait_for(&mut scene, "host.theme", "ready", "true", 5000);
     assert_eq!(scene.property("theme", "failed"), "false", "{}", scene.property("theme", "warnings"));
     assert!(scene.set_property("clock", "now", &(midnight() + 21 * 3600 + 41 * 60).to_string()));
@@ -148,6 +237,8 @@ pub fn pause(backend: &str) {
 
     let facts = base_facts(&tower_path, &file_url(&slot1_path), &file_url(&slot2_path));
     assert!(scene.set_property("pause", "facts", &facts.to_json()));
+    let settings_facts = json!({ "game": tower_path, "system": "psx" }).to_string();
+    assert!(scene.set_property("settingsModel", "facts", &settings_facts));
     scene.wait(200);
     let tokens = kit_tokens(&mut scene);
     let mut differences = Vec::new();
@@ -311,29 +402,235 @@ pub fn pause(backend: &str) {
     );
     picture(&mut scene, &format!("pause-options-1920x1200-{backend}.png"));
 
-    // Verify p2 subpages remain reachable without errors and hiding Cheats when empty works cleanly.
+    // Board #39: Pause Card, Game Options, Controllers.
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "Controllers opened", |s| s.property("pause", "title") == "Controllers" && !card_words(s).is_empty());
     scene.wait(120);
-    assert_eq!(scene.property("pause", "title"), "Controllers");
+    assert_eq!(
+        card_words(&mut scene),
+        vec![
+            ("Player 1".into(), "Wireless Controller".into()),
+            ("Player 2".into(), "None".into()),
+            ("Profile".into(), "Default".into()),
+            ("Bindings".into(), "".into()),
+            ("Swap Players".into(), "".into()),
+        ]
+    );
+    hold_card(
+        &mut scene,
+        "cardCanvas",
+        &tokens,
+        TABLE_CONTROLLERS,
+        &[
+            ("cardBreadcrumb", "TOWER SET · GAME OPTIONS", true),
+            ("cardTitle", "Controllers", false),
+            ("PaneSentence", "Player 1 plays on the Wireless Controller, with the Default profile.", false),
+            ("PaneMuted", "The controller player 1 plays on.", false),
+            ("cardBattery", "82%", false),
+            ("cardClock", "9:41 PM", false),
+            ("cardPosition", "1 of 5", false),
+        ],
+        &["Value", "Choose", "Back", "Screenshot", "Resume"],
+        &["◀ ▶", "A", "B", "X", "MENU"],
+        &mut differences,
+    );
+    picture(&mut scene, &format!("pause-controllers-1920x1200-{backend}.png"));
+    // Bindings and Swap Players omit Value in the help bar; Swap Players renders in full textStrong ink unfocused.
+    for _ in 0..3 {
+        scene.pad(UiButton::Down);
+    }
+    scene.wait(60);
+    assert_eq!(words_under(&scene.tree(), "cardHelp"), ["Choose", "Back", "Screenshot", "Resume"]);
+    let tree = scene.tree();
+    let row4 = tree.nodes.iter().find(|n| n.visible && n.name == "cardRow.4").expect("Swap Players row");
+    let swap_ink = tree.nodes.iter().find(|n| n.visible && n.parent == row4.id && n.name == "label").and_then(|n| n.colors.first()).and_then(|c| Colour::parse(c));
+    assert_eq!(swap_ink, Colour::parse("#FFF4F1EC"), "Swap Players keeps full cream-white ink unfocused");
+    scene.pad(UiButton::Down);
+    scene.wait(60);
+    assert_eq!(words_under(&scene.tree(), "cardHelp"), ["Choose", "Back", "Screenshot", "Resume"]);
     scene.pad(UiButton::Back);
     scene.wait(100);
+
+    // Board #40: Pause Card, Game Options, Display (R-20261125-2).
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "Display opened", |s| s.property("pause", "title") == "Display" && !card_words(s).is_empty());
     scene.wait(120);
-    assert_eq!(scene.property("pause", "title"), "Display");
+    assert_eq!(
+        card_words(&mut scene),
+        vec![
+            ("CRT profile".into(), "Balanced".into()),
+            ("Shader levers".into(), "".into()),
+            ("Crop overscan".into(), "TV overscan".into()),
+            ("Picture shape".into(), "TV shape".into()),
+        ]
+    );
+    assert!(!scene.tree().nodes.iter().any(|n| n.visible && n.name == "AdaptiveCardPane"), "Display shows no aside box");
+    hold_card(
+        &mut scene,
+        "cardCanvas",
+        &tokens,
+        TABLE_DISPLAY,
+        &[
+            ("cardBreadcrumb", "TOWER SET · GAME OPTIONS", true),
+            ("cardTitle", "Display", false),
+            ("cardSubtitle", "The PlayStation's CRT, drawn on the paused frame behind the card: Balanced.", false),
+            ("cardBadgeWords", "Tower Set · Balanced", false),
+            ("cardBattery", "82%", false),
+            ("cardClock", "9:41 PM", false),
+            ("cardPosition", "1 of 4", false),
+        ],
+        &["Value", "Choose", "Back", "Screenshot", "Resume"],
+        &["◀ ▶", "A", "B", "X", "MENU"],
+        &mut differences,
+    );
+    picture(&mut scene, &format!("pause-display-1920x1200-{backend}.png"));
+    // Undrawn states on #40: stepping CRT updates subtitle + badge; Shader levers uses {GAME} · DISPLAY and sentence pane.
+    scene.pad(UiButton::Down);
+    scene.wait(60);
+    assert_eq!(words_under(&scene.tree(), "cardHelp"), ["Choose", "Back", "Screenshot", "Resume"]);
+    assert_eq!(read(&scene.tree(), "cardBadgeWords", "text"), "Tower Set · Balanced");
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "Shader levers opened", |s| s.property("pause", "title") == "Shader levers");
+    assert_eq!(read(&scene.tree(), "cardBreadcrumb", "text").to_uppercase(), "TOWER SET · DISPLAY");
+    assert_eq!(read(&scene.tree(), "AdaptiveCardPane", "visible"), "true");
+    assert!(!scene.tree().nodes.iter().any(|n| n.visible && n.name == "cardBadge"));
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "back on Display", |s| s.property("pause", "title") == "Display");
+    scene.pad(UiButton::Up);
+    scene.pad(UiButton::Left);
+    until(&mut scene, 5, "CRT Performance", |s| read(&s.tree(), "cardBadgeWords", "text") == "Tower Set · Performance");
+    assert_eq!(read(&scene.tree(), "cardSubtitle", "text"), "The PlayStation's CRT, drawn on the paused frame behind the card: Performance.");
+    scene.pad(UiButton::Left);
+    until(&mut scene, 5, "CRT Off", |s| read(&s.tree(), "cardBadgeWords", "text") == "Tower Set · Off");
+    assert_eq!(read(&scene.tree(), "cardSubtitle", "text"), "The PlayStation's CRT, drawn on the paused frame behind the card: Off.");
+    scene.pad(UiButton::Right);
+    scene.pad(UiButton::Right);
+    until(&mut scene, 5, "CRT Balanced restored", |s| read(&s.tree(), "cardBadgeWords", "text") == "Tower Set · Balanced");
     scene.pad(UiButton::Back);
     scene.wait(100);
+
+    // Board #41: Pause Card, Game Options, Sound (R-20261125-3).
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "Sound opened", |s| s.property("pause", "title") == "Sound" && !card_words(s).is_empty());
     scene.wait(120);
-    assert_eq!(scene.property("pause", "title"), "Sound");
+    assert_eq!(card_words(&mut scene), vec![("Volume".into(), "60%".into()), ("Output".into(), "System default".into())]);
+    hold_card(
+        &mut scene,
+        "cardCanvas",
+        &tokens,
+        TABLE_SOUND,
+        &[
+            ("cardBreadcrumb", "TOWER SET · GAME OPTIONS", true),
+            ("cardTitle", "Sound", false),
+            ("PaneSentence", "The game's volume. On the handheld this row defers to the device's quick menu.", false),
+            ("PaneMuted", "The ring fills as the volume rises; the next sound plays at the level you chose.", false),
+            ("cardBattery", "82%", false),
+            ("cardClock", "9:41 PM", false),
+            ("cardPosition", "1 of 2", false),
+        ],
+        &["Value", "Choose", "Back", "Screenshot", "Resume"],
+        &["◀ ▶", "A", "B", "X", "MENU"],
+        &mut differences,
+    );
+    picture(&mut scene, &format!("pause-sound-1920x1200-{backend}.png"));
+    // Stepping Volume fills bar 3 at 80%; Output hides the 5-bar meter and shows plain sentence + muted aside.
+    for _ in 0..4 {
+        scene.pad(UiButton::Right);
+        scene.wait(40);
+    }
+    until(&mut scene, 5, "Volume at 80%", |s| card_words(s)[0].1 == "80%");
+    assert_eq!(painted(&scene.tree(), "PaneMeterBar.3"), Colour::parse("#FFF6E7D8"), "4th bar fills at 80%");
+    scene.pad(UiButton::Down);
+    scene.wait(60);
+    assert!(!scene.tree().nodes.iter().any(|n| n.visible && n.name == "PaneMeter"), "Output hides the 5-bar meter");
+    assert_eq!(words_under(&scene.tree(), "cardHelp"), ["Value", "Choose", "Back", "Screenshot", "Resume"]);
     scene.pad(UiButton::Back);
     scene.wait(100);
+
+    // Board #42: Pause Card, Game Options, Memory Cards.
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "Memory Cards opened", |s| s.property("pause", "title") == "Memory Cards" && !card_words(s).is_empty());
     scene.wait(120);
-    assert_eq!(scene.property("pause", "title"), "Memory Cards");
+    assert_eq!(
+        card_words(&mut scene),
+        vec![
+            ("Slot 1".into(), "Card 1".into()),
+            ("Slot 2".into(), "Card 2".into()),
+            ("Mode".into(), "Named".into()),
+            ("Cards".into(), "3 cards".into()),
+        ]
+    );
+    hold_card(
+        &mut scene,
+        "cardCanvas",
+        &tokens,
+        TABLE_CARDS,
+        &[
+            ("cardBreadcrumb", "TOWER SET · GAME OPTIONS", true),
+            ("cardTitle", "Memory Cards", false),
+            ("PaneSentence", "Card 1 is in Slot 1.", false),
+            ("PaneMuted", "Left and Right choose another card; it goes in when the game next starts.", false),
+            ("cardBattery", "82%", false),
+            ("cardClock", "9:41 PM", false),
+            ("cardPosition", "1 of 4", false),
+        ],
+        &["Value", "Choose", "Back", "Screenshot", "Resume"],
+        &["◀ ▶", "A", "B", "X", "MENU"],
+        &mut differences,
+    );
+    picture(&mut scene, &format!("pause-cards-1920x1200-{backend}.png"));
+
+    // Board #43: Pause Card, Memory Cards, the drawer (Card 3 focused).
+    for _ in 0..3 {
+        scene.pad(UiButton::Down);
+    }
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "Drawer opened", |s| card_words(s).len() == 3 && card_words(s)[0].0 == "Card 1");
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    scene.wait(120);
+    assert_eq!(card_words(&mut scene), vec![("Card 1".into(), "in Tower Set".into()), ("Card 2".into(), "in Tower Set".into()), ("Card 3".into(), "".into())]);
+    hold_card(
+        &mut scene,
+        "cardCanvas",
+        &tokens,
+        TABLE_DRAWER,
+        &[
+            ("cardBreadcrumb", "TOWER SET · MEMORY CARDS", true),
+            ("cardTitle", "Memory Cards", false),
+            ("PaneDrawerCardName.0", "Card 1", false),
+            ("PaneDrawerCardName.1", "Card 2", false),
+            ("PaneDrawerCardName.2", "Card 3", false),
+            ("PaneSentence", "A card in the drawer.", false),
+            ("cardBattery", "82%", false),
+            ("cardClock", "9:41 PM", false),
+            ("cardPosition", "3 of 3", false),
+        ],
+        &["Choose", "Back", "Screenshot", "Resume"],
+        &["A", "B", "X", "MENU"],
+        &mut differences,
+    );
+    picture(&mut scene, &format!("pause-drawer-1920x1200-{backend}.png"));
+    // Undrawn >3 card drawer sliding window check.
+    let mut five = facts.clone();
+    five.cards = card_facts(&["Card 1", "Card 2", "Card 3", "Card 4", "Card 5"], 2);
+    assert!(scene.set_property("pause", "facts", &five.to_json()));
+    scene.wait(60);
+    assert_eq!(read(&scene.tree(), "PaneDrawerCardName.1", "text"), "Card 3");
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    scene.wait(60);
+    assert_eq!(
+        [read(&scene.tree(), "PaneDrawerCardName.0", "text"), read(&scene.tree(), "PaneDrawerCardName.1", "text"), read(&scene.tree(), "PaneDrawerCardName.2", "text")],
+        ["Card 3", "Card 4", "Card 5"]
+    );
+    assert!(scene.set_property("pause", "facts", &facts.to_json()));
+    scene.pad(UiButton::Back);
+    scene.wait(100);
     scene.pad(UiButton::Back);
     scene.wait(100);
     let mut no_cheats = facts.clone();
@@ -428,5 +725,6 @@ pub fn pause(backend: &str) {
     assert_eq!(scene.property("pause", "current"), "3", "B returns to Quit EmuSen row");
 
     scene.assert_quiet();
+    sdl.detach(pad);
     assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));
 }

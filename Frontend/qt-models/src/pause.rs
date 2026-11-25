@@ -470,6 +470,10 @@ pub enum PaneKind {
     Cover,
     /// A sentence alone.
     Sentence,
+    /// Five-bar volume meter over sentence and muted lines, on Eclipse Pause Sound (Volume).
+    Meter,
+    /// Visual memory card tiles over a sentence, on Eclipse Pause Memory Cards Drawer.
+    Drawer,
 }
 
 impl PaneKind {
@@ -481,6 +485,8 @@ impl PaneKind {
             PaneKind::Slots => "slots",
             PaneKind::Cover => "cover",
             PaneKind::Sentence => "sentence",
+            PaneKind::Meter => "meter",
+            PaneKind::Drawer => "drawer",
         }
     }
 }
@@ -506,11 +512,13 @@ pub struct Pane {
     pub title: String,
     /// A muted line under the sentence (Controllers' page, as Mistress's pane's second line).
     pub muted: String,
+    /// Filled bar count (0..=5) on Eclipse Pause Sound (Volume).
+    pub bars: u8,
 }
 
 impl Pane {
     fn none() -> Pane {
-        Pane { kind: PaneKind::None, big: String::new(), tiles: Vec::new(), sentence: String::new(), title: String::new(), muted: String::new() }
+        Pane { kind: PaneKind::None, big: String::new(), tiles: Vec::new(), sentence: String::new(), title: String::new(), muted: String::new(), bars: 0 }
     }
 
     /// The pane as plain data, the way it crosses from `PauseModel` to `PaneModel`.
@@ -520,7 +528,7 @@ impl Pane {
             .iter()
             .map(|t| json!({ "picture": t.picture, "name": t.name, "when": t.when, "ringed": t.ringed }))
             .collect();
-        json!({ "kind": self.kind.name(), "big": self.big, "tiles": tiles, "sentence": self.sentence, "title": self.title, "muted": self.muted, "blank": EMPTY }).to_string()
+        json!({ "kind": self.kind.name(), "big": self.big, "tiles": tiles, "sentence": self.sentence, "title": self.title, "muted": self.muted, "bars": self.bars, "blank": EMPTY }).to_string()
     }
 }
 
@@ -610,20 +618,23 @@ impl Card {
             Page::Controllers => self
                 .controllers
                 .iter()
-                .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.dimmed, ..row(CONTROLLER, &r.label, r.value.clone()) })
+                .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.dimmed, section_end: self.eclipse && r.section_end, ..row(CONTROLLER, &r.label, r.value.clone()) })
                 .collect(),
             Page::Settings(_) => self
                 .settings_rows()
                 .iter()
                 .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.dimmed, ..row(SETTING, &r.label, r.value.clone()) })
                 .collect(),
-            Page::Cards => self
-                .facts
-                .cards
-                .rows()
-                .into_iter()
-                .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.held, ..row(MEMORY_CARD, &r.label, r.value) })
-                .collect(),
+            Page::Cards => {
+                let raw = self.facts.cards.rows();
+                raw.iter()
+                    .enumerate()
+                    .map(|(i, r)| {
+                        let slot_end = matches!(r.part, cards::Part::Slot(_)) && raw.get(i + 1).is_some_and(|n| !matches!(n.part, cards::Part::Slot(_)));
+                        Row { steps: r.steps, opens: r.opens, dimmed: r.held, section_end: self.eclipse && slot_end, ..row(MEMORY_CARD, &r.label, r.value.clone()) }
+                    })
+                    .collect()
+            }
             Page::Drawer(at) => self
                 .facts
                 .cards
@@ -692,24 +703,61 @@ impl Card {
         }
     }
 
-    /// Breadcrumb for the active theme: Eclipse's PAUSED trail or reference theme's breadcrumb.
+    /// Breadcrumb for the active theme: Eclipse's PAUSED or subpage trail, or reference breadcrumb.
     pub fn breadcrumb_for(&self, game: &str, console: &str) -> String {
         if !self.eclipse {
             return self.breadcrumb(game);
         }
         let sys = if !console.is_empty() { console } else { &self.facts.cards.console };
+        let title = self.named(game);
         match self.page {
             Page::First => crate::words::line(&[PAUSED, sys]),
-            _ => crate::words::line(&[PAUSED, sys, &self.named(game)]),
+            Page::Options | Page::Leave | Page::Ask(_) | Page::Disc | Page::Reel => crate::words::line(&[PAUSED, sys, &title]),
+            Page::Controllers | Page::Cards | Page::Cheats => crate::words::line(&[&title, "Game Options"]),
+            Page::Settings(_) if self.settings.title.is_empty() => crate::words::line(&[&title, "Game Options"]),
+            Page::Settings(CardPage::Display) => crate::words::line(&[&title, "Display"]),
+            Page::Settings(CardPage::Sound) => crate::words::line(&[&title, "Sound"]),
+            Page::Drawer(_) => crate::words::line(&[&title, "Memory Cards"]),
         }
     }
 
-    /// Question sentence shown under the heading on Eclipse Pause Ask pages (EclipsePauseAsk:36).
-    pub fn subtitle(&self) -> String {
+    fn display_mode(&self) -> Option<(bool, &str)> {
+        let rows = self.settings_rows();
+        if let Some(r) = rows.iter().find(|r| r.key == "crtprofile" && !r.value.is_empty()) {
+            return Some((true, r.value.as_str()));
+        }
+        rows.iter().find(|r| r.key == "screen" && !r.value.is_empty()).map(|r| (false, r.value.as_str()))
+    }
+
+    /// Question or live CRT subtitle shown under the heading on Eclipse Pause Ask and Display pages.
+    pub fn subtitle_for(&self, console: &str) -> String {
         match self.page {
             Page::Ask(ask) if self.eclipse => ask.page().breadcrumb,
+            Page::Settings(CardPage::Display) if self.eclipse && self.settings.title.is_empty() => {
+                let sys = if !console.is_empty() { console } else { &self.facts.cards.console };
+                let Some((is_crt, mode)) = self.display_mode() else { return String::new() };
+                if !sys.is_empty() && is_crt {
+                    format!("The {sys}'s CRT, drawn on the paused frame behind the card: {mode}.")
+                } else {
+                    format!("Drawn on the paused frame behind the card: {mode}.")
+                }
+            }
             _ => String::new(),
         }
+    }
+
+    /// Question or CRT subtitle using the facts' console name.
+    pub fn subtitle(&self) -> String {
+        self.subtitle_for("")
+    }
+
+    /// Bottom-right live preview pill text on Eclipse Pause Display ("Tower Set · Balanced").
+    pub fn badge(&self, game: &str) -> String {
+        if !self.eclipse || self.page != Page::Settings(CardPage::Display) || !self.settings.title.is_empty() {
+            return String::new();
+        }
+        let Some((_, mode)) = self.display_mode() else { return String::new() };
+        crate::words::line(&[&self.named(game), mode])
     }
 
     /// Footer row position ("4 of 8") for Eclipse Pause Card.
@@ -903,13 +951,14 @@ impl Card {
         Outcome::Shown
     }
 
-    /// The help bar the page shows: Eclipse Pause keeps the 4-entry bar on Save/Load; reference shows Change slot.
+    /// The help bar the page shows: Eclipse adds ◀ ▶ Value on stepped subpage rows.
     pub fn help(&self) -> Screen {
         match (self.page, self.key_at(self.current)) {
             (Page::First, Some(SAVE | LOAD)) if !self.eclipse => Screen::PauseSlots,
             (Page::First, _) => Screen::Pause,
             (Page::Reel, _) => Screen::PauseReel,
             (Page::Disc, _) => Screen::PauseDisc,
+            _ if self.eclipse && self.rows().get(self.current).is_some_and(|r| r.steps) => Screen::PausePageValue,
             _ => Screen::PausePage,
         }
     }
@@ -923,15 +972,29 @@ impl Card {
             (Page::Disc, _) => self.disc_pane(),
             (Page::Cards, _) => self.cards_pane(),
             (Page::Controllers, _) => match self.controllers.get(self.current) {
-                // Mistress's two lines: the sentence, and the muted one under it.
-                Some(r) => Pane { kind: PaneKind::Sentence, sentence: r.sentence.clone(), muted: r.muted.clone(), ..Pane::none() },
+                Some(r) => Pane {
+                    kind: PaneKind::Sentence,
+                    sentence: r.sentence.clone(),
+                    muted: if self.eclipse && !r.muted_eclipse.is_empty() { r.muted_eclipse.clone() } else { r.muted.clone() },
+                    ..Pane::none()
+                },
                 None => Pane::none(),
             },
+            (Page::Drawer(at), _) if self.eclipse => self.drawer_pane(at),
             (Page::Drawer(_), _) => Pane { kind: PaneKind::Sentence, sentence: cards::DRAWER_CARD.to_owned(), ..Pane::none() },
-            (Page::Settings(_), _) => match self.settings_rows().get(self.current) {
-                Some(r) => Pane { kind: PaneKind::Sentence, sentence: r.sentence.clone(), muted: r.muted.clone(), ..Pane::none() },
-                None => Pane::none(),
-            },
+            (Page::Settings(page), _) => {
+                if self.eclipse && page == CardPage::Display && self.settings.title.is_empty() {
+                    return Pane::none();
+                }
+                match self.settings_rows().get(self.current) {
+                    Some(r) if self.eclipse && page == CardPage::Sound && r.key == "volume" => {
+                        let pct = r.value.trim_end_matches('%').parse::<u8>().unwrap_or(0).min(100);
+                        Pane { kind: PaneKind::Meter, bars: (pct + 19) / 20, sentence: r.sentence.clone(), muted: r.muted.clone(), ..Pane::none() }
+                    }
+                    Some(r) => Pane { kind: PaneKind::Sentence, sentence: r.sentence.clone(), muted: r.muted.clone(), ..Pane::none() },
+                    None => Pane::none(),
+                }
+            }
             _ => Pane::none(),
         }
     }
@@ -955,13 +1018,34 @@ impl Card {
         turned
     }
 
-    /// A card row's words, as Settings' Memory cards gives them in a game.
+    /// A card row's words, kept split into sentence and muted on Eclipse.
     fn cards_pane(&self) -> Pane {
         let facts = &self.facts.cards;
         let Some(row) = facts.rows().into_iter().nth(self.current) else { return Pane::none() };
         let words = cards::pane(&facts.media, &row, &facts.schema, &|k| facts.value(k), &facts.console, true);
-        let sentence = words.lines.into_iter().chain(words.muted).collect::<Vec<_>>().join(" ");
-        Pane { kind: PaneKind::Sentence, sentence, ..Pane::none() }
+        if self.eclipse {
+            Pane { kind: PaneKind::Sentence, sentence: words.lines.join(" "), muted: words.muted.join(" "), ..Pane::none() }
+        } else {
+            let sentence = words.lines.into_iter().chain(words.muted).collect::<Vec<_>>().join(" ");
+            Pane { kind: PaneKind::Sentence, sentence, ..Pane::none() }
+        }
+    }
+
+    /// Up to three sliding drawer card tiles centered around the focused card on Eclipse Pause Drawer.
+    fn drawer_pane(&self, at: usize) -> Pane {
+        let Some(medium) = self.facts.cards.media.get(at) else {
+            return Pane { kind: PaneKind::Sentence, sentence: cards::DRAWER_CARD.to_owned(), ..Pane::none() };
+        };
+        let drawer = medium.drawer();
+        let first = if drawer.len() <= 3 { 0 } else { (self.current as isize - 1).clamp(0, drawer.len() as isize - 3) as usize };
+        let tiles = drawer
+            .iter()
+            .enumerate()
+            .skip(first)
+            .take(3)
+            .map(|(i, c)| Tile { name: c.label.clone(), ringed: i == self.current, ..Tile::default() })
+            .collect();
+        Pane { kind: PaneKind::Drawer, tiles, sentence: cards::DRAWER_CARD.to_owned(), ..Pane::none() }
     }
 
     /// A, Left or Right on a cheat: turned the other way, in the card's facts at once and in the game by the outcome.

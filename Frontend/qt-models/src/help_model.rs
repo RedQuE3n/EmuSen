@@ -80,6 +80,8 @@ pub mod qobject {
         GamePageCoverArt,
         /// Eclipse's Home Card menu foot, after every screen before it.
         CardHome,
+        /// Eclipse Pause Card subpage with Left/Right value stepping.
+        PausePageValue,
     }
 
     extern "RustQt" {
@@ -172,6 +174,7 @@ impl qobject::HelpModel {
             HelpScreen::HomePlaces => Screen::HomePlaces,
             HelpScreen::Pause => Screen::Pause,
             HelpScreen::PausePage => Screen::PausePage,
+            HelpScreen::PausePageValue => Screen::PausePageValue,
             HelpScreen::Card => Screen::Card,
             HelpScreen::CardStart => Screen::CardStart,
             HelpScreen::CardHome => Screen::CardHome,
@@ -258,6 +261,7 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::HomePlaces => HelpScreen::HomePlaces,
         Screen::Pause => HelpScreen::Pause,
         Screen::PausePage => HelpScreen::PausePage,
+        Screen::PausePageValue => HelpScreen::PausePageValue,
         Screen::PauseSlots => HelpScreen::PauseSlots,
         Screen::PauseReel => HelpScreen::PauseReel,
         Screen::Card => HelpScreen::Card,

@@ -146,11 +146,11 @@ Item {
         }
         Row {
             objectName: "PaneSlots"
-            visible: slotRepeater.count > 0
+            visible: !root.paneModel.drawer && slotRepeater.count > 0
             spacing: root.paneModel.moment ? 8 * root.unit : 24 * root.unit
             Repeater {
                 id: slotRepeater
-                model: root.paneModel
+                model: root.paneModel.drawer ? null : root.paneModel
                 delegate: Column {
                     id: tile
                     required property int index
@@ -231,6 +231,74 @@ Item {
                         weight: Font.Normal
                         elide: Text.ElideRight
                     }
+                }
+            }
+        }
+        Row {
+            objectName: "PaneDrawerCards"
+            visible: root.paneModel.drawer && drawerRepeater.count > 0
+            spacing: 22 * root.unit
+            Repeater {
+                id: drawerRepeater
+                model: root.paneModel.drawer ? root.paneModel : null
+                delegate: Rectangle {
+                    id: drawerCard
+                    required property int index
+                    required property string name
+                    required property bool ringed
+                    objectName: "PaneDrawerCard." + drawerCard.index
+                    width: 150 * root.unit
+                    height: 190 * root.unit
+                    topLeftRadius: 14 * root.unit
+                    topRightRadius: 14 * root.unit
+                    bottomLeftRadius: 22 * root.unit
+                    bottomRightRadius: 22 * root.unit
+                    color: "#151826"
+                    border.width: 2 * root.unit
+                    border.color: drawerCard.ringed ? Kit.Tokens.accent : "#5A6076"
+                    Rectangle {
+                        objectName: "PaneDrawerCardSlot." + drawerCard.index
+                        x: 22 * root.unit
+                        y: 22 * root.unit
+                        width: 106 * root.unit
+                        height: 54 * root.unit
+                        radius: 8 * root.unit
+                        color: "#262A3A"
+                    }
+                    CardLine {
+                        objectName: "PaneDrawerCardName." + drawerCard.index
+                        unit: root.unit
+                        boardLine: true
+                        x: 0
+                        y: parent.height - 26 * root.unit - height
+                        width: parent.width
+                        text: drawerCard.name
+                        color: Kit.Tokens.textStrong
+                        size: 20
+                        weight: Font.Normal
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+        }
+        Row {
+            objectName: "PaneMeter"
+            visible: root.paneModel.meter
+            width: root.contentWidth
+            height: 56 * root.unit
+            spacing: 8 * root.unit
+            Repeater {
+                model: 5
+                delegate: Rectangle {
+                    id: bar
+                    required property int index
+                    objectName: "PaneMeterBar." + bar.index
+                    y: (56 - (16 + bar.index * 8)) * root.unit
+                    width: 22 * root.unit
+                    height: (16 + bar.index * 8) * root.unit
+                    radius: 6 * root.unit
+                    color: bar.index < root.paneModel.bars ? Kit.Tokens.accent : "#262A3A"
                 }
             }
         }

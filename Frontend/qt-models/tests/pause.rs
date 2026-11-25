@@ -443,3 +443,169 @@ fn eclipse_pause_card_breadcrumbs_dividers_subtitle_help_and_slot_when() {
     assert_eq!(c.position_line(), "2 of 7");
     assert_eq!(c.help(), Screen::PauseDisc);
 }
+
+#[test]
+fn eclipse_pause_subpages_match_boards_39_to_43_and_preserve_reference_card() {
+    use emusen_crystal_client::shapes::SettingRow;
+    use emusen_qt_models::cards::{Card as MediaCard, Medium, Slot};
+    use emusen_qt_models::pause::CardFacts;
+    use emusen_qt_models::settings_card::{CardPage, CardRows};
+    use emusen_qt_models::settings_controllers::GameRow;
+    use std::collections::BTreeMap;
+
+    let mut drawer_cards: Vec<MediaCard> = (1..=5)
+        .map(|i| MediaCard {
+            path: format!("/cards/Card {i}.mcd"),
+            name: format!("Card {i}"),
+            label: format!("Card {i}"),
+            games_own: false,
+            held_by: (i <= 2).then(|| "Tower Set".to_owned()),
+        })
+        .collect();
+    let medium = Medium {
+        medium: "psx.card".into(),
+        title: "Memory Card".into(),
+        noun: "Card".into(),
+        noun_in_text: "card".into(),
+        mode: "named".into(),
+        mode_key: "Cards".into(),
+        slots: vec![
+            Slot { label: "Slot 1".into(), name: "Card 1".into(), path: "/cards/Card 1.mcd".into() },
+            Slot { label: "Slot 2".into(), name: "Card 2".into(), path: "/cards/Card 2.mcd".into() },
+        ],
+        cards: drawer_cards.clone(),
+        ..Medium::default()
+    };
+    let schema = vec![
+        SettingRow {
+            key: "Cards".into(),
+            label: "Mode".into(),
+            kind: "choice".into(),
+            default: Some("named".into()),
+            choices: Some(vec!["named".into(), "shared".into()]),
+            choice_labels: Some(vec!["Named".into(), "Shared".into()]),
+            ..SettingRow::default()
+        },
+        SettingRow {
+            key: "Card1".into(),
+            label: "Slot 1".into(),
+            kind: "choice".into(),
+            default: Some("Card 1".into()),
+            choices: Some(vec!["Card 1".into(), "Card 2".into()]),
+            shown_with: Some(emusen_crystal_client::shapes::ShownWith { key: "Cards".into(), value: "named".into() }),
+            ..SettingRow::default()
+        },
+    ];
+    let mut c = Card {
+        facts: Facts {
+            path: "/g/Tower Set.cue".into(),
+            system: "psx".into(),
+            discs: DiscFacts { count: 1, index: Some(0), unread: false, can_change: true, lid_open: false },
+            cards: CardFacts { console: "PlayStation".into(), media: vec![medium.clone()], schema, values: BTreeMap::new() },
+            ..Facts::default()
+        },
+        eclipse: true,
+        ..Card::default()
+    };
+    c.controllers = vec![
+        GameRow {
+            key: "seat1".into(),
+            label: "Player 1".into(),
+            value: "Wireless Controller".into(),
+            steps: true,
+            sentence: "Player 1 plays on the Wireless Controller, with the Default profile.".into(),
+            muted: "seat_muted".into(),
+            muted_eclipse: "The controller player 1 plays on.".into(),
+            ..GameRow::default()
+        },
+        GameRow { key: "gbindings".into(), label: "Bindings".into(), opens: true, section_end: true, ..GameRow::default() },
+        GameRow { key: "gswap".into(), label: "Swap Players".into(), dimmed: true, ..GameRow::default() },
+    ];
+
+    // #39 Controllers: {game} · Game Options, section divider on Bindings, player_hint under Eclipse only.
+    c.act(pause::OPTIONS);
+    c.choose(at(&c, "Controllers"));
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Tower Set · Game Options");
+    assert_eq!(c.help(), Screen::PausePageValue);
+    assert_eq!(c.pane().muted, "The controller player 1 plays on.");
+    assert!(!c.rows()[0].section_end && c.rows()[1].section_end);
+    c.focus(1);
+    assert_eq!(c.help(), Screen::PausePage);
+    c.focus(0);
+    c.eclipse = false;
+    assert_eq!(c.pane().muted, "seat_muted");
+    assert!(!c.rows()[1].section_end);
+    c.eclipse = true;
+    c.back();
+
+    // #40 Display: subtitle, preview badge, no aside card on Display root, {game} · Display inside Shader levers.
+    c.choose(at(&c, "Display"));
+    c.take_settings(CardRows {
+        page: "display".into(),
+        title: String::new(),
+        focus: 0,
+        rows: vec![
+            GameRow { key: "crtprofile".into(), label: "CRT profile".into(), value: "Balanced".into(), steps: true, ..GameRow::default() },
+            GameRow { key: "consolelevers".into(), label: "Shader levers".into(), opens: true, sentence: "Levers".into(), ..GameRow::default() },
+        ],
+    });
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Tower Set · Game Options");
+    assert_eq!(c.subtitle_for("PlayStation"), "The PlayStation's CRT, drawn on the paused frame behind the card: Balanced.");
+    assert_eq!(c.badge("Tower Set"), "Tower Set · Balanced");
+    assert_eq!(c.pane().kind, PaneKind::None);
+    assert_eq!(c.help(), Screen::PausePageValue);
+    c.take_settings(CardRows {
+        page: "display".into(),
+        title: "Shader levers".into(),
+        focus: 0,
+        rows: vec![GameRow { key: "gamma".into(), label: "Tube gamma".into(), value: "2.4".into(), steps: true, sentence: "Gamma".into(), ..GameRow::default() }],
+    });
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Tower Set · Display");
+    assert_eq!(c.subtitle_for("PlayStation"), "");
+    assert_eq!(c.badge("Tower Set"), "");
+    assert_eq!(c.pane().kind, PaneKind::Sentence);
+    c.eclipse = false;
+    assert_eq!((c.subtitle(), c.badge("Tower Set"), c.pane().kind), (String::new(), String::new(), PaneKind::Sentence));
+    c.eclipse = true;
+    c.take_settings(CardRows::default());
+    c.back();
+
+    // #41 Sound: 5-bar meter proportional in 20% steps on Volume, plain sentence on Output.
+    c.choose(at(&c, "Sound"));
+    for (val, want_bars) in [("0%", 0), ("20%", 1), ("40%", 2), ("60%", 3), ("80%", 4), ("100%", 5)] {
+        c.take_settings(CardRows {
+            page: "sound".into(),
+            title: String::new(),
+            focus: 0,
+            rows: vec![
+                GameRow { key: "volume".into(), label: "Volume".into(), value: val.into(), steps: true, sentence: "S".into(), muted: "M".into(), ..GameRow::default() },
+                GameRow { key: "output".into(), label: "Output".into(), value: "System default".into(), opens: true, sentence: "O".into(), ..GameRow::default() },
+            ],
+        });
+        let pane = c.pane();
+        assert_eq!((pane.kind, pane.bars), (PaneKind::Meter, want_bars), "volume {val}");
+    }
+    c.focus(1);
+    assert_eq!((c.pane().kind, c.pane().bars, c.help()), (PaneKind::Sentence, 0, Screen::PausePage));
+    c.back();
+
+    // #42 Memory Cards & #43 Drawer: Slot 2 divider, split muted line, 3-card sliding drawer aside.
+    c.choose(at(&c, "Memory Cards"));
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Tower Set · Game Options");
+    assert_eq!(c.rows().iter().map(|r| r.section_end).collect::<Vec<_>>(), [false, true, false, false]);
+    assert_eq!(c.pane().sentence, "Card 1 is in Slot 1.");
+    assert_eq!(c.pane().muted, "Left and Right choose another card; it goes in when the game next starts.");
+    c.choose(at(&c, "Cards"));
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Tower Set · Memory Cards");
+    assert_eq!(c.help(), Screen::PausePage);
+    let win = |focus: usize, card: &mut Card| -> Vec<(String, bool)> {
+        card.focus(focus);
+        card.pane().tiles.into_iter().map(|t| (t.name, t.ringed)).collect()
+    };
+    assert_eq!(win(0, &mut c), [("Card 1".into(), true), ("Card 2".into(), false), ("Card 3".into(), false)]);
+    assert_eq!(win(2, &mut c), [("Card 2".into(), false), ("Card 3".into(), true), ("Card 4".into(), false)]);
+    assert_eq!(win(4, &mut c), [("Card 3".into(), false), ("Card 4".into(), false), ("Card 5".into(), true)]);
+    c.facts.cards.media[0].cards = drawer_cards.drain(..3).collect();
+    c.focus(2);
+    assert_eq!(c.pane().tiles.into_iter().map(|t| (t.name, t.ringed)).collect::<Vec<_>>(), [("Card 1".into(), false), ("Card 2".into(), false), ("Card 3".into(), true)]);
+}

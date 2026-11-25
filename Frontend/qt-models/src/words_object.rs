@@ -44,6 +44,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "positionLine"]
         fn position_line(self: &Words, index: i32, total: i32) -> QString;
+
+        /// Footer B label for an Eclipse dialog: the choice B answers, or "Back".
+        #[qinvokable]
+        #[cxx_name = "questionBackLabel"]
+        fn question_back_label(self: &Words, choices: &QStringList, back_index: i32) -> QString;
     }
 }
 
@@ -101,5 +106,10 @@ impl qobject::Words {
 
     pub fn position_line(&self, index: i32, total: i32) -> QString {
         QString::from(words::position_line(index.max(0) as usize, total.max(0) as usize).as_str())
+    }
+
+    pub fn question_back_label(&self, choices: &QStringList, back_index: i32) -> QString {
+        let items: Vec<String> = choices.iter().map(|s| s.to_string()).collect();
+        QString::from(crate::question::back_label(&items, back_index).as_str())
     }
 }

@@ -157,6 +157,7 @@ pub fn firmware_question(need: &FirmwareNeed, folder: &str) -> Question {
         caption: String::new(),
         choices: vec!["Play Without It".to_owned(), "Check Again".to_owned()],
         back: None,
+        picture: String::new(),
     }
 }
 

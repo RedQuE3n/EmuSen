@@ -1063,17 +1063,37 @@ impl GamePage {
         }
     }
 
-    /// X on a state's tile: deleting it asks first, naming the state and when it was saved (Mistress's
-    /// `DeleteStateAsync`).
+    /// X on a state's tile: deleting it asks first, naming the state and when it was saved (Mistress's `DeleteStateAsync`).
     pub fn delete(&self, index: usize) -> Outcome {
+        self.delete_for(index, false, &|_| String::new())
+    }
+
+    /// X on a state's tile, selecting Eclipse board #14's wording and preview thumbnail when `eclipse` is true.
+    pub fn delete_for(&self, index: usize, eclipse: bool, when: &dyn Fn(i64) -> String) -> Outcome {
         let Content::Tiles(tiles) = self.content() else { return Outcome::Nothing };
         if self.shown() != Section::States {
             return Outcome::Nothing;
         }
         let Some(state) = tiles.get(index).and_then(|t| self.read.states.iter().find(|s| s.path == t.key)) else { return Outcome::Nothing };
         let slot = slot_name(state.slot);
-        let sentence = format!("{}'s {slot}, saved {}, is deleted. This cannot be undone.", self.read.title, ago(state.when, self.now).to_lowercase());
-        Outcome::Ask(ask(&format!("Delete {slot}?"), &sentence, "Delete"), Change::DeleteState(state.path.clone()))
+        let mut q = if eclipse {
+            let sentence = format!("Saved {}. The state and its picture go. Your in-game saves stay.", when(state.when));
+            let mut q = ask(&format!("Delete {slot}?"), &sentence, "Delete");
+            q.choices[0] = "Keep it".into();
+            q
+        } else {
+            let sentence = format!("{}'s {slot}, saved {}, is deleted. This cannot be undone.", self.read.title, ago(state.when, self.now).to_lowercase());
+            ask(&format!("Delete {slot}?"), &sentence, "Delete")
+        };
+        q.picture = state.picture.clone();
+        Outcome::Ask(q, Change::DeleteState(state.path.clone()))
+    }
+
+    /// X on a state's tile formatted in the machine's zone and short clock form.
+    pub fn delete_for_now(&self, index: usize, eclipse: bool) -> Outcome {
+        let now = self.now;
+        let when = |at: i64| delete_when(crate::clock::local_day(at, 0), crate::clock::local_day(now, 0), crate::clock::local_day(now, 1), &crate::clock::short_time(at));
+        self.delete_for(index, eclipse, &when)
     }
 
     /// A change saved, taken into the page's facts at once, so the next step steps from it rather than from the facts read
@@ -2324,6 +2344,17 @@ impl GamePage {
         }
         let sentence = format!("{}'s {label} is deleted. This cannot be undone.", self.read.title);
         Outcome::Ask(ask(&format!("Delete {label}?"), &sentence, "Delete"), Change::DeleteMedia(media.path.clone()))
+    }
+}
+
+/// Formats a saved state timestamp for Eclipse's Delete Slot dialog ("yesterday at 8:40 PM").
+pub fn delete_when(day: Day, today: Day, yesterday: Day, time: &str) -> String {
+    let month = MONTHS_LONG[(day.1.clamp(1, 12) - 1) as usize];
+    match day {
+        d if d == today => format!("today at {time}"),
+        d if d == yesterday => format!("yesterday at {time}"),
+        d if d.0 == today.0 => format!("{} {month} at {time}", d.2),
+        d => format!("{} {month} {} at {time}", d.2, d.0),
     }
 }
 

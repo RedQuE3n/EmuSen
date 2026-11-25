@@ -18,7 +18,7 @@ Kit.NormalizedCanvas {
         helpShown: false
         focus: launchCanvas.launch.asking
         controller.navigationShown: false
-        Kit.Question {
+        QuestionHost {
             id: launchQuestion
             objectName: "launchQuestion"
             controller: launchFrame.controller
@@ -36,10 +36,8 @@ Kit.NormalizedCanvas {
             help: HelpModel {
                 screen: launchCanvas.launch.help
             }
+            showing: launchCanvas.launch.asking
             onChosen: (index) => launchCanvas.launch.answer(index)
-        }
-        Binding {
-            launchQuestion.visible: launchCanvas.launch.asking
         }
     }
 }

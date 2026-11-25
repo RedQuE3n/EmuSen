@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import EmuSen.Kit as Kit
 import EmuSen.Models
 
 // A game's page with its own model, from X on Home and the grid, a theme's openPage and the Home card's Selected game
@@ -29,6 +30,7 @@ GamePage {
     GamePageModel {
         id: pageModel
         objectName: "pageModel"
+        eclipse: Kit.Tokens.coronaRim > 0
         platformLibrary: pageScreen.platformLibrary
         cores: pageScreen.library.cores
         // The game a door opened the page for (Settings' Cheats: the game last played), else the game in hand.

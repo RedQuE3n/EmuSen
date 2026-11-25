@@ -17,10 +17,15 @@ Kit.NormalizedCanvas {
     required property int padFamily
     required property bool gameShown
     required property bool splashShown
+    property Clock clock: null
+    property int battery: -1
+    property LibraryModel library: null
+    readonly property bool eclipse: Kit.Tokens.coronaRim > 0
     visible: !searchCanvas.gameShown && searchCanvas.host.searching
     Kit.KeyboardModel {
         id: typist
         objectName: "typist"
+        layouts: searchCanvas.eclipse ? searchEclipse.layouts : ""
         onTextChanged: searchCanvas.games.search = typist.text
         onClosed: searchCanvas.screens.back()
     }
@@ -35,14 +40,15 @@ Kit.NormalizedCanvas {
     Kit.Frame {
         id: searchFrame
         anchors.fill: parent
+        visible: !searchCanvas.eclipse
         surfaceDrawn: false
         padFamily: searchCanvas.padFamily
         helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         // Its help stands while the keyboard holds the focus; on the covers the theme's own does.
-        helpShown: searchCanvas.screens.shown === Screens.Search
-        focus: !searchCanvas.splashShown && searchCanvas.screens.shown === Screens.Search
+        helpShown: !searchCanvas.eclipse && searchCanvas.screens.shown === Screens.Search
+        focus: !searchCanvas.eclipse && !searchCanvas.splashShown && searchCanvas.screens.shown === Screens.Search
         controller.navigationShown: false
         help: HelpModel {
             screen: HelpModel.Search
@@ -91,5 +97,19 @@ Kit.NormalizedCanvas {
                 onActiveFocusChanged: if (searchCanvas.host.searching && keyboard.activeFocus !== searchCanvas.host.typing) searchCanvas.screens.keysFocused(keyboard.activeFocus)
             }
         }
+    }
+    SearchEclipse {
+        id: searchEclipse
+        objectName: "searchEclipse"
+        anchors.fill: parent
+        visible: searchCanvas.eclipse
+        focus: searchCanvas.eclipse && !searchCanvas.splashShown && (searchCanvas.screens.shown === Screens.Search || searchCanvas.screens.shown === Screens.SearchGrid)
+        pixelScale: searchCanvas.unit
+        screens: searchCanvas.screens
+        games: searchCanvas.games
+        typist: typist
+        library: searchCanvas.library
+        padFamily: searchCanvas.padFamily
+        splashShown: searchCanvas.splashShown
     }
 }

@@ -499,6 +499,9 @@ Window {
             padFamily: program.padFamily
             gameShown: program.gameShown
             splashShown: program.splashShown
+            clock: clock
+            battery: machineBattery.level
+            library: library
         }
         ListCardScreen {
             screens: screens
@@ -745,6 +748,28 @@ Window {
             splashShown: program.splashShown
             // The Scraper's run ended: the library shows what it fetched.
             onLibraryChanged: library.refresh()
+        }
+        Binding {
+            target: screens
+            property: "eclipse"
+            value: Kit.Tokens.coronaRim > 0
+        }
+        CollectionsEclipse {
+            screens: screens
+            library: library
+            clock: clock
+            battery: machineBattery.level
+            padFamily: program.padFamily
+            splashShown: program.splashShown
+        }
+        ToolsEclipse {
+            screens: screens
+            library: library
+            settings: settingsModel
+            clock: clock
+            battery: machineBattery.level
+            padFamily: program.padFamily
+            splashShown: program.splashShown
         }
         PageScreen {
             id: pageScreen

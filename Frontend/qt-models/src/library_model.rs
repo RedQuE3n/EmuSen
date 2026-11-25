@@ -1,11 +1,14 @@
 //! `LibraryModel`, the library's navigation as a QAbstractListModel (EmuSen_Qt.md §1.2.1): library.rs's rows put on
 //! Qt. A refresh runs off the GUI thread and comes back through qt_thread().queue, the one way in.
 
+use crate::clients::ClientSource;
+use crate::esde_shelves::Metadata;
 use crate::esde_texts::EsdeTexts;
-use crate::library::{refresh, refresh_with, splash_worlds, LibrarySource, LibraryView, Refreshed};
+use crate::library::{games_of_at, refresh, refresh_with, splash_worlds, LibrarySource, LibraryView, Refreshed, ALL};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 #[cxx_qt::bridge]
@@ -216,6 +219,36 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "esdeSearch"]
         fn esde_search(self: Pin<&mut LibraryModel>, words: &QString);
+
+        /// Fetches game metadata once in the background when not yet loaded by `byFacts`.
+        #[qinvokable]
+        #[cxx_name = "ensureMetadata"]
+        fn ensure_metadata(self: Pin<&mut LibraryModel>);
+
+        /// Creates a user collection in games.db and refreshes the library.
+        #[qinvokable]
+        #[cxx_name = "createCollection"]
+        fn create_collection(self: Pin<&mut LibraryModel>, name: &QString);
+
+        /// Renames a user collection in games.db and refreshes the library.
+        #[qinvokable]
+        #[cxx_name = "renameCollection"]
+        fn rename_collection(self: Pin<&mut LibraryModel>, id: i64, name: &QString);
+
+        /// Deletes a user collection in games.db and refreshes the library.
+        #[qinvokable]
+        #[cxx_name = "deleteCollection"]
+        fn delete_collection(self: Pin<&mut LibraryModel>, id: i64);
+
+        /// Emitted when cached or catalog game metadata updates.
+        #[qsignal]
+        #[cxx_name = "metadataChanged"]
+        fn metadata_changed(self: Pin<&mut LibraryModel>);
+
+        /// Emitted when a collection mutation is refused (for example a duplicate name).
+        #[qsignal]
+        #[cxx_name = "collectionProblem"]
+        fn collection_problem(self: Pin<&mut LibraryModel>, message: QString);
     }
 
     unsafe extern "RustQt" {
@@ -269,6 +302,10 @@ pub struct LibraryModelRust {
     esde_theme_folders: QString,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
+    client: Option<Arc<ClientSource>>,
+    extra_metadata: Vec<(String, Metadata)>,
+    metadata_asking: bool,
+    metadata_games: usize,
 }
 
 impl Default for LibraryModelRust {
@@ -301,6 +338,10 @@ impl Default for LibraryModelRust {
             esde_theme_folders: QString::default(),
             view: LibraryView::empty(),
             source: None,
+            client: None,
+            extra_metadata: Vec::new(),
+            metadata_asking: false,
+            metadata_games: 0,
         }
     }
 }
@@ -447,8 +488,89 @@ impl qobject::LibraryModel {
         self.announce_esde([changed, false, false, false]);
     }
 
+    /// Metadata from the catalog when loaded, or from background `ensureMetadata`.
+    pub fn effective_metadata(&self) -> &[(String, Metadata)] {
+        if !self.view.catalog.metadata.is_empty() {
+            &self.view.catalog.metadata
+        } else {
+            &self.extra_metadata
+        }
+    }
+
+    pub fn ensure_metadata(mut self: Pin<&mut Self>) {
+        if self.loading || !self.view.catalog.metadata.is_empty() || self.metadata_asking {
+            return;
+        }
+        let games_len = self.view.catalog.games.len();
+        if games_len == 0 || (!self.extra_metadata.is_empty() && self.metadata_games == games_len) {
+            return;
+        }
+        let Some(source) = self.source.clone() else { return };
+        self.as_mut().rust_mut().metadata_asking = true;
+        let games = self.view.catalog.games.clone();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let loaded = source.metadata(&games).unwrap_or_default();
+            let _ = qt.queue(move |mut model| {
+                let mut m = model.as_mut().rust_mut();
+                m.extra_metadata = loaded;
+                m.metadata_games = games_len;
+                m.metadata_asking = false;
+                model.as_mut().metadata_changed();
+            });
+        });
+    }
+
+    pub fn create_collection(self: Pin<&mut Self>, name: &QString) {
+        let trimmed = name.to_string().trim().to_owned();
+        if !trimmed.is_empty() {
+            let at = crate::words::utc(crate::words::now());
+            self.change_collection(serde_json::json!({ "op": "create_collection", "name": trimmed, "at": at }), true);
+        }
+    }
+
+    pub fn rename_collection(self: Pin<&mut Self>, id: i64, name: &QString) {
+        let trimmed = name.to_string().trim().to_owned();
+        if !trimmed.is_empty() {
+            self.change_collection(serde_json::json!({ "op": "rename_collection", "id": id, "name": trimmed }), true);
+        }
+    }
+
+    pub fn delete_collection(self: Pin<&mut Self>, id: i64) {
+        self.change_collection(serde_json::json!({ "op": "delete_collection", "id": id }), false);
+    }
+
+    fn change_collection(self: Pin<&mut Self>, op: serde_json::Value, check_duplicate: bool) {
+        let (Some(client), Some(source)) = (self.client.clone(), self.source.clone()) else { return };
+        let (qt, gamelists, by_facts) = (self.qt_thread(), self.view.gamelists.clone(), self.by_facts);
+        std::thread::spawn(move || {
+            let answer = match client.library.change(&op) {
+                Ok(v) => v,
+                Err(why) => {
+                    let msg = QString::from(why.to_string().as_str());
+                    let _ = qt.queue(move |model| model.collection_problem(msg));
+                    return;
+                }
+            };
+            if check_duplicate && (answer.is_null() || answer == serde_json::Value::Bool(false)) {
+                let _ = qt.queue(move |model| model.collection_problem(QString::from("A collection with that name already exists.")));
+                return;
+            }
+            let refreshed = refresh_with(source.as_ref(), &gamelists, by_facts);
+            let texts = texts_of(&refreshed);
+            let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
+        });
+    }
+
     pub fn heading_of(&self, key: &QString) -> QString {
         let key = key.to_string();
+        if let Some(id) = key.strip_prefix("collection:").and_then(|s| s.parse::<i64>().ok()) {
+            let name = self.view.catalog.collections.iter().find(|c| c.id == id).map_or("", |c| c.name.as_str());
+            return QString::from(name);
+        }
+        if let Some(genre) = key.strip_prefix("genre:") {
+            return QString::from(genre);
+        }
         self.view.rows.rows().iter().find(|r| r.key == key).map_or_else(QString::default, |r| QString::from(r.heading.as_str()))
     }
 
@@ -567,7 +689,36 @@ impl qobject::LibraryModel {
     }
 
     pub fn games_of(&self, key: &QString) -> QString {
-        QString::from(self.view.games_text(&key.to_string()))
+        let key = key.to_string();
+        if let Some(id) = key.strip_prefix("collection:").and_then(|s| s.parse::<i64>().ok()) {
+            let members: HashSet<&str> = self
+                .view
+                .catalog
+                .collections
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| c.members.iter().map(String::as_str).collect())
+                .unwrap_or_default();
+            let rows: Vec<_> = games_of_at(ALL, &self.view.systems, &self.view.catalog, crate::words::now())
+                .into_iter()
+                .filter(|g| members.contains(g.path.as_str()))
+                .collect();
+            return QString::from(crate::games::to_json(&rows).as_str());
+        }
+        if let Some(genre) = key.strip_prefix("genre:") {
+            let paths: HashSet<&str> = self
+                .effective_metadata()
+                .iter()
+                .filter(|(_, m)| m.get("genre").is_some_and(|g| g.trim().eq_ignore_ascii_case(genre)))
+                .map(|(p, _)| p.as_str())
+                .collect();
+            let rows: Vec<_> = games_of_at(ALL, &self.view.systems, &self.view.catalog, crate::words::now())
+                .into_iter()
+                .filter(|g| paths.contains(g.path.as_str()))
+                .collect();
+            return QString::from(crate::games::to_json(&rows).as_str());
+        }
+        QString::from(self.view.games_text(&key))
     }
 
     pub fn index_of(&self, key: &QString) -> i32 {
@@ -688,10 +839,11 @@ impl qobject::LibraryModel {
         let cores = self.cores.to_string();
         let qt = self.qt_thread();
         std::thread::spawn(move || {
-            let (source, refreshed): (Option<Arc<dyn LibrarySource>>, Refreshed) =
+            let (source, client, refreshed): (Option<Arc<dyn LibrarySource>>, Option<Arc<ClientSource>>, Refreshed) =
                 match crate::clients::source_for(&library, &cores) {
-                    Ok(source) => {
-                        let source: Arc<dyn LibrarySource> = Arc::new(source);
+                    Ok(client) => {
+                        let client = Arc::new(client);
+                        let source: Arc<dyn LibrarySource> = client.clone();
                         // The systems come before the scan, so Moonrise's planets do not wait for the games.
                         if let Ok(systems) = source.systems() {
                             let worlds = splash_worlds(&systems);
@@ -700,24 +852,31 @@ impl qobject::LibraryModel {
                         // An ES-DE theme's view is shown from a first read, the metadata and media following (§4.15).
                         let themed = source.settings().is_ok_and(|s| crate::esde_shelves::settings_of(&s).themed);
                         if themed {
-                            let (first, shown) = (refresh(&crate::library::FirstLook(source.as_ref())), source.clone());
+                            let (first, shown, c) = (refresh(&crate::library::FirstLook(source.as_ref())), source.clone(), client.clone());
                             let texts = texts_of(&first);
-                            let _ = qt.queue(move |model| model.apply(Some(shown), first, texts));
+                            let _ = qt.queue(move |model| model.apply_with_client(Some(shown), Some(c), first, texts));
                         }
                         let refreshed = refresh(source.as_ref());
-                        (Some(source), refreshed)
+                        (Some(source), Some(client), refreshed)
                     }
-                    Err(words) => (None, Err(words)),
+                    Err(words) => (None, None, Err(words)),
                 };
             let texts = texts_of(&refreshed);
-            let _ = qt.queue(move |model| model.apply(source, refreshed, texts));
+            let _ = qt.queue(move |model| model.apply_with_client(source, client, refreshed, texts));
         });
     }
 
+    fn apply(self: Pin<&mut Self>, source: Option<Arc<dyn LibrarySource>>, refreshed: Refreshed, texts: Option<EsdeTexts>) {
+        self.apply_with_client(source, None, refreshed, texts);
+    }
+
     /// A refresh's answer applied on the GUI thread: the rows reset with the selection kept, the properties published.
-    fn apply(mut self: Pin<&mut Self>, source: Option<Arc<dyn LibrarySource>>, refreshed: Refreshed, texts: Option<EsdeTexts>) {
+    fn apply_with_client(mut self: Pin<&mut Self>, source: Option<Arc<dyn LibrarySource>>, client: Option<Arc<ClientSource>>, refreshed: Refreshed, texts: Option<EsdeTexts>) {
         if source.is_some() {
             self.as_mut().rust_mut().source = source;
+        }
+        if client.is_some() {
+            self.as_mut().rust_mut().client = client;
         }
         let rows_change = refreshed.is_ok();
         if rows_change {
@@ -726,6 +885,10 @@ impl qobject::LibraryModel {
         let changed = {
             let mut m = self.as_mut().rust_mut();
             let m = &mut *m;
+            if rows_change && m.view.catalog.games.len() != m.metadata_games {
+                m.extra_metadata.clear();
+                m.metadata_games = 0;
+            }
             let shown = [&mut m.esde_settings, &mut m.esde_shelves, &mut m.esde_media, &mut m.esde_presence];
             crate::esde_texts::take(&mut m.view, shown, refreshed, texts)
         };
@@ -734,7 +897,10 @@ impl qobject::LibraryModel {
         }
         self.as_mut().announce_esde(changed);
         self.as_mut().show_loading(false);
-        self.publish();
+        self.as_mut().publish();
+        if rows_change {
+            self.metadata_changed();
+        }
     }
 
     /// The ES-DE view's texts that changed and whether it is shown, announced after a refresh and never on a step, since

@@ -1,0 +1,111 @@
+NAME
+    rom - hash the library's games, check them, and find the same dump twice
+
+SYNOPSIS
+    rom hash [-r] [--comparable] <path>...
+    rom check [-r] <path>...
+    rom dups [<console>]
+    rom wait [rom<n>]
+
+DESCRIPTION
+    The library's file tool of the emusen.library module. A <path> is a
+    file or a folder of the library, AppSettings.RomDirectory, written
+    relative to it with / between its parts: snes, "psx/Rayman (USA).cue".
+    A folder is taken only with -r, and then whole, as the library's scan
+    shelves it: a cue sheet stands for the tracks it names and an .m3u for
+    its discs, and only files some console takes are read; / with -r is
+    the whole library. A file named directly is read whatever it is.
+    Which console a file is for is the scan's own routing, then the
+    nearest console folder above it.
+
+    THE LIBRARY IS ONLY READ. rom writes nothing anywhere: not into the
+    library, not beside it. It reports; hiding a game or moving it to the
+    Trash is the Library window's, and never this command's.
+
+    'hash' prints one line for each file:
+
+        <crc32> <md5> <sha1> <size> <name>
+
+    the CRC-32 (as zip and ScreenScraper take it), MD5 and SHA-1 in lower-
+    case hexadecimal, the size in bytes and the name relative to the
+    library, one space between, so that the name is the rest of the line
+    however many spaces it holds. A cue sheet gives one line for each
+    track, as Redump lists a dump, named <sheet>#<nn>: the track's bytes
+    from its first index in its file to the next track's. An .m3u gives
+    no line of its own; its discs follow it. A zip is hashed as the file
+    it is.
+
+    With --comparable each file gives one line, of its console's
+    comparable form, the form in which two copies of one dump are equal:
+      - a cartridge with the header its console's pack takes off removed
+        (the iNES header of an NES game, a SNES copier's 512 bytes, an N64
+        image put in big-endian order); otherwise the file as it is;
+      - a zip as the image inside it that a game is played from, checked
+        against its CRC-32 and then taken as above;
+      - a disc (a cue sheet and its tracks, a CHD, an .iso, a raw data
+        track) as EmuSen's own disc reader gives its sectors: a compact
+        disc's 2,352 raw bytes each from track 1's index 01 to the lead-
+        out, a DVD's 2,048 user bytes each, its size the disc's. So a cue
+        sheet of one file, the same disc split into a file a track, and
+        its CHD give one line.
+
+    'check' prints one line for each file: '<name>: ok', or the name and
+    each check it failed, as '<check>: <why>', separated by '; '. The checks
+    are those a dump can be held to without a catalogue of good dumps:
+        size     the file will not open, will not read through, or is
+                 empty; an .iso or raw track that is not a whole number of
+                 its 2,048- or 2,352-byte sectors;
+        sheet    a cue sheet that does not parse, names a file that is not
+                 there, has a track that ends inside a sector, or does not
+                 make a disc; an .m3u listing a disc that is not there;
+        archive  a zip whose directory does not read, which holds no file,
+                 or an entry whose bytes do not match the length and CRC-32
+                 the zip records for it;
+        chd      a CHD that chdman's verify fails (every hunk decompressed,
+                 the overall SHA-1 compared), or one of whose sectors
+                 EmuSen's reader cannot read (a hunk whose CRC is not the
+                 map's). Where the build's chdman is not there, or is not
+                 the pinned one, rom check says so once and reads each CHD
+                 through EmuSen's reader alone.
+    A header that does not hold its own checksum is a later check, by each
+    console's pack. A clean check is not a proof that the dump is a good
+    one: only a catalogue of good dumps can say that.
+
+    'dups' prints the groups of the same dump, one a paragraph, each file
+    as its 'hash --comparable' line: files whose comparable CRC-32, MD5,
+    SHA-1 and size are all equal. A package and the library files it
+    claims are one game already (a CHD the tool wrote beside its original,
+    and the original), so a group of those alone is no group. With a
+    <console>, by its ES-DE name or its id (snes, psx), only that console's
+    games are compared. A file that cannot be read is named on standard
+    error and left out; no group is given if the job was stopped before
+    every file was read. The same pairs come from the shell's own tools:
+
+        rom hash -r --comparable / | sort | uniq -D -w 40
+
+    since the first 40 characters of a line are the CRC-32 and most of the
+    MD5; dups adds the paragraphs and the packages' rule.
+
+    Each rom is a job of the library tool, followed until it ends or the
+    line's ten seconds are spent; a longer one goes on in the background as
+    rom<n>, which ps lists with how many files it has read, 'rom wait
+    rom<n>' follows again, printing what it found meanwhile, and 'kill
+    rom<n>' stops. What rom prints on standard output is only its lines,
+    so that it pipes; its notes and the words for a file it could not read
+    go to standard error. A pipe is bound by the same ten seconds, so a
+    whole library is run as 'rom dups' and waited for.
+
+    Exit status: 1 where a path names nothing, a file could not be read or
+    failed a check; otherwise 0. dups finding groups is not a failure.
+
+EXAMPLES
+    rom hash "snes/Super Metroid (USA).sfc"
+    rom hash psx/Rayman.cue
+    rom hash -r --comparable snes | sort
+    rom check -r / | grep -v ': ok$'
+    rom dups
+    rom dups psx
+    rom hash -r --comparable / | sort | uniq -D -w 40
+
+SEE ALSO
+    chd, pkg, uniq, sort, EmuSen_LibraryTools.md section 7

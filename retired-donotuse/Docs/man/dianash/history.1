@@ -1,0 +1,22 @@
+NAME
+    history - list previously executed commands
+
+SYNOPSIS
+    history
+    history clear
+    !N
+    !!
+
+DESCRIPTION
+    Lists every completed (non-buffered) command line typed at the prompt,
+    numbered from 1 like bash's own history builtin. 'history clear' forgets
+    all of it. '!N' re-runs history entry N; '!!' re-runs the last command -
+    both are expanded before lexing even happens, the same point a real
+    shell expands '!'-references, and only at the start of a brand-new
+    (not mid-block) line. A script run via 'source' does NOT add its own
+    lines to history - only the 'source' invocation itself does.
+
+EXAMPLES
+    history
+    !!
+    !12

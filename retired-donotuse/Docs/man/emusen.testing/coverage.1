@@ -1,0 +1,106 @@
+NAME
+    coverage - the coverage map: which test classes executed a source file
+
+SYNOPSIS
+    coverage [FILE...]
+    coverage run --bin DIR [--tree DIR] [--jobs N] [--rev REV] [--class C]... [--by-case C]... [--nightly] [--out DIR] [--repo DIR]
+    coverage load [--merge] [FILE]
+
+DESCRIPTION
+    A command of the emusen.testing module. The map records, for each
+    test class of a test project, the source files its tests executed:
+    C# files of this repository by their path, and the LunaP toolkit's
+    by the sibling checkout's path with a 'lunap:' prefix. impact's
+    'covered' rule reads it: a changed .cs file the map has seen selects
+    the classes that executed it and no more. See `man impact` and
+    EmuSen_Testing.md §3.7.
+
+    With no words, one line describes the map the store holds: the
+    revision it was built at, when, how many classes and files, and how
+    many classes gave no report. With FILE words it prints one line per
+    class that executed each file, or 'unseen' for a file the map never
+    saw (a new file, one no test executes, or any file that is not C#).
+
+    'run' builds a map from one build of the test project. Every class
+    of the land tier runs in its own `dotnet test` process under the
+    coverlet collector (the version the test project references, from
+    the NuGet cache) with the filter
+    (FullyQualifiedName~CLASS.|FullyQualifiedName~CLASS+)&Category!=nightly,
+    so the map shows what land runs; the nightly tier's classes are left
+    out (--nightly adds them), since the nightly runs its classes whole
+    and needs no map. --jobs N processes run at once, each from its own
+    full copy of --bin beside it (bin/coverage-N/<framework>), never a
+    hard link: coverlet rewrites the instrumented assemblies in place
+    and restores them at the end of each session, and a build rewrites
+    the rest, so nothing may be shared with the build or between
+    workers. The copies are removed at the end. A class whose process
+    ends without a report is run once more after five seconds, since
+    the previous class's process may still hold a module coverlet backs
+    up. --tree names
+    the checkout the build was made in, whose paths the pdbs carry
+    (default: the repository); LunaP's root is read from that tree's
+    LunaP.props. --class C limits the run to the classes whose name
+    holds C, for a smoke test. Each process runs in the project's capped
+    scope with MSBUILDDISABLENODEREUSE=1 and UseSharedCompilation=false
+    in its environment (VSTest takes no -p: for a dll), so a test that
+    builds leaves no compiler server behind.
+
+    xunit discovers every test before the filter applies, so each copy
+    gets an xunit.runner.json with preEnumerateTheories false (a
+    theory's data is then evaluated by the class that runs it, not by
+    discovery), and the run opens with a discovery baseline: two runs
+    whose filter matches no test, the least hit count of each line of
+    each class block kept. A file counts as executed by a class only
+    where a line's hits exceed that floor; a line discovery alone hits
+    counts for nobody.
+
+    --by-case C maps a class whose name holds C one group of cases at a
+    time instead of whole: its cases are listed (dotnet test
+    --list-tests, with theories enumerated at discovery for that copy)
+    and grouped by the first quoted argument of each display name, less
+    a trailing size such as -1280x800 (the view a fit audit draws, the
+    recording it reads back), the cases with no quoted argument forming
+    one more group. Each group is a unit of its own, CLASS#KEY (CLASS#
+    for the last), selected and run by the filter
+    (FullyQualifiedName~CLASS.&(DisplayName~"KEY"|DisplayName~"KEY-)),
+    so a change to one window's code runs that window's cases and no
+    other's. The groups' reports are read against a second baseline
+    taken with theories enumerated at discovery, since that is how they
+    run. The output is plain lines, one a line as classes finish:
+
+        # coverage 1  rev R  built T  bin DIR  jobs N  classes C  groups G
+        # baseline  N files  M lines  SECONDS
+        covered  UNIT  FILE           the unit executed the file
+        ran      UNIT  SECONDS  RESULT  N files
+        none     UNIT  why            no report (its log is kept under --out)
+        # done   N with a report, M without
+
+    A class with no report (the process crashed before coverlet wrote
+    it) is recorded under the file '*' and impact selects it for every
+    covered change, so a lost report widens the selection and never
+    narrows it. The status is 1 when any class gave no report.
+
+    'load' reads a run's lines from FILE or standard input into the
+    store, as one trial of tier 'coverage' with the run's revision as
+    its tree, replacing the previous map in one transaction. With
+    --merge it replaces only the rows of the classes the run holds (a
+    class mapped by case merged into a whole map), and the run must be
+    at the map's revision. impact
+    uses the newest map whose revision is at most one day older than
+    the change's merge base (its --map-age), else says so and falls
+    back to the graph rule.
+
+    Measured on 2026-11-02 on the desktop: a class costs about 10 s
+    more under coverlet than bare (instrumenting the 17 EmuSen
+    assemblies and writing a 34 MB report), so 526 land classes in 4
+    processes take about an hour; a file executed by every class
+    (xunit's discovery runs the test attributes' constructors) is
+    attributed to every class, which is correct, since a change there
+    reaches every run.
+
+EXAMPLES
+    coverage
+    coverage EmuSen.Mistress/Views/CoresWindow.cs | wc -l
+    coverage run --bin EmuSen.WiseMan/bin/Debug/net10.0 --jobs 4 > map.txt
+    coverage load map.txt
+    coverage run --bin EmuSen.WiseMan/bin/Debug/net10.0 --class GalaxiaScopeTests --jobs 1

@@ -1,0 +1,23 @@
+NAME
+    load - write a raw file's bytes into memory
+
+SYNOPSIS
+    load <space> <addr> <file>
+
+DESCRIPTION
+    Reads home/Logs/<CoreName>/<file> (typically
+    one 'dump' produced, or hand-edited afterward) and pokes its raw bytes
+    into <space> starting at
+    <addr>. Refuses if <space> isn't writable.
+
+    The file name is taken from home/Logs/<CoreName>/: a bare name or one
+    with '../' in it is resolved from there, one with a leading '/' from
+    this shell's root, as every other command reads a path (see 'man
+    hier'). A name that lands above the root is refused, so '../../../x'
+    and an absolute path of the machine cannot write or read outside it.
+    Before 2026-10-10 the name was joined to the folder unchecked, and
+    both did.
+
+EXAMPLES
+    load WRAM 0 wram.bin
+    load WRAM 0 /tmp/wram.bin

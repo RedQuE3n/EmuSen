@@ -1,0 +1,20 @@
+NAME
+    ps, jobs - list active breakpoints, watches, and sessions
+
+SYNOPSIS
+    ps
+    jobs
+
+DESCRIPTION
+    Lists every active breakpoint (see 'bp'), watch (see 'watch'), and tmux
+    session (see 'tmux', if a session manager is registered for this host)
+    as one unified table - the read-only counterpart to 'kill'. 'jobs' is a
+    plain alias, not a separate command. Each row's id column is exactly
+    what 'kill' expects: 'bp<N>' for a breakpoint, 'watch<N>' for a watch, or
+    a session's own name - copy a row's id straight into 'kill' unchanged.
+    Prints nothing wrong, just an empty-looking table, with no ROM loaded and
+    no session manager registered (there's nothing to list, not an error).
+
+EXAMPLES
+    ps
+    jobs

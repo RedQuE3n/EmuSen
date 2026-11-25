@@ -1,0 +1,15 @@
+NAME
+    diff - compare a snapshot against current memory
+
+SYNOPSIS
+    diff <name> [<count>]
+
+DESCRIPTION
+    Compares a snapshot saved with 'snapshot' against that same space's
+    CURRENT contents and lists every byte address that's different now
+    (default 20 shown). Doesn't touch or replace the saved snapshot, so the
+    same baseline can be diffed again later against a further state.
+
+EXAMPLES
+    diff before
+    diff before 50

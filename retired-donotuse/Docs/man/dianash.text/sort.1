@@ -1,0 +1,15 @@
+NAME
+    sort - sort lines
+
+SYNOPSIS
+    sort [-n] [-r]
+
+DESCRIPTION
+    Sorts piped stdin (or trailing literal text) by line - ordinal string
+    comparison by default, numeric with -n, reversed with -r. No -u (that's
+    'uniq's job - pair them, 'sort | uniq', the way real shell usage does
+    before reaching for 'sort -u' as a shortcut), no field/key selection, no
+    locale-aware collation.
+
+EXAMPLES
+    watch list | sort -n

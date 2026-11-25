@@ -1,0 +1,15 @@
+NAME
+    mem - hexdump a range of memory
+
+SYNOPSIS
+    mem <space> <addr> [<len>]
+
+DESCRIPTION
+    Prints <len> bytes (default 16) from <space> starting at <addr> as a
+    classic hex + ASCII dump, 16 bytes per row. <space> is one of the names
+    'spaces' lists. Addresses/lengths are hex (an optional 0x or $ prefix is
+    fine either way).
+
+EXAMPLES
+    mem WRAM 0
+    mem CpuBus 8000 64

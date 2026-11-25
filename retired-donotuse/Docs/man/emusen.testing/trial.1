@@ -1,0 +1,62 @@
+NAME
+    trial - run a selection, judge it and record it
+
+SYNOPSIS
+    trial [--tier T] [--from FILE] [--no-reuse] [--dry-run] [--on RUNNER]
+          [--requested-by WHO] [--base REV] [--repo DIR]
+    trial verdict SHA | ls | show N
+    trial quarantine [add TEST --owner O --cause C [--unit U] [--days N]
+                     | rm TEST]
+
+DESCRIPTION
+    A command of the emusen.testing module. It reads impact's lines from
+    standard input, or --from FILE, or runs impact for the tier against
+    --base, and runs them:
+
+    - each cargo root once, with its selected crates as -p arguments,
+      through cargo nextest on the tier's profile where the root defines
+      it (test-fast at land) and release otherwise; nextest's JUnit gives
+      a row per test, and one retry for every test (two for a quarantined
+      one) shows a flake for what it is;
+    - each test project once: dotnet build, then dotnet test --no-build
+      with the selected classes as the filter (or only Category!=nightly
+      when every class is chosen) and a TRX logger; a failed test is run
+      once more by name, and a pass then records it as flaky;
+    - the lunap unit as dotnet test of the sibling LunaP checkout.
+
+    Steps run concurrently in the queue's CPU slots (two on the desktop),
+    each in a capped scope (CPUWeight=20, MemoryMax=10G or
+    EMUSEN_TESTING_MEMORY_MAX, MemorySwapMax=2G). A trial runs in the
+    foreground past the shell's ten-second budget, which it does not poll;
+    Ctrl-C at a terminal reaches its steps' processes.
+
+    Reuse: at a tier with "reuse": true (fast, land), a unit whose key
+    (see units) matches a green result on the same runner within the
+    tier's reuse_days, for a unit with no flaky result in 30 days, is not
+    run and is reported 'reused' with the trial it came from. A unit with
+    no key (uncommitted inputs) is always run. The nightly never reuses.
+
+    The policy: a failed test fails its unit; a flaky test fails it too
+    unless it is quarantined by name. A quarantine has an owner, a cause
+    and an expiry of at most 14 days; renewing it needs a new cause.
+    A step that could not run, or a dotnet run that matched no test,
+    fails its units.
+
+    Output, tab-separated: one 'build' line per step; one line per unit
+    beginning ok, FAIL, flaky (quarantined) or reused, with its counts and
+    time, and the failing tests indented below; and the verdict, GREEN or
+    RED, with the trial's number, tree, units and time and its folder
+    under ~/.cache/emusen/testing/trials/. Exit status 0 for GREEN, 1 for
+    RED, 2 when it could not run. The verdict is printed before the store
+    is written; a store failure is reported and never changes it.
+
+    trial verdict SHA prints the newest verdict of a tree, as push.sh
+    reads it (status 0 GREEN, 1 RED, 2 none). See EmuSen_Testing.md §3.4
+    and §3.5.
+
+EXAMPLES
+    impact | trial --dry-run
+    impact --base WiseMan@{1} --head WiseMan | trial --requested-by land
+    trial --from selection.txt --no-reuse
+    trial verdict $(git rev-parse HEAD)
+    trial quarantine add 'tests::racy_timer' --unit cargo:Platform/crystal --owner tester --cause "a 2 ms timing window, §3.57"

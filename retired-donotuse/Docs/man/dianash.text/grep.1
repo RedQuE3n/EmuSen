@@ -1,0 +1,20 @@
+NAME
+    grep - filter lines by pattern
+
+SYNOPSIS
+    grep [-i] [-v] [-n] [-c] [-q] <pattern> [text...]
+
+DESCRIPTION
+    Filters lines matching <pattern> (a .NET regex, same choice sed makes).
+    -i case-insensitive, -v invert (show non-matching lines), -n prefix each
+    match with its 1-based line number, -c print only the match count, -q
+    no output at all (exit code only). Exit code is 0 if anything matched, 1
+    otherwise (real grep semantics) - -q exists specifically so grep can
+    drive an if/while condition ('if regs | grep -q PC; then ...'), not just
+    filter text. Reads piped stdin if present, else operates on trailing
+    literal text. No -E/-F/-P mode switches, no -A/-B/-C context lines, no
+    multi-file support.
+
+EXAMPLES
+    watch log 1 | grep -v poll
+    if regs | grep -q PC; then echo has-pc; fi

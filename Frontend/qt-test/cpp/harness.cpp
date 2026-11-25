@@ -743,7 +743,24 @@ QString harness_constants(QObject& object)
     for (int i = QObject::staticMetaObject.propertyCount(); i < meta->propertyCount(); ++i) {
         const QMetaProperty p = meta->property(i);
         if (!p.isWritable()) {
-            lines << QStringLiteral("%1=%2").arg(QString::fromLatin1(p.name()), p.read(&object).toString());
+            const QVariant value = p.read(&object);
+            QString text;
+            if (value.metaType() == QMetaType::fromType<QList<double>>()) {
+                QStringList parts;
+                for (double item : value.value<QList<double>>()) {
+                    parts << QString::number(item);
+                }
+                text = parts.join(QLatin1Char(' '));
+            } else if (value.typeId() == QMetaType::QVariantList) {
+                QStringList parts;
+                for (const QVariant& item : value.toList()) {
+                    parts << item.toString();
+                }
+                text = parts.join(QLatin1Char(' '));
+            } else {
+                text = value.toString();
+            }
+            lines << QStringLiteral("%1=%2").arg(QString::fromLatin1(p.name()), text);
         }
     }
     return lines.join(QLatin1Char('\n'));

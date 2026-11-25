@@ -114,15 +114,19 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
 
     // Eclipse: every role in Sora but the codes, in JetBrains Mono; the families drawn, not only those asked for.
     use_eclipse(&mut scene);
-    // Eclipse's own Settings (EmuSen_Qt.md §3.4.11): the Library's first row, the ROM folder, in Sora, its path in JetBrains Mono.
+    // Eclipse's own Settings: Library's ROM folder row in Sora, its aside folder path in JetBrains Mono.
     wait_for(&mut scene, "theme", "settings", "true", 2000);
+    scene.pad(UiButton::Up);
+    scene.pad(UiButton::Up);
+    wait_for(&mut scene, "settingsModel", "focused", "0", 1000);
     scene.wait(300);
     let own = scene.tree();
     let rom = own.nodes.iter().find(|n| n.name.starts_with("rowName.") && n.visible && n.text.as_deref() == Some("ROM folder")).expect("Eclipse's ROM folder row").name.replace("rowName.", "");
     // A Line's words are named as the Line is: the Text, the last of the name in the tree, holds the face.
     let face = |name: String| own.nodes.iter().rev().find(|n| n.name == name && n.visible).map(|n| (n.face.clone().unwrap_or_default(), n.drawn.clone().unwrap_or_default())).unwrap_or_default();
     assert_eq!(face(format!("rowName.{rom}")), ("Sora".into(), "Sora".into()), "Eclipse's own settings row");
-    assert_eq!(face(format!("rowWords.{rom}")), ("JetBrains Mono".into(), "JetBrains Mono".into()), "Eclipse's own path, a code");
+    assert_eq!(face(format!("rowWords.{rom}")), ("Sora".into(), "Sora".into()), "Eclipse's own settings row value");
+    assert_eq!(face("asideFolderPath".into()), ("JetBrains Mono".into(), "JetBrains Mono".into()), "Eclipse's own path, a code");
     // The program's own Settings under Eclipse's faces: a package of the reference's screens, which draws no Settings, with Eclipse's tokens.
     let folder = eclipse_reference();
     assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));

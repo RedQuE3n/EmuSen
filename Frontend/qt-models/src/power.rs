@@ -50,11 +50,21 @@ pub trait Runner: Send + Sync {
     fn run(&self, verb: &str) -> Result<(), String>;
 }
 
-/// Production runner using `systemctl --no-ask-password <verb>`.
+/// Production runner using `systemctl --no-ask-password <verb>`, guarded against invocation from test binaries.
 pub struct SystemctlRunner;
+
+fn systemctl_blocked() -> bool {
+    if cfg!(test) || std::env::var_os("NEXTEST_RUN_ID").is_some() || std::env::var_os("EMUSEN_TEST_NO_SYSTEMCTL").is_some() {
+        return true;
+    }
+    std::env::current_exe().ok().and_then(|p| p.parent().and_then(|d| d.file_name()).map(|n| n == "deps")).unwrap_or(false)
+}
 
 impl Runner for SystemctlRunner {
     fn run(&self, verb: &str) -> Result<(), String> {
+        if systemctl_blocked() {
+            return Err("systemctl is disabled in tests".to_owned());
+        }
         let out = Command::new("systemctl").args(["--no-ask-password", verb]).output().map_err(|e| format!("systemctl could not start: {e}"))?;
         if out.status.success() {
             return Ok(());
@@ -73,6 +83,16 @@ pub fn failed_notice(action: Action, why: &str) -> String {
     format!("{} could not run\n{why}", action.label())
 }
 
+/// Formats a desktop-return save failure as heading + body for the Eclipse Notice banner.
+pub fn desktop_cancelled(why: &str) -> String {
+    format!("Back to the desktop cancelled\nCould not save the suspended game: {why}")
+}
+
+/// Formats a quit save failure as heading + body for the Eclipse Notice banner.
+pub fn quit_cancelled(why: &str) -> String {
+    format!("Quit EmuSen cancelled\nCould not save the suspended game: {why}")
+}
+
 /// Saves any active game first, aborting without calling `runner` if saving fails, then runs the power verb.
 pub fn execute<F>(action: Action, runner: &dyn Runner, save_game: F) -> Result<(), String>
 where
@@ -80,4 +100,15 @@ where
 {
     save_game(action.closes_session()).map_err(|why| format!("{} cancelled\nCould not save the suspended game: {why}", action.label()))?;
     runner.run(action.verb()).map_err(|why| failed_notice(action, &why))
+}
+
+/// Saves any suspended game before minimizing to the desktop, aborting without minimizing on save error.
+pub fn execute_desktop<F, G>(save_game: F, minimize: G) -> Result<(), String>
+where
+    F: FnOnce() -> Result<(), String>,
+    G: FnOnce(),
+{
+    save_game().map_err(|why| desktop_cancelled(&why))?;
+    minimize();
+    Ok(())
 }

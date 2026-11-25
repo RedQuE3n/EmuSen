@@ -14,14 +14,8 @@ Kit.NormalizedCanvas {
     readonly property bool eclipse: Kit.Tokens.coronaRim > 0
     Connections {
         target: noticeCanvas.notices
-        function onWordsChanged() { noticeCanvas.presenter.sync(noticeCanvas.notices.words, noticeCanvas.notices.attention) }
-        function onAttentionChanged() { noticeCanvas.presenter.sync(noticeCanvas.notices.words, noticeCanvas.notices.attention) }
+        function onRaised() { noticeCanvas.presenter.sync(noticeCanvas.notices.words, noticeCanvas.notices.attention) }
         function onShownChanged() { noticeCanvas.presenter.clearWhenHidden(noticeCanvas.notices.shown) }
-    }
-    Connections {
-        target: Kit.PadRouter
-        enabled: noticeCanvas.eclipse && noticeCanvas.notices.shown && noticeCanvas.presenter.hasAction
-        function onPressed(button) { noticeCanvas.presenter.handleButton(button) }
     }
     Loader {
         active: !noticeCanvas.eclipse

@@ -544,7 +544,7 @@ impl qobject::SessionModel {
         }
     }
 
-    fn open(self: Pin<&mut Self>, path: &QString) {
+    pub fn open(self: Pin<&mut Self>, path: &QString) {
         self.start(Opening::Game(path.to_string()));
     }
 
@@ -1210,9 +1210,17 @@ impl qobject::SessionModel {
         if !self.paused {
             self.as_mut().pause();
         }
-        if let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) {
-            if let Err(e) = runtime.resume_save(session) {
-                return QString::from(e.to_string().as_str());
+        let played = self.session.as_ref().is_none_or(Session::played);
+        if played {
+            if let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) {
+                if let Err(e) = runtime.resume_save(session) {
+                    return QString::from(e.to_string().as_str());
+                }
+                if close_session {
+                    if let Some(running) = &self.session {
+                        running.skip_exit_save();
+                    }
+                }
             }
         }
         if close_session {

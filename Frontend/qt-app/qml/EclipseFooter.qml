@@ -9,6 +9,7 @@ Item {
     required property var model
     required property int family
     property real unit: 1
+    signal pressed(int button)
     implicitWidth: bar.implicitWidth
     implicitHeight: bar.implicitHeight
     width: implicitWidth
@@ -19,6 +20,7 @@ Item {
         controller: footer.controller
         model: footer.model
         family: footer.family
+        onPressed: (button) => footer.pressed(button)
         fitted: true
         ruled: false
         color: "transparent"

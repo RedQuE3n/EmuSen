@@ -5,8 +5,8 @@ use emusen_qt_models::game_page::{delete_when, GamePage, Outcome, Read, Slot, St
 use emusen_qt_models::help::Screen;
 use emusen_qt_models::home_card::{self, Facts};
 use emusen_qt_models::marks;
-use emusen_qt_models::notice_presenter::{icon_for, split_words};
-use emusen_qt_models::power::{execute, Action, Runner};
+use emusen_qt_models::notice_presenter::{icon_for, split_words, take_pending_action, OPEN_ITS_FOLDER};
+use emusen_qt_models::power::{execute, execute_desktop, Action, Runner, SystemctlRunner};
 use emusen_qt_models::question::back_label;
 use std::sync::Mutex;
 
@@ -50,6 +50,28 @@ fn power_execute_saves_before_running_verb_and_aborts_on_save_error() {
     let err = execute(Action::Restart, &failing, |_| Ok(())).unwrap_err();
     assert_eq!(*failing.log.lock().unwrap(), ["reboot"]);
     assert_eq!(err, "Restart could not run\npermission denied");
+}
+
+#[test]
+fn desktop_saves_before_minimizing_and_systemctl_is_blocked_in_tests() {
+    let order = Mutex::new(Vec::new());
+    let ok = execute_desktop(
+        || {
+            order.lock().unwrap().push("save:keep");
+            Ok(())
+        },
+        || order.lock().unwrap().push("desktop"),
+    );
+    assert!(ok.is_ok(), "{ok:?}");
+    assert_eq!(*order.lock().unwrap(), ["save:keep", "desktop"]);
+
+    let mut minimized = false;
+    let err = execute_desktop(|| Err("disk full".into()), || minimized = true).unwrap_err();
+    assert!(!minimized, "minimize never called when save fails");
+    assert_eq!(err, "Back to the desktop cancelled\nCould not save the suspended game: disk full");
+
+    let blocked = SystemctlRunner.run("poweroff").unwrap_err();
+    assert!(blocked.contains("disabled in tests"), "{blocked}");
 }
 
 #[test]
@@ -111,6 +133,21 @@ fn notice_presenter_splits_heading_body_and_picks_icons() {
     assert_eq!(split_words("State saved to slot 1"), ("State saved to slot 1".into(), String::new()));
     assert_eq!((icon_for(true), icon_for(false)), ("notice.warning", "notice.ok"));
     assert!(!marks::path("notice.warning").is_empty() && !marks::path("notice.ok").is_empty());
+
+    // Scoped pending folder action attaches only to matching attention words and clears on unrelated attention notices.
+    let mut words = "Failed to load Missing: not found".to_owned();
+    let mut action = Some((OPEN_ITS_FOLDER.to_owned(), "/roms/snes".to_owned()));
+    assert_eq!(take_pending_action(&mut words, &mut action, "State saved", false), None);
+    assert_eq!(
+        take_pending_action(&mut words, &mut action, "Failed to load Missing: not found", true),
+        Some((OPEN_ITS_FOLDER.to_owned(), "/roms/snes".to_owned()))
+    );
+    assert!(words.is_empty() && action.is_none());
+
+    let mut words = "Failed to load Missing: not found".to_owned();
+    let mut action = Some((OPEN_ITS_FOLDER.to_owned(), "/roms/snes".to_owned()));
+    assert_eq!(take_pending_action(&mut words, &mut action, "Settings could not save", true), None);
+    assert!(words.is_empty() && action.is_none(), "unrelated attention notice clears stale pending action");
 }
 
 #[test]

@@ -164,6 +164,35 @@ fn raise_plain_notice(scene: &mut Scene<'_>, words: &str, attention: bool) {
     notices.raise(&QString::from(words), attention, false);
 }
 
+fn expire_notice(scene: &mut Scene<'_>) {
+    let notices = scene.object("notices");
+    assert!(!notices.is_null(), "notices");
+    let notices = unsafe {
+        std::pin::Pin::new_unchecked(&mut *(notices as *mut emusen_kit_qt::notices::qobject::NoticeModel))
+    };
+    notices.expire();
+    wait_for(scene, "notices", "shown", "false", 2000);
+}
+
+fn pads_button(scene: &mut Scene<'_>, button: UiButton) {
+    let pads = scene.object("pads");
+    assert!(!pads.is_null(), "pads");
+    let raw = emusen_kit_qt::kinds::pad_button(button);
+    let mut pads = unsafe {
+        std::pin::Pin::new_unchecked(&mut *(pads as *mut emusen_qt_endymion::pad_reader::qobject::PadReader))
+    };
+    pads.as_mut().button(raw, true);
+    pads.as_mut().button(raw, false);
+    scene.wait(120);
+}
+
+fn folders_caught(scene: &mut Scene<'_>) -> Vec<String> {
+    let folders = scene.object("folders");
+    assert!(!folders.is_null(), "folders");
+    let folders = unsafe { &*(folders as *const emusen_qt_models::folders::ffi::Folders) };
+    folders.caught().iter().map(|s| s.to_string()).collect()
+}
+
 fn set_state_time(path: &Path, secs: i64) {
     let file = std::fs::OpenOptions::new().write(true).open(path).unwrap();
     let time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs.max(0) as u64);
@@ -310,7 +339,7 @@ pub fn sys1(backend: &str) {
     wait_for(&mut scene, "screens", "shown", "Home", 3000);
     assert_eq!(scene.property("power", "recordedLog"), "reboot,poweroff,desktop", "Back to the desktop recorded");
 
-    // Verify save-before-power ordering through live PowerModel -> SessionModel signal loop.
+    // Verify save-before-power ordering through live PowerModel -> SessionModel signal loop (Sleep, Desktop, Quit).
     let power_ptr = scene.object("power");
     assert!(!power_ptr.is_null(), "power");
     let power_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(power_ptr as *mut emusen_qt_models::power_model::qobject::PowerModel)) };
@@ -319,6 +348,38 @@ pub fn sys1(backend: &str) {
     power_obj.trigger(&QString::from(home_card::POWER_SLEEP), true);
     scene.wait(50);
     assert_eq!(scene.property("power", "recordedLog"), "save:keep,suspend", "Sleep saves before suspend");
+
+    let power_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(power_ptr as *mut emusen_qt_models::power_model::qobject::PowerModel)) };
+    power_obj.clear_recorded();
+    let power_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(power_ptr as *mut emusen_qt_models::power_model::qobject::PowerModel)) };
+    power_obj.trigger(&QString::from(home_card::POWER_DESKTOP), true);
+    scene.wait(50);
+    assert_eq!(scene.property("power", "recordedLog"), "save:keep,desktop", "Back to the desktop saves before minimizing");
+
+    assert!(scene.set_property("power", "failSaveWith", "disk full"));
+    let power_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(power_ptr as *mut emusen_qt_models::power_model::qobject::PowerModel)) };
+    power_obj.clear_recorded();
+    let power_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(power_ptr as *mut emusen_qt_models::power_model::qobject::PowerModel)) };
+    power_obj.trigger(&QString::from(home_card::POWER_DESKTOP), true);
+    wait_for(&mut scene, "notices", "shown", "true", 2000);
+    assert_eq!(scene.property("power", "recordedLog"), "save:keep", "failed save aborts Back to the desktop");
+    assert_eq!(scene.property("noticePresenter", "heading"), "Back to the desktop cancelled");
+    expire_notice(&mut scene);
+
+    let power_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(power_ptr as *mut emusen_qt_models::power_model::qobject::PowerModel)) };
+    power_obj.clear_recorded();
+    let power_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(power_ptr as *mut emusen_qt_models::power_model::qobject::PowerModel)) };
+    power_obj.finish_quit(&QString::from(""));
+    wait_for(&mut scene, "notices", "shown", "true", 2000);
+    assert_eq!(scene.property("power", "recordedLog"), "", "failed save aborts Quit EmuSen");
+    assert_eq!(scene.property("noticePresenter", "heading"), "Quit EmuSen cancelled");
+    assert!(scene.set_property("power", "failSaveWith", ""));
+    expire_notice(&mut scene);
+
+    let power_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(power_ptr as *mut emusen_qt_models::power_model::qobject::PowerModel)) };
+    power_obj.finish_quit(&QString::from(""));
+    scene.wait(50);
+    assert_eq!(scene.property("power", "recordedLog"), "quit", "successful save completes Quit EmuSen");
 
     // Suspended Quit EmuSen opens circular #14 confirmation dialog; B returns to Power.
     scene.pad(UiButton::Menu);
@@ -344,16 +405,76 @@ pub fn sys1(backend: &str) {
     assert!(scene.set_property("homeCardModel", "start", ""));
     scene.wait(250);
 
+    // Real SessionModel.failedFolder -> Main -> NoticeModel.raised -> NoticePresenter.sync across two identical launch failures, plus X on Eclipse Home.
+    let missing_rom = world.root.join("Roms/SNES/Missing Disc.sfc").to_string_lossy().into_owned();
+    let session_ptr = scene.object("session");
+    assert!(!session_ptr.is_null(), "session");
+    for attempt in 1..=2 {
+        let session_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(session_ptr as *mut emusen_qt_models::session_model::qobject::SessionModel)) };
+        session_obj.open(&QString::from(missing_rom.as_str()));
+        wait_for(&mut scene, "notices", "shown", "true", 4000);
+        assert!(scene.property("noticePresenter", "heading").contains("Missing Disc"), "attempt {attempt}: heading");
+        assert_eq!(scene.property("noticePresenter", "hasAction"), "true", "attempt {attempt}: repeat failure keeps Open its folder");
+        assert_eq!(scene.property("noticePresenter", "actionLabel"), "Open its folder");
+        assert_eq!(scene.property("noticePresenter", "actionPath"), rom_dir);
+        let before = folders_caught(&mut scene).len();
+        pads_button(&mut scene, UiButton::Screensaver);
+        let after = folders_caught(&mut scene);
+        assert_eq!(after.len(), before + 1, "attempt {attempt}: X on Eclipse Home triggers Open its folder");
+        assert!(after.last().unwrap().contains("Roms/SNES"), "attempt {attempt}: opened {}", after.last().unwrap());
+        assert_eq!(scene.property("screens", "shown"), "Home", "attempt {attempt}: X did not leak to Home");
+        expire_notice(&mut scene);
+        assert_eq!(scene.property("noticePresenter", "hasAction"), "false", "attempt {attempt}: hiding clears action");
+    }
+
+    // Unrelated attention notice cannot steal a pending folder action scoped to a different failure.
+    let presenter_ptr = scene.object("noticePresenter");
+    let presenter_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(presenter_ptr as *mut emusen_qt_models::notice_presenter::qobject::NoticePresenter)) };
+    presenter_obj.set_pending_folder(&QString::from("Failed to load Other: missing"), &QString::from(rom_dir.as_str()));
+    raise_plain_notice(&mut scene, "Settings could not save", true);
+    scene.wait(120);
+    assert_eq!(scene.property("noticePresenter", "hasAction"), "false", "unrelated notice did not steal pending folder");
+    raise_plain_notice(&mut scene, "Failed to load Other: missing", true);
+    scene.wait(120);
+    assert_eq!(scene.property("noticePresenter", "hasAction"), "false", "stale pending folder was cleared on mismatch");
+    expire_notice(&mut scene);
+
+    // Lightweight Eclipse QuestionHost checks for LaunchQuestion, ResumeQuestion, and Cores.
+    assert_eq!(scene.property("launchQuestion", "eclipse"), "true");
+    assert_eq!(scene.property("resumeQuestion", "eclipse"), "true");
+    let screens_ptr = scene.object("screens");
+    let screens_obj = unsafe { std::pin::Pin::new_unchecked(&mut *(screens_ptr as *mut emusen_qt_models::screens::qobject::Screens)) };
+    screens_obj.place(emusen_qt_models::screens::CORES_PLACE as i32);
+    wait_for(&mut scene, "screens", "shown", "Cores", 3000);
+    scene.wait(250);
+    assert_eq!(scene.property("coresQuestion", "eclipse"), "true");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Home", 3000);
+    scene.wait(250);
+
     // --- BOARD #14: Delete Slot 1? dialog + Failure Notice banner with X Open its folder ---
     let home_id = theme_object(&mut scene, "homeScreen");
     assert!(emusen_theme_qt::host::actions(object(home_id)).expect("Actions").open_page(&QString::from(rom_str.as_str())));
     wait_for(&mut scene, "screens", "shown", "Page", 3000);
     wait_for(&mut scene, "pageModel", "ready", "true", 5000);
     scene.wait(350);
-    // Navigate to States tab (pageSection 1) and delete Slot 1 via X.
+    // Navigate to States tab (pageSection 1); X while failure notice is active opens folder WITHOUT leaking to Delete.
     scene.pad(UiButton::PageDown);
     wait_for(&mut scene, "pageModel", "section", "1", 2000);
     scene.wait(250);
+    raise_board_notice(&mut scene, &rom_dir);
+    scene.wait(150);
+    let before = folders_caught(&mut scene).len();
+    pads_button(&mut scene, UiButton::Screensaver);
+    let after = folders_caught(&mut scene);
+    assert_eq!(after.len(), before + 1, "X on GamePage with failure notice opens its folder");
+    assert!(after.last().unwrap().contains("Roms/SNES"), "opened {}", after.last().unwrap());
+    assert_eq!(scene.property("pageModel", "asking"), "false", "X did not leak to GamePage Delete");
+    assert_eq!(scene.property("pageQuestion", "opened"), "false", "Delete dialog stayed closed");
+    assert!(slot1.exists(), "Slot 1 untouched when X handled by failure notice");
+    expire_notice(&mut scene);
+
+    // With no failure notice active, X opens Delete Slot 1? dialog (#14).
     scene.pad(UiButton::Screensaver);
     wait_for(&mut scene, "pageModel", "asking", "true", 3000);
     wait_for(&mut scene, "pageQuestion", "opened", "true", 3000);
@@ -383,12 +504,14 @@ pub fn sys1(backend: &str) {
     );
     picture(&mut scene, &format!("dialog-1920x1200-{backend}.png"), |s| raise_board_notice(s, &rom_dir));
 
-    // Pressing X while failure notice with action is shown opens its folder via Folders.
+    // Pressing X through PadReader while failure notice with action is shown opens its folder via Folders.
     raise_board_notice(&mut scene, &rom_dir);
     scene.wait(150);
-    scene.pad(UiButton::Screensaver);
-    scene.wait(150);
-    assert!(scene.property("folders", "caught").contains("Roms/SNES"), "X opened folder: {}", scene.property("folders", "caught"));
+    let before = folders_caught(&mut scene).len();
+    pads_button(&mut scene, UiButton::Screensaver);
+    let after = folders_caught(&mut scene);
+    assert_eq!(after.len(), before + 1, "X over dialog opened folder");
+    assert!(after.last().unwrap().contains("Roms/SNES"), "X opened folder: {}", after.last().unwrap());
 
     // Non-attention success notice draws checkmark icon and hides body + action pill.
     raise_plain_notice(&mut scene, "State saved to slot 1", false);

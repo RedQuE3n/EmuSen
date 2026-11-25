@@ -29,6 +29,21 @@ pub fn icon_for(attention: bool) -> &'static str {
     if attention { "notice.warning" } else { "notice.ok" }
 }
 
+/// Consumes a queued folder action only when an attention notice matches its exact words, clearing mismatches.
+pub fn take_pending_action(pending_words: &mut String, pending_action: &mut Option<(String, String)>, words: &str, attention: bool) -> Option<(String, String)> {
+    if !attention {
+        return None;
+    }
+    let matched = !pending_words.is_empty() && *pending_words == words;
+    pending_words.clear();
+    if matched {
+        pending_action.take()
+    } else {
+        *pending_action = None;
+        None
+    }
+}
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -42,6 +57,7 @@ pub mod qobject {
     extern "RustQt" {
         #[qobject]
         #[qml_element]
+        #[qproperty(bool, active)]
         #[qproperty(QString, heading, READ, NOTIFY)]
         #[qproperty(QString, body, READ, NOTIFY)]
         #[qproperty(QString, icon, READ, NOTIFY)]
@@ -56,10 +72,10 @@ pub mod qobject {
         #[qinvokable]
         fn sync(self: Pin<&mut NoticePresenter>, words: &QString, attention: bool);
 
-        /// Attaches an "Open its folder" action to the next attention notice raised.
+        /// Attaches an "Open its folder" action scoped to the exact next attention notice matching `words`.
         #[qinvokable]
         #[cxx_name = "setPendingFolder"]
-        fn set_pending_folder(self: Pin<&mut NoticePresenter>, folder: &QString);
+        fn set_pending_folder(self: Pin<&mut NoticePresenter>, words: &QString, folder: &QString);
 
         /// Sets an explicit heading, body and optional action (label + folder path) for structured notices.
         #[qinvokable]
@@ -80,10 +96,10 @@ pub mod qobject {
         #[cxx_name = "invokeAction"]
         fn invoke_action(self: Pin<&mut NoticePresenter>);
 
-        /// Triggers the active notice action when X (`UiButton::Screensaver`) is pressed.
+        /// Consumes X (`UiButton::Screensaver`) when an Eclipse notice with an action is active.
         #[qinvokable]
-        #[cxx_name = "handleButton"]
-        fn handle_button(self: Pin<&mut NoticePresenter>, button: PadButton) -> bool;
+        #[cxx_name = "takePad"]
+        fn take_pad(self: Pin<&mut NoticePresenter>, button: PadButton) -> bool;
 
         /// Emitted with the folder path when the player activates the notice action.
         #[qsignal]
@@ -93,6 +109,7 @@ pub mod qobject {
 }
 
 pub struct NoticePresenterRust {
+    active: bool,
     heading: QString,
     body: QString,
     icon: QString,
@@ -107,6 +124,7 @@ pub struct NoticePresenterRust {
 impl Default for NoticePresenterRust {
     fn default() -> Self {
         NoticePresenterRust {
+            active: false,
             heading: QString::default(),
             body: QString::default(),
             icon: QString::from(icon_for(false)),
@@ -154,10 +172,16 @@ impl qobject::NoticePresenter {
         }
     }
 
-    pub fn set_pending_folder(mut self: Pin<&mut Self>, folder: &QString) {
+    pub fn set_pending_folder(mut self: Pin<&mut Self>, words: &QString, folder: &QString) {
+        let w = words.to_string();
         let f = folder.to_string();
-        self.as_mut().rust_mut().pending_words.clear();
-        self.as_mut().rust_mut().pending_action = (!f.is_empty()).then(|| (OPEN_ITS_FOLDER.to_owned(), f));
+        if w.is_empty() || f.is_empty() {
+            self.as_mut().rust_mut().pending_words.clear();
+            self.as_mut().rust_mut().pending_action = None;
+            return;
+        }
+        self.as_mut().rust_mut().pending_words = w;
+        self.as_mut().rust_mut().pending_action = Some((OPEN_ITS_FOLDER.to_owned(), f));
     }
 
     pub fn present(mut self: Pin<&mut Self>, heading: &QString, body: &QString, attention: bool, action_label: &QString, action_path: &QString) {
@@ -180,7 +204,10 @@ impl qobject::NoticePresenter {
         }
         self.as_mut().rust_mut().structured = None;
         let (heading, body) = split_words(&raw);
-        let action = if attention { self.as_mut().rust_mut().pending_action.take() } else { None };
+        let action = {
+            let state = self.as_mut().rust_mut().get_mut();
+            take_pending_action(&mut state.pending_words, &mut state.pending_action, &raw, attention)
+        };
         let (al, ap) = action.unwrap_or_default();
         self.apply(heading, body, attention, al, ap);
     }
@@ -214,8 +241,8 @@ impl qobject::NoticePresenter {
         self.action_triggered(path);
     }
 
-    pub fn handle_button(self: Pin<&mut Self>, button: qobject::PadButton) -> bool {
-        if !self.has_action || emusen_kit_qt::kinds::ui_button(button) != Some(UiButton::Screensaver) {
+    pub fn take_pad(self: Pin<&mut Self>, button: qobject::PadButton) -> bool {
+        if !self.active || !self.has_action || emusen_kit_qt::kinds::ui_button(button) != Some(UiButton::Screensaver) {
             return false;
         }
         self.invoke_action();

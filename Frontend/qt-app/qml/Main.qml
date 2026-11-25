@@ -110,6 +110,11 @@ Window {
     // Every notice is raised here, and words that say nothing (a model's cleared problem) raise none (EmuSen_Qt.md §7.9).
     signal said(string words, bool attention, bool overGame)
     onSaid: (words, attention, overGame) => { if (words.length > 0) notices.raise(words, attention, overGame) }
+    signal saidFolder(string words, string folder, bool attention, bool overGame)
+    onSaidFolder: (words, folder, attention, overGame) => {
+        noticePresenter.setPendingFolder(words, folder)
+        if (words.length > 0) notices.raise(words, attention, overGame)
+    }
     // Every item under one, so a key no screen takes reaches it: a hotkey's action away from the game, as Mistress's
     // window heard a key its views passed on (EmuSen_Qt.md §7.7.H8). Over the game, Game.qml hears the keys first.
     Item {
@@ -140,10 +145,7 @@ Window {
             lastPlayed: library.lastPlayed
             found: games.count > 0
             themed: program.esdeLook
-            onQuit: {
-                player.session.saveForPower(true)
-                Qt.quit()
-            }
+            onQuit: power.finishQuit(player.session.saveForPower(true))
             onPowerAsked: (key) => power.trigger(key, player.session.running)
             // The suspended game resumes as its screen comes back: the Home card's Continue, or resume() (a library's Continue, Exit to Library over the library).
             onResumed: player.session.resume()
@@ -155,6 +157,7 @@ Window {
             objectName: "power"
             onSaveNeeded: (closeSession) => power.saved(player.session.saveForPower(closeSession))
             onMinimizeAsked: program.showMinimized()
+            onQuitAsked: Qt.quit()
             onProblemChanged: program.said(power.problem, true, false)
         }
         // Reduced motion as the start read it until Settings has read the settings, then as they say; the text size, which
@@ -199,7 +202,7 @@ Window {
                     referenceHost.feed.push(button, false)
                     Kit.PadRouter.push(button, false)
                 }
-                settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
+                settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : (down && noticePresenter.takePad(button)) ? undefined : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
             }
             onSeatsChanged: settingsModel.seatsChanged()
             // A pad come or gone, told where Controller notices is on, over a game too (EmuSen_Input.md §8.13.5).
@@ -695,6 +698,7 @@ Window {
         NoticePresenter {
             id: noticePresenter
             objectName: "noticePresenter"
+            active: Kit.Tokens.coronaRim > 0 && notices.shown
             onActionTriggered: (path) => folders.open(path)
         }
         // The theme the settings choose that cannot be shown, said once, after the splash has faded.
@@ -715,8 +719,7 @@ Window {
         // the library unread, a setting, a game's page's change, or Cores; a cleared problem raises nothing (EmuSen_Qt.md §7.9).
         Connections {
             target: player.session
-            function onFailedFolderChanged() { noticePresenter.setPendingFolder(player.session.failedFolder) }
-            function onProblemChanged() { program.said(player.session.problem, true, true) }
+            function onProblemChanged() { program.saidFolder(player.session.problem, player.session.failedFolder, true, true) }
             function onOpenFailed() { screens.failed() }
         }
         Connections {

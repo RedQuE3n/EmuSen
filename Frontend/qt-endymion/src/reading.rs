@@ -14,8 +14,21 @@ const BUTTONS: usize = UiButton::ALL.len();
 pub mod sdl {
     pub const LEFT_X: u32 = 0;
     pub const LEFT_Y: u32 = 1;
+    pub const RIGHT_X: u32 = 2;
     pub const LEFT_TRIGGER: u32 = 4;
     pub const RIGHT_TRIGGER: u32 = 5;
+}
+
+const RIGHT_STICK_DEADZONE: f64 = 0.18;
+
+fn right_stick_x(raw: f64) -> f64 {
+    let mag = raw.abs();
+    if mag <= RIGHT_STICK_DEADZONE {
+        return 0.0;
+    }
+    let scaled = ((mag - RIGHT_STICK_DEADZONE) / (1.0 - RIGHT_STICK_DEADZONE)).min(1.0);
+    let rounded = (scaled * 100.0).round() / 100.0;
+    raw.signum() * rounded
 }
 
 /// The SDL_GamepadButton that is this control; none for a trigger, which is an axis.
@@ -66,6 +79,7 @@ pub struct Tick {
     pub events: Vec<PadEvent>,
     pub family: Option<PadFamily>,
     pub connected: Option<usize>,
+    pub right_x: Option<f64>,
     pub devices: Vec<devices::PadEvent>,
     pub seats: bool,
     pub notices: Vec<String>,
@@ -73,7 +87,7 @@ pub struct Tick {
 
 impl Tick {
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty() && self.family.is_none() && self.connected.is_none() && !self.seats && self.notices.is_empty()
+        self.events.is_empty() && self.family.is_none() && self.connected.is_none() && self.right_x.is_none() && !self.seats && self.notices.is_empty()
     }
 }
 
@@ -86,6 +100,7 @@ pub struct Reading {
     last_used: Option<u64>,
     family: Option<PadFamily>,
     connected: Option<usize>,
+    right_x: f64,
 }
 
 impl Reading {
@@ -112,9 +127,14 @@ impl Reading {
         let read = &open[..count];
         let mut held = [false; BUTTONS];
         let mut active = Vec::with_capacity(read.len());
+        let mut right_x = 0.0f64;
         for &key in read {
             let mine = held_on(pads, key)?;
-            let any = mine.iter().any(|&h| h);
+            let rx = right_stick_x(pads.axis(key, consts::AXIS_RAW, sdl::RIGHT_X)?);
+            if rx.abs() > right_x.abs() {
+                right_x = rx;
+            }
+            let any = mine.iter().any(|&h| h) || rx != 0.0;
             let was = self.active.iter().any(|&(k, a)| k == key && a);
             if any && !was {
                 self.last_used = Some(key);
@@ -138,10 +158,12 @@ impl Reading {
             events,
             family: (self.family != Some(family)).then_some(family),
             connected: (self.connected != Some(count)).then_some(count),
+            right_x: ((right_x - self.right_x).abs() >= 0.005).then_some(right_x),
             ..Tick::default()
         };
         self.family = Some(family);
         self.connected = Some(count);
+        self.right_x = right_x;
         Ok(tick)
     }
 }

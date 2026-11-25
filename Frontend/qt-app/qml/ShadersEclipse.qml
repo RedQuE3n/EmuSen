@@ -14,6 +14,7 @@ FocusScope {
     property int battery: -1
     property string clockText: ""
     property bool inputs: true
+    property real rightStickX: 0
     focus: true
     Timer {
         interval: 0
@@ -32,6 +33,7 @@ FocusScope {
         readonly property int battery: outer.battery
         readonly property string clockText: outer.clockText
         readonly property bool inputs: outer.inputs
+        readonly property real rightStickX: outer.rightStickX
         readonly property var board: outer.settings.shadersBoard.length > 0 ? JSON.parse(outer.settings.shadersBoard) : ({})
         RowsModel {
             id: helpRows
@@ -124,6 +126,14 @@ FocusScope {
                     repeat: true
                     running: navScope.activeFocus && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
                     onTriggered: Kit.PadRouter.pump()
+                }
+                Timer {
+                    id: splitScrubTimer
+                    objectName: "shadersSplitScrubTimer"
+                    interval: 16
+                    repeat: true
+                    running: navScope.activeFocus && Math.abs(canvas.rightStickX) > 0.01
+                    onTriggered: canvas.settings.shadersScrubSplit(canvas.rightStickX * 0.018)
                 }
             }
             Kit.Backdrop {

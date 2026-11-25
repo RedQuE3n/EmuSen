@@ -81,7 +81,7 @@ fn press_handoff(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, control: Pa
     scene.wait(80);
 }
 
-fn with_shaders_world(tag: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPad, &Platform)) {
+fn with_shaders_world(tag: &str, with_host: bool, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPad, &Platform)) {
     std::env::set_var("TZ", "UTC");
     std::env::set_var("LC_ALL", "en_US.UTF-8");
     let world = World::new(tag);
@@ -117,7 +117,18 @@ fn with_shaders_world(tag: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPa
     let sdl = Sdl::open();
     let pad = sdl.attach("Simulated pad", 0x045e, 0x028e);
     let mut harness = emusen_qt_test::Harness::new();
-    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    let gpu = std::env::var("EMUSEN_GPU_DEVICE").ok();
+    let host = with_host.then(|| emusen_qt_play::host::Host::new(&platform, "wayland", gpu.as_deref(), false, &world.dir("presets")).expect("a Vulkan device"));
+    let mut scene = match host.as_ref() {
+        Some(host) => {
+            let adoption = host.adoption();
+            harness.load_prepared(MAIN_URL, 1280, 800, move |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"))
+        }
+        None => harness.load(MAIN_URL, 1280, 800),
+    };
+    if let Some(host) = host.as_ref() {
+        assert!(scene.set_property("program", "feed", &host.feed.address().to_string()));
+    }
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("settingsModel", "world", WORLD_JSON));
@@ -150,10 +161,13 @@ fn with_shaders_world(tag: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPa
     press_handoff(&mut scene, &sdl, &pad, PadControl::South, "#20 shaders shown", |s| s.property("settingsModel", "shadersShown") == "true" && shown(s, "shadersEclipseCanvas"));
     f(&mut scene, &sdl, &pad, &platform);
     sdl.detach(pad);
+    drop(scene);
+    drop(harness);
+    drop(host);
 }
 
 pub fn oracle_software() {
-    with_shaders_world("qt-app-eclipse-shaders", |scene, sdl, pad, platform| {
+    with_shaders_world("qt-app-eclipse-shaders", false, |scene, sdl, pad, platform| {
         let mut differences = Vec::new();
         assert_eq!(scene.property("theme", "holdsFocus"), "false");
         let dump = scene.property("settingsModel", "shadersBoard");
@@ -218,6 +232,12 @@ pub fn oracle_software() {
         press(scene, sdl, pad, PadControl::RightShoulder);
         until(scene, "RB moves divider right", |s| read(&s.tree(), "previewDivider", "x").parse::<f64>().unwrap() > mid_div + 10.0);
 
+        // Right stick horizontal scrub smoothly slides the divider without leaving focus.
+        let stick_start: f64 = read(&scene.tree(), "previewDivider", "x").parse().unwrap();
+        sdl.axis(pad, 2, -20000);
+        until(scene, "RS left scrubs divider left", |s| read(&s.tree(), "previewDivider", "x").parse::<f64>().unwrap() < stick_start - 40.0);
+        sdl.axis(pad, 2, 0);
+
         // Hold X compares without filter, release restores active shader.
         let west = sdl_button(PadControl::West).unwrap();
         sdl.press(pad, west, true);
@@ -275,7 +295,7 @@ pub fn oracle_software() {
 }
 
 pub fn oracle_gpu() {
-    with_shaders_world("qt-app-eclipse-shaders-gpu", |scene, sdl, pad, _| {
+    with_shaders_world("qt-app-eclipse-shaders-gpu", true, |scene, sdl, pad, _| {
         scene.resize(1920, 1200);
         scene.wait(300);
         let (tx, ty) = centre(scene, "shaderRow.1");
@@ -285,6 +305,8 @@ pub fn oracle_gpu() {
         });
         scene.wait(400);
         picture(scene, "shaders-1920x1200-card.png");
+        scene.resize(1920, 1200);
+        scene.wait(300);
 
         // Sample unfiltered left side vs magenta-tinted right side at 1920x1200 (y=328 hits pure #17306E sky).
         let left_pt = (1150.0, 328.0);
@@ -303,6 +325,18 @@ pub fn oracle_gpu() {
         scene.wait(250);
         let mid_after = scene.colours_at(&[mid_pt])[0].expect("mid after");
         assert!(mid_after.r > mid_before.r + 40, "LB moved split boundary past mid_pt: before={mid_before:?} after={mid_after:?}");
+
+        // Smooth right-stick tilt right scrubs divider back past mid_pt while leaving right_pt tinted.
+        sdl.axis(pad, 2, 16000);
+        until(scene, "RS right scrubs divider past mid_pt", |s| {
+            let col = s.colours_at(&[mid_pt])[0].expect("mid restored");
+            col.b > col.r + 30 && col.r < mid_after.r - 40
+        });
+        sdl.axis(pad, 2, 0);
+        scene.wait(100);
+        let tree = scene.tree();
+        let div_scene_x = read(&tree, "previewBox", "x").parse::<f64>().unwrap() + read(&tree, "previewDivider", "x").parse::<f64>().unwrap();
+        assert!(div_scene_x < right_pt.0 - 40.0, "RS stopped before right_pt (div_scene_x={div_scene_x})");
 
         // Hold X shows unfiltered pixels across the entire box, release restores tint.
         let west = sdl_button(PadControl::West).unwrap();

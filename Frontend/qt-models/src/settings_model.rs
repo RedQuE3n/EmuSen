@@ -472,6 +472,10 @@ pub mod qobject {
         fn shaders_set_split(self: Pin<&mut SettingsModel>, norm: f64);
 
         #[qinvokable]
+        #[cxx_name = "shadersScrubSplit"]
+        fn shaders_scrub_split(self: Pin<&mut SettingsModel>, delta: f64);
+
+        #[qinvokable]
         #[cxx_name = "shadersHoldCompare"]
         fn shaders_hold_compare(self: Pin<&mut SettingsModel>, down: bool);
 
@@ -2369,6 +2373,10 @@ impl qobject::SettingsModel {
 
     pub fn shaders_set_split(self: Pin<&mut Self>, norm: f64) {
         self.mutate_shaders(false, |board, _, _| if board.set_split(norm) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None });
+    }
+
+    pub fn shaders_scrub_split(self: Pin<&mut Self>, delta: f64) {
+        self.mutate_shaders(false, |board, _, _| if board.step_split(delta) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None });
     }
 
     pub fn shaders_hold_compare(self: Pin<&mut Self>, down: bool) {

@@ -619,6 +619,7 @@ Window {
                 battery: machineBattery.level
                 clockText: clock.shortTime
                 inputs: !program.splashShown
+                rightStickX: pads.rightStickX
             }
         }
         // Docked keyboard overlay for Profiles, Shader parameters search and ScreenScraper log-in while Eclipse draws Settings.

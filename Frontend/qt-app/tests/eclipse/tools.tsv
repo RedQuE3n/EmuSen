@@ -1,0 +1,31 @@
+# Eclipse Tools (#9) against EclipseTools.dc.html (1920 by 1200).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+mark	25	crescent mark	Item	Item	96	mid:80	34	34	-	-	-	built	-
+wordmark	26	"EmuSen"	CardLine	CardLine	after:mark:14	mid:80	-	-	-	#FFF4F1EC	24	built	600 0.02 none
+nav	28	section tabs	Row	Row	after:wordmark:64	mid:80	-	-	-	-	-	built	-
+navUnderline.tools	33	active Tools underline	Rectangle	Rectangle	in:nav.tools:0	foot:nav.tools	fit:nav.tools:0	3	-	#FFF6E7D8	-	built	-
+navWords.tools	33	"Tools" active tab	CardLine	CardLine	in:nav.tools:0	top:nav.tools:0	-	-	-	#FFFFFFFF	24	built	600 0 none
+clock	36	"9:41 PM"	CardLine	CardLine	-	mid:80	right:96	-	-	#FFF4F1EC	22	built	600 0 none
+battery	36	"82%"	CardLine	CardLine	before:clock:22	mid:80	-	-	-	#FFF4F1EC	22	built	400 0 none
+toolsHeading	40	"Tools"	CardLine	CardLine	96	170	-	-	-	#FFF4F1EC	56	built	600 -0.01 none
+toolsSubtitle	41	subtitle line	CardLine	CardLine	96	below:toolsHeading:8	-	-	-	#FFB9BED0	22	built	300 0 none
+toolCard.0	46	card 0 Cores	Item	Item	96	330	-	312	-	-	-	built	-
+toolCardBg.0	46	card 0 surface	Rectangle	Rectangle	in:toolCard.0:0	top:toolCard.0:0	-	312	26	#FF11131C	-	built	line 1 #FF262A3A
+toolIconDisc.0	48	card 0 icon circle	Item	Item	in:toolCard.0:32	top:toolCard.0:32	84	84	-	-	-	built	-
+toolIconCircle.0	48	card 0 circle fill	Rectangle	Rectangle	in:toolIconDisc.0:0	top:toolIconDisc.0:0	84	84	42	#FF07080F	-	built	-
+toolBadge.0	52	"2 updates" badge	CardLine	CardLine	-	-	-	-	-	#FF07080F	17	built	700 0 none
+toolCardTitle.0	56	"Cores"	CardLine	CardLine	in:toolCard.0:32	-	-	-	-	#FFF4F1EC	34	built	600 0 none
+toolCardLine.0	57	summary line	CardLine	CardLine	in:toolCard.0:32	below:toolCardTitle.0:10	-	-	-	#FFC9CDDB	20	built	400 0 none
+toolCard.1	46	card 1 Scraper	Item	Item	after:toolCard.0:28	330	-	312	-	-	-	built	-
+toolCard.2	46	card 2 Packages	Item	Item	after:toolCard.1:28	330	right:96	312	-	-	-	built	-
+toolCard.3	46	card 3 Library Manager	Item	Item	96	below:toolCard.0:28	-	312	-	-	-	built	-
+toolBadge.3	52	"4 to check" badge	CardLine	CardLine	-	-	-	-	-	#FF07080F	17	built	700 0 none
+toolCard.4	46	card 4 Themes	Item	Item	after:toolCard.3:28	below:toolCard.1:28	-	312	-	-	-	built	-
+toolCard.5	46	card 5 Memory cards	Item	Item	after:toolCard.4:28	below:toolCard.2:28	right:96	312	-	-	-	built	-
+toolsFooter	63	footer row	Item	Item	96	1122	right:96	38	-	-	-	built	-
+toolsHelp	63	footer A B LB RB	HelpBar	HelpBar	in:toolsFooter:0	mid:toolsFooter	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Open	64	A filled 34 px	CardGlyph	-	in:toolsHelp:0	mid:toolsFooter	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Back	65	B ringed 38 px	CardGlyph	-	-	mid:toolsFooter	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Sections	66	LB boxed 34 px	CardGlyph	-	-	mid:toolsFooter	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Sections	66	RB boxed 34 px	CardGlyph	-	after:ownGlyph-Sections:10	mid:toolsFooter	-	34	-	-	-	built	word 15 400 8 10

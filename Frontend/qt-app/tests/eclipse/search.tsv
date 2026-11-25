@@ -1,0 +1,32 @@
+# Eclipse Search (#8) against EclipseSearch.dc.html (1920 by 1200).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+searchInput	21	pill input bar	Item	Item	96	64	right:96	104	-	-	-	built	-
+searchInputBg	21	pill input surface	Tokens.inputSurface	Rectangle	in:searchInput:0	top:searchInput:0	right:96	104	52	#FF11131C	-	built	-
+searchQueryText	24	query "aur"	CardLine	CardLine	in:searchInput:94	mid:searchInput	-	-	-	#FFF4F1EC	44	built	600 0 none
+searchCount	25	"3 of 4 games"	CardLine	CardLine	-	mid:searchInput	inright:searchInput:36	-	-	#FFB9BED0	22	built	400 0 none
+searchHeading	29	"Games"	CardLine	CardLine	96	214	-	-	-	#FFD8DBE6	24	built	600 0 none
+searchResult.0	32	result card 0	Item	Item	96	below:searchHeading:18	400	124	-	-	-	built	-
+searchResultBg.0	32	card 0 surface	Rectangle	Rectangle	in:searchResult.0:0	top:searchResult.0:0	400	124	20	#FF11131C	-	built	line 1 #FF262A3A
+searchResultArt.0	33	card 0 art	EclipseArtPlate	EclipseArtPlate	in:searchResult.0:14	top:searchResult.0:14	150	96	-	-	-	built	-
+searchResultTitle.0	35	card 0 title	CardLine	CardLine	in:searchResult.0:182	-	-	-	-	#FFF4F1EC	23	built	600 0 none
+searchResultMeta.0	36	card 0 subtitle	CardLine	CardLine	in:searchResult.0:182	below:searchResultTitle.0:6	-	-	-	#FFB9BED0	17	built	400 0 none
+searchResult.1	32	result card 1	Item	Item	after:searchResult.0:24	top:searchResult.0:0	400	124	-	-	-	built	-
+searchResult.2	32	result card 2	Item	Item	after:searchResult.1:24	top:searchResult.0:0	400	124	-	-	-	built	-
+searchDivider	44	cream hairline divider	Rectangle	Rectangle	0	540	right:0	2	-	-	-	built	-
+searchKey.0	50	key q	Item	Item	-	590	132	96	-	-	-	built	-
+searchKeyBg.0	50	key q background	Rectangle	Rectangle	in:searchKey.0:0	top:searchKey.0:0	132	96	20	#FF1A1D2A	-	built	-
+searchKeyText.0	50	key q label	CardLine	CardLine	-	-	-	-	-	#FFF4F1EC	34	built	600 0 none
+searchKey.8	50	focused key o	Item	Item	after:searchKey.7:14	590	132	96	-	-	-	built	-
+searchKeyBg.8	50	focused key o accent bg	Rectangle	Rectangle	in:searchKey.8:0	top:searchKey.8:0	132	96	20	#FFF6E7D8	-	built	-
+searchKeyText.8	50	focused key o ink	CardLine	CardLine	-	-	-	-	-	#FF07080F	34	built	600 0 none
+searchKey.30	55	123 key	Item	Item	in:searchKey.0:0	920	205	96	-	-	-	built	-
+searchKey.31	56	Space key	Item	Item	after:searchKey.30:14	920	716	96	-	-	-	built	-
+searchKey.32	57	Erase key	Item	Item	after:searchKey.31:14	920	205	96	-	-	-	built	-
+searchKey.33	60	Done key	Item	Item	after:searchKey.32:14	920	278	96	-	-	-	built	-
+searchKeyBg.33	60	Done accent fill	Rectangle	Rectangle	in:searchKey.33:0	top:searchKey.33:0	278	96	20	#FFF6E7D8	-	built	-
+searchFooter	64	centered footer row	Item	Item	96	1128	right:96	38	-	-	-	built	-
+searchHelp	64	footer A B Y RT	HelpBar	HelpBar	-	mid:searchFooter	-	-	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Type	65	A filled 34 px	CardGlyph	-	-	mid:searchFooter	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Space	67	Y ringed 38 px	CardGlyph	-	-	mid:searchFooter	38	38	-	-	-	built	glyph 16 400
+ownGlyph-To the results	68	RT boxed 34 px	CardGlyph	-	-	mid:searchFooter	-	34	-	-	-	built	word 15 400 8 10

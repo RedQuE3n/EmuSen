@@ -10,7 +10,7 @@ use emusen_client_fixture::library;
 use emusen_kit_core::input::{PadControl, UiButton};
 use emusen_qt::MAIN_URL;
 use emusen_qt_endymion::reading::sdl_button;
-use emusen_qt_models::{home_card, library as games, list_card, sections, themes};
+use emusen_qt_models::{library as games, sections, themes};
 use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
 use emusen_qt_test::Scene;
 
@@ -95,10 +95,11 @@ fn qt_3_4_8_the_shoulders_and_a_tap_open_eclipse_s_sections_from_home_and_consol
     assert_eq!(marked(&mut scene), ["home"], "the nav marks Home");
 
     let all = |s: &str| s.to_owned();
-    // Home's LB: Tools, the last, the Home card at its Tools page; B back to Home.
+    // Home's LB: Tools hub; B back to Home.
     shoulder(&mut scene, &sdl, &pad, LB.0, LB.1);
-    wait_for(&mut scene, "screens", "shown", "HomeCard", 2000);
-    assert_eq!(at(&mut scene)[2], home_card::TOOLS, "LB on Home opens Tools: the Home card's Tools page");
+    wait_for(&mut scene, "screens", "shown", "Tools", 2000);
+    settle(&mut scene);
+    assert_eq!(marked(&mut scene), ["tools"], "LB on Home opens Tools");
     back(&mut scene, "Home");
     assert_eq!(marked(&mut scene), ["home"], "back on Home, the nav marks Home");
 
@@ -112,15 +113,13 @@ fn qt_3_4_8_the_shoulders_and_a_tap_open_eclipse_s_sections_from_home_and_consol
     assert_eq!(scene.property("screens", "section"), "consoles");
     assert_eq!(marked(&mut scene), ["consoles"], "Choose a console's nav marks Consoles");
 
-    // Choose a console's RB: Collections, the List card at its Filter page over every game; B to the grid, B again back.
+    // Choose a console's RB: Collections hub; LB back to Consoles.
     shoulder(&mut scene, &sdl, &pad, RB.0, RB.1);
-    wait_for(&mut scene, "screens", "shown", "List", 2000);
-    let [shown, key, _, list_page] = at(&mut scene);
-    assert_eq!([shown, key, list_page], [all("List"), all(games::ALL), all(list_card::FILTER)], "RB on Consoles opens Collections");
-    scene.wait(300);
-    assert_eq!(scene.property("listCardModel", "page"), list_card::FILTER, "the List card is at its Filter page, the collections");
-    back(&mut scene, "Grid");
-    back(&mut scene, "Consoles");
+    wait_for(&mut scene, "screens", "shown", "Collections", 2000);
+    settle(&mut scene);
+    assert_eq!(marked(&mut scene), ["collections"], "RB on Consoles opens Collections");
+    shoulder(&mut scene, &sdl, &pad, LB.0, LB.1);
+    wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
     settle(&mut scene);
 
     // Choose a console's LB: Library; B back.
@@ -130,10 +129,15 @@ fn qt_3_4_8_the_shoulders_and_a_tap_open_eclipse_s_sections_from_home_and_consol
     back(&mut scene, "Consoles");
     settle(&mut scene);
 
-    // A tap: Tools from Choose a console, Home from it, and Consoles from Home.
+    // A tap: Tools from Choose a console, Home on Back, Collections tapped, and Consoles from Home.
     tap(&mut scene, "tools");
-    wait_for(&mut scene, "screens", "shown", "HomeCard", 2000);
-    assert_eq!(at(&mut scene)[2], home_card::TOOLS, "Tools tapped on Consoles");
+    wait_for(&mut scene, "screens", "shown", "Tools", 2000);
+    settle(&mut scene);
+    assert_eq!(marked(&mut scene), ["tools"], "Tools tapped on Consoles");
+    tap(&mut scene, "collections");
+    wait_for(&mut scene, "screens", "shown", "Collections", 2000);
+    settle(&mut scene);
+    assert_eq!(marked(&mut scene), ["collections"], "Collections tapped on Tools");
     back(&mut scene, "Home");
     tap(&mut scene, "consoles");
     wait_for(&mut scene, "screens", "shown", "Consoles", 2000);

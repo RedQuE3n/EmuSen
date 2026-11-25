@@ -41,6 +41,10 @@ pub enum Shown {
     /// A game's page, from X on Home or the grid, a theme's `openPage` and the Home card's Selected game (EmuSen_Qt.md
     /// §7.8); B returns to where it was opened.
     Page,
+    /// Eclipse Collections hub (#11).
+    Collections,
+    /// Eclipse Tools hub (#9).
+    Tools,
 }
 
 /// What asked for a change.
@@ -48,8 +52,10 @@ pub enum Shown {
 pub enum Ask {
     /// One of Home's places, by its index in `words::HOME_PLACES`.
     Place(usize),
-    /// A row chosen on Choose a console.
+    /// A row chosen on Choose a console or a collection opened on Collections.
     Open(String),
+    /// A game's page opened directly by path, as from Search results.
+    GamePage(String),
     /// B that no screen kept.
     Back,
     /// A screen's declared action (crate::help) or a card's row's action, by its key.
@@ -237,6 +243,7 @@ fn card_act(themed: bool, key: &str) -> Option<(Shown, Option<String>)> {
 pub fn tool_back(themed: bool, opened_over: Option<Shown>, shown: Shown, ask: &Ask) -> Option<Shown> {
     match (opened_over, shown, ask) {
         (Some(Shown::Settings), Shown::Cores | Shown::Tool, Ask::Back) => Some(Shown::Settings),
+        (Some(Shown::Tools), Shown::Cores | Shown::Themes | Shown::Tool, Ask::Back) => Some(Shown::Tools),
         (Some(Shown::Page), Shown::Tool, Ask::Back) => Some(Shown::Page),
         (Some(Shown::HomeCard), Shown::Cores | Shown::Themes | Shown::Tool, Ask::Back) => Some(library_of(themed)),
         (_, Shown::Cores | Shown::Tool, Ask::Back) => Some(library_of(themed)),
@@ -283,7 +290,7 @@ pub fn library_of(themed: bool) -> Shown {
 /// As `step`, under the library's look: with an ES-DE theme the theme's view stands where Home, Choose a console and
 /// the grid stood, and the cards, the game and the Pause Card come back to it (EmuSen_Qt.md §4.6).
 pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
-    let own = matches!(shown, Shown::Home | Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid);
+    let own = matches!(shown, Shown::Home | Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid | Shown::Collections | Shown::Tools);
     match (themed, shown, ask) {
         (true, _, Ask::Restyled) if own => Some((Shown::Esde, None)),
         (false, Shown::Esde, Ask::Restyled) => Some((Shown::Home, None)),
@@ -313,6 +320,50 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
     }
 }
 
+fn eclipse_section(shown: Shown) -> Option<&'static str> {
+    match shown {
+        Shown::Home => Some(HOME),
+        Shown::Consoles => Some(CONSOLES_KEY),
+        Shown::Collections => Some("collections"),
+        Shown::Tools => Some("tools"),
+        _ => None,
+    }
+}
+
+/// Eclipse-aware screen step, routing Collections and Tools hubs when `eclipse` is active.
+pub fn step_in_look(eclipse: bool, themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
+    if matches!(ask, Ask::GamePage(_)) && matches!(shown, Shown::SearchGrid | Shown::Grid | Shown::Home | Shown::HomeCard) {
+        return Some((Shown::Page, None));
+    }
+    if !eclipse || themed {
+        return step_in(themed, shown, ask);
+    }
+    match (shown, ask) {
+        (_, Ask::Section(key)) => {
+            let current = eclipse_section(shown)?;
+            if current == key.as_str() {
+                return None;
+            }
+            match key.as_str() {
+                HOME => Some((Shown::Home, None)),
+                "library" => Some((Shown::Grid, Some(crate::library::ALL.to_owned()))),
+                CONSOLES_KEY => Some((Shown::Consoles, None)),
+                "collections" => Some((Shown::Collections, None)),
+                "tools" => Some((Shown::Tools, None)),
+                _ => None,
+            }
+        }
+        (Shown::Collections, Ask::Open(key)) => Some((Shown::Grid, Some(key.clone()))),
+        (Shown::Collections | Shown::Tools, Ask::Back) => Some((Shown::Home, None)),
+        (Shown::Collections | Shown::Tools, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
+        (Shown::Tools, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),
+        (Shown::Tools, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
+        (Shown::Tools, Ask::Act(key)) if console_options(key).is_some() => Some((Shown::Settings, None)),
+        (Shown::Tools, Ask::Act(key)) => open_tool(key),
+        _ => step_in(false, shown, ask),
+    }
+}
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -338,6 +389,8 @@ pub mod qobject {
         Cores,
         Page,
         Tool,
+        Collections,
+        Tools,
     }
 
     extern "RustQt" {
@@ -352,6 +405,8 @@ pub mod qobject {
         #[qproperty(bool, found)]
         /// Whether an ES-DE theme is the library's look (LibraryModel.themed): its view stands for the library's screens.
         #[qproperty(bool, themed)]
+        /// Whether Eclipse chrome is active (Kit.Tokens.coronaRim > 0).
+        #[qproperty(bool, eclipse)]
         /// The tool of jobs the tool screen shows, by its key.
         #[qproperty(QString, tool, READ, NOTIFY)]
         /// The game last played (LibraryModel.lastPlayed), whose page Settings' Cheats opens.
@@ -414,6 +469,14 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openSection"]
         fn open_section(self: Pin<&mut Screens>, key: &QString);
+        /// Steps to the previous (-1) or next (+1) section from a nav-bearing screen.
+        #[qinvokable]
+        #[cxx_name = "stepSection"]
+        fn step_section(self: Pin<&mut Screens>, delta: i32);
+        /// Opens a game's page directly by its ROM path.
+        #[qinvokable]
+        #[cxx_name = "openGame"]
+        fn open_game(self: Pin<&mut Screens>, path: &QString);
         /// Quit EmuSen answered Yes: the program ends.
         #[qsignal]
         fn quit(self: Pin<&mut Screens>);
@@ -444,6 +507,7 @@ pub struct ScreensRust {
     page: QString,
     found: bool,
     themed: bool,
+    eclipse: bool,
     tool: QString,
     last_played: QString,
     page_game: QString,
@@ -455,10 +519,16 @@ pub struct ScreensRust {
     tool_origin: Option<Shown>,
     /// Settings opened over the Pause Card, whose B returns to it.
     over_card: bool,
+    /// Settings opened from Tools, whose B returns to it.
+    over_tools: bool,
     settings_at: QString,
     list_page: QString,
     /// Settings opened at a console's page from Choose a console, whose B returns to it.
     over_consoles: bool,
+    /// Grid opened from Collections, whose B returns to Collections.
+    grid_origin: Option<Shown>,
+    /// Screen Search was opened over.
+    search_origin: Option<Shown>,
 }
 
 impl Default for ScreensRust {
@@ -470,6 +540,7 @@ impl Default for ScreensRust {
             page: QString::default(),
             found: false,
             themed: false,
+            eclipse: false,
             tool: QString::default(),
             last_played: QString::default(),
             page_game: QString::default(),
@@ -478,9 +549,12 @@ impl Default for ScreensRust {
             page_origin: Shown::Home,
             tool_origin: None,
             over_card: false,
+            over_tools: false,
             settings_at: QString::default(),
             list_page: QString::default(),
             over_consoles: false,
+            grid_origin: None,
+            search_origin: None,
         }
     }
 }
@@ -513,6 +587,8 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::Cores => Shown::Cores,
         Screen::Page => Shown::Page,
         Screen::Tool => Shown::Tool,
+        Screen::Collections => Shown::Collections,
+        Screen::Tools => Shown::Tools,
         _ => Shown::Home,
     }
 }
@@ -534,6 +610,8 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::Cores => Screen::Cores,
         Shown::Page => Screen::Page,
         Shown::Tool => Screen::Tool,
+        Shown::Collections => Screen::Collections,
+        Shown::Tools => Screen::Tools,
     }
 }
 
@@ -616,6 +694,20 @@ impl qobject::Screens {
         self.ask(Ask::Section(key.to_string()));
     }
 
+    pub fn step_section(self: Pin<&mut Self>, delta: i32) {
+        let Some(current) = eclipse_section(shown_of(self.shown)) else { return };
+        let Some(at) = SECTIONS.iter().position(|s| s.key == current) else { return };
+        let next = (at as isize + delta as isize).rem_euclid(SECTIONS.len() as isize) as usize;
+        self.ask(Ask::Section(SECTIONS[next].key.to_owned()));
+    }
+
+    pub fn open_game(self: Pin<&mut Self>, path: &QString) {
+        let p = path.to_string();
+        if !p.is_empty() {
+            self.ask(Ask::GamePage(p));
+        }
+    }
+
     fn ask(self: Pin<&mut Self>, ask: Ask) {
         let _ = self.qt_thread().queue(move |screens| screens.apply(ask));
     }
@@ -632,19 +724,42 @@ impl qobject::Screens {
                 (s, key)
             }),
             Shown::Settings if self.over_card && ask == Ask::Back => Some((Shown::Pause, None)),
+            Shown::Settings if self.over_tools && ask == Ask::Back => Some((Shown::Tools, None)),
             Shown::Settings if self.over_consoles && ask == Ask::Back => Some((Shown::Consoles, None)),
-            _ => tool_back(self.themed, self.tool_origin, was, &ask).map(|s| (s, None)).or_else(|| step_in(self.themed, was, &ask)),
+            Shown::Grid if self.grid_origin == Some(Shown::Collections) && ask == Ask::Back => Some((Shown::Collections, None)),
+            Shown::Search | Shown::SearchGrid if self.eclipse && self.search_origin == Some(Shown::Home) && ask == Ask::Back => Some((Shown::Home, None)),
+            _ => tool_back(self.themed, self.tool_origin, was, &ask)
+                .map(|s| (s, None))
+                .or_else(|| step_in_look(self.eclipse, self.themed, was, &ask)),
         };
         let Some((shown, key)) = stepped else { return };
         if matches!(shown, Shown::Cores | Shown::Themes | Shown::Tool) && shown != was {
             self.as_mut().rust_mut().tool_origin = Some(was);
         }
+        let over_tools = (was == Shown::Tools && shown == Shown::Settings) || (self.over_tools && shown == Shown::Settings);
+        self.as_mut().rust_mut().over_tools = over_tools;
+        let grid_origin = if was == Shown::Collections && shown == Shown::Grid {
+            Some(Shown::Collections)
+        } else if shown == Shown::Grid {
+            self.grid_origin
+        } else {
+            None
+        };
+        self.as_mut().rust_mut().grid_origin = grid_origin;
+        let search_origin = if shown == Shown::Search && !matches!(was, Shown::Search | Shown::SearchGrid | Shown::Page) {
+            Some(was)
+        } else if matches!(shown, Shown::Search | Shown::SearchGrid | Shown::Page) {
+            self.search_origin
+        } else {
+            None
+        };
+        self.as_mut().rust_mut().search_origin = search_origin;
         if shown != was && (shown == Shown::Settings || was == Shown::Settings) {
             let at = match (&ask, shown) {
                 (Ask::Act(key), Shown::Settings) => console_options(key).unwrap_or_default(),
                 _ => "",
             };
-            self.as_mut().rust_mut().over_consoles = !at.is_empty();
+            self.as_mut().rust_mut().over_consoles = was == Shown::Consoles && !at.is_empty();
             let at = QString::from(at);
             if self.settings_at != at {
                 self.as_mut().rust_mut().settings_at = at;
@@ -674,9 +789,14 @@ impl qobject::Screens {
                 }
             } else {
                 self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);
-                // Opened at a part by a door, for the game it names; else the game in hand's page from its start.
-                let at = QString::from(key.as_deref().unwrap_or_default());
-                let game = if key.is_some() { self.last_played.clone() } else { QString::default() };
+                let (at, game) = match &ask {
+                    Ask::GamePage(path) => (QString::default(), QString::from(path.as_str())),
+                    _ => {
+                        let at = QString::from(key.as_deref().unwrap_or_default());
+                        let game = if key.is_some() { self.last_played.clone() } else { QString::default() };
+                        (at, game)
+                    }
+                };
                 if self.page_at != at {
                     self.as_mut().rust_mut().page_at = at;
                     self.as_mut().page_at_changed();
@@ -706,7 +826,7 @@ impl qobject::Screens {
                 self.as_mut().key_changed();
             }
         }
-        let section = QString::from(crate::sections::current(shown).map_or("", |s| s.key));
+        let section = QString::from(eclipse_section(shown).unwrap_or_else(|| crate::sections::current(shown).map_or("", |s| s.key)));
         if self.section != section {
             self.as_mut().rust_mut().section = section;
             self.as_mut().section_changed();

@@ -51,6 +51,9 @@ fn main() {
             "src/game_page_model.rs",
             "src/notice_presenter.rs",
             "src/power_model.rs",
+            "src/search_eclipse.rs",
+            "src/collections_eclipse.rs",
+            "src/tools_hub.rs",
         ])
         .include_dir("cpp")
         .cpp_files(["cpp/session_pictures.cpp", "cpp/folders.cpp", "cpp/short_time.cpp"])

@@ -5,11 +5,14 @@ use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
 use cxx_qt_lib::QString;
+use emusen_kit_core::canvas::DESIGN_HEIGHT;
 use emusen_kit_core::tokens::Colour;
+use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::tree::Tree;
 use emusen_qt_test::Scene;
 use emusen_theme_qt::host;
 use std::collections::BTreeMap;
+use std::path::Path;
 
 /// One row of the table.
 #[derive(Clone)]
@@ -498,4 +501,121 @@ pub fn held(
             differences.push(format!("{at}: {} {problem}", row.name));
         }
     }
+}
+
+/// Tokens of the program's own engine as Qt writes each constant.
+pub fn kit_tokens(scene: &mut Scene<'_>) -> BTreeMap<String, String> {
+    let tokens = scene.kit_tokens().expect("the program's kit tokens");
+    Scene::constants(tokens.upcast_pin()).into_iter().collect()
+}
+
+/// Visible text strings drawn inside the named container, in tree order.
+pub fn words_under(tree: &Tree, name: &str) -> Vec<String> {
+    let Some(top) = tree.nodes.iter().rposition(|n| n.name == name && n.visible) else { return Vec::new() };
+    let top = tree.nodes[top].id.clone();
+    tree.nodes
+        .iter()
+        .filter(|n| n.visible && n.ty.contains("Text") && inside(tree, n, &top))
+        .filter_map(|n| n.text.clone())
+        .filter(|t| !t.is_empty())
+        .collect()
+}
+
+/// Visible help glyph labels (`ownGlyph-*`) inside `container`, ordered left to right.
+pub fn glyphs_in(tree: &Tree, container: &str) -> Vec<String> {
+    let Some(top) = tree.nodes.iter().rposition(|n| n.name == container && n.visible) else { return Vec::new() };
+    let top = tree.nodes[top].id.clone();
+    let mut found: Vec<(f64, String)> = tree
+        .nodes
+        .iter()
+        .filter(|n| n.visible && n.name.starts_with("ownGlyph-") && inside(tree, n, &top))
+        .map(|n| {
+            let child = tree.nodes.iter().position(|c| c.parent == n.id);
+            let text = child
+                .map(|c| {
+                    let id: u64 = tree.nodes[c].id.parse().unwrap();
+                    let p = |q: &str| emusen_qt_test::ffi::ffi::harness_property(object(id), &QString::from(tree.nodes[c].name.as_str()), &QString::from(q)).to_string();
+                    if p("named") == "true" { p("word") } else { p("letter") }
+                })
+                .unwrap_or_default();
+            (n.x, text)
+        })
+        .collect();
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    found.into_iter().map(|(_, t)| t).collect()
+}
+
+fn inside(tree: &Tree, node: &emusen_qt_test::tree::Node, ancestor_id: &str) -> bool {
+    let mut at = node.parent.clone();
+    while let Some(p) = tree.nodes.iter().find(|p| p.id == at) {
+        if p.id == ancestor_id {
+            return true;
+        }
+        at = p.parent.clone();
+    }
+    false
+}
+
+/// Holds an Eclipse card canvas against a board TSV, expected texts, help bar words and glyphs across all 5 gate sizes.
+#[allow(clippy::too_many_arguments)]
+pub fn hold_card(
+    scene: &mut Scene<'_>,
+    canvas: &str,
+    tokens: &BTreeMap<String, String>,
+    table: &str,
+    words: &[(&str, &str, bool)],
+    help: &[&str],
+    help_glyphs: &[&str],
+    differences: &mut Vec<String>,
+) {
+    let (board_height, all_rows) = rows(table);
+    let k = DESIGN_HEIGHT / board_height;
+    for (width, height) in SIZES {
+        scene.resize(width, height);
+        scene.wait(300);
+        let tree = scene.tree();
+        let unit: f64 = read(&tree, canvas, "unit").parse().expect("card canvas unit");
+        let canvas_width = width as f64 / unit;
+        let at = format!("{canvas} {width}x{height}");
+        let (present, missing): (Vec<Row>, Vec<Row>) = all_rows.iter().cloned().partition(|r| r.status != "built" || tree.find_named(&r.name).is_some());
+        differences.extend(missing.iter().map(|r| format!("{at}: {} is not drawn", r.name)));
+        held(&tree, &present, k, unit, canvas_width, tokens, &at, &|_, _, _| false, differences);
+        for (name, want, upper) in words {
+            let have = read(&tree, name, "text");
+            let drawn = if *upper { have.to_uppercase() } else { have.clone() };
+            if drawn != *want {
+                differences.push(format!("{at}: {name} says {drawn:?} where the board says {want:?}"));
+            }
+        }
+        let line = words_under(&tree, "cardHelp");
+        if line != help {
+            differences.push(format!("{at}: help line says {line:?} where the board says {help:?}"));
+        }
+        let letters = glyphs_in(&tree, "cardHelp");
+        if letters != help_glyphs {
+            differences.push(format!("{at}: help glyphs read {letters:?} where the board draws {help_glyphs:?}"));
+        }
+        if let Some(root) = tree.nodes.iter().rposition(|n| n.name == canvas && n.visible) {
+            let cid = tree.nodes[root].id.clone();
+            for n in tree.nodes.iter().filter(|n| n.visible && n.text.is_some() && !n.name.is_empty() && inside(&tree, n, &cid)) {
+                if read(&tree, &n.name, "truncated") == "true" {
+                    differences.push(format!("{at}: {} is cut: {:?}", n.name, read(&tree, &n.name, "text")));
+                }
+            }
+        }
+    }
+    scene.resize(1280, 800);
+    scene.wait(300);
+}
+
+/// Captures a 1920x1200 screenshot under EMUSEN_ECLIPSE_PICTURES when set.
+pub fn picture(scene: &mut Scene<'_>, name: &str) {
+    let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") else { return };
+    std::fs::create_dir_all(&folder).unwrap();
+    scene.resize(1920, 1200);
+    scene.wait(500);
+    let path = Path::new(&folder).join(name);
+    assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
+    scene.resize(1280, 800);
+    scene.wait(300);
 }

@@ -84,10 +84,11 @@ fn qt_3_5_1_the_pause_card_keeps_its_fit_and_contrast_under_each_theme_s_colours
         for theme in overriding() {
             let text = std::fs::read_to_string(format!("{THEMES}/{theme}/theme.json")).unwrap();
             let package = emusen_theme_host::package::read(&text).unwrap();
-            // The table as the program's ThemeStyle sets it, through the kit's Tokens of this scene's engine.
+            // Strip coronaRim for eclipse so reference PauseCard is audited under its colour tokens (matches common::eclipse_reference).
             let table = package
                 .overrides()
                 .into_iter()
+                .filter(|(_, name, _)| !(theme == "eclipse" && name == "coronaRim"))
                 .map(|(light, name, value)| (if light { Variant::Light } else { Variant::Dark }, name, value))
                 .collect();
             scene.kit_tokens().expect("the kit's tokens").set_overrides(table);

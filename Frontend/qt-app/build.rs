@@ -5,7 +5,7 @@ fn main() {
     CxxQtBuilder::new_qml_module(
         QmlModule::new("EmuSen.App")
             .version(1, 0)
-            .qml_files(["qml/Main.qml", "qml/PauseCard.qml", "qml/MenuCard.qml", "qml/MenuCardReference.qml", "qml/MenuCardEclipse.qml", "qml/MenuRowEclipse.qml", "qml/CardLine.qml", "qml/CardGlyph.qml", "qml/CardChevron.qml", "qml/CardPlanet.qml", "qml/CardPane.qml", "qml/ThemeHost.qml", "qml/Themes.qml", "qml/Settings.qml", "qml/SettingsScreen.qml", "qml/Cores.qml", "qml/GamePage.qml", "qml/SearchScreen.qml", "qml/ListCardScreen.qml", "qml/ThemesScreen.qml", "qml/ToolScreen.qml", "qml/PageScreen.qml", "qml/HomeCardScreen.qml", "qml/PauseScreen.qml", "qml/ResumeQuestion.qml", "qml/LaunchQuestion.qml", "qml/NoticeScreen.qml", "qml/ThemeSplash.qml"])
+            .qml_files(["qml/Main.qml", "qml/PauseCard.qml", "qml/MenuCard.qml", "qml/MenuCardReference.qml", "qml/MenuCardEclipse.qml", "qml/MenuRowEclipse.qml", "qml/CardLine.qml", "qml/CardGlyph.qml", "qml/CardChevron.qml", "qml/CardPlanet.qml", "qml/CardPane.qml", "qml/CardPaneEclipse.qml", "qml/ThemeHost.qml", "qml/Themes.qml", "qml/Settings.qml", "qml/SettingsScreen.qml", "qml/Cores.qml", "qml/GamePage.qml", "qml/SearchScreen.qml", "qml/ListCardScreen.qml", "qml/ThemesScreen.qml", "qml/ToolScreen.qml", "qml/PageScreen.qml", "qml/HomeCardScreen.qml", "qml/PauseScreen.qml", "qml/ResumeQuestion.qml", "qml/LaunchQuestion.qml", "qml/NoticeScreen.qml", "qml/ThemeSplash.qml"])
             .depend("QtQuick")
             .depend("QtQuick.Shapes")
             .depend("QtQuick.Effects")

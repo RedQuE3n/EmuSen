@@ -371,3 +371,75 @@ fn the_reels_shoulders_and_triggers_are_mistresss() {
     c.shoulder(UiButton::Last);
     assert_eq!(c.rows()[0].label, "Stay at Now", "the right trigger the present");
 }
+
+#[test]
+fn eclipse_pause_card_breadcrumbs_dividers_subtitle_help_and_slot_when() {
+    use emusen_qt_models::game_page::short_when;
+    assert_eq!(short_when((2026, 11, 25), (2026, 11, 25), "8:40 PM"), "8:40 PM");
+    assert_eq!(short_when((2026, 11, 8), (2026, 11, 25), "8:40 PM"), "8 November");
+    assert_eq!(short_when((2025, 11, 8), (2026, 11, 25), "8:40 PM"), "8 November 2025");
+
+    let mut facts = saved(&[1, 2]);
+    facts.slot = 2;
+    facts.path = "/g/Tower Set.cue".into();
+    facts.system = "psx".into();
+    facts.discs = DiscFacts { count: 3, index: Some(0), unread: false, can_change: true, lid_open: false };
+    facts.cheats = vec![Switch { description: "Infinite lives".into(), on: false }];
+    facts.slot_when.insert(1, "8:40 PM".into());
+    facts.slot_when.insert(2, "8 November".into());
+    assert_eq!(Facts::from_json(&facts.to_json()), facts, "slot_when survives JSON round-trip");
+
+    let shelf = vec![
+        row("/g/Tower Set.cue", "Tower Set", "file:///c/tower.png"),
+        row("/g/Glass Orchard.cue", "Glass Orchard", "file:///c/glass.png"),
+        row("/g/Ninth Lantern.cue", "Ninth Lantern", "file:///c/ninth.png"),
+        row("/g/Saltwater Kings.cue", "Saltwater Kings", "file:///c/salt.png"),
+    ];
+    let mut c = Card { facts, shelf, eclipse: true, ..Card::default() };
+
+    // #6 First page: divider after Speed, 4-entry help on Load State, PAUSED · PlayStation breadcrumb, short timestamps.
+    let first_ends: Vec<(String, bool)> = c.rows().into_iter().map(|r| (r.label, r.section_end)).collect();
+    assert_eq!(first_ends[4], ("Speed".into(), true));
+    assert_eq!(first_ends[5], ("Change Disc".into(), false));
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Paused · PlayStation");
+    assert_eq!(c.subtitle(), "");
+    c.focus(at(&c, "Load State"));
+    assert_eq!(c.help(), Screen::Pause, "Eclipse #6 keeps 4-entry bar on Save/Load");
+    assert_eq!(c.position_line(), "4 of 8");
+    let whens: Vec<String> = c.pane().tiles.into_iter().map(|t| t.when).collect();
+    assert_eq!(whens, ["8:40 PM", "8 November", "Empty"]);
+    // Fallback to SlotFact.when when slot_when has no entry for a slot.
+    c.facts.slot_when.remove(&1);
+    assert_eq!(c.pane().tiles[0].when, "Sun 8 Nov, 21:41");
+
+    // #35 Game Options: 5 rows with Cheats and Memory Cards, full breadcrumb.
+    c.choose(at(&c, "Game Options"));
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Paused · PlayStation · Tower Set");
+    assert_eq!(c.position_line(), "1 of 5");
+    assert_eq!(c.help(), Screen::PausePage);
+    c.back();
+
+    // #36 Leave and #37 Ask: divider after Back to Library, subtitle under heading on Ask.
+    c.choose(at(&c, "Leave"));
+    assert_eq!(c.rows()[0].section_end, true);
+    assert_eq!(c.position_line(), "1 of 4");
+    c.choose(at(&c, "Quit Game..."));
+    assert_eq!(c.title("Tower Set"), "Quit Game?");
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Paused · PlayStation · Tower Set");
+    assert_eq!(c.subtitle(), "The game closes and the library comes back.");
+    assert_eq!(c.position_line(), "1 of 2");
+    assert_eq!(c.help(), Screen::PausePage);
+    c.back();
+    c.back();
+
+    // #38 Change Disc: dividers after own discs (index 2) and before Eject disc (index 5).
+    c.choose(at(&c, "Change Disc"));
+    c.focus(1);
+    let disc_ends: Vec<(String, bool)> = c.rows().into_iter().map(|r| (r.label, r.section_end)).collect();
+    assert_eq!(disc_ends[2], ("Tower Set (Disc 3)".into(), true));
+    assert_eq!(disc_ends[5], ("Saltwater Kings".into(), true));
+    assert_eq!(disc_ends[6], ("Eject disc".into(), false));
+    assert_eq!(c.breadcrumb_for("Tower Set", "PlayStation"), "Paused · PlayStation · Tower Set");
+    assert_eq!(c.position_line(), "2 of 7");
+    assert_eq!(c.help(), Screen::PauseDisc);
+}

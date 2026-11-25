@@ -27,7 +27,6 @@ FocusScope {
     property bool menu: false
     property bool power: false
     property bool dialog: false
-    property string subtitle
     property list<string> choices
     property bool hasContinue: false
     property string continueTitle

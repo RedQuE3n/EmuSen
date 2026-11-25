@@ -4,6 +4,7 @@
 //! line. The jobs' events are the library tool's (EmuSen_GamePackages.md §12.3, EmuSen_LibraryTools.md §7.1). No Qt here.
 
 use super::cores::backend::Job;
+use super::library_eclipse::{EclipseLibrary, FindingKind, APPLY_BATCH, HIDE_ONE};
 use super::{Action, Bar, Column, Effect, Item, Mark, Pane, Source, Tone, Words};
 use crate::card::{Pane as CardPane, Row as CardRow};
 use crate::question::confirm;
@@ -16,6 +17,7 @@ const TOOLS: &str = include_str!("jobs.json");
 /// A's actions: a job started, and the running job stopped.
 pub const START: &str = "start";
 pub const STOP: &str = "stop";
+pub const LIBRARY_TOOL: &str = "library";
 
 /// One job of a tool: its row's key and name, what it does, the word its progress is said with, the request it starts,
 /// the question asked first (none for a job that only reads), and the states whose lines are not kept.
@@ -170,6 +172,7 @@ pub type Starter = Box<dyn Fn(&Value) -> Result<Box<dyn Job>, String>>;
 
 /// A tool of jobs: its title, what it does, its jobs, how they start, the running one and every job's last run.
 pub struct Jobs {
+    tool_key: String,
     title: String,
     about: String,
     specs: Vec<Spec>,
@@ -179,6 +182,7 @@ pub struct Jobs {
     /// The job last started, whose outcome the bar says; and the same, taken once to focus its row.
     last: Option<String>,
     acted: Option<String>,
+    eclipse: EclipseLibrary,
 }
 
 impl Jobs {
@@ -186,7 +190,23 @@ impl Jobs {
     pub fn new(key: &str, starter: Starter) -> Option<Jobs> {
         let specs = specs(key);
         let (title, about) = crate::home_card::tool_words(key)?;
-        (!specs.is_empty()).then(|| Jobs { title: title.to_owned(), about: about.to_owned(), specs, starter, running: None, runs: HashMap::new(), last: None, acted: None })
+        (!specs.is_empty()).then(|| Jobs {
+            tool_key: key.to_owned(),
+            title: title.to_owned(),
+            about: about.to_owned(),
+            specs,
+            starter,
+            running: None,
+            runs: HashMap::new(),
+            last: None,
+            acted: None,
+            eclipse: EclipseLibrary::default(),
+        })
+    }
+
+    /// Attaches client library/scraper/package access when opened for Library Manager.
+    pub fn attach_client(&mut self, platform_library: &str, cores: &str) {
+        self.eclipse.attach(platform_library, cores);
     }
 
     fn spec(&self, key: &str) -> Option<&Spec> {
@@ -311,7 +331,73 @@ impl Source for Jobs {
             .collect()
     }
 
+    fn step(&mut self, key: &str, item: &str, by: i32) -> Option<Vec<CardRow>> {
+        if key != "list" || item != "sort" || !self.is_eclipse_library() {
+            return None;
+        }
+        self.eclipse.sort_by = self.eclipse.sort_by.step(by);
+        self.eclipse.rebuild_rows();
+        Some(self.eclipse.list_page())
+    }
+
     fn act(&mut self, action: &str, key: Option<&str>, _section: &str) -> Effect {
+        if self.is_eclipse_library() {
+            match (action, key) {
+                ("toggle-mark", Some(rk)) => {
+                    if let Some(row) = self.eclipse.rows.iter().find(|r| r.row_key == rk).cloned() {
+                        self.eclipse.toggle_mark(&row);
+                    }
+                    return Effect::Done;
+                }
+                ("hide-one", Some(rk)) => {
+                    if let Some(row) = self.eclipse.rows.iter().find(|r| r.row_key == rk).cloned() {
+                        return self.eclipse.ask_hide_single(&row);
+                    }
+                    return Effect::Done;
+                }
+                ("sort", _) => {
+                    self.eclipse.sort_by = self.eclipse.sort_by.step(1);
+                    self.eclipse.rebuild_rows();
+                    return Effect::Done;
+                }
+                ("run-check", _) => {
+                    self.eclipse.pending_queue = vec!["dups".to_owned()];
+                    self.start("check");
+                    return Effect::Done;
+                }
+                ("run-dups", _) => {
+                    self.start("dups");
+                    return Effect::Done;
+                }
+                ("mark-dups", _) => {
+                    let mut keep_first = std::collections::BTreeSet::new();
+                    for r in &self.eclipse.rows {
+                        if r.kind == FindingKind::SameDump && !r.hidden && !keep_first.insert(r.group_text.clone()) {
+                            self.eclipse.marked.insert(r.full_path.clone(), (r.filename.clone(), true));
+                        }
+                    }
+                    return Effect::Done;
+                }
+                ("mark-broken", _) => {
+                    for r in &self.eclipse.rows {
+                        if r.kind == FindingKind::Broken && !r.hidden {
+                            self.eclipse.marked.insert(r.full_path.clone(), (r.filename.clone(), true));
+                        }
+                    }
+                    return Effect::Done;
+                }
+                ("clear-marks", _) => {
+                    self.eclipse.marked.clear();
+                    return Effect::Done;
+                }
+                ("clear-search", _) => {
+                    self.eclipse.search.clear();
+                    self.eclipse.ensure_focus();
+                    return Effect::Done;
+                }
+                _ => {}
+            }
+        }
         let Some(spec) = key.and_then(|k| self.spec(k)).cloned() else { return Effect::Done };
         match action {
             STOP => self.stop(),
@@ -326,22 +412,46 @@ impl Source for Jobs {
     }
 
     fn answer(&mut self, asked: &str, yes: bool) {
-        if yes {
-            self.start(asked);
+        if !yes {
+            self.eclipse.pending_single = None;
+            return;
+        }
+        match asked {
+            HIDE_ONE => {
+                if let Some((path, hide)) = self.eclipse.pending_single.take() {
+                    self.eclipse.marked.remove(&path);
+                    self.eclipse.apply_edits(&[(path, hide)]);
+                }
+            }
+            APPLY_BATCH => {
+                let changes: Vec<(String, bool)> = self.eclipse.marked.iter().map(|(p, (_, h))| (p.clone(), *h)).collect();
+                self.eclipse.marked.clear();
+                self.eclipse.apply_edits(&changes);
+            }
+            _ => self.start(asked),
         }
     }
 
-    /// Nothing is read until a job runs; a running job is followed on.
-    fn refresh(&mut self) {}
+    /// Nothing is read until a job runs; Eclipse Library Manager starts check then dups.
+    fn refresh(&mut self) {
+        if self.is_eclipse_library() {
+            self.eclipse.reload_metadata();
+            self.ensure_initial_check();
+        }
+    }
 
     fn poll(&mut self) -> bool {
         let Some((key, mut job)) = self.running.take() else { return false };
         let quiet = self.spec(&key).map(|s| s.quiet.clone()).unwrap_or_default();
         let mut events = Vec::new();
         let ended = job.drain(&mut events);
+        let eclipse_library = self.is_eclipse_library();
         let run = self.runs.entry(key.clone()).or_default();
         for event in &events {
             run.take(event, &quiet);
+            if eclipse_library {
+                self.eclipse.ingest_event(&key, event);
+            }
         }
         match ended {
             Ok(false) => self.running = Some((key, job)),
@@ -352,6 +462,11 @@ impl Source for Jobs {
             }
             Err(words) => run.outcome = Some(Words::new(words, Tone::Error)),
         }
+        if self.running.is_none() && self.is_eclipse_library() && !self.eclipse.pending_queue.is_empty() {
+            let next = self.eclipse.pending_queue.remove(0);
+            self.start(&next);
+            return true;
+        }
         !events.is_empty() || self.running.is_none()
     }
 
@@ -361,5 +476,129 @@ impl Source for Jobs {
 
     fn acted_on(&mut self) -> Option<String> {
         self.acted.take()
+    }
+
+    fn set_eclipse(&mut self, eclipse: bool) {
+        self.eclipse.enabled = eclipse;
+        if self.is_eclipse_library() {
+            self.eclipse.reload_metadata();
+            self.ensure_initial_check();
+        }
+    }
+
+    fn card_breadcrumb(&self, key: &str) -> Option<String> {
+        if !self.is_eclipse_library() {
+            return None;
+        }
+        if key == "list" {
+            return Some("Tools / Library Manager".to_owned());
+        }
+        self.eclipse.rows.iter().find(|r| r.row_key == key).map(|r| format!("Library Manager / {}", r.filename))
+    }
+
+    fn card_detail_pane(&self, rows: &[CardRow], at: usize) -> Option<(String, String)> {
+        self.is_eclipse_library().then(|| crate::tools::eclipse_detail_pane(rows, at)).flatten()
+    }
+
+    fn eclipse_view(&self) -> Option<Value> {
+        self.is_eclipse_library().then(|| self.eclipse.projection(self.running()))
+    }
+
+    fn eclipse_choose_filter(&mut self, key: &str) {
+        if self.is_eclipse_library() {
+            self.eclipse.choose_filter(key);
+        }
+    }
+
+    fn eclipse_focus_zone_code(&mut self, code: i32) {
+        if self.is_eclipse_library() {
+            self.eclipse.focus_zone = (code.clamp(0, 1)) as usize;
+        }
+    }
+
+    fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Effect {
+        if !self.is_eclipse_library() {
+            return Effect::Done;
+        }
+        match code {
+            0 => {
+                let Some(r) = key.and_then(|k| self.eclipse.rows.iter().find(|x| x.row_key == k)).or_else(|| self.eclipse.focused_row()).cloned() else {
+                    return Effect::Done;
+                };
+                Effect::Page(r.filename.clone(), self.eclipse.row_page(&r.row_key))
+            }
+            1 => Effect::Page("List".to_owned(), self.eclipse.list_page()),
+            2 => self.eclipse.apply_question(),
+            3 => {
+                if let Some(k) = key {
+                    self.eclipse.focused_row_key = Some(k.to_owned());
+                    self.eclipse.focus_zone = 1;
+                }
+                Effect::Done
+            }
+            _ => Effect::Done,
+        }
+    }
+
+    fn eclipse_action_key(&mut self, key: &str) -> Effect {
+        match key {
+            "more" => self.eclipse_act_code(0, None),
+            "list" => self.eclipse_act_code(1, None),
+            "apply" => self.eclipse_act_code(2, None),
+            "prevFilter" => {
+                self.eclipse.step_filter(-1);
+                Effect::Done
+            }
+            "nextFilter" => {
+                self.eclipse.step_filter(1);
+                Effect::Done
+            }
+            _ => Effect::Done,
+        }
+    }
+
+    fn eclipse_nav(&mut self, code: i32) -> Effect {
+        if !self.is_eclipse_library() {
+            return Effect::Done;
+        }
+        let dir = match code {
+            0 => "up",
+            1 => "down",
+            2 => "left",
+            3 => "right",
+            4 => "accept",
+            5 => "prevFilter",
+            6 => "nextFilter",
+            _ => return Effect::Done,
+        };
+        self.eclipse.navigate(dir)
+    }
+
+    fn set_eclipse_search(&mut self, words: &str) {
+        if self.is_eclipse_library() {
+            self.eclipse.search = words.to_owned();
+            self.eclipse.ensure_focus();
+        }
+    }
+
+    fn take_library_changed(&mut self) -> bool {
+        std::mem::take(&mut self.eclipse.library_changed)
+    }
+
+    fn eclipse_screen_code(&self) -> i32 {
+        if self.is_eclipse_library() { 4 } else { 0 }
+    }
+}
+
+impl Jobs {
+    fn is_eclipse_library(&self) -> bool {
+        self.eclipse.enabled && self.tool_key == LIBRARY_TOOL
+    }
+
+    fn ensure_initial_check(&mut self) {
+        if !self.eclipse.checked_once && self.running.is_none() && self.eclipse.pending_queue.is_empty() {
+            self.eclipse.pending_queue = vec!["dups".to_owned()];
+            self.start("check");
+        }
     }
 }

@@ -94,6 +94,7 @@ pub mod qobject {
         #[qproperty(QString, card_detail_value, cxx_name = "cardDetailValue", READ, NOTIFY)]
         #[qproperty(QString, eclipse_cores, cxx_name = "eclipseCores", READ, NOTIFY)]
         #[qproperty(QString, eclipse_help, cxx_name = "eclipseHelp", READ, NOTIFY)]
+        #[qproperty(i32, eclipse_screen, cxx_name = "eclipseScreen", READ, NOTIFY)]
         /// The question over the screen: the plan, or one the tool asks.
         #[qproperty(bool, asking, READ, NOTIFY)]
         #[qproperty(QString, question_title, cxx_name = "questionTitle", READ, NOTIFY)]
@@ -260,6 +261,7 @@ pub struct ToolModelRust {
     card_detail_value: QString,
     eclipse_cores: QString,
     eclipse_help: QString,
+    eclipse_screen: i32,
     asking: bool,
     question_title: QString,
     question_sentences: QStringList,
@@ -326,6 +328,7 @@ impl Default for ToolModelRust {
             card_detail_value: QString::default(),
             eclipse_cores: QString::from("{}"),
             eclipse_help: QString::from("[]"),
+            eclipse_screen: 0,
             asking: false,
             question_title: QString::default(),
             question_sentences: QStringList::default(),
@@ -384,7 +387,7 @@ fn cheats_source(platform_library: &str, cores: &str, url: &str) -> Result<Box<d
 }
 
 /// The tool of jobs of `key`, its jobs started by the platform library's tools, or from the world a file holds.
-fn jobs_source(platform_library: &str, world: &str, key: &str) -> Result<Box<dyn Source>, String> {
+fn jobs_source(platform_library: &str, cores: &str, world: &str, key: &str) -> Result<Box<dyn Source>, String> {
     let starter: crate::tools::jobs::Starter = if world.is_empty() {
         let platform = emusen_platform_client::Platform::load(platform_library).map_err(|e| e.to_string())?;
         Box::new(move |request| crate::tools::cores::backend::platform_job(&platform, request))
@@ -392,7 +395,11 @@ fn jobs_source(platform_library: &str, world: &str, key: &str) -> Result<Box<dyn
         let scripted = Scripted::open(world)?;
         Box::new(move |request| scripted.start(request))
     };
-    crate::tools::jobs::Jobs::new(key, starter).map(|j| Box::new(j) as Box<dyn Source>).ok_or_else(|| format!("{key} is no tool of jobs"))
+    let mut jobs = crate::tools::jobs::Jobs::new(key, starter).ok_or_else(|| format!("{key} is no tool of jobs"))?;
+    if world.is_empty() && key == crate::tools::jobs::LIBRARY_TOOL {
+        jobs.attach_client(platform_library, cores);
+    }
+    Ok(Box::new(jobs))
 }
 
 macro_rules! put {
@@ -424,7 +431,7 @@ impl qobject::ToolModel {
                 Shown::Cores => cores_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.world.to_string()),
                 Shown::Jobs if jobs == crate::home_card::CHEATS => cheats_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.cheats_url.to_string()),
                 Shown::Jobs if jobs == crate::home_card::SCRAPER => scraper_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.scraper_test.to_string()),
-                Shown::Jobs => jobs_source(&self.platform_library.to_string(), &self.world.to_string(), &jobs),
+                Shown::Jobs => jobs_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.world.to_string(), &jobs),
                 _ => Err("no tool is named".to_owned()),
             };
             match made {
@@ -462,12 +469,17 @@ impl qobject::ToolModel {
     }
 
     fn change(mut self: Pin<&mut Self>, change: impl FnOnce(&mut Tool<Box<dyn Source>>) -> Option<String>) {
-        let host = {
+        let (host, lib_dirty) = {
             let mut rust = self.as_mut().rust_mut();
             let Some(tool) = rust.shown.as_mut() else { return };
-            change(tool)
+            let host = change(tool);
+            let dirty = tool.source.take_library_changed();
+            (host, dirty)
         };
         self.as_mut().fill();
+        if lib_dirty {
+            self.as_mut().library_changed();
+        }
         match host.as_deref().map(|k| (k, k.strip_prefix(crate::tools::cores::OPEN_FOLDER))) {
             Some((_, Some(path))) => self.as_mut().open_folder(QString::from(path)),
             Some((key, None)) => self.as_mut().host_asked(QString::from(key)),
@@ -741,6 +753,7 @@ impl qobject::ToolModel {
                 .map_or_else(|| "[]".to_owned(), ToString::to_string)
                 .as_str(),
         );
+        let eclipse_screen = if !self.eclipse { 0 } else if self.tool == Shown::Cores { 1 } else { source.eclipse_screen_code() };
         let question = tool.question().cloned();
         let busy = source.running();
         let changed_library = self.busy && !busy && source.changes_library();
@@ -781,6 +794,7 @@ impl qobject::ToolModel {
         put!(self, card_detail_value, detail_value, card_detail_value_changed);
         put!(self, eclipse_cores, eclipse_cores, eclipse_cores_changed);
         put!(self, eclipse_help, eclipse_help, eclipse_help_changed);
+        put!(self, eclipse_screen, eclipse_screen, eclipse_screen_changed);
         let closed = self.card_open && card.is_none();
         put!(self, card_open, card.is_some(), card_open_changed);
         let closed_asking = self.asking && question.is_none();

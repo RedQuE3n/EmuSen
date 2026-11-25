@@ -1,0 +1,58 @@
+# Eclipse Scraper (#66) against EclipseScraper.dc.html (1920 by 1200, Chrome JSON t4-boards/scraper.json).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground #07080F	Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
+backdropField.0	18	teal glow #1FC9A8	Kit.BackdropField	-	1240	-420	900	720	-	opacity:0.5	blur:110	built	field 0 -1 0 0
+backdropField.1	19	purple glow #6A4CF0	Kit.BackdropField	-	1500	-200	700	600	-	opacity:0.55	blur:120	built	field 0 -1 0 0
+toolMark	22	crescent mark	Marks.menuCrescent	Item	96	mid:80	34	34	-	-	-	built	-
+trailWords.0	24	"Tools"	trail[0]	CardLine	after:toolMark:28	mid:80	-	-	-	#FFB9BED0	24	built	400 0 none
+trailSlash.0	25	"/"	trail[0].slash	CardLine	after:trailWords.0:14	mid:80	-	-	-	#FF8E94AB	24	built	400 0 none
+trailWords.1	26	"Scraper"	trail[1]	CardLine	after:trailSlash.0:14	mid:80	-	-	-	Tokens.textStrong	24	built	600 0 none
+statusPill	29	top-right status pill	Rectangle	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-
+battery	30	"82%"	battery	CardLine	in:statusPill:22	mid:statusPill	-	-	-	Tokens.textStrong	22	built	400 0 none
+clock	30	"9:41 PM"	clockText	CardLine	after:battery:22	mid:statusPill	inright:statusPill:22	-	-	Tokens.textStrong	22	built	600 0 none
+toolTitle	34	"Scraper"	view.title	CardLine	96	150	-	59.36	-	Tokens.textStrong	56	built	600 -0.01 none
+toolSubtitle	35	games without art summary	view.subtitle	CardLine	96	below:toolTitle:10	1100	31.9	-	#FFC9CDDB	22	built	300 0 none
+filterPill.all	37	All filter pill active	filters[0]	Item	96	276	-	44	-	-	-	built	-
+filterWords.all	37	"All" active text	filters[0].label	CardLine	-	mid:filterPill.all	-	-	-	#FF07080F	20	built	600 0 none
+tableHeader	38	6-col header row	tableHeader	Item	96	340	1160	40	-	-	-	built	-
+tableCol.1	38	"GAME"	columns[1]	CardLine	168	mid:tableHeader	246.59649	-	-	#FF8E94AB	16	built	400 0.14 upper
+tableCol.2	38	"CONSOLE"	columns[2]	CardLine	after:tableCol.1:16	mid:tableHeader	193.75439	-	-	#FF8E94AB	16	built	400 0.14 upper
+tableCol.3	38	"MEDIA"	columns[3]	CardLine	after:tableCol.2:16	mid:tableHeader	105.68421	-	-	#FF8E94AB	16	built	400 0.14 upper
+tableCol.4	38	"MISSING"	columns[4]	CardLine	after:tableCol.3:16	mid:tableHeader	228.98246	-	-	#FF8E94AB	16	built	400 0.14 upper
+tableCol.5	38	"LAST RUN"	columns[5]	CardLine	after:tableCol.4:16	mid:tableHeader	228.98246	-	-	#FF8E94AB	16	built	400 0.14 upper
+tableRow.0	40	row 0 unfocused	rows[0]	Item	96	388	1160	66	-	-	-	built	-
+tableRowBg.0	40	row 0 surface	Rectangle	Rectangle	in:tableRow.0:0	top:tableRow.0:0	1160	66	16	#FF11131C	-	built	line 1 #FF262A3A
+tableCell.0.0	40	row 0 mark box	CardLine	CardLine	116	mid:tableRow.0	36	26	-	Tokens.textStrong	20	built	400 0 none
+tableRow.1	40	row 1 focused wrapped	rows[1]	Item	96	below:tableRow.0:8	1160	72	-	-	-	built	-
+tableRowRing.1	40	row 1 focus ring	Kit.FocusRing	FocusRing	in:tableRow.1:0	top:tableRow.1:0	1160	72	-	-	-	built	ring 4 3 40 10 23 #80F0B4C4 #FF07080F #FFF6E7D8
+tableRowBg.1	40	row 1 focused bg	Rectangle	Rectangle	in:tableRow.1:0	top:tableRow.1:0	1160	72	16	#FF151826	-	built	line 0 -
+scraperAside	42	right detail aside	aside	Rectangle	1300	276	524	430	28	#FF11131C	-	built	line 1 #FF262A3A
+asideHeading	42	focused game title	aside.title	CardLine	1332	308	460	36	-	Tokens.textStrong	30	built	600 0 none
+asideConsole	42	"Console: ..."	aside.subtitle	CardLine	1332	below:asideHeading:16	460	29	-	#FFD8DBE6	20	built	400 0 none
+mediaTile.0	42	Cover tile	tiles[0]	Column	1332	below:asideConsole:16	140	-	-	-	-	built	-
+mediaBox.0	42	Cover box present	Rectangle	Rectangle	in:mediaTile.0:0	top:mediaTile.0:0	140	105	12	#FF134B3A	-	built	-
+mediaLabel.0	42	"Cover"	tiles[0].label	CardLine	in:mediaTile.0:0	below:mediaBox.0:8	140	-	-	#FFB9BED0	17	built	400 0 none
+mediaTile.1	42	Screenshot tile	tiles[1]	Column	after:mediaTile.0:14	top:mediaTile.0:0	140	-	-	-	-	built	-
+mediaBox.1	42	Screenshot box present	Rectangle	Rectangle	in:mediaTile.1:0	top:mediaTile.1:0	140	105	12	#FF134B3A	-	built	-
+mediaTile.2	42	Video tile	tiles[2]	Column	after:mediaTile.1:14	top:mediaTile.0:0	140	-	-	-	-	built	-
+mediaBox.2	42	Video box missing	Rectangle	Rectangle	in:mediaTile.2:0	top:mediaTile.2:0	140	105	12	#00000000	-	built	line 2 #FF5A6076
+asideLine.0	42	Cover provenance	aside.lines[0]	CardLine	1332	below:mediaTile.0:16	460	29	-	#FFD8DBE6	20	built	400 0 none
+asideLine.1	42	Screenshot provenance	aside.lines[1]	CardLine	1332	below:asideLine.0:16	460	29	-	#FFD8DBE6	20	built	400 0 none
+asideLine.2	42	Last run muted line	aside.lines[2]	CardLine	1332	below:asideLine.1:16	460	29	-	#FFB9BED0	20	built	400 0 none
+scraperMarkBar	42	bottom mark summary bar	Rectangle	Rectangle	96	1032	right:96	64	20	#FF151826	-	built	line 1 #FF262A3A
+scraperMarkSummary	42	marked count and disclaimer	view.markBarText	CardLine	in:scraperMarkBar:24	mid:scraperMarkBar	-	-	-	Tokens.textStrong	21	built	400 0 none
+markToggle.0	42	Videos · Off pill	toggles[0]	Item	-	mid:scraperMarkBar	-	38	-	-	-	built	-
+markToggleWords.0	42	"Videos · Off"	toggles[0].label	CardLine	-	mid:markToggle.0	-	-	-	#FFB9BED0	18	built	400 0 none
+markToggle.1	42	Overwrite · Off pill	toggles[1]	Item	after:markToggle.0:12	mid:scraperMarkBar	inright:scraperMarkBar:24	38	-	-	-	built	-
+markToggleWords.1	42	"Overwrite · Off"	toggles[1].label	CardLine	-	mid:markToggle.1	-	-	-	#FFB9BED0	18	built	400 0 none
+scraperFooter	43	bottom footer	Item	Item	96	1122	right:96	38	-	-	-	built	-
+scraperHelp	44	help bar	Kit.HelpBar	HelpBar	96	mid:scraperFooter	-	38	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Mark	45	A filled 34 px	CardGlyph	-	in:scraperHelp:0	mid:scraperHelp	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Back	46	B ringed 38 px	CardGlyph	-	-	mid:scraperHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Console	47	LB boxed 34 px	CardGlyph	-	-	mid:scraperHelp	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Console	48	RB boxed 34 px	CardGlyph	-	after:ownGlyph-Console:10	mid:scraperHelp	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph-More	49	X ringed 38 px	CardGlyph	-	-	mid:scraperHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-List	50	SELECT boxed 34 px	CardGlyph	-	-	mid:scraperHelp	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph-Apply…	51	START boxed 34 px	CardGlyph	-	-	mid:scraperHelp	-	34	-	-	-	built	word 15 400 8 10
+scraperCounter	53	focused index counter	view.counter	CardLine	-	mid:scraperFooter	right:96	-	-	#FFB9BED0	21	built	400 0 none

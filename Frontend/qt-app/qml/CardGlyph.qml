@@ -27,8 +27,9 @@ Item {
     property real boxRadius: 8
     property real boxPadding: 10
     property bool boxMenu: false
+    property bool boxOptions: false
     readonly property bool shoulderOrTrigger: root.button === Kit.Pad.PageUp || root.button === Kit.Pad.PageDown || root.button === Kit.Pad.First || root.button === Kit.Pad.Last
-    readonly property bool boxed: root.keyed || (root.boxMenu && root.button === Kit.Pad.Menu) || root.shoulderOrTrigger
+    readonly property bool boxed: root.keyed || (root.boxMenu && root.button === Kit.Pad.Menu) || (root.boxOptions && root.button === Kit.Pad.Options) || root.shoulderOrTrigger
     property color ring: Kit.Tokens.muted
     property color ink: Kit.Tokens.text
     property color leadFill: Kit.Tokens.accent

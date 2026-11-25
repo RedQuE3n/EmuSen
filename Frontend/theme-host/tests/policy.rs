@@ -106,3 +106,15 @@ fn qt_3_5_a_folder_in_the_resources_is_a_folder_too() {
     assert_eq!(folder_url("/a/b/"), "file:///a/b");
     assert_eq!(folder_url("qrc:/emusen/themes/emusen"), "qrc:/emusen/themes/emusen");
 }
+
+#[test]
+fn qt_3_5_theme_previews_reject_parent_traversal_and_allow_user_store_pngs() {
+    let p = Policy::new("qrc:/emusen/themes/eclipse", &["/user/themes".to_owned()], QT_QML);
+    assert!(passes(&p, "qrc:/emusen/themes/emusen/assets/previews/home.png", Kind::Url));
+    assert!(!passes(&p, "qrc:/emusen/themes/emusen/assets/previews/../other.png", Kind::Url));
+    assert!(!passes(&p, "qrc:/emusen/themes/emusen/assets/previews/../../screens/Home.qml", Kind::Qml));
+    assert!(!passes(&p, "qrc:/emusen/themes/emusen/assets/previews/../../screens/Home.qml", Kind::Url));
+    assert!(passes(&p, "file:///user/themes/aurora/assets/previews/home.png", Kind::Url));
+    assert!(!passes(&p, "file:///user/themes/aurora/screens/Home.qml", Kind::Qml));
+    assert!(!passes(&p, "file:///user/themes/aurora/assets/previews/../../../../etc/other.png", Kind::Url));
+}

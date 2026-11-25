@@ -37,7 +37,6 @@
         <file alias="parts/Encore.qml">../themes/eclipse/parts/Encore.qml</file>
         <file alias="parts/PlanetInk.qml">../themes/eclipse/parts/PlanetInk.qml</file>
         <file alias="parts/PlanetSphere.qml">../themes/eclipse/parts/PlanetSphere.qml</file>
-        <file alias="parts/ScrapeRow.qml">../themes/eclipse/parts/ScrapeRow.qml</file>
         <file alias="parts/SplashCorona.qml">../themes/eclipse/parts/SplashCorona.qml</file>
         <file alias="parts/Blend.qml">../themes/eclipse/parts/Blend.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
@@ -51,6 +50,7 @@
         <file alias="parts/Horizon.qml">../themes/eclipse/parts/Horizon.qml</file>
         <file alias="parts/LineBox.qml">../themes/eclipse/parts/LineBox.qml</file>
         <file alias="parts/Limb.qml">../themes/eclipse/parts/Limb.qml</file>
+        <file alias="parts/ScrapeRow.qml">../themes/eclipse/parts/ScrapeRow.qml</file>
         <file alias="parts/SettingsAside.qml">../themes/eclipse/parts/SettingsAside.qml</file>
         <file alias="parts/SettingsChips.qml">../themes/eclipse/parts/SettingsChips.qml</file>
         <file alias="parts/SettingsConsoleCard.qml">../themes/eclipse/parts/SettingsConsoleCard.qml</file>
@@ -63,6 +63,7 @@
         <file alias="parts/SettingsMeter.qml">../themes/eclipse/parts/SettingsMeter.qml</file>
         <file alias="parts/SettingsNav.qml">../themes/eclipse/parts/SettingsNav.qml</file>
         <file alias="parts/SettingsRow.qml">../themes/eclipse/parts/SettingsRow.qml</file>
+        <file alias="parts/SettingsThemePreview.qml">../themes/eclipse/parts/SettingsThemePreview.qml</file>
         <file alias="parts/StateCard.qml">../themes/eclipse/parts/StateCard.qml</file>
         <file alias="parts/Tabs.qml">../themes/eclipse/parts/Tabs.qml</file>
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>

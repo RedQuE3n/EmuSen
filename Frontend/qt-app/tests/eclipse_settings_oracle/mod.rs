@@ -128,7 +128,7 @@ pub fn help_line(scene: &mut Scene<'_>) -> (Vec<String>, String) {
 }
 
 /// Session.frame as the program sets it: the game's own picture item while a game is suspended (`ThemeHost.qml`'s showSession), else none.
-fn paused_frame(scene: &mut Scene<'_>, paused: bool) {
+pub fn paused_frame(scene: &mut Scene<'_>, paused: bool) {
     let tree = scene.tree();
     let id = |name: &str| -> u64 { tree.nodes[tree.find_named(name).unwrap_or_else(|| panic!("{name} in the tree")) as usize].id.parse().unwrap() };
     let frame = if paused { id("picture") as *mut _ } else { std::ptr::null_mut() };

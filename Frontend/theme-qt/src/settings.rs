@@ -91,6 +91,13 @@ pub mod qobject {
         /// From 1.18 (boards #52-#56): Eclipse secondary aside lines and rounded-box Start glyph flag.
         #[qproperty(QStringList, board_lines, cxx_name = "boardLines", READ, NOTIFY = shown)]
         #[qproperty(bool, box_menu, cxx_name = "boxMenu", READ, NOTIFY = shown)]
+        /// From 1.21 (boards #59-#62): board crumb line, inline kind pills, theme preview card and metadata line.
+        #[qproperty(QString, board_trail_line, cxx_name = "boardTrailLine", READ, NOTIFY = shown)]
+        #[qproperty(QStringList, inline_pills, cxx_name = "inlinePills", READ, NOTIFY = shown)]
+        #[qproperty(i32, inline_pill, cxx_name = "inlinePill", READ, NOTIFY = shown)]
+        #[qproperty(bool, theme_preview, cxx_name = "themePreview", READ, NOTIFY = shown)]
+        #[qproperty(QString, preview_image, cxx_name = "previewImage", READ, NOTIFY = shown)]
+        #[qproperty(QString, board_meta, cxx_name = "boardMeta", READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -150,6 +157,12 @@ pub struct SettingsFacts {
     pub board_wrap_about: bool,
     pub cards_help: bool,
     pub box_menu: bool,
+    pub board_trail_line: String,
+    pub inline_pills: Vec<String>,
+    pub inline_pill: i32,
+    pub theme_preview: bool,
+    pub preview_image: String,
+    pub board_meta: String,
 }
 
 /// The facts of a view whose rows were last told as `rows`; an error where those are not the view's rows.
@@ -262,6 +275,12 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         board_wrap_about: aside.wrap_about,
         cards_help: aside.cards_help,
         box_menu: aside.box_menu,
+        board_trail_line: aside.trail_line,
+        inline_pills: aside.inline_pills,
+        inline_pill: aside.inline_pill,
+        theme_preview: aside.theme_preview,
+        preview_image: aside.preview_image,
+        board_meta: aside.meta,
     })
 }
 
@@ -326,6 +345,12 @@ pub struct ThemeSettingsRust {
     board_wrap_about: bool,
     cards_help: bool,
     box_menu: bool,
+    board_trail_line: QString,
+    inline_pills: QStringList,
+    inline_pill: i32,
+    theme_preview: bool,
+    preview_image: QString,
+    board_meta: QString,
     last: SettingsFacts,
 }
 
@@ -376,7 +401,13 @@ impl Default for ThemeSettingsRust {
             board_wrap_about: false,
             cards_help: false,
             box_menu: false,
-            last: SettingsFacts { help: -1, card_planet: -3, ..SettingsFacts::default() },
+            board_trail_line: QString::default(),
+            inline_pills: QStringList::default(),
+            inline_pill: -1,
+            theme_preview: false,
+            preview_image: QString::default(),
+            board_meta: QString::default(),
+            last: SettingsFacts { help: -1, card_planet: -3, inline_pill: -1, ..SettingsFacts::default() },
         }
     }
 }
@@ -468,6 +499,12 @@ impl qobject::ThemeSettings {
         me.board_wrap_about = facts.board_wrap_about;
         me.cards_help = facts.cards_help;
         me.box_menu = facts.box_menu;
+        me.board_trail_line = QString::from(facts.board_trail_line.as_str());
+        me.inline_pills = list(&facts.inline_pills);
+        me.inline_pill = facts.inline_pill;
+        me.theme_preview = facts.theme_preview;
+        me.preview_image = QString::from(facts.preview_image.as_str());
+        me.board_meta = QString::from(facts.board_meta.as_str());
         me.last = facts.clone();
         drop(me);
         self.shown();

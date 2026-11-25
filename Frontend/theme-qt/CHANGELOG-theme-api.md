@@ -3,6 +3,13 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.21, an addition: Settings Shader levers, Parameters, Themes and Scraping boards (2026-11-25)
+
+- **`Settings.boardTrailLine`**, **`Settings.inlinePills`**, **`Settings.inlinePill`**, **`Settings.themePreview`**, **`Settings.previewImage`** and **`Settings.boardMeta`**: Eclipse board crumb line, Themes inline kind pills (`EmuSen` / `ES-DE`), 424×265 theme preview card (image URL or swatch fallback) and author/API/variants metadata line for boards #59–#62 without altering reference-theme fields (R-20261116-20, -22, -24, R-20261123-32).
+- **`Actions.settingsInlinePill(index)`**: pointer selection of a Themes inline kind pill (board #61).
+- **`Help.SettingsThemes`**, **`Help.SettingsThemesChecked`** and **`Help.SettingsThemesChoice`**: maps `Screen::Themes`, `Screen::ThemesChecked` and `Screen::ThemesChoice` (`A Use`, `X Check`, `LB RB Kind`, `B Back`, `START Home`) for board #61.
+- The module is 1.21 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.21.*`.
+
 ## 1.20, an addition: Eclipse's game page Edit Details, Cover Art, Scrape This Game, Media Viewer and This game's crop (2026-11-25)
 
 Decided 2026-11-24 by the tester (R-20261114-10, -11, R-20261116-32 to -35, R-20261123-32): Eclipse draws all five remaining game page inner pages as their boards draw them.

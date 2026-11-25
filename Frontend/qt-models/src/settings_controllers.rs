@@ -114,6 +114,9 @@ pub struct Drawn {
 pub enum Typed {
     NewProfile { console: String, from: String },
     Rename { console: String, profile: String },
+    SearchParameters,
+    ScrapeUser,
+    ScrapePassword,
 }
 
 fn fill(line: &str, names: &[(&str, &str)]) -> String {
@@ -558,23 +561,46 @@ impl SettingsView {
         None
     }
 
-    /// A typed answer taken: a new profile made, or one renamed and its page following it.
+    /// A typed answer taken: profile actions, shader parameter search, or ScreenScraper sign-in steps.
     pub fn typed(&mut self, typed: &Typed, words: &str) -> Outcome {
-        let words = words.trim();
-        if words.is_empty() {
+        let trimmed = words.trim();
+        match typed {
+            Typed::SearchParameters => {
+                self.param_search = trimmed.to_owned();
+                return Outcome::Shown;
+            }
+            Typed::ScrapeUser => {
+                if trimmed.is_empty() {
+                    self.scrape.pending_user = None;
+                    return Outcome::Nothing;
+                }
+                self.scrape.pending_user = Some(trimmed.to_owned());
+                return Outcome::Type { title: "Log in".to_owned(), prompt: "Your ScreenScraper password.".to_owned(), start: String::new(), typed: Typed::ScrapePassword };
+            }
+            Typed::ScrapePassword => {
+                let user = self.scrape.pending_user.take();
+                return match user {
+                    Some(user) if !words.is_empty() => Outcome::ScrapeSignIn { user, password: words.to_owned() },
+                    _ => Outcome::Nothing,
+                };
+            }
+            _ => {}
+        }
+        if trimmed.is_empty() {
             return Outcome::Nothing;
         }
         match typed {
-            Typed::NewProfile { console, from } => Outcome::Bindings(vec![self.read.bindings.create(console, words, from)]),
+            Typed::NewProfile { console, from } => Outcome::Bindings(vec![self.read.bindings.create(console, trimmed, from)]),
             Typed::Rename { console, profile } => {
-                let file = self.read.bindings.rename(console, profile, words);
+                let file = self.read.bindings.rename(console, profile, trimmed);
                 if let Some(last) = self.pages.last_mut() {
                     if last.0 == Page::Profile(console.clone(), profile.clone()) {
-                        *last = (Page::Profile(console.clone(), words.to_owned()), words.to_owned(), last.2);
+                        *last = (Page::Profile(console.clone(), trimmed.to_owned()), trimmed.to_owned(), last.2);
                     }
                 }
                 Outcome::Bindings(vec![file])
             }
+            Typed::SearchParameters | Typed::ScrapeUser | Typed::ScrapePassword => Outcome::Nothing,
         }
     }
 

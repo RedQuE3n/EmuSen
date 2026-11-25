@@ -11,17 +11,23 @@ MenuCard {
     // Settings' one description, whose Game Options ▸ Controllers, Display and Sound pages the card draws (EmuSen_Interface.md §20.3).
     property SettingsModel settings: null
     readonly property alias model: pause
+    readonly property bool eclipseMode: Kit.Tokens.coronaRim > 0
     readonly property int coverRow: games.revision >= 0 ? games.rowOf(root.session.game) : -1
     signal resumed()
     signal backToLibrary()
     // Quit Game answered Yes, and Quit EmuSen.
     signal quitGame()
     signal quitAll()
+    eclipse: root.eclipseMode
+    scrimColor: root.eclipseMode ? Qt.alpha(Kit.Tokens.scrim, 0.58) : Kit.Tokens.scrim
     rows: pause
     title: pause.title
     breadcrumb: pause.breadcrumb
+    subtitle: pause.subtitle
+    positionLine: pause.positionLine
     current: pause.current
     paneDrawn: pane.model.shown
+    paneHeight: pane.contentHeight
     cover: root.coverRow >= 0 ? games.coverAt(root.coverRow) : ""
     help: HelpModel {
         screen: pause.helpScreen
@@ -36,7 +42,9 @@ MenuCard {
     PauseModel {
         id: pause
         objectName: "pause"
+        eclipse: root.eclipseMode
         game: root.library.titleOf(root.session.game)
+        console: root.library.consoleOf(root.session.game)
         facts: root.session.cardFacts
         shelf: root.library.gamesOf(pause.system)
         onResumed: root.resumed()
@@ -75,5 +83,8 @@ MenuCard {
         id: pane
         anchors.fill: parent
         pane: pause.pane
+        eclipse: root.eclipseMode
+        unit: Kit.CanvasUnits.designHeight / 1200
+        pixelScale: root.pixelScale
     }
 }

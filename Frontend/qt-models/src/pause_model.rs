@@ -71,6 +71,14 @@ pub mod qobject {
         #[qproperty(QString, pane, READ, NOTIFY)]
         /// The help bar the page shows, a `HelpModel` screen.
         #[qproperty(i32, help_screen, cxx_name = "helpScreen", READ, NOTIFY)]
+        /// Whether Eclipse Pause Card wording, dividers and help bar are active.
+        #[qproperty(bool, eclipse)]
+        /// The running game's console display name for Eclipse's PAUSED breadcrumb.
+        #[qproperty(QString, console)]
+        /// Question sentence shown under the heading on Eclipse Pause Ask pages.
+        #[qproperty(QString, subtitle, READ, NOTIFY)]
+        /// Footer row position ("4 of 8") for Eclipse Pause Card.
+        #[qproperty(QString, position_line, cxx_name = "positionLine", READ, NOTIFY)]
         type PauseModel = super::PauseModelRust;
     }
 
@@ -259,6 +267,10 @@ pub struct PauseModelRust {
     current: i32,
     pane: QString,
     help_screen: i32,
+    eclipse: bool,
+    console: QString,
+    subtitle: QString,
+    position_line: QString,
     card: Card,
     /// The page and the count of the rows the view holds, so a value's change is a data change and a page's a reset.
     rows_of: Option<(Page, usize)>,
@@ -280,6 +292,10 @@ impl Default for PauseModelRust {
             current: 0,
             pane: QString::from(card.pane().to_json().as_str()),
             help_screen: shown_screen(card.help()),
+            eclipse: false,
+            console: QString::default(),
+            subtitle: QString::default(),
+            position_line: QString::from(card.position_line().as_str()),
             card,
             rows_of: None,
         }
@@ -289,6 +305,14 @@ impl Default for PauseModelRust {
 impl cxx_qt::Initialize for qobject::PauseModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_game_changed(|model| model.shown()).release();
+        self.as_mut().on_console_changed(|model| model.shown()).release();
+        self.as_mut()
+            .on_eclipse_changed(|mut model| {
+                let on = model.eclipse;
+                model.as_mut().rust_mut().card.eclipse = on;
+                model.shown();
+            })
+            .release();
         self.as_mut().on_facts_changed(|mut model| {
             let facts = Facts::from_json(&model.facts.to_string());
             let system = QString::from(&facts.system);
@@ -502,8 +526,10 @@ impl qobject::PauseModel {
             let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(now.1 as i32 - 1, 0, &QModelIndex::default()));
             self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
         }
+        let console = self.console.to_string();
         let title = QString::from(self.card.title(&game).as_str());
-        let breadcrumb = QString::from(self.card.breadcrumb(&game).as_str());
+        let breadcrumb = QString::from(self.card.breadcrumb_for(&game, &console).as_str());
+        let subtitle = QString::from(self.card.subtitle().as_str());
         if self.title != title {
             self.as_mut().rust_mut().title = title;
             self.as_mut().title_changed();
@@ -512,10 +538,14 @@ impl qobject::PauseModel {
             self.as_mut().rust_mut().breadcrumb = breadcrumb;
             self.as_mut().breadcrumb_changed();
         }
+        if self.subtitle != subtitle {
+            self.as_mut().rust_mut().subtitle = subtitle;
+            self.as_mut().subtitle_changed();
+        }
         self.described();
     }
 
-    /// The pane and the help bar for the row focused.
+    /// The pane, position counter and help bar for the row focused.
     fn described(mut self: Pin<&mut Self>) {
         let pane = QString::from(self.card.pane().to_json().as_str());
         if self.pane != pane {
@@ -526,6 +556,11 @@ impl qobject::PauseModel {
         if self.help_screen != help {
             self.as_mut().rust_mut().help_screen = help;
             self.as_mut().help_screen_changed();
+        }
+        let position = QString::from(self.card.position_line().as_str());
+        if self.position_line != position {
+            self.as_mut().rust_mut().position_line = position;
+            self.as_mut().position_line_changed();
         }
     }
 }

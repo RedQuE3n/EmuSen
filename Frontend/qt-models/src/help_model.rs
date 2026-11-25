@@ -80,6 +80,8 @@ pub mod qobject {
         GamePageCoverArt,
         /// Eclipse's Home Card menu foot, after every screen before it.
         CardHome,
+        SettingsEclipseButtons,
+        SettingsEclipseButtonsCard,
     }
 
     extern "RustQt" {
@@ -213,6 +215,8 @@ impl qobject::HelpModel {
             HelpScreen::GamePageViewerCover => Screen::GamePageViewerCover,
             HelpScreen::GamePageViewerManualCover => Screen::GamePageViewerManualCover,
             HelpScreen::GamePageCoverArt => Screen::GamePageCoverArt,
+            HelpScreen::SettingsEclipseButtons => Screen::SettingsEclipseButtons,
+            HelpScreen::SettingsEclipseButtonsCard => Screen::SettingsEclipseButtonsCard,
             _ => Screen::Home,
         }
     }
@@ -317,6 +321,8 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageViewerBoardCover => HelpScreen::GamePageViewerCover,
         Screen::GamePageViewerManualBoard => HelpScreen::GamePageManual,
         Screen::GamePageCropToggle | Screen::GamePageCropEdge => HelpScreen::GamePageValue,
+        Screen::SettingsEclipseButtons => HelpScreen::SettingsEclipseButtons,
+        Screen::SettingsEclipseButtonsCard => HelpScreen::SettingsEclipseButtonsCard,
     };
     shown.repr
 }

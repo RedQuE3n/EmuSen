@@ -284,8 +284,8 @@ Item {
         role: Host.ThemeHost.Settings
         host: host
         wanted: themed.settingsModel !== null
-        inputs: themed.inputs && !(themed.settingsModel?.listening ?? false) && !(themed.settingsModel?.typing ?? false)
-        shown: themed.screens.shown === Screens.Settings
+        inputs: themed.inputs && !(themed.settingsModel?.listening ?? false) && !(themed.settingsModel?.typing ?? false) && !(themed.settingsModel?.bindingsShown ?? false)
+        shown: themed.screens.shown === Screens.Settings && !(themed.settingsModel?.bindingsShown ?? false)
     }
     // Trusted host stage for themed Media Viewer clips: keeps QtMultimedia out of the theme sandbox.
     Loader {

@@ -316,6 +316,10 @@ pub struct SettingsView {
     pub scrape: crate::settings_scrape::ScrapeState,
     /// Focused row index kept in sync by SettingsModel for focus-dependent help bars (Page::Themes).
     pub focused_row: usize,
+    /// First visible card slot on the left and right Eclipse pad columns when > 8 controls overflow.
+    pub(crate) pad_scroll: [usize; 2],
+    /// Focused header pill on `#12` (`0..=max_players`), or `-1` when focus is in the pad diagram.
+    pub(crate) header_focus: i32,
 }
 
 impl Default for SettingsView {
@@ -448,6 +452,8 @@ impl SettingsView {
             theme_kind: crate::themes::Kind::EmuSen,
             scrape: crate::settings_scrape::ScrapeState::default(),
             focused_row: 0,
+            pad_scroll: [0, 0],
+            header_focus: -1,
         }
     }
 

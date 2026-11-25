@@ -120,6 +120,9 @@ pub enum Screen {
     GamePageCropEdge,
     /// Eclipse's Home Card menu foot: A Choose and B Close (EclipseHomeCard:56-59).
     CardHome,
+    /// Eclipse's Controller bindings foot (EclipseControllers:99-105), with and without Page switching.
+    SettingsEclipseButtons,
+    SettingsEclipseButtonsCard,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -297,6 +300,19 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Screensaver, "Clear", Some(CLEAR)),
             (UiButton::Back, "Back", None),
             (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::SettingsEclipseButtons => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Screensaver, "Clear", Some(CLEAR)),
+            (UiButton::Search, "Back to the default", Some(RESET)),
+            (UiButton::PageUp, "Page", None),
+            (UiButton::Back, "Back", None),
+        ],
+        Screen::SettingsEclipseButtonsCard => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Screensaver, "Clear", Some(CLEAR)),
+            (UiButton::Search, "Back to the default", Some(RESET)),
+            (UiButton::Back, "Back", None),
         ],
         // Mistress's GamePage.Hints: A's word for what is focused, Left and Right where they step, Y the heart, the
         // shoulders the sections, B and Start.

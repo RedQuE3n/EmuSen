@@ -1266,6 +1266,11 @@ impl qobject::GamePageModel {
         self.as_mut().rust_mut().page.scraping_pick = false;
         self.as_mut().rust_mut().focus = (None, 0);
         self.as_mut().shown(true);
+        self.start_scrape_thread(source, pick, true);
+    }
+
+    /// Starts a single-game scrape thread and streams its progress back to the model.
+    fn start_scrape_thread(mut self: Pin<&mut Self>, source: Arc<ClientSource>, pick: Option<i64>, end_on_err: bool) {
         let (file, test) = (self.file.clone(), self.scraper_test.to_string());
         let test: Option<serde_json::Value> = serde_json::from_str(&test).ok();
         self.as_mut().ran(Some((true, "Starting".into())), "running");
@@ -1276,7 +1281,9 @@ impl qobject::GamePageModel {
                 None => crate::scrape_run::start(&source, std::slice::from_ref(&file), true, test.as_ref()),
             };
             if let Err(why) = started {
-                let _ = source.scrape_end();
+                if end_on_err {
+                    let _ = source.scrape_end();
+                }
                 let _ = thread.queue(move |mut model| {
                     model.as_mut().ran(Some((false, "It could not start".into())), "idle");
                     model.said(format!("The scrape could not start: {why}"));
@@ -1302,31 +1309,7 @@ impl qobject::GamePageModel {
     /// told to the Scrape row, and the page read again once it ends, the scraper back to finding pictures alone.
     fn scrape(mut self: Pin<&mut Self>) {
         let Some(source) = self.source.clone() else { return };
-        let (file, test) = (self.file.clone(), self.scraper_test.to_string());
-        let test: Option<serde_json::Value> = serde_json::from_str(&test).ok();
-        self.as_mut().ran(Some((true, "Starting".into())), "running");
-        let thread = self.qt_thread();
-        std::thread::spawn(move || {
-            if let Err(why) = crate::scrape_run::start(&source, std::slice::from_ref(&file), true, test.as_ref()) {
-                let _ = thread.queue(move |mut model| {
-                    model.as_mut().ran(Some((false, "It could not start".into())), "idle");
-                    model.said(format!("The scrape could not start: {why}"));
-                });
-                return;
-            }
-            let path = file.path.clone();
-            let followed = crate::scrape_run::follow(&source, |progress| {
-                let (going, words) = crate::game_page::run_words(&progress, &path);
-                let state = progress["state"].as_str().unwrap_or("idle").to_owned();
-                let _ = thread.queue(move |model| model.ran(Some((going, words)), &state));
-            });
-            let _ = thread.queue(move |mut model| {
-                if let Err(why) = followed {
-                    model.as_mut().said(format!("The scrape could not be followed: {why}"));
-                }
-                model.refresh();
-            });
-        });
+        self.start_scrape_thread(source, None, false);
     }
 
     /// The package's job: started through the source, its events drained off the GUI thread and told to the job's row,

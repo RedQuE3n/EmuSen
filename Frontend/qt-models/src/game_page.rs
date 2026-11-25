@@ -2190,25 +2190,8 @@ impl GamePage {
         }
     }
 
-    /// A on a row of Eclipse's This game's crop: row 0 toggles, edges open typing (R-20261116-33).
-    pub fn choose_board_crop(&self, index: usize) -> Outcome {
-        if !self.cropping {
-            return Outcome::Nothing;
-        }
-        let Some(crop) = &self.read.crop else { return Outcome::Nothing };
-        if index == 0 {
-            let next = if crop.own.is_some() { None } else { Some(Crop::default()) };
-            return Outcome::Changed(Change::Crop(next));
-        }
-        let Some(edge) = crate::display::EDGES.get(index - 1).copied() else { return Outcome::Nothing };
-        let mut cur = crop.own.unwrap_or_default();
-        let percent = *edge.of(&mut cur) * 100.0;
-        let start = format!("{}", (percent * 10.0).round() / 10.0);
-        Outcome::Type { field: edge.key, title: format!("{} › {}", self.read.title, edge.label), start }
-    }
-
-    /// Left/Right on a row of Eclipse's This game's crop: 0.5% steps, auto-enabling crop (R-20261116-33).
-    pub fn step_board_crop(&self, index: usize, by: i32) -> Outcome {
+    /// Handles row activation or stepping for Eclipse's This game's crop page (R-20261116-33).
+    fn board_crop_action(&self, index: usize, step: Option<i32>) -> Outcome {
         if !self.cropping {
             return Outcome::Nothing;
         }
@@ -2220,9 +2203,27 @@ impl GamePage {
         let Some(edge) = crate::display::EDGES.get(index - 1).copied() else { return Outcome::Nothing };
         let mut next = crop.own.unwrap_or_default();
         let percent = *edge.of(&mut next) * 100.0;
-        let most = if crop.most > 0.0 { crop.most } else { 0.25 };
-        *edge.of(&mut next) = crate::display::edge_stepped_by(most, percent, by, crate::display::HALF_EDGE_STEP) / 100.0;
-        Outcome::Changed(Change::Crop(Some(next)))
+        match step {
+            None => {
+                let start = format!("{}", (percent * 10.0).round() / 10.0);
+                Outcome::Type { field: edge.key, title: format!("{} › {}", self.read.title, edge.label), start }
+            }
+            Some(by) => {
+                let most = if crop.most > 0.0 { crop.most } else { 0.25 };
+                *edge.of(&mut next) = crate::display::edge_stepped_by(most, percent, by, crate::display::HALF_EDGE_STEP) / 100.0;
+                Outcome::Changed(Change::Crop(Some(next)))
+            }
+        }
+    }
+
+    /// A on a row of Eclipse's This game's crop: row 0 toggles, edges open typing (R-20261116-33).
+    pub fn choose_board_crop(&self, index: usize) -> Outcome {
+        self.board_crop_action(index, None)
+    }
+
+    /// Left/Right on a row of Eclipse's This game's crop: 0.5% steps, auto-enabling crop (R-20261116-33).
+    pub fn step_board_crop(&self, index: usize, by: i32) -> Outcome {
+        self.board_crop_action(index, Some(by))
     }
 
     /// Saves a typed edge percentage on Eclipse's This game's crop, auto-enabling crop (R-20261116-33).

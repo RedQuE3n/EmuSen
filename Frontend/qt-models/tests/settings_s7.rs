@@ -232,7 +232,7 @@ fn s7_62_scrape_run_projects_six_rows_two_step_login_and_actions() {
     // Two-step Log in: username -> password -> ScrapeSignIn.
     assert!(matches!(v.choose(1), Outcome::Type { typed: Typed::ScrapeUser, .. }));
     assert!(matches!(v.typed(&Typed::ScrapeUser, "alice"), Outcome::Type { typed: Typed::ScrapePassword, .. }));
-    assert_eq!(v.typed(&Typed::ScrapePassword, "secret"), Outcome::ScrapeSignIn { user: "alice".into(), password: "secret".into() });
+    assert_eq!(v.typed(&Typed::ScrapePassword, "example-pass"), Outcome::ScrapeSignIn { user: "alice".into(), password: "example-pass".into() });
     assert_eq!(v.choose(2), Outcome::ScrapeResume);
     assert_eq!(v.choose(3), Outcome::ScrapeCancel);
     assert_eq!(v.choose(4), Outcome::ScrapeRefresh);

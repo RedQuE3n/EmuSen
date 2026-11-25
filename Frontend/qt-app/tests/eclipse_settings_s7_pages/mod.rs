@@ -559,7 +559,7 @@ pub fn s7(backend: &str) {
             ("rowName.1".into(), "Eclipse".into()),
             ("rowWords.1".into(), "In use".into()),
             ("asideHeading".into(), "Eclipse".into()),
-            ("asideMeta".into(), "By The EmuSen project · EmuSen.Theme 1.20 · dark".into()),
+            ("asideMeta".into(), "By The EmuSen project · EmuSen.Theme 1.21 · dark".into()),
             ("asideSentence".into(), "In use.".into()),
         ];
         check_board(

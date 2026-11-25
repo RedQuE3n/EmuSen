@@ -1451,27 +1451,32 @@ impl qobject::SettingsModel {
         self.shown(false);
     }
 
-    /// Signs into a ScreenScraper account off the GUI thread (#62).
-    fn scrape_sign_in(mut self: Pin<&mut Self>, user: String, password: String) {
+    /// Spawns a background ScreenScraper operation and merges its refreshed snapshot back onto the model (#62).
+    fn run_scrape_task(
+        mut self: Pin<&mut Self>,
+        checking: bool,
+        clear_said: bool,
+        work: impl FnOnce(&ClientSettings) -> Result<Option<String>, String> + Send + 'static,
+    ) {
         let library = self.platform_library.to_string();
         let qt = self.qt_thread();
-        self.as_mut().rust_mut().view.scrape.status_note = "Checking account…".to_owned();
-        self.as_mut().shown(false);
+        if checking {
+            self.as_mut().rust_mut().view.scrape.status_note = "Checking account…".to_owned();
+            self.as_mut().shown(false);
+        }
         std::thread::spawn(move || {
-            let answer = ClientSettings::open(&library).and_then(|s| {
-                let res = s.scrape_sign_in(&user, &password);
-                Ok((res, s.scrape_snapshot()))
-            });
+            let answer = ClientSettings::open(&library).and_then(|s| Ok((work(&s), s.scrape_snapshot())));
             let _ = qt.queue(move |mut model| {
                 match answer {
-                    Ok((Ok(val), snap)) => {
+                    Ok((Ok(note), snap)) => {
                         let mut r = model.as_mut().rust_mut();
                         r.view.scrape = snap;
-                        if val["result"].as_str() != Some("signed_in") {
-                            let said = val["said"].as_str().filter(|s| !s.is_empty()).unwrap_or_else(|| val["result"].as_str().unwrap_or("Could not sign in."));
-                            r.view.scrape.status_note = said.to_owned();
+                        if let Some(said) = note {
+                            r.view.scrape.status_note = said;
                         }
-                        model.as_mut().said(String::new());
+                        if clear_said {
+                            model.as_mut().said(String::new());
+                        }
                     }
                     Ok((Err(why), snap)) => {
                         let mut r = model.as_mut().rust_mut();
@@ -1483,6 +1488,11 @@ impl qobject::SettingsModel {
                 model.shown(false);
             });
         });
+    }
+
+    /// Signs into a ScreenScraper account off the GUI thread (#62).
+    fn scrape_sign_in(self: Pin<&mut Self>, user: String, password: String) {
+        self.run_scrape_task(true, true, move |s| s.scrape_sign_in(&user, &password).map(|val| scrape_account_note(&val, "Could not sign in.")));
     }
 
     /// Signs out of the saved ScreenScraper account (#62).
@@ -1500,61 +1510,14 @@ impl qobject::SettingsModel {
     }
 
     /// Re-verifies the saved ScreenScraper account off the GUI thread (#62).
-    fn scrape_check(mut self: Pin<&mut Self>) {
-        let library = self.platform_library.to_string();
-        let qt = self.qt_thread();
-        self.as_mut().rust_mut().view.scrape.status_note = "Checking account…".to_owned();
-        self.as_mut().shown(false);
-        std::thread::spawn(move || {
-            let answer = ClientSettings::open(&library).and_then(|s| {
-                let res = s.scrape_check();
-                Ok((res, s.scrape_snapshot()))
-            });
-            let _ = qt.queue(move |mut model| {
-                match answer {
-                    Ok((Ok(val), snap)) => {
-                        let mut r = model.as_mut().rust_mut();
-                        r.view.scrape = snap;
-                        if val["result"].as_str() != Some("signed_in") {
-                            let said = val["said"].as_str().filter(|s| !s.is_empty()).unwrap_or_else(|| val["result"].as_str().unwrap_or("Could not verify account."));
-                            r.view.scrape.status_note = said.to_owned();
-                        }
-                    }
-                    Ok((Err(why), snap)) => {
-                        let mut r = model.as_mut().rust_mut();
-                        r.view.scrape = snap;
-                        r.view.scrape.status_note = why;
-                    }
-                    Err(why) => model.as_mut().rust_mut().view.scrape.status_note = why,
-                }
-                model.shown(false);
-            });
-        });
+    fn scrape_check(self: Pin<&mut Self>) {
+        self.run_scrape_task(true, false, |s| s.scrape_check().map(|val| scrape_account_note(&val, "Could not verify account.")));
     }
 
     /// Resumes queued games from a stopped scrape run off the GUI thread (#62).
     fn scrape_resume(self: Pin<&mut Self>) {
-        let library = self.platform_library.to_string();
         let app = self.view.read.app.clone();
-        let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let answer = ClientSettings::open(&library).and_then(|s| {
-                let res = s.scrape_resume(&app);
-                Ok((res, s.scrape_snapshot()))
-            });
-            let _ = qt.queue(move |mut model| {
-                match answer {
-                    Ok((Ok(_), snap)) => model.as_mut().rust_mut().view.scrape = snap,
-                    Ok((Err(why), snap)) => {
-                        let mut r = model.as_mut().rust_mut();
-                        r.view.scrape = snap;
-                        r.view.scrape.status_note = why;
-                    }
-                    Err(why) => model.as_mut().rust_mut().view.scrape.status_note = why,
-                }
-                model.shown(false);
-            });
-        });
+        self.run_scrape_task(false, false, move |s| s.scrape_resume(&app).map(|_| None));
     }
 
     /// Cancels an active scrape run (#62).
@@ -1620,4 +1583,12 @@ impl qobject::SettingsModel {
             self.as_mut().samples_changed();
         }
     }
+}
+
+/// Formats a non-signed-in ScreenScraper account response into a UI status note (#62).
+fn scrape_account_note(val: &serde_json::Value, fallback: &str) -> Option<String> {
+    if val["result"].as_str() == Some("signed_in") {
+        return None;
+    }
+    Some(val["said"].as_str().filter(|s| !s.is_empty()).unwrap_or_else(|| val["result"].as_str().unwrap_or(fallback)).to_owned())
 }

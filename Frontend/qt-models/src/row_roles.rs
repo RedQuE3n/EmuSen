@@ -13,6 +13,8 @@ pub struct Shown<'a> {
     pub section_end: bool,
     /// Greyed: a hint, chosen to no effect.
     pub dimmed: bool,
+    /// Optional icon key in `marks.rs` for Eclipse Home Card rows.
+    pub icon: &'a str,
 }
 
 const LABEL: i32 = 0;
@@ -22,6 +24,7 @@ const OPENS: i32 = 3;
 const SECTION_END: i32 = 4;
 const KEY: i32 = 5;
 const DIMMED: i32 = 6;
+const ICON: i32 = 7;
 
 /// A row's value for a role; none for a row past the end or a role no card names.
 pub fn data(row: Option<Shown<'_>>, role: i32) -> QVariant {
@@ -34,6 +37,7 @@ pub fn data(row: Option<Shown<'_>>, role: i32) -> QVariant {
         SECTION_END => QVariant::from(&row.section_end),
         KEY => QVariant::from(&QString::from(row.key)),
         DIMMED => QVariant::from(&row.dimmed),
+        ICON => QVariant::from(&QString::from(row.icon)),
         _ => QVariant::default(),
     }
 }
@@ -41,7 +45,7 @@ pub fn data(row: Option<Shown<'_>>, role: i32) -> QVariant {
 /// The roles by name.
 pub fn role_names() -> QHash<QHashPair_i32_QByteArray> {
     let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
-    let names = [(LABEL, "label"), (VALUE, "value"), (STEPS, "steps"), (OPENS, "opens"), (SECTION_END, "sectionEnd"), (KEY, "key"), (DIMMED, "dimmed")];
+    let names = [(LABEL, "label"), (VALUE, "value"), (STEPS, "steps"), (OPENS, "opens"), (SECTION_END, "sectionEnd"), (KEY, "key"), (DIMMED, "dimmed"), (ICON, "icon")];
     for (role, name) in names {
         roles.insert(role, QByteArray::from(name));
     }

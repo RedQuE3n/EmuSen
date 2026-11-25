@@ -174,6 +174,8 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::HomeCard, Some(crate::home_card::FIRST.to_owned()))),
         (Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Back | Ask::Close) => Some((Shown::Home, None)),
+        (Shown::HomeCard, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, Some(crate::library::ALL.to_owned()))),
+        (Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::LIBRARY => Some((Shown::Grid, Some(crate::library::ALL.to_owned()))),
         (Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
         (Shown::HomeCard, Ask::Act(key)) => card_act(false, key),
         (Shown::Settings, Ask::Back) => Some((Shown::Home, None)),

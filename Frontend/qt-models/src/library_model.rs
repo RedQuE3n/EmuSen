@@ -154,6 +154,11 @@ pub mod qobject {
         #[cxx_name = "homeCardFacts"]
         fn home_card_facts(self: &LibraryModel, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString;
 
+        /// Eclipse Home Card facts including total game count, focused game, suspended console and thumbnail.
+        #[qinvokable]
+        #[cxx_name = "eclipseHomeCardFacts"]
+        fn eclipse_home_card_facts(self: &LibraryModel, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString, in_hand: &QString) -> QString;
+
         /// Records the game at `path` as started now, then reads the games again, so Recent and Continue lead with it.
         #[qinvokable]
         fn started(self: Pin<&mut LibraryModel>, path: &QString);
@@ -491,6 +496,36 @@ impl qobject::LibraryModel {
                 String::new()
             },
             paused: paused.to_string(),
+            game_mode,
+            startable,
+            tools,
+            unread,
+            ..crate::home_card::Facts::default()
+        };
+        QString::from(facts.to_json().as_str())
+    }
+
+    pub fn eclipse_home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString, in_hand: &QString) -> QString {
+        let suspended = suspended.to_string();
+        let console = console.to_string();
+        let in_hand = in_hand.to_string();
+        let (startable, tools, unread) = crate::home_card::read_lists(&startable.to_string(), &tools.to_string());
+        let (suspended_name, suspended_console, suspended_picture) = if !suspended.is_empty() {
+            let art = self.view.catalog.heroes.iter().chain(self.view.catalog.covers.iter()).find(|(p, _)| *p == suspended).map_or("", |(_, f)| f.as_str());
+            (crate::library::title_of(&suspended), self.view.console_of(&suspended), crate::game_model::cover_url(art))
+        } else if !console.is_empty() {
+            (crate::session::console_session_name(&console), console, String::new())
+        } else {
+            (String::new(), String::new(), String::new())
+        };
+        let facts = crate::home_card::Facts {
+            suspended: suspended_name,
+            suspended_console,
+            suspended_picture,
+            paused: paused.to_string(),
+            total_games: self.view.catalog.games.len(),
+            in_hand: if in_hand.is_empty() { String::new() } else { crate::library::title_of(&in_hand) },
+            search: true,
             game_mode,
             startable,
             tools,

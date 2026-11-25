@@ -109,6 +109,8 @@ pub enum Screen {
     GamePagePackageMake,
     GamePagePackageStop,
     GamePagePackageInfo,
+    /// Eclipse's Home Card menu foot: A Choose and B Close (EclipseHomeCard:56-59).
+    CardHome,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -177,6 +179,7 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::QuestionBack => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
         Screen::Card => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
         Screen::CardStart => &[(UiButton::Accept, "Start", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
+        Screen::CardHome => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Close", None)],
         Screen::Search => &[
             (UiButton::Accept, "Type", None),
             (UiButton::Back, "Delete", None),
@@ -584,6 +587,7 @@ pub fn unnamed(screen: Screen) -> &'static [Entry] {
         Screen::Grid | Screen::GridSearched => &[(UiButton::PageDown, "Console", Some(NEXT))],
         Screen::Search => &[(UiButton::PageDown, "Move to grid", Some(crate::screens::TO_GRID))],
         Screen::ToolSearch => &[(UiButton::PageDown, "Move to list", Some(crate::screens::TO_GRID))],
+        Screen::CardHome => &[(UiButton::Menu, "Close", Some(CLOSE))],
         _ => &[],
     }
 }

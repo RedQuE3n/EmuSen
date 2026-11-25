@@ -356,6 +356,7 @@ impl qobject::PauseModel {
             opens: r.opens,
             section_end: r.section_end,
             dimmed: r.dimmed,
+            icon: "",
         });
         row_roles::data(shown, role)
     }

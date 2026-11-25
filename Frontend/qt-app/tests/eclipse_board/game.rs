@@ -257,7 +257,7 @@ pub fn add_board_media(harness: &mut Harness, world: &emusen_client_fixture::Wor
     draw_covers(harness, &world.root, &taken, |_| {});
     let clip = media.join("snes/videos").join(format!("{TITLE}.mkv"));
     std::fs::create_dir_all(clip.parent().unwrap()).unwrap();
-    std::fs::write(&clip, b"video").unwrap();
+    emusen_qt_test::clips::write(&clip, 2);
     let manual = media.join("snes/manuals").join(format!("{TITLE}.pdf"));
     std::fs::create_dir_all(manual.parent().unwrap()).unwrap();
     std::fs::write(&manual, b"%PDF-1.4\n%%EOF\n").unwrap();
@@ -605,7 +605,7 @@ pub fn add_viewer_media(harness: &mut Harness, world: &emusen_client_fixture::Wo
     }
     let clip = media.join("snes/videos").join(format!("{TITLE}.mkv"));
     std::fs::create_dir_all(clip.parent().unwrap()).unwrap();
-    std::fs::write(&clip, b"video").unwrap();
+    emusen_qt_test::clips::write(&clip, 2);
     let manual = media.join("snes/manuals").join(format!("{TITLE}.pdf"));
     std::fs::create_dir_all(manual.parent().unwrap()).unwrap();
     std::fs::write(&manual, mini_pdf(3)).unwrap();

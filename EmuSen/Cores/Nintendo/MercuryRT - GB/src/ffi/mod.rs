@@ -1,8 +1,6 @@
-//! MercuryRT's C ABI: the core ABI v1 (`v1`) and the Game Boy's test extensions `mercuryrt_core_*` beside it. A negative
-//! return is a status. See EmuSen_CoreAPI.md, Mercury_Native.md §8.7 and EmuSen_Backend.md §17.
+//! MercuryRT's C ABI: the core ABI v1 (`v1`). A negative return is a status (EmuSen_CoreAPI.md, EmuSen_Backend.md §17).
 
 use std::collections::HashMap;
-use std::ptr;
 
 use crate::machine::Machine;
 
@@ -66,45 +64,4 @@ pub fn build_rom_patches(triples: &[u32]) -> Option<Box<HashMap<u16, [u16; 256]>
         }
     }
     if map.is_empty() { None } else { Some(Box::new(map)) }
-}
-
-/// The serial log copied up to `len`.
-///
-/// # Safety
-/// `out` valid for `len` bytes, or null.
-pub(crate) unsafe fn serial(m: &Machine, out: *mut u8, len: usize) -> i64 {
-    let log = &m.bus.serial_log;
-    if !out.is_null() {
-        unsafe { ptr::copy_nonoverlapping(log.as_ptr(), out, log.len().min(len)) };
-    }
-    log.len() as i64
-}
-
-/// One instruction with the frame loop's acknowledge and stall: the T-cycles, or the illegal-opcode status.
-pub(crate) fn step(m: &mut Machine) -> i32 {
-    let (ie, iflags) = (m.bus.interrupt_enable, m.bus.interrupt_flags);
-    match m.cpu.step(&mut m.bus, ie, iflags) {
-        Ok((cycles, serviced)) => {
-            if serviced >= 0 {
-                m.bus.interrupt_flags &= !(1u8 << serviced);
-            }
-            let stall = m.bus.take_pending_stall();
-            if stall > 0 {
-                m.bus.tick(stall);
-            }
-            cycles + stall
-        }
-        Err(_) => STATUS_ILLEGAL_OPCODE,
-    }
-}
-
-/// The patch table's answer for one read, or -1 for none.
-pub(crate) fn rom_patch(m: &Machine, address: u32, original: u32) -> i32 {
-    let (Ok(address), Ok(original)) = (u16::try_from(address), u8::try_from(original)) else { return -1 };
-    // A scan, not `get`: a second call site of the map's `get` stops it being inlined into the plain bus read (Mercury_Native.md §8.7).
-    let found = m.bus.rom_patches.as_ref().and_then(|map| map.iter().find(|(a, _)| **a == address).map(|(_, t)| t[original as usize]));
-    match found {
-        Some(entry) if entry != 0 => (entry & 0xFF) as i32,
-        _ => -1,
-    }
 }

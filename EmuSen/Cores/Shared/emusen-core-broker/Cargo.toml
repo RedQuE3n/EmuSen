@@ -18,14 +18,13 @@ path = "src/bin/emusen-core-runner.rs"
 emusen-native = { path = "../emusen-native" }
 emusen-core-host = { path = "../emusen-core-host" }
 libc = "0.2"
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = "0.4"
 
 # The libretro proxy, host and test core, built as shared libraries beside the tests that run them brokered.
 [dev-dependencies]
-# The runtime's listing read back as JSON.
-serde_json = "1.0.154"
 emusen-libretro-proxy = { path = "../../Libretro/emusen-libretro-proxy" }
 emusen-libretro-host = { path = "../../Libretro/emusen-libretro-host" }
 emusen-libretro-testcore = { path = "../../Libretro/emusen-libretro-testcore" }

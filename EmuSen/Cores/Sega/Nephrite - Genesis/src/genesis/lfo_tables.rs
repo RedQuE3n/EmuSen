@@ -1,6 +1,7 @@
 //! The YM2612's vibrato: the offset the LFO adds to a channel's frequency number, measured on the board (Nephrite_LfoTables.md).
 
 /// The vibrato's steps a cycle: `lfo_step` runs from 0 to 31.
+#[cfg(test)]
 pub(in crate::genesis) const PM_STEPS: u8 = 32;
 
 /// For each PMS and quarter-wave step, the terms summed: bit k adds the frequency number's top seven bits shifted right by k.

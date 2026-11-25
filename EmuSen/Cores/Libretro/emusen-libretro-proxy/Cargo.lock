@@ -60,6 +60,7 @@ dependencies = [
  "emusen-native",
  "landlock",
  "libc",
+ "serde_json",
 ]
 
 [[package]]

@@ -6,7 +6,7 @@ use emusen_native::core::{
     Scope, Setting, SettingKind, Space, StateFormat, System, UNIT_FIRST_ID, Unit, Video, caps, status,
 };
 
-use super::{BATTERY_SPACE, SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ILLEGAL_OPCODE, STATUS_NULL, STATUS_TOO_SHORT, STATUS_UNKNOWN_MODEL, STATUS_UNSUPPORTED_BOARD, build_rom_patches, rom_patch, serial, step};
+use super::{BATTERY_SPACE, SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ILLEGAL_OPCODE, STATUS_TOO_SHORT, STATUS_UNKNOWN_MODEL, STATUS_UNSUPPORTED_BOARD, build_rom_patches};
 use crate::debug::Hooks;
 use crate::machine::{CPU_CLOCK_HZ, CYCLES_PER_FRAME, Machine, Model, OLDEST_READABLE_VERSION, STATE_VERSION};
 use crate::memory::cartridge::RomError;
@@ -461,56 +461,3 @@ impl v1::Core for Machine {
 }
 
 emusen_native::core_exports!(Machine; audio_peek, mutes, rom_patches, debug, debug_stack, debug_registers, debug_disassemble);
-
-/// The byte a CPU read of `address` returns for `original` under the current patches, or -1 for none: the exhaustive patch test's view.
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercuryrt_core_rom_patch(machine: *const v1::sys::Machine, address: u32, original: u32) -> i32 {
-    unsafe { v1::exports::core_of::<Machine>(machine) }.map_or(STATUS_NULL, |m| rom_patch(m, address, original))
-}
-
-/// One instruction with the frame loop's acknowledge and stall, a test extension
-/// (Mercury_Native.md §12).
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercuryrt_core_step(machine: *mut v1::sys::Machine) -> i32 {
-    unsafe { v1::exports::core_of_mut::<Machine>(machine) }.map_or(STATUS_NULL, step)
-}
-
-/// `MemoryBus.Tick`: the machine without its CPU for `cycles` T-cycles, a test extension (Mercury_Native.md §12).
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercuryrt_core_tick(machine: *mut v1::sys::Machine, cycles: i32) -> i32 {
-    let Some(m) = (unsafe { v1::exports::core_of_mut::<Machine>(machine) }) else { return STATUS_NULL };
-    if cycles > 0 {
-        m.bus.tick(cycles);
-    }
-    0
-}
-
-/// `MemoryBus.Stop`: the speed switch KEY1 armed, without a STOP instruction around it, a test extension (Mercury_Native.md §12).
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercuryrt_core_stop(machine: *mut v1::sys::Machine) -> i32 {
-    let Some(m) = (unsafe { v1::exports::core_of_mut::<Machine>(machine) }) else { return STATUS_NULL };
-    m.bus.stop();
-    0
-}
-
-/// The link port's log, oldest first, copied up to `len`; its count.
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned; `out` valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercuryrt_core_serial(machine: *const v1::sys::Machine, out: *mut u8, len: usize) -> i64 {
-    let Some(m) = (unsafe { v1::exports::core_of::<Machine>(machine) }) else { return STATUS_NULL as i64 };
-    unsafe { serial(m, out, len) }
-}

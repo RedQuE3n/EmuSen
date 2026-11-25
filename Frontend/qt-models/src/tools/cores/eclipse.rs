@@ -842,6 +842,11 @@ impl Cores {
             format!("Get cores for {} more {}", crate::words::grouped(remaining_count), if remaining_count == 1 { "console" } else { "consoles" })
         };
 
+        let focus_zone_code = match self.eclipse.focus_zone.as_str() {
+            "top" => 0,
+            "grid" => 1,
+            _ => 2,
+        };
         json!({
             "readyCount": ready_count,
             "remainingCount": remaining_count,
@@ -850,6 +855,7 @@ impl Cores {
             "filters": filters,
             "cards": cards,
             "focusZone": self.eclipse.focus_zone,
+            "focusZoneCode": focus_zone_code,
             "focusedTopIndex": self.eclipse.focused_top_index.min(filters.len()),
             "focusedConsole": focused_console.unwrap_or_default(),
             "focusedConsoleIndex": focused_console_index,
@@ -860,6 +866,73 @@ impl Cores {
             "updateAllCount": updates_count,
             "footerHelp": footer_help,
             "statusPill": self.status_pill(),
+            "actionLines": "toggleView Options\nupdateAll Menu\nuseDefault Screensaver\nremoveCore Search\ncorePage Random\n",
+            "labels": {
+                "tools": "Tools",
+                "slash": "/",
+                "cores": "Cores",
+                "installedHeading": "On this machine",
+                "emptyInstalled": "No core installed for this console yet.",
+                "youHavePrefix": "You have ",
+                "newerPrefix": "Newer ",
+                "updatePill": "Update",
+                "defaultPill": "Use for this console",
+                "removePill": "Remove",
+                "pagePill": "Core page",
+            },
         })
+    }
+
+    pub fn eclipse_action_key(&mut self, key: &str) -> Effect {
+        match key {
+            "toggleView" => {
+                self.eclipse_toggle_view();
+                Effect::Done
+            }
+            "updateAll" => self.eclipse_action(super::UPDATE_ALL, None),
+            "useDefault" => self.eclipse_action(DEFAULT, None),
+            "removeCore" => self.eclipse_action(ECLIPSE_REMOVE, None),
+            "corePage" => self.eclipse_action(ECLIPSE_PAGE, None),
+            _ => Effect::Done,
+        }
+    }
+
+    pub fn eclipse_nav_code(&mut self, code: i32) -> Effect {
+        match code {
+            0 => self.eclipse_navigate("up"),
+            1 => self.eclipse_navigate("down"),
+            2 => self.eclipse_navigate("left"),
+            3 => self.eclipse_navigate("right"),
+            4 => self.eclipse_navigate("accept"),
+            _ => Effect::Done,
+        }
+    }
+
+    pub fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Effect {
+        match code {
+            0 => self.eclipse_action(ECLIPSE_PAGE, key),
+            1 => self.eclipse_action(ECLIPSE_UPDATE, key),
+            2 => self.eclipse_action(DEFAULT, key),
+            3 => self.eclipse_action(ECLIPSE_REMOVE, key),
+            4 => self.eclipse_action(ECLIPSE_INSTALL, key),
+            _ => Effect::Done,
+        }
+    }
+
+    pub fn eclipse_zone_code(&mut self, code: i32) {
+        self.eclipse.focus_zone = match code {
+            0 => "top",
+            1 => "grid",
+            _ => "aside",
+        }
+        .to_owned();
+    }
+
+    pub(super) fn eclipse_toggle_view(&mut self) {
+        self.eclipse.showing_remaining = !self.eclipse.showing_remaining;
+        self.eclipse.filter = Filter::Ready;
+        self.eclipse.focus_zone = "grid".to_owned();
+        self.eclipse.focused_console = None;
+        self.eclipse.focused_core = None;
     }
 }

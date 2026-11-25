@@ -1256,11 +1256,7 @@ impl Source for Cores {
     }
 
     fn eclipse_toggle_view(&mut self) {
-        self.eclipse.showing_remaining = !self.eclipse.showing_remaining;
-        self.eclipse.filter = eclipse::Filter::Ready;
-        self.eclipse.focus_zone = "grid".to_owned();
-        self.eclipse.focused_console = None;
-        self.eclipse.focused_core = None;
+        Cores::eclipse_toggle_view(self);
     }
 
     fn eclipse_focus_console(&mut self, console: &str) {
@@ -1276,11 +1272,27 @@ impl Source for Cores {
         self.eclipse.focus_zone = zone.to_owned();
     }
 
+    fn eclipse_focus_zone_code(&mut self, code: i32) {
+        self.eclipse_zone_code(code);
+    }
+
     fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> Effect {
         self.eclipse_action(action, key)
     }
 
+    fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Effect {
+        Cores::eclipse_act_code(self, code, key)
+    }
+
+    fn eclipse_action_key(&mut self, key: &str) -> Effect {
+        Cores::eclipse_action_key(self, key)
+    }
+
     fn eclipse_navigate(&mut self, dir: &str) -> Effect {
         Cores::eclipse_navigate(self, dir)
+    }
+
+    fn eclipse_nav(&mut self, code: i32) -> Effect {
+        self.eclipse_nav_code(code)
     }
 }

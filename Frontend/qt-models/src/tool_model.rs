@@ -165,11 +165,23 @@ pub mod qobject {
         #[cxx_name = "eclipseFocusZone"]
         fn eclipse_focus_zone(self: Pin<&mut ToolModel>, zone: &QString);
         #[qinvokable]
+        #[cxx_name = "eclipseFocusZoneCode"]
+        fn eclipse_focus_zone_code(self: Pin<&mut ToolModel>, code: i32);
+        #[qinvokable]
         #[cxx_name = "eclipseAct"]
         fn eclipse_act(self: Pin<&mut ToolModel>, action: &QString, key: &QString);
         #[qinvokable]
+        #[cxx_name = "eclipseActCode"]
+        fn eclipse_act_code(self: Pin<&mut ToolModel>, code: i32, key: &QString);
+        #[qinvokable]
+        #[cxx_name = "eclipseActionKey"]
+        fn eclipse_action_key(self: Pin<&mut ToolModel>, key: &QString);
+        #[qinvokable]
         #[cxx_name = "eclipseNavigate"]
         fn eclipse_navigate(self: Pin<&mut ToolModel>, dir: &QString);
+        #[qinvokable]
+        #[cxx_name = "eclipseNav"]
+        fn eclipse_nav(self: Pin<&mut ToolModel>, code: i32);
         /// A card or the docked keyboard over the screen closed, so the list takes the keys back.
         #[qsignal]
         #[cxx_name = "listFocused"]
@@ -608,15 +620,36 @@ impl qobject::ToolModel {
         });
     }
 
+    pub fn eclipse_focus_zone_code(self: Pin<&mut Self>, code: i32) {
+        self.with(move |t| {
+            t.eclipse_focus_zone_code(code);
+            None
+        });
+    }
+
     pub fn eclipse_act(self: Pin<&mut Self>, action: &QString, key: &QString) {
         let action = action.to_string();
         let key = key.to_string();
         self.with(move |t| t.eclipse_act(&action, (!key.is_empty()).then_some(key.as_str())));
     }
 
+    pub fn eclipse_act_code(self: Pin<&mut Self>, code: i32, key: &QString) {
+        let key = key.to_string();
+        self.with(move |t| t.eclipse_act_code(code, (!key.is_empty()).then_some(key.as_str())));
+    }
+
+    pub fn eclipse_action_key(self: Pin<&mut Self>, key: &QString) {
+        let key = key.to_string();
+        self.with(move |t| t.eclipse_action_key(&key));
+    }
+
     pub fn eclipse_navigate(self: Pin<&mut Self>, dir: &QString) {
         let dir = dir.to_string();
         self.with(move |t| t.eclipse_navigate(&dir));
+    }
+
+    pub fn eclipse_nav(self: Pin<&mut Self>, code: i32) {
+        self.with(move |t| t.eclipse_nav(code));
     }
 
     /// Every property read again from the tool's description.

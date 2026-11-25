@@ -85,10 +85,7 @@ Kit.NormalizedCanvas {
         // The list takes the keys back from a card as it closes.
         Connections {
             target: screen.tool
-            function onListFocused() {
-                if (screen.eclipseCoresActive) eclipseView.forceActiveFocus()
-                else frame.forceActiveFocus()
-            }
+            function onListFocused() { (screen.eclipseCoresActive ? eclipseView : frame).forceActiveFocus() }
             function onSearchOpened() { searchFrame.forceActiveFocus() }
         }
         Connections {

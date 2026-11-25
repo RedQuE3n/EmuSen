@@ -227,10 +227,20 @@ pub trait Source {
     fn eclipse_focus_console(&mut self, _console: &str) {}
     fn eclipse_focus_core(&mut self, _key: &str) {}
     fn eclipse_focus_zone(&mut self, _zone: &str) {}
+    fn eclipse_focus_zone_code(&mut self, _code: i32) {}
     fn eclipse_act(&mut self, _action: &str, _key: Option<&str>) -> Effect {
         Effect::Done
     }
+    fn eclipse_act_code(&mut self, _code: i32, _key: Option<&str>) -> Effect {
+        Effect::Done
+    }
+    fn eclipse_action_key(&mut self, _key: &str) -> Effect {
+        Effect::Done
+    }
     fn eclipse_navigate(&mut self, _dir: &str) -> Effect {
+        Effect::Done
+    }
+    fn eclipse_nav(&mut self, _code: i32) -> Effect {
         Effect::Done
     }
 }
@@ -547,8 +557,11 @@ impl<S: Source> Tool<S> {
         self.source.eclipse_focus_zone(zone);
     }
 
-    pub fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> Option<String> {
-        let effect = self.source.eclipse_act(action, key);
+    pub fn eclipse_focus_zone_code(&mut self, code: i32) {
+        self.source.eclipse_focus_zone_code(code);
+    }
+
+    fn take_eclipse(&mut self, effect: Effect, key: Option<&str>) -> Option<String> {
         let fallback = self.source.eclipse_view().and_then(|v| v.get("focusedAsideKey").and_then(|s| s.as_str()).filter(|s| !s.is_empty()).map(str::to_owned));
         let target = key.filter(|k| !k.is_empty()).map(str::to_owned).or(fallback);
         if matches!(effect, Effect::Page(..)) {
@@ -557,13 +570,29 @@ impl<S: Source> Tool<S> {
         self.take(effect, target.as_deref())
     }
 
+    pub fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> Option<String> {
+        let effect = self.source.eclipse_act(action, key);
+        self.take_eclipse(effect, key)
+    }
+
+    pub fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Option<String> {
+        let effect = self.source.eclipse_act_code(code, key);
+        self.take_eclipse(effect, key)
+    }
+
+    pub fn eclipse_action_key(&mut self, key: &str) -> Option<String> {
+        let effect = self.source.eclipse_action_key(key);
+        self.take_eclipse(effect, None)
+    }
+
     pub fn eclipse_navigate(&mut self, dir: &str) -> Option<String> {
         let effect = self.source.eclipse_navigate(dir);
-        let key = self.source.eclipse_view().and_then(|v| v.get("focusedAsideKey").and_then(|s| s.as_str()).map(str::to_owned));
-        if matches!(effect, Effect::Page(..)) {
-            self.cards.clear();
-        }
-        self.take(effect, key.as_deref())
+        self.take_eclipse(effect, None)
+    }
+
+    pub fn eclipse_nav(&mut self, code: i32) -> Option<String> {
+        let effect = self.source.eclipse_nav(code);
+        self.take_eclipse(effect, None)
     }
 
     fn card_rows(&self, card: &Card) -> Vec<CardRow> {
@@ -884,10 +913,22 @@ impl Source for Box<dyn Source> {
     fn eclipse_focus_zone(&mut self, zone: &str) {
         (**self).eclipse_focus_zone(zone)
     }
+    fn eclipse_focus_zone_code(&mut self, code: i32) {
+        (**self).eclipse_focus_zone_code(code)
+    }
     fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> Effect {
         (**self).eclipse_act(action, key)
     }
+    fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Effect {
+        (**self).eclipse_act_code(code, key)
+    }
+    fn eclipse_action_key(&mut self, key: &str) -> Effect {
+        (**self).eclipse_action_key(key)
+    }
     fn eclipse_navigate(&mut self, dir: &str) -> Effect {
         (**self).eclipse_navigate(dir)
+    }
+    fn eclipse_nav(&mut self, code: i32) -> Effect {
+        (**self).eclipse_nav(code)
     }
 }

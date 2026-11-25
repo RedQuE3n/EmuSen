@@ -14,10 +14,11 @@ FocusScope {
     property string clockText: ""
     signal backed()
     readonly property real unit: Kit.CanvasUnits.designHeight / 1200
-    readonly property var view: JSON.parse(root.tool.eclipseCores || "{}")
+    readonly property var view: JSON.parse(root.tool.eclipseCores)
+    readonly property var labels: root.view.labels ?? ({})
     readonly property var aside: root.view.aside ?? ({})
     readonly property var statusPill: root.view.statusPill ?? ({})
-    readonly property string focusZone: root.view.focusZone ?? "grid"
+    readonly property int focusZone: root.view.focusZoneCode ?? 1
     readonly property int focusedTopIndex: root.view.focusedTopIndex ?? 0
     readonly property int focusedConsoleIndex: root.view.focusedConsoleIndex ?? -1
     readonly property int focusedAsideIndex: root.view.focusedAsideIndex ?? -1
@@ -112,28 +113,22 @@ FocusScope {
         helpShown: false
         padFamily: root.padFamily
         controller.navigationShown: false
-        controller.actionLines: "toggleView Options\nupdateAll Menu\nuseDefault Screensaver\nremoveCore Search\ncorePage Random\n"
+        controller.actionLines: root.view.actionLines ?? ""
         Connections {
             target: frame.controller
             function onBackDeclined() { root.backed() }
-            function onActionInvoked(key) {
-                if (key === "toggleView") root.tool.eclipseToggleView()
-                else if (key === "updateAll") root.tool.eclipseAct("update-all", "")
-                else if (key === "useDefault") root.tool.eclipseAct("default", "")
-                else if (key === "removeCore") root.tool.eclipseAct("eclipse-remove", "")
-                else if (key === "corePage") root.tool.eclipseAct("eclipse-page", "")
-            }
+            function onActionInvoked(key) { root.tool.eclipseActionKey(key) }
         }
         FocusScope {
             id: keyScope
             anchors.fill: parent
             focus: true
             Keys.onPressed: (event) => {
-                if (event.key === Qt.Key_Up) { root.tool.eclipseNavigate("up"); event.accepted = true }
-                else if (event.key === Qt.Key_Down) { root.tool.eclipseNavigate("down"); event.accepted = true }
-                else if (event.key === Qt.Key_Left) { root.tool.eclipseNavigate("left"); event.accepted = true }
-                else if (event.key === Qt.Key_Right) { root.tool.eclipseNavigate("right"); event.accepted = true }
-                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.tool.eclipseNavigate("accept"); event.accepted = true }
+                if (event.key === Qt.Key_Up) { root.tool.eclipseNav(0); event.accepted = true }
+                else if (event.key === Qt.Key_Down) { root.tool.eclipseNav(1); event.accepted = true }
+                else if (event.key === Qt.Key_Left) { root.tool.eclipseNav(2); event.accepted = true }
+                else if (event.key === Qt.Key_Right) { root.tool.eclipseNav(3); event.accepted = true }
+                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.tool.eclipseNav(4); event.accepted = true }
             }
         }
     }
@@ -173,7 +168,7 @@ FocusScope {
                 objectName: "trailWords.0"
                 unit: root.unit
                 boardLine: true
-                text: "Tools"
+                text: root.labels.tools ?? ""
                 size: 24
                 weight: Font.Normal
                 color: Kit.Tokens.muted
@@ -186,7 +181,7 @@ FocusScope {
                 objectName: "trailSlash.0"
                 unit: root.unit
                 boardLine: true
-                text: "/"
+                text: root.labels.slash ?? ""
                 size: 24
                 weight: Font.Normal
                 color: "#8E94AB"
@@ -195,7 +190,7 @@ FocusScope {
                 objectName: "trailWords.1"
                 unit: root.unit
                 boardLine: true
-                text: "Cores"
+                text: root.labels.cores ?? ""
                 size: 24
                 weight: Font.DemiBold
                 color: Kit.Tokens.textStrong
@@ -274,7 +269,7 @@ FocusScope {
                     objectName: "filterPill." + filterPill.modelData.key
                     height: 52 * root.unit
                     width: filterWords.implicitWidth + 44 * root.unit
-                    readonly property bool focused: root.focusZone === "top" && root.focusedTopIndex === filterPill.index
+                    readonly property bool focused: root.focusZone === 0 && root.focusedTopIndex === filterPill.index
                     Kit.FocusRing {
                         visible: filterPill.focused
                         anchors.fill: parent
@@ -307,7 +302,7 @@ FocusScope {
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            root.tool.eclipseFocusZone("top")
+                            root.tool.eclipseFocusZoneCode(0)
                             root.tool.eclipseChooseFilter(filterPill.modelData.key)
                         }
                     }
@@ -321,7 +316,7 @@ FocusScope {
             anchors.verticalCenter: parent.verticalCenter
             height: 52 * root.unit
             width: viewContent.implicitWidth + 32 * root.unit
-            readonly property bool focused: root.focusZone === "top" && root.focusedTopIndex === (root.view.filters?.length ?? 1)
+            readonly property bool focused: root.focusZone === 0 && root.focusedTopIndex === (root.view.filters?.length ?? 1)
             readonly property bool active: root.view.showingRemaining === true
             Kit.FocusRing {
                 visible: viewButton.focused
@@ -406,8 +401,8 @@ FocusScope {
             required property var modelData
             width: grid.cellWidth
             height: grid.cellHeight
-            readonly property bool cardFocused: root.focusZone === "grid" && root.focusedConsoleIndex === cardCell.index
-            readonly property bool cardSelected: root.focusZone !== "grid" && root.focusedConsoleIndex === cardCell.index
+            readonly property bool cardFocused: root.focusZone === 1 && root.focusedConsoleIndex === cardCell.index
+            readonly property bool cardSelected: root.focusZone !== 1 && root.focusedConsoleIndex === cardCell.index
             Item {
                 id: cardBox
                 objectName: "consoleCard." + cardCell.index
@@ -612,7 +607,7 @@ FocusScope {
                 MouseArea {
                     anchors.fill: parent
                     onClicked: {
-                        root.tool.eclipseFocusZone("grid")
+                        root.tool.eclipseFocusZoneCode(1)
                         root.tool.eclipseFocusConsole(cardCell.modelData.console)
                     }
                 }
@@ -680,7 +675,7 @@ FocusScope {
                     unit: root.unit
                     boardLine: true
                     width: parent.width
-                    text: "On this machine"
+                    text: root.labels.installedHeading ?? ""
                     size: 20
                     weight: Font.DemiBold
                     color: "#D8DBE6"
@@ -690,7 +685,7 @@ FocusScope {
                     boardLine: true
                     width: parent.width
                     visible: (root.aside.installed?.length ?? 0) === 0
-                    text: "No core installed for this console yet."
+                    text: root.labels.emptyInstalled ?? ""
                     size: 17
                     weight: Font.Normal
                     color: Kit.Tokens.muted
@@ -703,7 +698,7 @@ FocusScope {
                         required property int index
                         required property var modelData
                         objectName: "asideCore." + instCard.index
-                        readonly property bool cardFocused: root.focusZone === "aside" && root.focusedAsideIndex === instCard.index
+                        readonly property bool cardFocused: root.focusZone === 2 && root.focusedAsideIndex === instCard.index
                         width: parent.width
                         height: instInner.implicitHeight + 36 * root.unit
                         Kit.FocusRing {
@@ -829,9 +824,9 @@ FocusScope {
                                 MouseArea {
                                     anchors.fill: parent
                                     onClicked: {
-                                        root.tool.eclipseFocusZone("aside")
+                                        root.tool.eclipseFocusZoneCode(2)
                                         root.tool.eclipseFocusCore(instCard.modelData.key)
-                                        root.tool.eclipseAct("eclipse-page", instCard.modelData.key)
+                                        root.tool.eclipseActCode(0, instCard.modelData.key)
                                     }
                                 }
                             }
@@ -848,7 +843,7 @@ FocusScope {
                                         CardLine {
                                             unit: root.unit
                                             boardLine: true
-                                            text: "You have "
+                                            text: root.labels.youHavePrefix ?? ""
                                             size: 17
                                             color: Kit.Tokens.muted
                                         }
@@ -878,7 +873,7 @@ FocusScope {
                                         CardLine {
                                             unit: root.unit
                                             boardLine: true
-                                            text: "Newer "
+                                            text: root.labels.newerPrefix ?? ""
                                             size: 17
                                             color: "#F3C9D2"
                                         }
@@ -927,7 +922,7 @@ FocusScope {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 unit: root.unit
                                                 boardLine: true
-                                                text: "Update"
+                                                text: root.labels.updatePill ?? ""
                                                 size: 17
                                                 weight: Font.DemiBold
                                                 color: Kit.Tokens.overAccent
@@ -935,7 +930,7 @@ FocusScope {
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: root.tool.eclipseAct("eclipse-update", instCard.modelData.key)
+                                            onClicked: root.tool.eclipseActCode(1, instCard.modelData.key)
                                         }
                                     }
                                     Item {
@@ -969,7 +964,7 @@ FocusScope {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 unit: root.unit
                                                 boardLine: true
-                                                text: "Use for this console"
+                                                text: root.labels.defaultPill ?? ""
                                                 size: 17
                                                 weight: Font.Normal
                                                 color: Kit.Tokens.textStrong
@@ -977,7 +972,7 @@ FocusScope {
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: root.tool.eclipseAct("default", instCard.modelData.key)
+                                            onClicked: root.tool.eclipseActCode(2, instCard.modelData.key)
                                         }
                                     }
                                     Item {
@@ -1011,7 +1006,7 @@ FocusScope {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 unit: root.unit
                                                 boardLine: true
-                                                text: "Remove"
+                                                text: root.labels.removePill ?? ""
                                                 size: 17
                                                 weight: Font.Normal
                                                 color: Kit.Tokens.textStrong
@@ -1019,7 +1014,7 @@ FocusScope {
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: root.tool.eclipseAct("eclipse-remove", instCard.modelData.key)
+                                            onClicked: root.tool.eclipseActCode(3, instCard.modelData.key)
                                         }
                                     }
                                     Item {
@@ -1052,7 +1047,7 @@ FocusScope {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 unit: root.unit
                                                 boardLine: true
-                                                text: "Core page"
+                                                text: root.labels.pagePill ?? ""
                                                 size: 17
                                                 weight: Font.Normal
                                                 color: Kit.Tokens.textStrong
@@ -1060,7 +1055,7 @@ FocusScope {
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: root.tool.eclipseAct("eclipse-page", instCard.modelData.key)
+                                            onClicked: root.tool.eclipseActCode(0, instCard.modelData.key)
                                         }
                                     }
                                 }
@@ -1093,7 +1088,7 @@ FocusScope {
                         required property int index
                         required property var modelData
                         readonly property int asideIdx: instRep.count + availCard.index
-                        readonly property bool cardFocused: root.focusZone === "aside" && root.focusedAsideIndex === availCard.asideIdx
+                        readonly property bool cardFocused: root.focusZone === 2 && root.focusedAsideIndex === availCard.asideIdx
                         objectName: "asideAvail." + availCard.index
                         width: parent.width
                         height: 84 * root.unit
@@ -1177,7 +1172,13 @@ FocusScope {
                                             strokeWidth: 2
                                             capStyle: ShapePath.RoundCap
                                             joinStyle: ShapePath.RoundJoin
-                                            PathSvg { path: "M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14" }
+                                            PathMove { x: 12; y: 4 }
+                                            PathLine { x: 12; y: 15 }
+                                            PathMove { x: 7.5; y: 10.5 }
+                                            PathLine { x: 12; y: 15 }
+                                            PathLine { x: 16.5; y: 10.5 }
+                                            PathMove { x: 5; y: 19 }
+                                            PathLine { x: 19; y: 19 }
                                         }
                                     }
                                 }
@@ -1197,9 +1198,9 @@ FocusScope {
                         MouseArea {
                             anchors.fill: parent
                             onClicked: {
-                                root.tool.eclipseFocusZone("aside")
+                                root.tool.eclipseFocusZoneCode(2)
                                 root.tool.eclipseFocusCore(availCard.modelData.key)
-                                root.tool.eclipseAct("eclipse-install", availCard.modelData.key)
+                                root.tool.eclipseActCode(4, availCard.modelData.key)
                             }
                         }
                     }

@@ -21,13 +21,14 @@ pub fn focused(scene: &mut Scene<'_>) -> String {
 pub fn press(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, control: PadControl) {
     let button = control.press().expect("a control the interface hears");
     let shown = scene.property("screens", "shown");
+    let bindings = scene.property("settingsModel", "bindingsShown");
     let set = |down: bool| match sdl_button(control) {
         Some(b) => sdl.press(pad, b, down),
         None => sdl.axis(pad, if control == PadControl::LeftTrigger { LEFT_TRIGGER } else { RIGHT_TRIGGER }, if down { PULLED } else { 0 }),
     };
     for down in [true, false] {
         set(down);
-        let heard = |s: &mut Scene<'_>| s.pad_held(button) == down || (down && s.property("screens", "shown") != shown);
+        let heard = |s: &mut Scene<'_>| s.pad_held(button) == down || (down && (s.property("screens", "shown") != shown || s.property("settingsModel", "bindingsShown") != bindings));
         let mut waited = 0;
         while !heard(scene) && waited < 2000 {
             scene.wait(8);

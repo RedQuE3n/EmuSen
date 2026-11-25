@@ -104,6 +104,10 @@ pub mod qobject {
         /// The bindings page: whether it is shown, its drawing file, controls, labels' words, focused and held controls,
         /// its strip and caption, and whether a press is listened for or the tester runs.
         #[qproperty(bool, bindings_shown, cxx_name = "bindingsShown", READ, NOTIFY = drawn)]
+        /// Eclipse `#12` / `#75` bindings state: whether keys view, whether from Pause Card, and full JSON payload.
+        #[qproperty(bool, bindings_keys, cxx_name = "bindingsKeys", READ, NOTIFY = drawn)]
+        #[qproperty(bool, bindings_from_card, cxx_name = "bindingsFromCard", READ, NOTIFY = drawn)]
+        #[qproperty(QString, bindings_pad, cxx_name = "bindingsPad", READ, NOTIFY = drawn)]
         #[qproperty(QString, drawing, READ, NOTIFY = drawn)]
         #[qproperty(QStringList, drawing_controls, cxx_name = "drawingControls", READ, NOTIFY = drawn)]
         #[qproperty(QStringList, drawing_texts, cxx_name = "drawingTexts", READ, NOTIFY = drawn)]
@@ -306,6 +310,36 @@ pub mod qobject {
         #[cxx_name = "bindingAccept"]
         fn binding_accept(self: Pin<&mut SettingsModel>);
 
+        /// Selects a player seat (`1..=2`) on Eclipse Controller bindings.
+        #[qinvokable]
+        #[cxx_name = "bindingPlayer"]
+        fn binding_player(self: Pin<&mut SettingsModel>, player: i32) -> bool;
+
+        /// Switches Eclipse bindings or Keyboard keys directly to `console`.
+        #[qinvokable]
+        #[cxx_name = "bindingConsole"]
+        fn binding_console(self: Pin<&mut SettingsModel>, console: &QString) -> bool;
+
+        /// Switches among the five Eclipse controller sub-navigation tabs.
+        #[qinvokable]
+        #[cxx_name = "bindingNav"]
+        fn binding_nav(self: Pin<&mut SettingsModel>, tab: i32) -> bool;
+
+        /// Steps across the five Eclipse controller sub-navigation tabs.
+        #[qinvokable]
+        #[cxx_name = "bindingPageStep"]
+        fn binding_page_step(self: Pin<&mut SettingsModel>, by: i32) -> bool;
+
+        /// Returns directly to Controllers settings from the Eclipse bindings breadcrumb.
+        #[qinvokable]
+        #[cxx_name = "bindingSettings"]
+        fn binding_settings(self: Pin<&mut SettingsModel>) -> bool;
+
+        /// Handles a pad or navigation button press on Eclipse Controller bindings / Keyboard keys.
+        #[qinvokable]
+        #[cxx_name = "bindingPadButton"]
+        fn binding_pad_button(self: Pin<&mut SettingsModel>, button: PadButton, repeat: bool) -> bool;
+
         /// One of the help bar's declared actions on the bindings page or Hotkeys (reset, player, clear, test); one the
         /// page does not take is `passed` on.
         #[qinvokable]
@@ -428,6 +462,9 @@ pub struct SettingsModelRust {
     reading: bool,
     game_pads: u64,
     bindings_shown: bool,
+    bindings_keys: bool,
+    bindings_from_card: bool,
+    bindings_pad: QString,
     drawing: QString,
     drawing_controls: QStringList,
     drawing_texts: QStringList,
@@ -518,6 +555,9 @@ impl Default for SettingsModelRust {
             reading: false,
             game_pads: 0,
             bindings_shown: false,
+            bindings_keys: false,
+            bindings_from_card: false,
+            bindings_pad: QString::default(),
             drawing: QString::default(),
             drawing_controls: QStringList::default(),
             drawing_texts: QStringList::default(),
@@ -827,6 +867,9 @@ impl qobject::SettingsModel {
                 true
             }
             None => {
+                if self.bindings_shown {
+                    self.as_mut().shown(true);
+                }
                 self.left();
                 false
             }
@@ -1161,8 +1204,15 @@ impl qobject::SettingsModel {
         let hold = self.view.tester_hold_ms();
         let card = serde_json::Value::Array(self.view.game_rows().iter().map(|g| g.to_json()).collect()).to_string();
         let card_settings = self.as_mut().rust_mut().view.card_rows().to_json().to_string();
+        let pad_board = self.as_mut().rust_mut().view.pad_board();
+        let bindings_keys = pad_board.as_ref().and_then(|v| v["keys"].as_bool()).unwrap_or(false);
+        let bindings_from_card = pad_board.as_ref().and_then(|v| v["fromCard"].as_bool()).unwrap_or(false);
+        let bindings_pad = pad_board.map_or_else(String::new, |v| v.to_string());
         let mut r = self.as_mut().rust_mut();
         r.bindings_shown = shown;
+        r.bindings_keys = bindings_keys;
+        r.bindings_from_card = bindings_from_card;
+        r.bindings_pad = QString::from(bindings_pad.as_str());
         r.drawing = QString::from(d.drawing.as_str());
         r.drawing_controls = list(d.controls.into_iter());
         r.drawing_texts = list(d.texts.into_iter());
@@ -1297,6 +1347,107 @@ impl qobject::SettingsModel {
             // The buttons held as listening starts are not the press listened for.
             self.as_mut().seats_changed();
             self.shown(false);
+        }
+    }
+
+    pub fn binding_player(mut self: Pin<&mut Self>, player: i32) -> bool {
+        let changed = self.as_mut().rust_mut().view.binding_player(player.max(0) as u32);
+        if changed {
+            self.shown(false);
+        }
+        changed
+    }
+
+    pub fn binding_console(mut self: Pin<&mut Self>, console: &QString) -> bool {
+        let changed = self.as_mut().rust_mut().view.binding_console(&console.to_string());
+        if changed {
+            self.shown(false);
+        }
+        changed
+    }
+
+    pub fn binding_nav(mut self: Pin<&mut Self>, tab: i32) -> bool {
+        let changed = self.as_mut().rust_mut().view.binding_nav(tab);
+        if changed {
+            self.shown(true);
+        }
+        changed
+    }
+
+    pub fn binding_page_step(mut self: Pin<&mut Self>, by: i32) -> bool {
+        let changed = self.as_mut().rust_mut().view.binding_page_step(by);
+        if changed {
+            self.shown(true);
+        }
+        changed
+    }
+
+    pub fn binding_settings(mut self: Pin<&mut Self>) -> bool {
+        let changed = self.as_mut().rust_mut().view.binding_settings();
+        if changed {
+            self.shown(true);
+        }
+        changed
+    }
+
+    pub fn binding_pad_button(mut self: Pin<&mut Self>, button: qobject::PadButton, repeat: bool) -> bool {
+        use emusen_kit_core::input::UiButton;
+        let Some(ui) = emusen_kit_qt::kinds::ui_button(button) else { return false };
+        if !self.view.binding_open() {
+            return false;
+        }
+        let dir = match ui {
+            UiButton::Left => Some((-1, 0)),
+            UiButton::Right => Some((1, 0)),
+            UiButton::Up => Some((0, -1)),
+            UiButton::Down => Some((0, 1)),
+            _ => None,
+        };
+        if let Some((dx, dy)) = dir {
+            if self.as_mut().rust_mut().view.binding_step(dx, dy) {
+                self.shown(false);
+            }
+            return true;
+        }
+        if repeat {
+            return false;
+        }
+        match ui {
+            UiButton::Accept => {
+                let (changed, started) = self.as_mut().rust_mut().view.binding_enter();
+                if started {
+                    self.as_mut().seats_changed();
+                    self.shown(false);
+                } else if changed {
+                    self.shown(false);
+                }
+                true
+            }
+            UiButton::Back => {
+                self.back();
+                true
+            }
+            UiButton::Search => {
+                let outcome = self.as_mut().rust_mut().view.binding_act(crate::help::RESET);
+                self.outcome(outcome)
+            }
+            UiButton::Screensaver => {
+                let outcome = self.as_mut().rust_mut().view.binding_act(crate::help::CLEAR);
+                self.outcome(outcome)
+            }
+            UiButton::PageUp | UiButton::PageDown => {
+                let by = if ui == UiButton::PageUp { -1 } else { 1 };
+                if self.bindings_keys {
+                    self.shoulder(by)
+                } else {
+                    self.binding_page_step(by)
+                }
+            }
+            UiButton::First | UiButton::Last if !self.bindings_keys => {
+                let by = if ui == UiButton::First { -1 } else { 1 };
+                self.shoulder(by)
+            }
+            _ => false,
         }
     }
 

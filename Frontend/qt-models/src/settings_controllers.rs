@@ -609,6 +609,8 @@ impl SettingsView {
         let Some((console, profile)) = on.or_else(|| self.pad_console().map(|c| (c.clone(), self.read.bindings.console_default(&c)))) else {
             return Outcome::Nothing;
         };
+        self.pad_scroll = [0, 0];
+        self.header_focus = -1;
         self.binding = Some(Binding { console, profile, player: 1, focus: 0, capturing: false, testing: false, keys });
         let title = if keys { self.cw("keys_title") } else { label };
         self.open(Page::Bindings, title, index)
@@ -891,10 +893,51 @@ impl SettingsView {
         match self.binding.as_mut().filter(|b| !b.capturing && !b.testing && index < count) {
             Some(b) => {
                 b.focus = index;
+                self.header_focus = -1;
                 true
             }
             None => false,
         }
+    }
+
+    /// Directional move on Eclipse pad pages, stepping into `#12` header pills above top controls.
+    pub fn binding_step(&mut self, dx: i32, dy: i32) -> bool {
+        let Some(b) = self.binding.as_ref().filter(|b| !b.capturing && !b.testing).cloned() else { return false };
+        if self.header_focus >= 0 {
+            if dy > 0 {
+                self.header_focus = -1;
+                return true;
+            }
+            let count = (self.players_of(&b.console).min(2).max(1) + 1) as i32;
+            if dx != 0 && !b.keys {
+                self.header_focus = (self.header_focus + dx).rem_euclid(count);
+                return true;
+            }
+            return false;
+        }
+        if self.binding_move(dx, dy) {
+            return true;
+        }
+        if !b.keys && dy < 0 {
+            self.header_focus = 0;
+            return true;
+        }
+        false
+    }
+
+    /// Activates the focused `#12` header pill or starts binding capture on the focused control.
+    pub fn binding_enter(&mut self) -> (bool, bool) {
+        let Some(b) = self.binding.as_ref().filter(|b| !b.capturing && !b.testing).cloned() else { return (false, false) };
+        if self.header_focus >= 0 && !b.keys {
+            let max_players = self.players_of(&b.console).min(2).max(1) as i32;
+            let changed = if self.header_focus < max_players {
+                self.binding_player((self.header_focus + 1) as u32)
+            } else {
+                self.binding_shoulder(1)
+            };
+            return (changed, false);
+        }
+        (false, self.binding_accept())
     }
 
     /// The shoulders on the bindings page: the console before or after, its own default profile, its first control.
@@ -907,6 +950,114 @@ impl SettingsView {
         let players = self.players_of(&next);
         let b = self.binding.as_mut().expect("a bindings page");
         *b = Binding { player: b.player.min(players), profile, console: next, focus: 0, capturing: false, testing: false, keys: b.keys };
+        self.pad_scroll = [0, 0];
+        true
+    }
+
+    /// Selects a player seat (`1..=players`) on Controller bindings (`#12`).
+    pub fn binding_player(&mut self, player: u32) -> bool {
+        let Some(b) = self.binding.as_ref().filter(|b| !b.keys && !b.capturing && !b.testing) else { return false };
+        let max = self.players_of(&b.console).min(2).max(1);
+        if player < 1 || player > max || b.player == player {
+            return false;
+        }
+        if let Some(page) = self.binding.as_mut() {
+            page.player = player;
+        }
+        true
+    }
+
+    /// Switches Controller bindings or Keyboard keys directly to `console`.
+    pub fn binding_console(&mut self, console: &str) -> bool {
+        let Some(b) = self.binding.as_ref().filter(|b| !b.capturing && !b.testing) else { return false };
+        if b.console == console || !self.pad_consoles().iter().any(|c| c.console == console) {
+            return false;
+        }
+        let profile = self.read.bindings.console_default(console);
+        let players = self.players_of(console);
+        let b = self.binding.as_mut().expect("a bindings page");
+        *b = Binding { player: b.player.min(players), profile, console: console.to_owned(), focus: 0, capturing: false, testing: false, keys: b.keys };
+        self.pad_scroll = [0, 0];
+        self.header_focus = -1;
+        true
+    }
+
+    /// Navigates among Players (0), Buttons (1), Keyboard keys (2), Hotkeys (3), and Profiles (4).
+    pub fn binding_nav(&mut self, tab: i32) -> bool {
+        if self.from_card {
+            return false;
+        }
+        let Some(b) = self.binding.as_ref().filter(|b| !b.capturing && !b.testing && matches!(self.page(), Some(Page::Bindings))).cloned() else {
+            return false;
+        };
+        let rows: Vec<(String, usize, String)> = self.description_at(&["sections"])[0]["rows"]
+            .as_array()
+            .map(|list| {
+                list.iter()
+                    .enumerate()
+                    .filter_map(|(i, r)| {
+                        let key = r["controllers"].as_str()?.to_owned();
+                        let label = self.controller_row(r).map(|row| row.label).unwrap_or_default();
+                        Some((key, i, label))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        match tab {
+            1 | 2 => {
+                let want_keys = tab == 2;
+                if b.keys == want_keys {
+                    return false;
+                }
+                let title = self.cw(if want_keys { "keys_title" } else { "bindings_title" });
+                if let Some(page) = self.binding.as_mut() {
+                    page.keys = want_keys;
+                    page.focus = 0;
+                }
+                if let Some(last) = self.pages.last_mut() {
+                    last.1 = title;
+                }
+                self.pad_scroll = [0, 0];
+                self.header_focus = -1;
+                true
+            }
+            0 | 3 | 4 => {
+                let (key, page) = match tab {
+                    0 => ("players", Page::Players),
+                    3 => ("hotkeys", Page::Hotkeys),
+                    _ => ("profiles", Page::Profiles),
+                };
+                let (at, label) = rows.iter().find(|(k, _, _)| k == key).map_or((0, String::new()), |(_, i, l)| (*i, l.clone()));
+                self.stepped_console = Some(b.console);
+                self.binding = None;
+                self.pad_scroll = [0, 0];
+                self.header_focus = -1;
+                self.choose_section(0);
+                self.pages = vec![(page, label, at)];
+                self.focused_row = 0;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Steps across the five controller sub-navigation tabs (`Players`..`Profiles`) on `#12`.
+    pub fn binding_page_step(&mut self, by: i32) -> bool {
+        let Some(b) = self.binding.as_ref() else { return false };
+        let cur = if b.keys { 2 } else { 1 };
+        self.binding_nav((cur + by).rem_euclid(5))
+    }
+
+    /// Returns directly to the Controllers settings root when clicking Settings in the header breadcrumb.
+    pub fn binding_settings(&mut self) -> bool {
+        if self.from_card || self.binding.as_ref().is_none_or(|b| b.capturing || b.testing) {
+            return false;
+        }
+        self.binding = None;
+        self.pad_scroll = [0, 0];
+        self.header_focus = -1;
+        self.choose_section(0);
+        self.pages.clear();
         true
     }
 
@@ -938,6 +1089,10 @@ impl SettingsView {
             crate::help::CLEAR if b.keys => match self.file_control(&control) {
                 Some(word) => Outcome::Bindings(vec![self.read.bindings.clear_key(&b.console, &word)]),
                 None => Outcome::Failed(unworded(&control)),
+            },
+            crate::help::CLEAR if controllers::is_button(&control) => match self.choice(&b.console, b.player, &b.profile) {
+                Ok(choice) => Outcome::Bindings(vec![self.read.bindings.unbind(&b.console, b.player, &choice, &control)]),
+                Err(words) => Outcome::Failed(words),
             },
             crate::help::PLAYER if !b.keys => {
                 let players = self.players_of(&b.console);
@@ -1062,14 +1217,16 @@ pub struct GameRow {
     pub steps: bool,
     pub opens: bool,
     pub dimmed: bool,
+    pub section_end: bool,
     pub sentence: String,
     pub muted: String,
+    pub muted_eclipse: String,
 }
 
 impl GameRow {
     pub fn to_json(&self) -> Value {
         json!({ "key": self.key, "label": self.label, "value": self.value, "steps": self.steps, "opens": self.opens,
-                "dimmed": self.dimmed, "sentence": self.sentence, "muted": self.muted })
+                "dimmed": self.dimmed, "sectionEnd": self.section_end, "sentence": self.sentence, "muted": self.muted, "mutedEclipse": self.muted_eclipse })
     }
 
     /// The rows as `SettingsModel.cardControllers` gives them.
@@ -1085,8 +1242,10 @@ impl GameRow {
                 steps: r["steps"] == true,
                 opens: r["opens"] == true,
                 dimmed: r["dimmed"] == true,
+                section_end: r["sectionEnd"] == true,
                 sentence: text(r, "sentence"),
                 muted: text(r, "muted"),
+                muted_eclipse: text(r, "mutedEclipse"),
             })
             .collect()
     }
@@ -1145,6 +1304,7 @@ impl SettingsView {
                 steps: true,
                 sentence,
                 muted: self.card_word("seat_muted"),
+                muted_eclipse: fill(&self.card_word("player_hint"), &[("n", &n)]),
                 ..GameRow::default()
             });
         }
@@ -1164,6 +1324,7 @@ impl SettingsView {
                 key: "gbindings".into(),
                 label: self.card_word("bindings_label"),
                 opens: true,
+                section_end: true,
                 sentence: fill(&self.card_word("bindings_line"), &names),
                 muted: self.card_word("bindings_muted"),
                 ..GameRow::default()
@@ -1220,9 +1381,241 @@ impl SettingsView {
             None => self.read.bindings.console_default(console),
         };
         self.choose_section(0);
+        self.pad_scroll = [0, 0];
+        self.header_focus = -1;
         self.binding = Some(Binding { console: console.to_owned(), profile, player: 1, focus: 0, capturing: false, testing: false, keys: false });
         self.pages.push((Page::Bindings, self.cw("bindings_title"), 0));
         self.from_card = true;
         Ok(())
+    }
+
+    fn app_setting(&self, reference: &str, fallback: &str) -> String {
+        self.keyed(&json!({ "row": reference }))
+            .and_then(|k| self.stored(&k).into_iter().next())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                reference
+                    .strip_prefix("AppSettings ")
+                    .and_then(|field| crate::settings::at(&self.read.app, field).map(crate::settings::text_of))
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or_else(|| fallback.to_owned())
+    }
+
+    /// Computes Eclipse `#12` (Buttons) and `#75` (Keyboard keys) geometry, labels, and state in Rust.
+    pub fn pad_board(&mut self) -> Option<Value> {
+        let b = self.binding.as_ref().filter(|_| matches!(self.page(), Some(Page::Bindings)))?.clone();
+        let (controls, file, cname) = {
+            let console = self.read.consoles.console(&b.console)?;
+            (controllers::controls(&console.controllers), controllers::drawing_on(console, b.player).map(str::to_owned), console.name.clone())
+        };
+        let (drawing, _) = emusen_kit_core::controller::drawing_for(file.as_deref(), &controls);
+        let scale = f64::min(640.0 / drawing.width.max(1.0), 440.0 / drawing.height.max(1.0));
+        let (pad_w, pad_h) = (drawing.width * scale, drawing.height * scale);
+        let (pad_x, pad_y) = (520.0 - pad_w / 2.0, 260.0 - pad_h / 2.0);
+        let focused = controls.get(b.focus).filter(|_| !b.testing).cloned();
+        let lit = |i: usize| {
+            let control = &drawing.regions[i].control;
+            emusen_kit_core::controller::Lit { focused: focused.as_ref() == Some(control), held: self.held.contains(control) }
+        };
+        let pushes: Vec<f64> = if b.testing { self.pushes.clone() } else { Vec::new() };
+        let push = |control: &str| controls.iter().position(|c| c == control).and_then(|i| pushes.get(i)).copied().unwrap_or(0.0);
+        let knobs = |k: usize| drawing.sticks.get(k).map_or((0.0, 0.0), |s| emusen_kit_core::controller::knob(s, &push));
+        let painted = emusen_kit_core::controller::paints(&drawing, &lit, &knobs, "#F6E7D8");
+        let svg = if drawing.width > 0.0 {
+            emusen_kit_core::controller::data_url("image/svg+xml;utf8", &emusen_kit_core::controller::svg(&drawing, &painted))
+        } else {
+            String::new()
+        };
+        let mut left_items: Vec<(usize, f64, f64)> = Vec::new();
+        let mut right_items: Vec<(usize, f64, f64)> = Vec::new();
+        for (i, c) in controls.iter().enumerate() {
+            let (cx, cy) = drawing.region(c).map_or((drawing.width / 2.0, drawing.height / 2.0), |r| r.shape.bounds().centre());
+            let (ax, ay) = (pad_x + cx * scale, pad_y + cy * scale);
+            if cx < drawing.width / 2.0 { left_items.push((i, ax, ay)); } else { right_items.push((i, ax, ay)); }
+        }
+        left_items.sort_by(|a, c| a.2.round().total_cmp(&c.2.round()).then(a.1.total_cmp(&c.1)));
+        right_items.sort_by(|a, c| a.2.round().total_cmp(&c.2.round()).then(c.1.total_cmp(&a.1)));
+        let (left_slot, left_over, left_h, left_scroll_y, left_cards) = self.pad_column(&b, &controls, &left_items, true, pad_x, b.focus, self.pad_scroll[0]);
+        let (right_slot, right_over, right_h, right_scroll_y, right_cards) = self.pad_column(&b, &controls, &right_items, false, pad_x + pad_w, b.focus, self.pad_scroll[1]);
+        self.pad_scroll = [left_slot, right_slot];
+        let max_players = self.players_of(&b.console).min(2).max(1);
+        let players: Vec<Value> = (1..=max_players)
+            .map(|p| {
+                let pad_name = self
+                    .seats
+                    .pads
+                    .iter()
+                    .find(|s| s.player == p as usize)
+                    .map(|s| s.name.as_str())
+                    .filter(|n| !n.is_empty())
+                    .or_else(|| self.seats.players.iter().find(|s| s.player == p as usize && !s.kept).and_then(|s| s.pad.as_deref()))
+                    .unwrap_or("None");
+                json!({ "player": p, "label": format!("Player {p} · {pad_name}"), "active": p == b.player })
+            })
+            .collect();
+        let consoles = self.pad_consoles();
+        let at = consoles.iter().position(|c| c.console == b.console).unwrap_or(0);
+        let console_pills: Vec<Value> = consoles[at..]
+            .iter()
+            .chain(consoles[..at].iter())
+            .map(|c| json!({ "key": c.console, "name": c.name }))
+            .collect();
+        let control = controls.get(b.focus).cloned().unwrap_or_default();
+        let name = self.control_words(&control);
+        let (detail_heading, detail_subline, detail_counter, detail_line1, detail_line2, detail_muted, detail_conflict) = if controls.is_empty() {
+            (fill(&self.cw("no_controls"), &[("console", &cname)]), String::new(), String::new(), String::new(), String::new(), String::new(), String::new())
+        } else if !b.keys {
+            let counter = format!("{} of {}", b.focus + 1, controls.len());
+            let (head, sub) = if b.capturing {
+                (format!("Press the button for {name} on the pad."), "Nothing pressed in five seconds, or Escape on the keyboard, leaves it as it was.".to_owned())
+            } else if !controllers::is_button(&control) {
+                (self.cw("stick_line"), String::new())
+            } else if let Some(pad) = self.bound_pad(&b, &control) {
+                (format!("{pad} on your pad presses {name} on the {cname}"), "Press A to change it, then the button you want.".to_owned())
+            } else {
+                (self.cw("not_bound"), "Press A to change it, then the button you want.".to_owned())
+            };
+            (head, sub, counter, String::new(), String::new(), String::new(), String::new())
+        } else {
+            let line1 = format!("{cname} · {} · {name}", self.cw("keyboard_tab"));
+            let line2 = if b.capturing {
+                format!("{} {}", self.cw("listening_mark"), fill(&self.cw("listen_key"), &[("control", &name)]))
+            } else {
+                self.file_control(&control)
+                    .and_then(|w| self.read.bindings.key(&b.console, &w))
+                    .map_or_else(|| self.cw("no_key"), |k| fill(&self.cw("bound_key"), &[("key", &k)]))
+            };
+            let muted = if b.capturing { String::new() } else { self.cw("keys_muted") };
+            let conflict = self.conflict_words(&b.console).map(|c| format!("{} {c}", self.cw("warning_mark"))).unwrap_or_default();
+            (name, String::new(), String::new(), line1, line2, muted, conflict)
+        };
+        let dz = self.app_setting("AppSettings StickDeadzone", "0.5").parse::<f64>().unwrap_or(0.5);
+        let whole = vec![
+            json!({ "name": "Swap A and B", "value": self.word(if self.app_setting("AppSettings SwapPadButtons", "false") == "true" { "on" } else { "off" }) }),
+            json!({ "name": "Left stick as the D-pad", "value": self.word(if self.app_setting("AppSettings AnalogStickAsDpad", "true") == "true" { "on" } else { "off" }) }),
+            json!({ "name": "Stick dead zone", "value": format!("{}%", (dz * 100.0).round() as i32) }),
+            json!({ "name": "Rumble", "value": if self.app_setting("AppSettings Rumble", "true") == "true" { "On, where a game asks".to_owned() } else { self.word("off") } }),
+        ];
+        Some(json!({
+            "keys": b.keys,
+            "fromCard": self.from_card,
+            "focus": b.focus,
+            "headerFocus": if b.keys { -1 } else { self.header_focus },
+            "capturing": b.capturing,
+            "crumbSettings": "Settings",
+            "crumbSlash": "/",
+            "crumbControllers": "Controllers",
+            "forWord": "For",
+            "profilePre": "in the profile",
+            "keyboardLabel": self.cw("keyboard_tab"),
+            "navTabs": ["Players", "Buttons", "Keyboard keys", "Hotkeys", "Profiles"],
+            "navActive": if b.keys { 2 } else { 1 },
+            "players": players,
+            "console": cname,
+            "profile": b.profile,
+            "consolePills": console_pills,
+            "caption": self.cw("caption"),
+            "svg": svg,
+            "padX": pad_x,
+            "padY": pad_y,
+            "padW": pad_w,
+            "padH": pad_h,
+            "leftScroll": left_over,
+            "leftContentHeight": left_h,
+            "leftScrollY": left_scroll_y,
+            "left": left_cards,
+            "rightScroll": right_over,
+            "rightContentHeight": right_h,
+            "rightScrollY": right_scroll_y,
+            "right": right_cards,
+            "detailHeading": detail_heading,
+            "detailSubline": detail_subline,
+            "detailCounter": detail_counter,
+            "detailLine1": detail_line1,
+            "detailLine2": detail_line2,
+            "detailMuted": detail_muted,
+            "detailConflict": detail_conflict,
+            "whole": whole,
+        }))
+    }
+
+    fn pad_column(&self, b: &Binding, controls: &[String], items: &[(usize, f64, f64)], left: bool, pad_edge: f64, focused: usize, mut slot: usize) -> (usize, bool, f64, f64, Vec<Value>) {
+        let n = items.len();
+        if n == 0 {
+            return (0, false, 520.0, 0.0, Vec::new());
+        }
+        let mut ys = Vec::with_capacity(n);
+        let (overflow, content_h, scroll_y) = if n <= 8 {
+            slot = 0;
+            let mut cy: Vec<f64> = items.iter().map(|(_, _, ay)| ay.clamp(32.0, 488.0)).collect();
+            for k in 1..n { cy[k] = cy[k].max(cy[k - 1] + 62.0); }
+            cy[n - 1] = cy[n - 1].min(488.0);
+            for k in (0..n - 1).rev() { cy[k] = cy[k].min(cy[k + 1] - 62.0); }
+            cy[0] = cy[0].max(32.0);
+            for k in 1..n { cy[k] = cy[k].max(cy[k - 1] + 62.0); }
+            for c in cy { ys.push(c - 28.0); }
+            (false, 520.0, 0.0)
+        } else {
+            for k in 0..n { ys.push(4.0 + (k as f64) * 62.0); }
+            slot = slot.min(n - 8);
+            if let Some(pos) = items.iter().position(|(i, _, _)| *i == focused) {
+                if pos < slot { slot = pos; } else if pos >= slot + 8 { slot = pos - 7; }
+            }
+            let ch = (n as f64) * 62.0 + 2.0;
+            let sy = ((slot as f64) * 62.0).min((ch - 520.0).max(0.0));
+            (true, ch, sy)
+        };
+        let cards = items
+            .iter()
+            .enumerate()
+            .map(|(k, &(index, ax, ay))| {
+                let c = &controls[index];
+                let name = self.control_words(c);
+                let binding = if b.keys {
+                    if b.capturing && index == focused {
+                        "Press a key…".to_owned()
+                    } else {
+                        self.file_control(c).and_then(|w| self.read.bindings.key(&b.console, &w)).unwrap_or_else(|| "Not bound".to_owned())
+                    }
+                } else if b.capturing && index == focused && controllers::is_button(c) {
+                    "Press a button…".to_owned()
+                } else if !controllers::is_button(c) {
+                    "Stick".to_owned()
+                } else {
+                    self.bound_pad(b, c).unwrap_or_else(|| "Not bound".to_owned())
+                };
+                let (left_text, right_text) = if left { (binding, name) } else { (name, binding) };
+                let frac = if n > 1 { k as f64 / (n - 1) as f64 } else { 0.5 };
+                let elbow_x = if left {
+                    let hi = (pad_edge - 14.0).clamp(56.0, 184.0);
+                    (hi - frac * (hi - 40.0)).min(ax)
+                } else {
+                    let lo = (pad_edge + 14.0).clamp(856.0, 984.0);
+                    (lo + frac * (1000.0 - lo)).max(ax)
+                };
+                let side = if left { "left" } else { "right" };
+                let leader_side = if left { "Left" } else { "Right" };
+                json!({
+                    "index": index,
+                    "left": left_text,
+                    "right": right_text,
+                    "cardName": format!("{side}Card.{k}"),
+                    "ringName": format!("{side}CardRing.{k}"),
+                    "fillName": format!("{side}CardFill.{k}"),
+                    "leftName": format!("{side}CardLeft.{k}"),
+                    "rightName": format!("{side}CardRight.{k}"),
+                    "leaderName": format!("leader{leader_side}.{k}"),
+                    "leaderFocusedName": format!("leaderFocused{leader_side}.{k}"),
+                    "y": ys[k],
+                    "ax": ax,
+                    "ay": ay,
+                    "elbowX": elbow_x,
+                    "focused": (b.keys || self.header_focus < 0) && index == focused,
+                    "held": self.held.contains(c),
+                })
+            })
+            .collect();
+        (slot, overflow, content_h, scroll_y, cards)
     }
 }

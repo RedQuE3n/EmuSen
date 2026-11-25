@@ -12,6 +12,7 @@ FocusScope {
     property string title
     property string breadcrumb
     property string subtitle
+    property string badge
     property string footer
     property int current: 0
     property var paneLines
@@ -198,6 +199,7 @@ FocusScope {
                     model: root.rows
                     focus: true
                     interactive: false
+                    cacheBuffer: 0
                     clip: list.contentHeight > list.height
                     spacing: 6 * root.unit
                     keyNavigationEnabled: true
@@ -457,6 +459,30 @@ FocusScope {
         }
     }
     Rectangle {
+        id: badgePill
+        objectName: "cardBadge"
+        visible: !root.menu && root.badge.length > 0
+        opacity: 1 - root.slide
+        y: root.height - 120 * root.unit - height
+        height: 46 * root.unit
+        width: badgeText.width + 40 * root.unit
+        x: root.width - 200 * root.unit - width
+        radius: 23 * root.unit
+        color: Qt.alpha(Kit.Tokens.surface, 0.86)
+        CardLine {
+            id: badgeText
+            objectName: "cardBadgeWords"
+            unit: root.unit
+            boardLine: true
+            x: 20 * root.unit
+            y: (badgePill.height - height) / 2
+            text: root.badge
+            color: Kit.Tokens.textStrong
+            size: 20
+            weight: Font.Normal
+        }
+    }
+    Rectangle {
         id: footerBar
         objectName: "cardFooterBar"
         visible: !root.menu
@@ -506,6 +532,7 @@ FocusScope {
                     unit: root.unit
                     side: 34
                     ink: "#D8DBE6"
+                    keyPairs: true
                     boxMenu: true
                 }
             }

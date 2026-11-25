@@ -672,3 +672,73 @@ fn qt_3_4_11_controllers_inner_pages_project_boards_52_to_55_without_changing_re
     assert_eq!(aside.page_glow, "#3F6FE0");
     assert!(aside.box_menu && !aside.cards_help);
 }
+
+#[test]
+fn eclipse_pad_board_clear_navigation_and_overflow_scroll_work_without_breaking_reference_fields() {
+    let mut view = view();
+    view.seats.pads[0].name = "Simulated pad".into();
+    view.seats.players[0].pad = Some("Simulated pad".into());
+    view.choose_section(0);
+    view.choose(index(&view, "bindings"));
+    let b12 = view.pad_board().expect("#12 Buttons board");
+    assert_eq!(b12["keys"], false);
+    assert_eq!(b12["console"], "Super Nintendo");
+    assert_eq!(b12["profile"], standard());
+    assert_eq!(b12["players"][0]["label"], "Player 1 · Simulated pad");
+    assert_eq!(b12["players"][1]["label"], "Player 2 · None");
+    assert_eq!(b12["leftScroll"], false);
+    assert_eq!(b12["rightScroll"], false);
+    assert_eq!(b12["left"].as_array().unwrap().len() + b12["right"].as_array().unwrap().len(), 12);
+    assert_eq!(b12["detailSubline"], "Press A to change it, then the button you want.");
+    assert_eq!(b12["detailCounter"], "1 of 12");
+    assert_eq!(b12["whole"].as_array().unwrap().len(), 4);
+    assert_eq!(b12["whole"][3]["name"], "Rumble");
+    assert_eq!(b12["whole"][3]["value"], "On, where a game asks");
+    // X Clear unbinds a button on #12 without disturbing reference pane logic; Y Reset puts it back.
+    assert!(matches!(view.binding_act(emusen_qt_models::help::CLEAR), Outcome::Bindings(_)));
+    let cleared = view.pad_board().expect("after clear");
+    assert_eq!(cleared["detailHeading"], "Not bound to a button.");
+    assert!(matches!(view.binding_act(emusen_qt_models::help::RESET), Outcome::Bindings(_)));
+    // Stepping up past the top row moves focus into #12's header pills, activates player/console, and steps down back.
+    while view.binding_step(0, -1) && view.pad_board().unwrap()["headerFocus"].as_i64() == Some(-1) {}
+    assert_eq!(view.pad_board().unwrap()["headerFocus"], 0);
+    assert!(view.binding_step(1, 0));
+    assert_eq!(view.pad_board().unwrap()["headerFocus"], 1);
+    assert_eq!(view.binding_enter(), (true, false));
+    assert_eq!(view.pad_board().unwrap()["players"][1]["active"], true);
+    assert!(view.binding_step(0, 1));
+    assert_eq!(view.pad_board().unwrap()["headerFocus"], -1);
+    // LB/RB page step moves to Keyboard keys (#75) and back/out to Players; from Pause Card locks navigation out.
+    assert!(view.binding_page_step(1));
+    let b75 = view.pad_board().expect("#75 Keyboard keys");
+    assert_eq!(b75["keys"], true);
+    assert_eq!(b75["navActive"], 2);
+    assert_eq!(b75["whole"].as_array().unwrap().len(), 4);
+    // Switching to PlayStation (24 controls > 8 per side) overflows and tracks focused cards within [scrollY, scrollY + 520].
+    assert!(view.binding_console("PlayStation"));
+    let mut psx = view.pad_board().expect("psx keys");
+    assert_eq!(psx["leftScroll"], true);
+    assert_eq!(psx["rightScroll"], true);
+    for _ in 0..10 {
+        if !view.binding_step(0, 1) {
+            break;
+        }
+        psx = view.pad_board().unwrap();
+        for side in [("left", "leftScrollY"), ("right", "rightScrollY")] {
+            let sy = psx[side.1].as_f64().unwrap();
+            for c in psx[side.0].as_array().unwrap() {
+                if c["focused"] == true {
+                    let y = c["y"].as_f64().unwrap();
+                    assert!(y - sy >= 3.9 && y + 56.0 - sy <= 516.1, "focused out of scroll viewport: y={y} sy={sy}");
+                }
+            }
+        }
+    }
+    assert!(view.binding_nav(0));
+    assert!(!view.binding_open());
+    // Pause Card locks sub-navigation away from bindings.
+    assert!(view.open_card_bindings("SNES").is_ok());
+    assert_eq!(view.pad_board().unwrap()["fromCard"], true);
+    assert!(!view.binding_nav(0));
+    assert!(!view.binding_settings());
+}

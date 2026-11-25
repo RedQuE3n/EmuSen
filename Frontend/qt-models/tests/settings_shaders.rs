@@ -234,3 +234,47 @@ fn qt_7_7_the_pack_and_a_preset_s_parameters_are_read_through_the_platform_libra
     assert_eq!(read.levers.keys().collect::<Vec<_>>(), ["slang:Test/magenta_tint.slangp"]);
     assert_eq!(read.levers["slang:Test/magenta_tint.slangp"].as_ref().map(Vec::len), Ok(2));
 }
+
+#[test]
+fn qt_7_7_eclipse_shaders_board_state_favourites_pack_and_sliders() {
+    use emusen_platform_client::galaxia::consts::DIR_SHADERS;
+    use emusen_qt_models::settings_shaders::{ShadersBoard, ShadersOutcome};
+
+    let _world = emusen_client_fixture::World::new("models-eclipse-shaders-board");
+    let lib_str = emusen_client_fixture::library().display().to_string();
+    let platform = emusen_platform_client::Platform::load(emusen_client_fixture::library()).unwrap();
+    let pack = platform.directory(DIR_SHADERS).unwrap().expect("pack dir");
+    std::fs::create_dir_all(pack.join("crt")).unwrap();
+    let shader = "#version 450\n#pragma parameter glow \"Glow\" 0.5 0.0 1.0 0.05\n#pragma stage vertex\nvoid main() {}\n#pragma stage fragment\nvoid main() {}\n";
+    std::fs::write(pack.join("crt/test_glow.slang"), shader).unwrap();
+    std::fs::write(pack.join("crt/test_glow.slangp"), "shaders = 1\nshader0 = test_glow.slang\n").unwrap();
+
+    let source = emusen_qt_models::settings_source::ClientSettings::open(&lib_str).unwrap();
+    let mut v = SettingsView::new();
+    v.read = settings::read(&source).unwrap();
+    v.read.consoles.consoles = vec![Console { console: "SNES".into(), name: "Super Nintendo".into(), engines: vec!["Engine".into()], ..Console::default() }];
+
+    let mut board = ShadersBoard::open(&v, &lib_str, 2);
+    let snap = board.to_json(&v, &lib_str, false);
+    assert_eq!(snap["categories"].as_array().unwrap().len(), 8);
+    assert_eq!(snap["scopes"].as_array().unwrap().len(), 2);
+    let dump = snap.to_string();
+    assert!(!dump.contains("ms of each"), "unmeasured timing omitted");
+    assert!(!dump.contains("This game"));
+    assert!(!dump.contains("Newer pack"));
+    assert!(!dump.contains("Get it"));
+
+    board.set_source(&v, &lib_str, 1);
+    assert!(board.toggle_favourite(&v, &lib_str));
+    let reopened = ShadersBoard::open(&v, &lib_str, 2);
+    assert_eq!(reopened.category_counts(&v)[0], 1, "favourites persisted in sidecar");
+
+    assert!(board.step_split(0.1));
+    let out = board.step_slider(&mut v, &lib_str, 0, 1).expect("live glow slider");
+    assert_eq!(out.0, "glow");
+    board.focus_zone = 7;
+    assert!(matches!(board.accept(&mut v, &lib_str), ShadersOutcome::OpenSettingsPage { ref console, .. } if console == "SNES"));
+    board.remove_pack(&mut v, &lib_str).unwrap();
+    assert!(v.read.pack.is_empty());
+    assert!(std::fs::read_dir(&pack).unwrap().next().is_none());
+}

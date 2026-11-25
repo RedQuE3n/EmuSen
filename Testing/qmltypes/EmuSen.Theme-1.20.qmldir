@@ -34,3 +34,4 @@ Backdrop 1.4 qml/Backdrop.qml
 Glow 1.4 qml/Glow.qml
 GroupGridLayout 1.5 qml/GroupGridLayout.qml
 MeasuredWalk 1.9 qml/MeasuredWalk.qml
+PdfPage 1.20 qml/PdfPage.qml

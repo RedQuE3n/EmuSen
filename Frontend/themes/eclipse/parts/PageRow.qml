@@ -13,6 +13,7 @@ Walkable {
     required property bool opens
     required property bool isSwitch
     required property bool switchOn
+    property bool editable: false
     property real pixelScale: 1
     signal stepped(int by)
     readonly property bool lit: root.activeFocus
@@ -47,6 +48,7 @@ Walkable {
         pixelScale: root.pixelScale
     }
     Line {
+        id: nameLine
         objectName: "pageRowName." + root.index
         unit: root.unit
         x: root.padX
@@ -80,6 +82,8 @@ Walkable {
             objectName: "pageRowWords." + root.index
             unit: root.unit
             visible: root.value.length > 0
+            width: Math.min(implicitWidth, Math.max(0, root.width - 2 * root.padX - nameLine.width - 20 * root.unit - (root.lit && root.steps ? 60 * root.unit : 0) - (root.lit && root.editable ? 32 * root.unit : 0) - (root.opens ? 30 * root.unit : 0)))
+            elide: Text.ElideRight
             boardLine: true
             y: (shown.height - height) / 2
             text: root.value
@@ -99,6 +103,13 @@ Walkable {
                 anchors.fill: parent
                 onClicked: root.stepped(1)
             }
+        }
+        Pen {
+            objectName: "pageRowPen." + root.index
+            unit: root.unit
+            visible: root.lit && root.editable
+            ink: Tokens.accent
+            y: (shown.height - height) / 2
         }
         Chevron {
             objectName: "pageRowDoor." + root.index

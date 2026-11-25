@@ -71,6 +71,15 @@ pub mod qobject {
         PagePackageInfo,
         /// 1.19: Eclipse's Settings Hotkeys bar (board #55: A Change, X Clear, B Back, START Home).
         SettingsHotkeys,
+        /// 1.20: Eclipse's boards for Edit Details, Scrape This Game, Media Viewer and This game's crop.
+        PageEditText,
+        PageScrape,
+        PageViewerBoard,
+        PageViewerBoardCover,
+        PageViewerBoardDelete,
+        PageViewerManualBoard,
+        PageCropToggle,
+        PageCropEdge,
     }
 
     extern "RustQt" {
@@ -118,7 +127,7 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 38] = [
+pub const KINDS: [HelpKind; 46] = [
     HelpKind::Continue,
     HelpKind::Game,
     HelpKind::Console,
@@ -157,6 +166,14 @@ pub const KINDS: [HelpKind; 38] = [
     HelpKind::PagePackageStop,
     HelpKind::PagePackageInfo,
     HelpKind::SettingsHotkeys,
+    HelpKind::PageEditText,
+    HelpKind::PageScrape,
+    HelpKind::PageViewerBoard,
+    HelpKind::PageViewerBoardCover,
+    HelpKind::PageViewerBoardDelete,
+    HelpKind::PageViewerManualBoard,
+    HelpKind::PageCropToggle,
+    HelpKind::PageCropEdge,
 ];
 
 /// The help bar a kind shows (EmuSen_Qt.md §3.2, `Help`).
@@ -199,6 +216,14 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::PagePackageMake => Screen::GamePagePackageMake,
         HelpKind::PagePackageStop => Screen::GamePagePackageStop,
         HelpKind::PagePackageInfo => Screen::GamePagePackageInfo,
+        HelpKind::PageEditText => Screen::GamePageEditText,
+        HelpKind::PageScrape => Screen::GamePageScrape,
+        HelpKind::PageViewerBoard => Screen::GamePageViewerBoard,
+        HelpKind::PageViewerBoardCover => Screen::GamePageViewerBoardCover,
+        HelpKind::PageViewerBoardDelete => Screen::GamePageViewerBoardDelete,
+        HelpKind::PageViewerManualBoard => Screen::GamePageViewerManualBoard,
+        HelpKind::PageCropToggle => Screen::GamePageCropToggle,
+        HelpKind::PageCropEdge => Screen::GamePageCropEdge,
         _ => Screen::Home,
     }
 }

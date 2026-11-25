@@ -57,7 +57,8 @@ impl ClientSource {
     /// A run started on `request` (emusen_scrape_service.h `start`): the scraper opened again with its store, the player's
     /// ScreenScraper developer file read, and `test` as its test seam where one is given; how many games it queued
     /// (EmuSen_Backend.md §30.3).
-    pub fn scrape_start(&self, request: &Value, test: Option<&Value>) -> Result<i64, String> {
+    /// Opens the scraper store with developer credentials and optional test seam, keeping picks across search and start.
+    pub fn scrape_open_store(&self, test: Option<&Value>) -> Result<(), String> {
         let scraper = self.scraper.as_ref().ok_or(NO_SCRAPER)?;
         let mut config = scraper.config.clone();
         config.settings["sources_alone"] = json!(false);
@@ -65,12 +66,38 @@ impl ClientSource {
         if let Some(test) = test {
             config.settings["test"] = test.clone();
         }
-        self.reopen(scraper, &config)?;
+        self.reopen(scraper, &config)
+    }
+
+    /// Starts a run on the already-open scraper store so prior `search` picks stay intact.
+    pub fn scrape_start_open(&self, request: &Value) -> Result<i64, String> {
+        let scraper = self.scraper.as_ref().ok_or(NO_SCRAPER)?;
         match scraper.service.start(request) {
             Ok(0) => Err("the scraper queued nothing".into()),
             Ok(n) => Ok(n),
             Err(why) => Err(why.to_string()),
         }
+    }
+
+    /// Searches ScreenScraper by name on an open store, returning the raw `search` response JSON.
+    pub fn scrape_search(&self, path: &str, esde_system: &str, text: &str, enabled: bool, test: Option<&Value>) -> Result<Value, String> {
+        self.scrape_open_store(test)?;
+        let scraper = self.scraper.as_ref().ok_or(NO_SCRAPER)?;
+        scraper.service.change(&json!({ "op": "search", "path": path, "system": esde_system, "text": text, "enabled": enabled })).map_err(words)
+    }
+
+    /// Forgets one game's scraped record and store media files, restoring sources-alone mode afterwards.
+    pub fn scrape_forget(&self, path: &str, esde_system: &str) -> Result<(), String> {
+        self.scrape_open_store(None)?;
+        let scraper = self.scraper.as_ref().ok_or(NO_SCRAPER)?;
+        let res = scraper.service.change(&json!({ "op": "forget", "path": path, "system": esde_system })).map(drop).map_err(words);
+        let end = self.scrape_end();
+        res.and(end)
+    }
+
+    pub fn scrape_start(&self, request: &Value, test: Option<&Value>) -> Result<i64, String> {
+        self.scrape_open_store(test)?;
+        self.scrape_start_open(request)
     }
 
     /// The scraper opened again on `config`, closing the one this source opened.

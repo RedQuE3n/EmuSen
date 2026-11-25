@@ -3,6 +3,17 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.20, an addition: Eclipse's game page Edit Details, Cover Art, Scrape This Game, Media Viewer and This game's crop (2026-11-25)
+
+Decided 2026-11-24 by the tester (R-20261114-10, -11, R-20261116-32 to -35, R-20261123-32): Eclipse draws all five remaining game page inner pages as their boards draw them.
+
+- **`PdfPage`** (the kit's, by name; 1.20 in the qmldir): PDF manual page rendering for Media Viewer (video clips play on the trusted host stage behind the theme slot so `QtMultimedia` stays out of the theme sandbox).
+- **`Page.PageSubpage`** extended with `Edit`, `Cover`, `Scrape`, `Viewer`, `Crop` (flags `1 << Page.Edit`, etc.).
+- **`Actions.pageViewKey(key, modifiers)`** and **`Actions.pageViewPages(pages)`**: media viewer navigation/zoom/pan keys and PDF manual page count reporting.
+- **`Page`** read-only properties **`viewKind`**, **`viewSource`**, **`viewManual`**, **`viewCaption`**, **`viewPage`**, **`viewZoom`**, **`viewPanX`**, **`viewPanY`**, **`cropPicture`**, **`cropLeft`**, **`cropRight`**, **`cropTop`**, **`cropBottom`**, **`cropEdge`**; **`Page.boardRows`** additive roles **`editable`** and **`separated`**.
+- **`Help.PageEditText`**, **`Help.PageScrape`**, **`Help.PageViewerBoard`**, **`Help.PageViewerBoardCover`**, **`Help.PageViewerBoardDelete`**, **`Help.PageViewerManualBoard`**, **`Help.PageCropToggle`** and **`Help.PageCropEdge`**: the boards' help lines for Edit Details, Scrape This Game, Media Viewer and This game's crop.
+- The module is 1.20 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.20.*`.
+
 ## 1.19, an addition: Settings Controllers inner pages and Output boards (2026-11-25)
 
 - **`Settings.boardLines`** and **`Settings.boxMenu`**: Eclipse secondary aside lines (20px light) for Players seat summaries and Hotkeys key/trigger ordering without altering reference-theme fields, plus rounded-box Start glyph flag for Players, Profiles, One profile, Hotkeys, Output and Memory cards pages (boards #52–#56; R-20261116-20, -22, R-20261123-32).

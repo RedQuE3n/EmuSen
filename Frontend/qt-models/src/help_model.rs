@@ -296,6 +296,12 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageCheatOn | Screen::GamePageCheatOff => HelpScreen::GamePageChange,
         Screen::GamePagePackageCheck | Screen::GamePagePackageMake | Screen::GamePagePackageStop => HelpScreen::GamePageChoose,
         Screen::GamePagePackageInfo => HelpScreen::GamePageNone,
+        Screen::GamePageEditText => HelpScreen::GamePageEdit,
+        Screen::GamePageScrape => HelpScreen::GamePageChoose,
+        Screen::GamePageViewerBoard | Screen::GamePageViewerBoardDelete => HelpScreen::GamePageViewer,
+        Screen::GamePageViewerBoardCover => HelpScreen::GamePageViewerCover,
+        Screen::GamePageViewerManualBoard => HelpScreen::GamePageManual,
+        Screen::GamePageCropToggle | Screen::GamePageCropEdge => HelpScreen::GamePageValue,
     };
     shown.repr
 }

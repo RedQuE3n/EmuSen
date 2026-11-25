@@ -158,6 +158,8 @@ pub const EDGES: [Edge; 4] = [
 
 /// One step of an edge, in percentage points: a count row's step.
 pub const EDGE_STEP: f64 = 1.0;
+/// Half-point step for Eclipse's per-game crop edges (R-20261116-33).
+pub const HALF_EDGE_STEP: f64 = 0.5;
 
 impl Edge {
     pub fn of(self, crop: &mut Crop) -> &mut f64 {
@@ -174,11 +176,16 @@ impl Edge {
     }
 }
 
+/// An edge's percentage a step on, landing on multiples of `step` and held between none and `most`, a share.
+pub fn edge_stepped_by(most: f64, percent: f64, by: i32, step: f64) -> f64 {
+    let at = (percent / step * 1e6).round() / 1e6;
+    let next = if by > 0 { at.floor() + f64::from(by) } else { at.ceil() + f64::from(by) };
+    ((next * step * 10.0).round() / 10.0).clamp(0.0, most * 100.0)
+}
+
 /// An edge's percentage a step on, landing on the step's whole multiples and held between none and `most`, a share.
 pub fn edge_stepped(most: f64, percent: f64, by: i32) -> f64 {
-    let at = percent / EDGE_STEP;
-    let next = if by > 0 { at.floor() + f64::from(by) } else { at.ceil() + f64::from(by) };
-    (next * EDGE_STEP).clamp(0.0, most * 100.0)
+    edge_stepped_by(most, percent, by, EDGE_STEP)
 }
 
 /// A stored edge's percentage, written with a point or a comma; none stored is none hidden.

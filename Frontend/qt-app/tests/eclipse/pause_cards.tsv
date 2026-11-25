@@ -1,0 +1,38 @@
+# Eclipse Pause Card, Game Options, Memory Cards (#42) against EclipsePauseCards.dc.html (1920 by 1200, Chrome JSON pause_cards.json).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+AdaptiveCardScrim	27	dimming scrim rgba(4,5,10,0.58)	PauseCard.scrimColor	Rectangle	0	0	right:0	1200	-	#9404050A	-	built	-
+cardDisc	30	left eclipse disc	Kit.CoronaDisc	CoronaDisc	-2400	-960	3120	3120	-	Tokens.surface	-	built	-
+coronaRim	30	2 px corona rim	Tokens.coronaColor	Rectangle	in:cardDisc:-2	top:cardDisc:-2	3124	3124	-	Tokens.coronaColor	-	built	-
+coronaGlow.0	30	inner corona glow	44 px blur, 8 px spread, 0.6	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 44 8 0.6
+coronaGlow.1	30	outer corona halo	170 px blur, 46 px spread, 0.28	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 170 46 0.28
+cardSection	32	card section 560x1026	Item	Item	72	64	560	1026	-	-	-	built	-
+cardBreadcrumb	34	"TOWER SET · GAME OPTIONS" eyebrow	PauseModel.breadcrumb	CardLine	72	64	560	22	-	#FFF3C9D2	18	built	600 0.22 upper
+cardTitle	35	"Memory Cards" 1 line	PauseModel.title	CardLine	72	below:cardBreadcrumb:8	560	53	-	Tokens.textStrong	50	built	600 -0.01 none
+cardRow.0	41	row 0 Slot 1 Card 1 focused	MenuRowEclipse	MenuRowEclipse	72	below:cardTitle:26	560	72	-	-	-	built	-
+rowGlow.0	41	Slot 1 glow	Kit.Glow	Glow	72	top:cardRow.0:0	560	72	36	#66F0B4C4	-	built	glow 46 6 0 0
+rowRing.0	41	Slot 1 6 px ring	rgba(246,231,216,0.18)	Rectangle	66	top:cardRow.0:-6	572	84	42	#2EF6E7D8	-	built	-
+rowBg.0	41	Slot 1 cream pill	Tokens.accent	Rectangle	72	top:cardRow.0:0	560	72	36	Tokens.accent	-	built	-
+rowGlyph.0	42	A badge 46 px	CardGlyph	CardGlyph	86	mid:cardRow.0	46	46	-	-	-	built	glyph 21 600
+rowStepPrev.0	44	Slot 1 left chevron	CardChevron	CardChevron	-	mid:cardRow.0	20	20	-	Tokens.overAccent	-	built	-
+rowStepNext.0	44	Slot 1 right chevron	CardChevron	CardChevron	590	mid:cardRow.0	20	20	-	Tokens.overAccent	-	built	-
+cardRow.1	41	row 1 Slot 2 Card 2 with divider	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.0:6	560	93	-	-	-	built	-
+rowDivider.1	41	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.1:82	516	1	-	#FF262A3A	-	built	-
+cardRow.2	41	row 2 Mode Named	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.1:6	560	66	-	-	-	built	-
+cardRow.3	41	row 3 Cards 3 cards	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.2:6	560	66	-	-	-	built	-
+rowChevron.3	45	Cards chevron	CardChevron	CardChevron	588	mid:cardRow.3	22	22	-	Tokens.textStrong	-	built	-
+AdaptiveCardPane	51	floating memory cards detail card	Rectangle	Rectangle	800	210	760	183.9	28	#F207080F	-	built	line 1 #FF262A3A
+PaneSentence	51	"Card 1 is in Slot 1."	PaneModel.sentence	CardLine	836	top:AdaptiveCardPane:36	688	34.8	-	Tokens.textStrong	24	built	400 0 none
+PaneMuted	51	"Left and Right choose another card; it goes in when the game next starts."	PaneModel.muted	CardLine	836	below:PaneSentence:22	688	55.1	-	Tokens.muted	19	built	400 0 none
+cardStatus	53	top-right status pill	Rectangle	Rectangle	-	48	right:200	56	28	#D107080F	-	built	-
+cardBattery	54	"82%"	Words.percent	CardLine	in:cardStatus:22	mid:cardStatus	-	27	-	Tokens.textStrong	22	built	400 0 none
+cardClock	54	"9:41 PM"	Clock.shortTime	CardLine	after:cardBattery:22	mid:cardStatus	inright:cardStatus:22	27	-	Tokens.textStrong	22	built	600 0 none
+cardFooterBar	57	bottom footer bar 76 px	Rectangle	Rectangle	0	1124	right:0	76	-	Tokens.surface	-	built	-
+cardFooterRule	57	top 2 px hairline	Tokens.rule	Rectangle	0	1124	right:0	2	-	Tokens.rule	-	built	-
+cardHelp	58	help bar Value Choose Back Screenshot Resume	HelpModel.PausePageValue	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Value	59	◀ ▶ boxed 34 px	CardGlyph	-	in:cardHelp:0	mid:cardHelp	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph-Choose	60	A filled 34 px	CardGlyph	-	-	mid:cardHelp	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Back	61	B ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Screenshot	62	X ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Resume	63	Menu boxed 34 px	CardGlyph	-	-	mid:cardHelp	-	34	-	-	-	built	word 15 400 8 10
+cardPosition	65	"1 of 4"	PauseModel.positionLine	CardLine	-	mid:cardFooterBar	right:72	26	-	Tokens.muted	21	built	400 0 none

@@ -22,6 +22,8 @@ pub enum Screen {
     Pause,
     /// A page of the Pause Card past the first.
     PausePage,
+    /// An Eclipse Pause Card subpage with a stepped row focused (◀ ▶ Value).
+    PausePageValue,
     /// A card over the library: the Home card and the List card (Mistress's `ShowCard` away from a game).
     Card,
     /// Start Console's page of a card: A starts the console (Mistress's `AcceptWord`, "Start" on that page).
@@ -179,6 +181,13 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
         Screen::PausePage => &[
+            (UiButton::Accept, "Choose", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
+            (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
+        ],
+        Screen::PausePageValue => &[
+            (UiButton::Left, "Value", None),
             (UiButton::Accept, "Choose", None),
             (UiButton::Back, "Back", None),
             (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),

@@ -1,4 +1,4 @@
-//! Program-drawn Eclipse Pause Card held to boards #6 and #35-#38 on the graphics card (R-20261113-5). A GPU job.
+//! Program-drawn Eclipse Pause Card held to boards #6 and #35-#43 on the graphics card (R-20261113-5). A GPU job.
 
 mod common;
 mod eclipse_board;
@@ -7,7 +7,7 @@ mod eclipse_pause_oracle;
 use emusen_qt_test::compositor::Compositor;
 
 #[test]
-fn eclipse_pause_holds_boards_6_and_35_to_38_on_the_card() {
+fn eclipse_pause_holds_boards_6_and_35_to_43_on_the_card() {
     let kwin = Compositor::start(1280, 800);
     kwin.watch(300);
     std::env::set_var("QT_QUICK_BACKEND", "rhi");

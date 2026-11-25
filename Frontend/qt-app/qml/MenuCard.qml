@@ -11,6 +11,7 @@ FocusScope {
     property string title
     property string breadcrumb
     property string subtitle
+    property string badge
     property string footer
     property string cover
     property int current: 0
@@ -143,6 +144,7 @@ FocusScope {
                 title: root.title
                 breadcrumb: root.breadcrumb
                 subtitle: root.subtitle
+                badge: root.badge
                 footer: root.footer
                 current: root.current
                 paneLines: root.paneLines

@@ -129,6 +129,7 @@ impl SettingsView {
                         dimmed: row.held || row.kind == RowKind::Action,
                         sentence,
                         muted: pane.muted.join(" "),
+                        ..GameRow::default()
                     })
                 })
                 .collect();

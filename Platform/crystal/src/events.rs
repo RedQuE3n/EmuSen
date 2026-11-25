@@ -66,14 +66,33 @@ impl Subscription {
         text.len()
     }
 
-    /// True when events are waiting, false when the timeout passed first.
+    /// Marks the subscription ended and wakes any waiter.
+    pub(crate) fn close(&self) {
+        let _q = self.queue.lock().unwrap_or_else(|p| p.into_inner());
+        self.live.store(false, std::sync::atomic::Ordering::Release);
+        self.ready.notify_all();
+    }
+
+    /// True when events are waiting, false when the timeout passed first or the subscription ended.
     pub fn wait(&self, timeout_ms: u32) -> bool {
-        let q = self.queue.lock().unwrap_or_else(|p| p.into_inner());
-        if !q.events.is_empty() || q.dropped > 0 {
-            return true;
+        let mut q = self.queue.lock().unwrap_or_else(|p| p.into_inner());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms.min(i32::MAX as u32) as u64);
+        loop {
+            if !q.events.is_empty() || q.dropped > 0 {
+                return true;
+            }
+            if !self.live.load(std::sync::atomic::Ordering::Acquire) {
+                return false;
+            }
+            let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else {
+                return false;
+            };
+            let (next, timed_out) = self.ready.wait_timeout(q, remaining).unwrap_or_else(|p| p.into_inner());
+            q = next;
+            if timed_out.timed_out() {
+                return !q.events.is_empty() || q.dropped > 0;
+            }
         }
-        let (q, _) = self.ready.wait_timeout(q, std::time::Duration::from_millis(timeout_ms.min(i32::MAX as u32) as u64)).unwrap_or_else(|p| p.into_inner());
-        !q.events.is_empty() || q.dropped > 0
     }
 }
 
@@ -90,7 +109,7 @@ impl Events {
     }
 
     pub fn remove(&self, s: &Arc<Subscription>) {
-        s.live.store(false, std::sync::atomic::Ordering::Release);
+        s.close();
         self.subscriptions.lock().unwrap_or_else(|p| p.into_inner()).retain(|x| !Arc::ptr_eq(x, s));
     }
 
@@ -132,7 +151,7 @@ impl Events {
     /// Every subscription ended, as the runtime is freed.
     pub fn clear(&self) {
         for s in self.subscriptions.lock().unwrap_or_else(|p| p.into_inner()).drain(..) {
-            s.live.store(false, std::sync::atomic::Ordering::Release);
+            s.close();
         }
     }
 }

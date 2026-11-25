@@ -354,6 +354,14 @@ impl From<String> for NotOpened {
     }
 }
 
+fn rewrite(manifest: &Path, doc: &Value) -> Result<(), String> {
+    match package::write(manifest, doc) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(words)) => Err(words),
+        Err(refusal) => Err(format!("{}: {}", manifest.display(), refusal.words())),
+    }
+}
+
 fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resolution, NotOpened> {
     let manifest = manifest_of(folder);
     let shown = manifest.display();
@@ -383,7 +391,7 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
         if let Some(g) = member_mut(&mut doc, "game") {
             set(g, "seen", seen_value(size, &mtime));
         }
-        let _ = package::write(&manifest, &doc);
+        rewrite(&manifest, &doc)?;
         return Ok(resolution(game, false));
     }
     let where_ = doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str).unwrap_or("");
@@ -391,7 +399,7 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
         && let Some(found) = find_in_library(roots, size, &recorded)
     {
         moved(roots, &mut doc, &found);
-        let _ = package::write(&manifest, &doc);
+        rewrite(&manifest, &doc)?;
         return Ok(resolution(found, true));
     }
     match opened {
@@ -484,7 +492,7 @@ pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
         }
         if taken.as_ref().is_some_and(|t| same_dump(&recorded, t)) {
             moved(roots, &mut doc, &full);
-            let _ = package::write(&manifest, &doc);
+            rewrite(&manifest, &doc)?;
             return Ok(Resolution { game: full, package: Some(p.folder.clone()), moved: true });
         }
     }
@@ -639,5 +647,27 @@ mod tests {
         assert_eq!(index(&roots).packages[0].claims, vec![chd.clone(), original.clone()], "recorded afresh, verified again");
         std::fs::File::options().write(true).open(&original).unwrap().set_modified(later).unwrap();
         assert_eq!(index(&roots).packages[0].claims, vec![chd.clone()], "an original changed since claims nothing");
+    }
+
+    #[test]
+    fn failed_manifest_rewrites_return_errors_instead_of_claiming_moved() {
+        let t = TempDir::new("claims-unwritable");
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
+        let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
+        let bytes = b"sixteen bytes!!!";
+        let game = t.text("Roms/SNES/Game.sfc");
+        put(&game, bytes);
+        let folder = linked(&t, "SNES/Game.sfc", "SNES/Game.sfc", bytes, &game);
+        std::fs::create_dir_all(format!("{folder}/package.json.tmp")).unwrap();
+
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(7200);
+        std::fs::File::options().write(true).open(&game).unwrap().set_modified(later).unwrap();
+        assert!(resolve(&roots, &game).is_err(), "seen rewrite failure must propagate");
+
+        let moved = t.text("Roms/SNES/Moved/Game.sfc");
+        std::fs::create_dir_all(t.text("Roms/SNES/Moved")).unwrap();
+        std::fs::rename(&game, &moved).unwrap();
+        assert!(resolve(&roots, &folder).is_err(), "opening moved package must fail when manifest cannot be written");
+        assert!(resolve(&roots, &moved).is_err(), "resolving moved file must fail when manifest cannot be written");
     }
 }

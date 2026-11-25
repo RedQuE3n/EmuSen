@@ -164,6 +164,13 @@ impl Lend {
         &self.inner.device
     }
 
+    /// `vkGetInstanceProcAddr` typed as the core ABI's opaque function pointer.
+    pub fn proc_addr(&self) -> unsafe extern "C" fn() {
+        let f = self.inner.device.entry().static_fn().get_instance_proc_addr;
+        // SAFETY: the core ABI carries vkGetInstanceProcAddr as a void (*)(void) function pointer.
+        unsafe { std::mem::transmute::<ash::vk::PFN_vkGetInstanceProcAddr, unsafe extern "C" fn()>(f) }
+    }
+
     /// What the core is given at create.
     pub fn lent(&self) -> Lent {
         let device = &self.inner.device;

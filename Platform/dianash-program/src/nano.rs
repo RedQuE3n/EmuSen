@@ -30,10 +30,13 @@ fn main() -> ExitCode {
     if !terminal::is_terminal() || !terminal::output_is_terminal() {
         return refuse("nano: needs a real interactive terminal (stdin/stdout is redirected, or this console has none)");
     }
+    let mut editor = match Editor::open(&path, &args[1]) {
+        Ok(editor) => editor,
+        Err(words) => return refuse(&format!("nano: {words}")),
+    };
     let Some(raw) = terminal::Raw::enter() else {
         return refuse("nano: needs a real interactive terminal (stdin/stdout is redirected, or this console has none)");
     };
-    let mut editor = Editor::open(&path, &args[1]);
     let saved = editor.run();
     drop(raw);
     print!("\x1b[2J\x1b[H");
@@ -134,6 +137,7 @@ struct Editor {
     col: usize,
     top: usize,
     modified: bool,
+    status: Option<String>,
 }
 
 /// The window's size, with the C# editor's floor and its fallback where the terminal does not say.
@@ -148,16 +152,16 @@ fn pad_or_truncate(text: &str, width: usize) -> String {
 }
 
 impl Editor {
-    fn open(path: &str, shown: &str) -> Editor {
-        let mut lines: Vec<Vec<char>> = if std::path::Path::new(path).is_file() {
-            std::fs::read_to_string(&path).map(|t| t.lines().map(str::to_string).collect::<Vec<_>>()).map_err(|e| format!("{}: {e}", path)).unwrap_or_default().into_iter().map(|l| l.chars().collect()).collect()
-        } else {
-            Vec::new()
+    fn open(path: &str, shown: &str) -> Result<Editor, String> {
+        let mut lines: Vec<Vec<char>> = match std::fs::read_to_string(path) {
+            Ok(text) => text.lines().map(|l| l.chars().collect()).collect(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => return Err(format!("{shown}: {e}")),
         };
         if lines.is_empty() {
             lines.push(Vec::new());
         }
-        Editor { path: path.to_string(), shown: shown.to_string(), lines, row: 0, col: 0, top: 0, modified: false }
+        Ok(Editor { path: path.to_string(), shown: shown.to_string(), lines, row: 0, col: 0, top: 0, modified: false, status: None })
     }
 
     /// Edits until ^X; whether anything was saved.
@@ -175,7 +179,10 @@ impl Editor {
                                 continue;
                             }
                             Some(true) => {
-                                self.save();
+                                if self.save().is_err() {
+                                    self.draw();
+                                    continue;
+                                }
                                 saved = true;
                             }
                             Some(false) => {}
@@ -184,10 +191,14 @@ impl Editor {
                     break;
                 }
                 Key::Save => {
-                    self.save();
-                    saved = true;
+                    if self.save().is_ok() {
+                        saved = true;
+                    }
                 }
-                other => self.edit(other),
+                other => {
+                    self.status = None;
+                    self.edit(other);
+                }
             }
             self.draw();
         }
@@ -195,10 +206,19 @@ impl Editor {
     }
 
     /// Each line ended by `\n`, as the shell's files are on every system (§12.1).
-    fn save(&mut self) {
+    fn save(&mut self) -> Result<(), String> {
         let text: String = self.lines.iter().map(|l| l.iter().collect::<String>() + "\n").collect();
-        if std::fs::write(&self.path, text).is_ok() {
-            self.modified = false;
+        match std::fs::write(&self.path, text) {
+            Ok(()) => {
+                self.modified = false;
+                self.status = Some(format!("Saved {} line(s) to {}", self.lines.len(), self.shown));
+                Ok(())
+            }
+            Err(e) => {
+                let words = format!("Save failed: {}: {e}", self.shown);
+                self.status = Some(words.clone());
+                Err(words)
+            }
         }
     }
 
@@ -308,9 +328,79 @@ impl Editor {
             let line: String = self.lines.get(self.top + i).map(|l| l.iter().collect()).unwrap_or_default();
             screen += &format!("\x1b[{};1H{}", i + 2, pad_or_truncate(&line, width));
         }
-        screen += &format!("\x1b[{height};1H{}", pad_or_truncate("^O Save    ^X Exit    Arrows/PgUp/PgDn move    Enter/Backspace/Delete edit", width));
+        let footer = self.status.as_deref().unwrap_or("^O Save    ^X Exit    Arrows/PgUp/PgDn move    Enter/Backspace/Delete edit");
+        screen += &format!("\x1b[{height};1H{}", pad_or_truncate(footer, width));
         screen += &format!("\x1b[{};{}H", self.row - self.top + 2, self.col.min(width - 1) + 1);
         print!("{screen}");
         let _ = std::io::stdout().flush();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn scratch(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("emusen-nano-{label}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn open_allows_missing_file_but_rejects_directories_and_invalid_utf8() {
+        let dir = scratch("open");
+        let missing = dir.join("new.txt");
+        let editor = Editor::open(missing.to_str().unwrap(), "new.txt").unwrap();
+        assert_eq!(editor.lines, vec![Vec::<char>::new()]);
+
+        assert!(Editor::open(dir.to_str().unwrap(), "dir").is_err());
+
+        let bad_utf8 = dir.join("binary.bin");
+        std::fs::write(&bad_utf8, [0xFF, 0xFE, 0x00]).unwrap();
+        let err = Editor::open(bad_utf8.to_str().unwrap(), "binary.bin").err().unwrap();
+        assert!(err.contains("binary.bin"), "{err}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_rejects_unreadable_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("unreadable");
+        let file = dir.join("secret.txt");
+        std::fs::write(&file, "hello\n").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let readable_as_root = std::fs::read_to_string(&file).is_ok();
+        if !readable_as_root {
+            assert!(Editor::open(file.to_str().unwrap(), "secret.txt").is_err());
+        }
+        let _ = std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_surfaces_write_errors_and_preserves_modified_flag() {
+        let dir = scratch("save");
+        let ok_path = dir.join("ok.txt");
+        let mut ok_editor = Editor::open(ok_path.to_str().unwrap(), "ok.txt").unwrap();
+        ok_editor.lines[0] = "hello".chars().collect();
+        ok_editor.modified = true;
+        assert!(ok_editor.save().is_ok());
+        assert!(!ok_editor.modified);
+        assert_eq!(std::fs::read_to_string(&ok_path).unwrap(), "hello\n");
+
+        let blocked = dir.join("missing-parent").join("out.txt");
+        let mut fail_editor = Editor::open(blocked.to_str().unwrap(), "out.txt").unwrap();
+        fail_editor.lines[0] = "unsaved".chars().collect();
+        fail_editor.modified = true;
+        let err = fail_editor.save().unwrap_err();
+        assert!(err.contains("Save failed") && err.contains("out.txt"), "{err}");
+        assert!(fail_editor.modified, "failed save must keep modified flag set");
+        assert_eq!(fail_editor.status.as_deref(), Some(err.as_str()));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,0 +1,69 @@
+# Eclipse Controller Bindings (#12) against EclipseControllers.dc.html (1920 by 1200).
+# board_height: 1200
+# Measured in Chrome after document.fonts.ready with Sora (Eclipse-Handoff/tmp/pad-boards/controllers.json); deferred Test (#76) omitted per R-20261114-19.
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+backdropGround	17	the ground, #07080F	ControllersEclipse's Kit.Backdrop ground	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
+backdropField.0	19	the top glow: 800 by 640 ellipse of #5B3FD6, blur 170 at 0.28	ControllersEclipse's Kit.BackdropField	-	-	180	800	640	-	opacity:0.28	blur:170	built	field 0 -1 #5B3FD6 0
+mark	23	the crescent mark, 34 px	ControllersEclipse's crescent Shape	Shape	96	mid:66	34	34	-	#FFF6E7D8	-	built	-
+crumbSettings	25	"Settings", 28 px after mark	ControllersEclipse's breadcrumb link	CardLine	after:mark:28	mid:66	-	-	-	#FFB9BED0	24	built	400 0 none
+crumbSlash	26	"/", 14 px after Settings	ControllersEclipse's breadcrumb slash	CardLine	after:crumbSettings:14	mid:66	-	-	-	#FF8E94AB	24	built	400 0 none
+crumbControllers	27	"Controllers", 14 px after /	ControllersEclipse's breadcrumb current	CardLine	after:crumbSlash:14	mid:66	-	-	-	#FFF4F1EC	24	built	600 0 none
+battery	30	"82%"	Device.battery as Words.percent	CardLine	before:clock:22	mid:66	-	-	-	#FFF4F1EC	22	built	400 0 none
+clock	30	"9:41 PM"	Device.shortTime	CardLine	-	mid:66	right:96	-	-	#FFF4F1EC	22	built	600 0 none
+navTab.0	34	tab 0 container, Players	ControllersEclipse nav2 tab	Item	96	116	-	42	-	-	-	built	-
+navTabWords.0	34	"Players", 23 px muted	ControllersEclipse nav2 label	CardLine	in:navTab.0:0	top:navTab.0:0	-	-	-	#FFB9BED0	23	built	400 0 none
+navTabLine.0	34	transparent underline bar	ControllersEclipse nav2 underline	Rectangle	in:navTab.0:0	foot:navTab.0	-	3	-	#00000000	-	built	-
+navTab.1	35	tab 1 container, Buttons active	ControllersEclipse nav2 tab	Item	after:navTab.0:36	116	-	42	-	-	-	built	-
+navTabWords.1	35	"Buttons", 23 px white semibold	ControllersEclipse nav2 label	CardLine	in:navTab.1:0	top:navTab.1:0	-	-	-	#FFFFFFFF	23	built	600 0 none
+navTabLine.1	35	active #F6E7D8 3 px underline	ControllersEclipse nav2 underline	Rectangle	in:navTab.1:0	foot:navTab.1	-	3	-	#FFF6E7D8	-	built	-
+navTab.2	36	tab 2 container, Keyboard keys	ControllersEclipse nav2 tab	Item	after:navTab.1:36	116	-	42	-	-	-	built	-
+navTabWords.2	36	"Keyboard keys", 23 px muted	ControllersEclipse nav2 label	CardLine	in:navTab.2:0	top:navTab.2:0	-	-	-	#FFB9BED0	23	built	400 0 none
+navTabLine.2	36	transparent underline bar	ControllersEclipse nav2 underline	Rectangle	in:navTab.2:0	foot:navTab.2	-	3	-	#00000000	-	built	-
+navTab.3	37	tab 3 container, Hotkeys	ControllersEclipse nav2 tab	Item	after:navTab.2:36	116	-	42	-	-	-	built	-
+navTabWords.3	37	"Hotkeys", 23 px muted	ControllersEclipse nav2 label	CardLine	in:navTab.3:0	top:navTab.3:0	-	-	-	#FFB9BED0	23	built	400 0 none
+navTabLine.3	37	transparent underline bar	ControllersEclipse nav2 underline	Rectangle	in:navTab.3:0	foot:navTab.3	-	3	-	#00000000	-	built	-
+navTab.4	38	tab 4 container, Profiles	ControllersEclipse nav2 tab	Item	after:navTab.3:36	116	-	42	-	-	-	built	-
+navTabWords.4	38	"Profiles", 23 px muted	ControllersEclipse nav2 label	CardLine	in:navTab.4:0	top:navTab.4:0	-	-	-	#FFB9BED0	23	built	400 0 none
+navTabLine.4	38	transparent underline bar	ControllersEclipse nav2 underline	Rectangle	in:navTab.4:0	foot:navTab.4	-	3	-	#00000000	-	built	-
+navTab.5	39	deferred Test tab omitted (#76)	-	-	-	-	-	-	-	-	-	deferred	-
+playerPill.0	44	Player 1 active pill	ControllersEclipse player pill	Rectangle	96	186	fit:playerWords.0:20	48	24	#FFF6E7D8	-	built	line 0 -
+playerWords.0	44	Player 1 label	ControllersEclipse player words	CardLine	in:playerPill.0:20	mid:playerPill.0	-	-	-	#FF07080F	20	built	600 0 none
+playerPill.1	45	Player 2 inactive pill	ControllersEclipse player pill	Rectangle	after:playerPill.0:12	186	fit:playerWords.1:20	48	24	#00000000	-	built	line 2 #FF4A5068
+playerWords.1	45	Player 2 label	ControllersEclipse player words	CardLine	in:playerPill.1:20	mid:playerPill.1	-	-	-	#FFF4F1EC	20	built	400 0 none
+forWords	47	"For"	ControllersEclipse strip text	CardLine	before:consolePill:12	mid:consolePill	-	-	-	#FFD8DBE6	20	built	400 0 none
+consolePill	47	Console selector pill	ControllersEclipse console pill	Rectangle	before:profilePre:12	186	fit:consoleChevron:20	48	24	#00000000	-	built	line 2 #FFF6E7D8
+consolePillWords	47	Active console name	ControllersEclipse console words	CardLine	in:consolePill:20	mid:consolePill	-	-	-	#FFF4F1EC	20	built	400 0 none
+consoleChevron	47	Downward 18 px chevron	ControllersEclipse chevron Shape	Shape	after:consolePillWords:10	mid:consolePill	18	18	-	-	-	built	-
+profilePre	47	"in the profile"	ControllersEclipse strip text	CardLine	before:profileName:12	mid:consolePill	-	-	-	#FFD8DBE6	20	built	400 0 none
+profileName	47	Profile name	ControllersEclipse profile words	CardLine	-	mid:consolePill	right:96	-	-	#FFF4F1EC	20	built	600 0 none
+padDiagram	50	Center SVG & leader area, 440..right:440, 270..790	ControllersEclipse diagram box	Item	440	270	right:440	520	-	-	-	built	-
+detailCard	83	Bottom focused detail card, #151826, r=22	ControllersEclipse detail card	Rectangle	-	840	1040	100	22	#FF151826	-	built	-
+detailRim	83	2 px outer rim rgba(246,231,216,0.55), r=24	ControllersEclipse detail rim	Rectangle	in:detailCard:-2	top:detailCard:-2	1044	104	24	#00000000	-	built	line 2 #8CF6E7D8
+detailGlow	83	0 0 40px 6px rgba(240,180,196,0.22) glow	ControllersEclipse detail glow	Glow	in:detailCard:0	top:detailCard:0	1040	100	22	#38F0B4C4	-	built	glow 40 6 0 0
+detailHeading	85	Primary binding sentence, 24 px semibold	ControllersEclipse detail head	CardLine	in:detailCard:28	top:detailCard:22	-	-	-	#FFF4F1EC	24	built	600 0 none
+detailSubline	86	Truthful binding instruction, 18 px	ControllersEclipse detail sub	CardLine	in:detailCard:28	below:detailHeading:4	-	-	-	#FFC9CDDB	18	built	400 0 none
+detailCounter	88	Control counter "i of N", 18 px right	ControllersEclipse detail count	CardLine	-	mid:detailCard	inright:detailCard:28	-	-	#FFB9BED0	18	built	400 0 none
+wholeCard.0	93	Whole-pad card 0: Swap A and B	ControllersEclipse whole card	Rectangle	96	980	-	84	16	#FF0F111A	-	built	line 1 #FF22263A
+wholeCardName.0	94	"Swap A and B", 19 px	ControllersEclipse whole name	CardLine	in:wholeCard.0:20	mid:wholeCard.0	-	-	-	#FFF4F1EC	19	built	400 0 none
+wholeCardValue.0	94	Swap value, 19 px semibold accent	ControllersEclipse whole val	CardLine	-	mid:wholeCard.0	inright:wholeCard.0:20	-	-	#FFF6E7D8	19	built	600 0 none
+wholeCard.1	93	Whole-pad card 1: Left stick as the D-pad	ControllersEclipse whole card	Rectangle	after:wholeCard.0:16	980	-	84	16	#FF0F111A	-	built	line 1 #FF22263A
+wholeCardName.1	94	"Left stick as the D-pad", 19 px	ControllersEclipse whole name	CardLine	in:wholeCard.1:20	mid:wholeCard.1	-	-	-	#FFF4F1EC	19	built	400 0 none
+wholeCardValue.1	94	Stick-as-D-pad value, 19 px semibold accent	ControllersEclipse whole val	CardLine	-	mid:wholeCard.1	inright:wholeCard.1:20	-	-	#FFF6E7D8	19	built	600 0 none
+wholeCard.2	93	Whole-pad card 2: Stick dead zone	ControllersEclipse whole card	Rectangle	after:wholeCard.1:16	980	-	84	16	#FF0F111A	-	built	line 1 #FF22263A
+wholeCardName.2	94	"Stick dead zone", 19 px	ControllersEclipse whole name	CardLine	in:wholeCard.2:20	mid:wholeCard.2	-	-	-	#FFF4F1EC	19	built	400 0 none
+wholeCardValue.2	94	Dead zone percent, 19 px semibold accent	ControllersEclipse whole val	CardLine	-	mid:wholeCard.2	inright:wholeCard.2:20	-	-	#FFF6E7D8	19	built	600 0 none
+wholeCard.3	93	Whole-pad card 3: Rumble	ControllersEclipse whole card	Rectangle	after:wholeCard.2:16	980	right:96	84	16	#FF0F111A	-	built	line 1 #FF22263A
+wholeCardName.3	94	"Rumble", 19 px	ControllersEclipse whole name	CardLine	in:wholeCard.3:20	mid:wholeCard.3	-	-	-	#FFF4F1EC	19	built	400 0 none
+wholeCardValue.3	94	Rumble value, 19 px semibold accent	ControllersEclipse whole val	CardLine	-	mid:wholeCard.3	inright:wholeCard.3:20	-	-	#FFF6E7D8	19	built	600 0 none
+help	97	Footer help bar, mid 1151, gap 30, 20 px	ControllersEclipse HelpBar	HelpBar	96	mid:1151	-	38	-	#FFD8DBE6	20	built	400 0 none
+ownGlyph-Change	98	A filled 34 px	ControllersEclipse CardGlyph	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
+helpWords-Change	98	"Change", 10 px after A	ControllersEclipse help label	CardLine	after:ownGlyph-Change:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+ownGlyph-Clear	99	X ringed 38 px	ControllersEclipse CardGlyph	-	after:helpWords-Change:30	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Clear	99	"Clear", 10 px after X	ControllersEclipse help label	CardLine	after:ownGlyph-Clear:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+ownGlyph-Back to the default	100	Y ringed 38 px	ControllersEclipse CardGlyph	-	after:helpWords-Clear:30	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back to the default	100	"Back to the default", 10 px after Y	ControllersEclipse help label	CardLine	after:ownGlyph-Back to the default:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+ownGlyph-Page	101	LB boxed 30 px inside	ControllersEclipse CardGlyph	-	after:helpWords-Back to the default:30	mid:help	-	34	-	-	-	built	word 15 400 8 10
+ownGlyph2-Page	101	RB boxed 30 px inside, 10 px after LB	ControllersEclipse CardGlyph	-	after:ownGlyph-Page:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
+helpWords-Page	101	"Page", 10 px after RB	ControllersEclipse help label	CardLine	after:ownGlyph2-Page:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+ownGlyph-Back	102	B ringed 38 px	ControllersEclipse CardGlyph	-	after:helpWords-Page:30	mid:help	38	38	-	-	-	built	glyph 16 400
+helpWords-Back	102	"Back", 10 px after B	ControllersEclipse help label	CardLine	after:ownGlyph-Back:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none

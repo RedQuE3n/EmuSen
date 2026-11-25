@@ -585,6 +585,22 @@ Window {
             function onRefocus(row) { settingsModel.setFocused(row) }
             function onTypeWords(start) { settingsThemeTypist.setText(start, start.length) }
         }
+        // Eclipse Controller Bindings (#12) and Keyboard Keys (#75), program-drawn over themed Settings.
+        Loader {
+            id: settingsEclipseBindings
+            objectName: "settingsEclipseBindings"
+            anchors.fill: parent
+            active: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.bindingsShown
+            focus: active
+            onActiveChanged: if (!active && screens.shown === Screens.Settings && chosenTheme.focus) chosenTheme.forceActiveFocus()
+            sourceComponent: ControllersEclipse {
+                settings: settingsModel
+                padFamily: program.padFamily
+                battery: machineBattery.level
+                clockText: clock.shortTime
+                inputs: !program.splashShown
+            }
+        }
         // Docked keyboard overlay for Profiles, Shader parameters search and ScreenScraper log-in while Eclipse draws Settings.
         Kit.KeyboardModel {
             id: settingsThemeTypist
@@ -666,7 +682,7 @@ Window {
         FocusScope {
             id: settingsThemeListener
             objectName: "settingsThemeListener"
-            focus: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.listening && !settingsModel.listeningPad
+            focus: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && !settingsModel.bindingsShown && settingsModel.listening && !settingsModel.listeningPad
             Keys.onPressed: (event) => event.accepted = settingsModel.heardKey(event.key, event.modifiers)
             Connections {
                 target: Kit.PadRouter

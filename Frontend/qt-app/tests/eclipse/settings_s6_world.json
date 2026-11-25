@@ -1,0 +1,42 @@
+{
+ "systems": [
+  {
+   "id": "snes",
+   "name": "Super Nintendo Entertainment System",
+   "console": "SNES",
+   "display_name": "Super Nintendo",
+   "release_year": 1990,
+   "firmware_name": null,
+   "engines": ["Venus"],
+   "starts_empty": false,
+   "controllers": {"buttons": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], "axes": [], "ports": 2, "players": ["snes.pad", "snes.pad"]}
+  },
+  {
+   "id": "psx",
+   "name": "Sony PlayStation",
+   "console": "PlayStation",
+   "display_name": "PlayStation",
+   "release_year": 1994,
+   "firmware_name": "PlayStation BIOS",
+   "engines": ["Diamond"],
+   "starts_empty": true,
+   "controllers": {"buttons": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "axes": [0, 1, 2, 3], "ports": 2, "players": ["psx.dualshock", "psx.dualshock"]},
+   "rumble": true
+  }
+ ],
+ "cores": [],
+ "schema": {
+  "SNES": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "Venus", "choices": ["Venus"], "choice_labels": []}
+  ],
+  "PlayStation": [
+   {"key": "Engine", "label": "Engine", "hint": "Which implementation runs the console.", "kind": "choice", "default": "Diamond", "choices": ["Diamond"], "choice_labels": []}
+  ]
+ },
+ "settings": {},
+ "firmware": {"snes": [], "psx": []},
+ "overview": [],
+ "cards": {},
+ "opened": {},
+ "outputs": ["Living room television", "Headphones"]
+}

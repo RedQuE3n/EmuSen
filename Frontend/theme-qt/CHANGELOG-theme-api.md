@@ -3,6 +3,12 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.19, an addition: Settings Controllers inner pages and Output boards (2026-11-25)
+
+- **`Settings.boardLines`** and **`Settings.boxMenu`**: Eclipse secondary aside lines (20px light) for Players seat summaries and Hotkeys key/trigger ordering without altering reference-theme fields, plus rounded-box Start glyph flag for Players, Profiles, One profile, Hotkeys, Output and Memory cards pages (boards #52–#56; R-20261116-20, -22, R-20261123-32).
+- **`Help.SettingsHotkeys`**: maps `Screen::SettingsHotkeys` (`A Change`, `X Clear`, `B Back`, `START Home`) for board #55.
+- The module is 1.19 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.19.*`.
+
 ## 1.18, an addition: Eclipse's game page Media, Cheats and Package (2026-11-24)
 
 Decided 2026-11-24 by the tester (R-20261113-16, -26, R-20261116-27, -29, -30, R-20261123-32): Eclipse draws the game page's Media and Cheats tabs and its Package deeper page as their boards draw them.

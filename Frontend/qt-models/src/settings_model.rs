@@ -638,7 +638,11 @@ impl qobject::SettingsModel {
                 read.consoles = if world.is_empty() {
                     crate::consoles::read(&ClientConsoles::open(&library, &cores)?)?
                 } else {
-                    crate::consoles::read(&ScriptedConsoles::open(&world)?)?
+                    let scripted = ScriptedConsoles::open(&world)?;
+                    if let Some(outputs) = scripted.outputs() {
+                        read.outputs = outputs;
+                    }
+                    crate::consoles::read(&scripted)?
                 };
                 let names: Vec<&str> = read.consoles.consoles.iter().map(|c| c.console.as_str()).collect();
                 read.bindings = source.bindings(&names)?;
@@ -820,8 +824,9 @@ impl qobject::SettingsModel {
                 let pads = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) };
                 let saved = ClientSettings::open(&self.platform_library.to_string())
                     .and_then(|s| crate::pads_reach::bindings_saved(&s, &self.view.read.bindings, &files, pads.as_deref()));
+                let page_changed = list(self.view.trail().into_iter()) != self.trail;
                 self.as_mut().said(saved.err().map(|e| format!("The bindings could not be saved: {e}")).unwrap_or_default());
-                self.as_mut().shown(false);
+                self.as_mut().shown(page_changed);
                 self.refresh();
             }
             Outcome::Seat(ask) => {

@@ -599,3 +599,76 @@ fn qt_7_7_h8_the_screens_hotkey_words_are_endymions_actions() {
         assert!(described.contains(&action.as_str()) != hidden.contains(&action.as_str()), "{action}: worded on the screen or hidden, one of the two");
     }
 }
+
+#[test]
+fn qt_3_4_11_controllers_inner_pages_project_boards_52_to_55_without_changing_reference_fields() {
+    let mut view = view();
+    view.seats.pads.push(Connected { key: 8, name: "Arcade Stick".into(), player: 0, ..Connected::default() });
+    view.seats.pads[0].name = "Wireless Controller".into();
+    view.seats.pads[0].pressed = true;
+    view.seats.players[0].pad = Some("Wireless Controller".into());
+    view.seats.players.push(Player { player: 2, pad: Some("Travel Pad".into()), kept: true });
+    view.choose_section(0);
+    // Board #52: Players
+    view.choose(index(&view, "players"));
+    let rows = view.rows();
+    let facets = view.facets();
+    let br = view.board_rows(&rows, &facets);
+    assert_eq!(br[0].value, "● Player 1");
+    assert_eq!(br[0].about, "The player this controller plays as; a button held on it marks its row.");
+    assert_eq!(br[1].about, "Plays as no one, and still steers the menus; a button held on it marks its row.");
+    assert_eq!(br[2].about, "Kept for this controller, which gets the number back when it reconnects.");
+    let aside = view.board_aside(0, &rows, &br, &view.pane(0));
+    assert_eq!(aside.about_heading, "Players");
+    assert_eq!(aside.sentence, format!("Player 1 · Wireless Controller · {} profile", standard()));
+    assert_eq!(aside.lines, ["Player 2 · Travel Pad · kept"]);
+    assert_eq!(aside.muted, ["Players 3 and 4 · none", "Left and Right on a controller's row pick its player."]);
+    assert_eq!(aside.page_glow, "#3F6FE0");
+    assert!(aside.wrap_about && aside.cards_help && aside.box_menu);
+    view.back();
+    // Boards #53 & #54: Profiles & One profile
+    view.choose(index(&view, "profiles"));
+    let Outcome::Type { typed, .. } = view.choose(index(&view, "newprofile")) else { panic!("asks for name") };
+    view.typed(&typed, "Couch");
+    let rows = view.rows();
+    let facets = view.facets();
+    let br = view.board_rows(&rows, &facets);
+    assert_eq!(br[0].about, "The console whose profiles these are.");
+    assert_eq!(br[1].about, "The bindings every console starts with; it cannot be renamed or deleted.");
+    assert_eq!(br[2].about, "A set of Super Nintendo bindings of your own.");
+    assert_eq!((br[3].about.as_str(), br[3].value.as_str()), ("A copy of Default, named by you, for Super Nintendo games.", "…"));
+    let aside = view.board_aside(2, &rows, &br, &view.pane(2));
+    assert_eq!(aside.about_heading, "Couch");
+    assert_eq!(aside.sentence, "Couch is kept for the games whose page chooses it.");
+    assert_eq!(aside.muted, ["A opens it: its bindings, starting games with it, a new name, or deleting it.", "Super Nintendo · 2 profiles · Default starts its games"]);
+    assert_eq!(aside.page_glow, "#3F6FE0");
+    view.choose(2);
+    let rows = view.rows();
+    let facets = view.facets();
+    let br = view.board_rows(&rows, &facets);
+    assert_eq!(br[0].about, "The Super Nintendo buttons this profile puts on your controller.");
+    assert_eq!(br[1].about, "Super Nintendo games start with Couch unless a game's page chooses another.");
+    assert_eq!((br[2].about.as_str(), br[2].value.as_str()), ("A new name; games that chose it keep it.", "…"));
+    assert_eq!(br[3].about, "Games that chose Couch start with the console's profile again.");
+    let aside = view.board_aside(1, &rows, &br, &view.pane(1));
+    assert_eq!(aside.about_heading, "Starts every game");
+    assert_eq!(aside.muted, ["A game can start with a profile of its own, chosen on its page."]);
+    view.back();
+    view.back();
+    // Board #55: Hotkeys
+    view.choose(index(&view, "hotkeys"));
+    let rows = view.rows();
+    let facets = view.facets();
+    let br = view.board_rows(&rows, &facets);
+    assert_eq!(br[0].about, "Applies while the key is held.");
+    assert_eq!(br[2].about, "Fires once each time the key is pressed.");
+    let pane = view.pane(2);
+    assert_eq!(pane.sentence, "Fires once each time the key is pressed.", "reference sentence order preserved");
+    assert_eq!(pane.lines, ["Bound to the key F5."], "reference lines order preserved");
+    let aside = view.board_aside(2, &rows, &br, &pane);
+    assert_eq!(aside.about_heading, "Save State");
+    assert_eq!(aside.sentence, "Bound to the key F5.");
+    assert_eq!(aside.lines, ["Fires once each time the key is pressed."]);
+    assert_eq!(aside.page_glow, "#3F6FE0");
+    assert!(aside.box_menu && !aside.cards_help);
+}

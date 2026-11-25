@@ -109,7 +109,7 @@
           "muted": ["The ring fills as the volume rises; the next sound plays at the level you chose."]}},
         {"id": "navsounds", "row": "AppSettings NavigationSounds", "about": "The sounds for moving, choosing and going back, on a stream of their own beside the game's."},
         {"id": "soundvolume", "row": "AppSettings BigPictureInterface.NavigationVolume", "pane": {"preview": "meter"}},
-        {"id": "output", "pause": true, "row": "AppSettings SoundOutputDevice", "more": "outputs",
+        {"id": "output", "pause": true, "row": "AppSettings SoundOutputDevice", "more": "outputs", "page": "output",
          "pane": {"by_value": {
            "System default": "The game and the interface's sounds play where the system sends sound.",
            "*": "The game and the interface's sounds play on {value}."},

@@ -694,7 +694,8 @@ Module {
                 "PagePackageCheck",
                 "PagePackageMake",
                 "PagePackageStop",
-                "PagePackageInfo"
+                "PagePackageInfo",
+                "SettingsHotkeys"
             ]
         }
         Property {
@@ -712,7 +713,7 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 74
+            lineNumber: 75
             Parameter { name: "kind"; type: "HelpKind" }
         }
         Method {
@@ -720,14 +721,14 @@ Module {
             type: "ThemeHelpEntries"
             isPointer: true
             isMethodConstant: true
-            lineNumber: 75
+            lineNumber: 76
             Parameter { name: "kind"; type: "HelpKind" }
             Parameter { name: "flags"; type: "QMap_QString_QVariant" }
         }
     }
     Component {
         file: "help.cxxqt.h"
-        lineNumber: 96
+        lineNumber: 97
         name: "ThemeHelpEntries"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -739,7 +740,7 @@ Module {
             type: "QString"
             read: "getActionLines"
             index: 0
-            lineNumber: 102
+            lineNumber: 103
             isReadonly: true
             isPropertyConstant: true
         }
@@ -747,7 +748,7 @@ Module {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 108
+            lineNumber: 109
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -755,13 +756,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 109
+            lineNumber: 110
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 110
+            lineNumber: 111
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }
@@ -1607,7 +1608,7 @@ Module {
             name: "SettingsForm"
             isScoped: true
             type: "int"
-            lineNumber: 73
+            lineNumber: 75
             values: ["Choice", "Switch", "Door", "Fact"]
         }
         Property {
@@ -1991,7 +1992,25 @@ Module {
             lineNumber: 72
             isReadonly: true
         }
-        Signal { name: "shown"; lineNumber: 126 }
+        Property {
+            name: "boardLines"
+            type: "QStringList"
+            read: "getBoardLines"
+            notify: "shown"
+            index: 42
+            lineNumber: 73
+            isReadonly: true
+        }
+        Property {
+            name: "boxMenu"
+            type: "bool"
+            read: "getBoxMenu"
+            notify: "shown"
+            index: 43
+            lineNumber: 74
+            isReadonly: true
+        }
+        Signal { name: "shown"; lineNumber: 130 }
     }
     Component {
         file: "splash.cxxqt.h"

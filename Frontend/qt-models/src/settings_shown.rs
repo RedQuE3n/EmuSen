@@ -445,24 +445,8 @@ impl SettingsView {
         match self.page() {
             Some(Page::Players) => {
                 out.about_heading = self.heading();
-                let profile = self.pad_console().map(|c| self.cw("profile_mark").replace("{profile}", &self.read.bindings.console_default(&c))).unwrap_or_default();
-                let mut lines: Vec<String> = self
-                    .seats
-                    .players
-                    .iter()
-                    .filter_map(|p| {
-                        let pad = p.pad.as_ref()?;
-                        let base = self.cw("players_line").replace("{n}", &p.player.to_string()).replace("{pad}", pad);
-                        Some(if p.kept { format!("{base}{}", self.cw("kept_mark")) } else { format!("{base}{profile}") })
-                    })
-                    .collect();
-                let free: Vec<String> = (1..=self.seats_shown()).filter(|n| self.seats.players.iter().all(|p| p.player != *n || p.pad.is_none())).map(|n| n.to_string()).collect();
-                let mut muted = Vec::new();
-                if !free.is_empty() {
-                    muted.push(self.cw("free").replace("{list}", &free.join(&self.cw("and"))));
-                }
-                muted.push(self.cw("players_muted"));
-                out.sentence = if lines.is_empty() { String::new() } else { lines.remove(0) };
+                let (sentence, lines, muted) = self.players_summary(false);
+                out.sentence = sentence;
                 out.lines = lines;
                 out.muted = muted;
                 return out;

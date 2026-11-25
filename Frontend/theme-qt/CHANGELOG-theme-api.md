@@ -11,7 +11,7 @@ never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
 ## 1.18, an addition: Eclipse's game page Media, Cheats and Package (2026-11-24)
 
-Decided 2026-11-24 by the tester (R-20261113-16, -26, R-20261116-27, -29, -30): Eclipse draws the game page's Media and Cheats tabs and its Package deeper page as their boards draw them.
+Decided 2026-11-24 by the tester (R-20261113-16, -26, R-20261116-27, -29, -30, R-20261123-32): Eclipse draws the game page's Media and Cheats tabs and its Package deeper page as their boards draw them.
 
 - **`ThemeScreen.pageSubpages`** and **`Page.PageSubpage`** (`None`, `Package`): deeper pages of the game page a theme's screen draws as flags, written `1 << Page.Package`.
 - **`Page.mediaTiles`** (`key`, `label`, `picture`, `row`), **`Page.mediaNote`** and **`Page.coverable`**: the game's media items, the empty-media fallback sentence, and whether X (`setCover`) sets the focused tile as cover.

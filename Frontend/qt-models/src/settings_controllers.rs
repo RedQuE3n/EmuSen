@@ -348,6 +348,36 @@ impl SettingsView {
         if twice || !self.consoles_holding(&key).is_empty() { fill(&self.cw("hotkey_clash"), &[("key", &key)]) } else { key }
     }
 
+    /// The Players seat summary lines and muted free/hint lines (`profile_on_kept` keeps the profile mark on kept pads for the reference theme).
+    pub(crate) fn players_summary(&self, profile_on_kept: bool) -> (String, Vec<String>, Vec<String>) {
+        let profile = self.pad_console().map(|c| fill(&self.cw("profile_mark"), &[("profile", &self.read.bindings.console_default(&c))])).unwrap_or_default();
+        let mut lines: Vec<String> = self
+            .seats
+            .players
+            .iter()
+            .filter_map(|p| {
+                let pad = p.pad.as_ref()?;
+                let base = fill(&self.cw("players_line"), &[("n", &p.player.to_string()), ("pad", pad)]);
+                let tail = if p.kept && !profile_on_kept {
+                    self.cw("kept_mark")
+                } else if p.kept {
+                    format!("{}{profile}", self.cw("kept_mark"))
+                } else {
+                    profile.clone()
+                };
+                Some(format!("{base}{tail}"))
+            })
+            .collect();
+        let free: Vec<String> = (1..=self.seats_shown()).filter(|n| self.seats.players.iter().all(|p| p.player != *n || p.pad.is_none())).map(|n| n.to_string()).collect();
+        let mut muted = Vec::new();
+        if !free.is_empty() {
+            muted.push(fill(&self.cw("free"), &[("list", &free.join(&self.cw("and")))]));
+        }
+        muted.push(self.cw("players_muted"));
+        let sentence = if lines.is_empty() { String::new() } else { lines.remove(0) };
+        (sentence, lines, muted)
+    }
+
     /// The pane of a row of Controllers' own, or of the bindings page.
     pub(crate) fn controller_pane(&self, entry: Option<&Value>) -> Option<Pane> {
         if let Some(b) = &self.binding {
@@ -357,24 +387,7 @@ impl SettingsView {
         let said = |sentence: String, muted: Vec<String>| Some(Pane { sentence, muted, ..Pane::default() });
         match entry["controllers"].as_str() {
             Some("players") => {
-                let profile = self.pad_console().map(|c| fill(&self.cw("profile_mark"), &[("profile", &self.read.bindings.console_default(&c))])).unwrap_or_default();
-                let mut lines: Vec<String> = self
-                    .seats
-                    .players
-                    .iter()
-                    .filter_map(|p| {
-                        let pad = p.pad.as_ref()?;
-                        let kept = if p.kept { self.cw("kept_mark") } else { String::new() };
-                        Some(format!("{}{kept}{profile}", fill(&self.cw("players_line"), &[("n", &p.player.to_string()), ("pad", pad)])))
-                    })
-                    .collect();
-                let free: Vec<String> = (1..=self.seats_shown()).filter(|n| self.seats.players.iter().all(|p| p.player != *n || p.pad.is_none())).map(|n| n.to_string()).collect();
-                let mut muted = Vec::new();
-                if !free.is_empty() {
-                    muted.push(fill(&self.cw("free"), &[("list", &free.join(&self.cw("and")))]));
-                }
-                muted.push(self.cw("players_muted"));
-                let sentence = if lines.is_empty() { String::new() } else { lines.remove(0) };
+                let (sentence, lines, muted) = self.players_summary(true);
                 return Some(Pane { sentence, lines, muted, tones: vec![Tone::Text], ..Pane::default() });
             }
             Some("profiles") => {

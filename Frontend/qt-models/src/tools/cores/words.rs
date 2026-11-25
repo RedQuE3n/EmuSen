@@ -82,6 +82,18 @@ pub fn long_day(text: &str) -> Option<String> {
     date(text).map(|(y, m, d)| format!("{d} {} {y}", MONTHS[m - 1]))
 }
 
+/// A date as "28 October", adding the year when it differs from `current_year` (R-20261123-34).
+pub fn short_day_in(text: &str, current_year: u32) -> Option<String> {
+    date(text).map(|(y, m, d)| {
+        if y == current_year { format!("{d} {}", MONTHS[m - 1]) } else { format!("{d} {} {y}", MONTHS[m - 1]) }
+    })
+}
+
+/// Current UTC year, for omitting redundant years in recent build dates.
+pub fn current_year() -> u32 {
+    crate::words::utc(crate::words::now())[..4].parse().unwrap_or(2026)
+}
+
 /// The consoles a row runs, as a list shows them; a dash for none.
 pub fn consoles(row: &Core) -> String {
     if row.console_names.is_empty() {

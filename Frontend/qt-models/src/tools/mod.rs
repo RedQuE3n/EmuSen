@@ -206,6 +206,43 @@ pub trait Source {
     fn changes_library(&self) -> bool {
         false
     }
+    /// Enables Eclipse styling and board projection where supported.
+    fn set_eclipse(&mut self, _eclipse: bool) {}
+    /// Optional console game-count map (`console -> count`).
+    fn set_console_counts(&mut self, _counts: std::collections::HashMap<String, usize>) {}
+    /// Optional Eclipse card breadcrumb override for a page's key.
+    fn card_breadcrumb(&self, _key: &str) -> Option<String> {
+        None
+    }
+    /// Optional Eclipse label/value pair for `#73` Details pane rendering.
+    fn card_detail_pane(&self, _rows: &[CardRow], _at: usize) -> Option<(String, String)> {
+        None
+    }
+    /// Serialized `#10` Eclipse board projection JSON when Eclipse mode is active.
+    fn eclipse_view(&self) -> Option<serde_json::Value> {
+        None
+    }
+    fn eclipse_choose_filter(&mut self, _key: &str) {}
+    fn eclipse_toggle_view(&mut self) {}
+    fn eclipse_focus_console(&mut self, _console: &str) {}
+    fn eclipse_focus_core(&mut self, _key: &str) {}
+    fn eclipse_focus_zone(&mut self, _zone: &str) {}
+    fn eclipse_focus_zone_code(&mut self, _code: i32) {}
+    fn eclipse_act(&mut self, _action: &str, _key: Option<&str>) -> Effect {
+        Effect::Done
+    }
+    fn eclipse_act_code(&mut self, _code: i32, _key: Option<&str>) -> Effect {
+        Effect::Done
+    }
+    fn eclipse_action_key(&mut self, _key: &str) -> Effect {
+        Effect::Done
+    }
+    fn eclipse_navigate(&mut self, _dir: &str) -> Effect {
+        Effect::Done
+    }
+    fn eclipse_nav(&mut self, _code: i32) -> Effect {
+        Effect::Done
+    }
 }
 
 /// The cards over the screen: a row's page (X) and the List card (Select).
@@ -474,8 +511,88 @@ impl<S: Source> Tool<S> {
     /// The card on top, its rows and its focused row.
     pub fn card(&self) -> Option<(String, String, Vec<CardRow>, usize)> {
         let (card, at) = self.cards.last()?;
-        let breadcrumb = if self.cards.len() > 1 { self.cards[self.cards.len() - 2].0.title(self) } else { self.source.title().to_owned() };
+        let custom = card.page_key().and_then(|k| self.source.card_breadcrumb(k));
+        let breadcrumb = custom.unwrap_or_else(|| {
+            if self.cards.len() > 1 { self.cards[self.cards.len() - 2].0.title(self) } else { self.source.title().to_owned() }
+        });
         Some((card.title(self), breadcrumb, self.card_rows(card), *at))
+    }
+
+    /// Eclipse label/value split for the focused card row on `#73` Details.
+    pub fn card_detail_pane(&self) -> Option<(String, String)> {
+        let (card, at) = self.cards.last()?;
+        let rows = self.card_rows(card);
+        self.source.card_detail_pane(&rows, *at)
+    }
+
+    pub fn set_eclipse(&mut self, eclipse: bool) {
+        self.source.set_eclipse(eclipse);
+    }
+
+    pub fn set_console_counts(&mut self, counts: std::collections::HashMap<String, usize>) {
+        self.source.set_console_counts(counts);
+    }
+
+    pub fn eclipse_view(&self) -> Option<serde_json::Value> {
+        self.source.eclipse_view()
+    }
+
+    pub fn eclipse_choose_filter(&mut self, key: &str) {
+        self.source.eclipse_choose_filter(key);
+    }
+
+    pub fn eclipse_toggle_view(&mut self) {
+        self.source.eclipse_toggle_view();
+    }
+
+    pub fn eclipse_focus_console(&mut self, console: &str) {
+        self.source.eclipse_focus_console(console);
+    }
+
+    pub fn eclipse_focus_core(&mut self, key: &str) {
+        self.source.eclipse_focus_core(key);
+    }
+
+    pub fn eclipse_focus_zone(&mut self, zone: &str) {
+        self.source.eclipse_focus_zone(zone);
+    }
+
+    pub fn eclipse_focus_zone_code(&mut self, code: i32) {
+        self.source.eclipse_focus_zone_code(code);
+    }
+
+    fn take_eclipse(&mut self, effect: Effect, key: Option<&str>) -> Option<String> {
+        let fallback = self.source.eclipse_view().and_then(|v| v.get("focusedAsideKey").and_then(|s| s.as_str()).filter(|s| !s.is_empty()).map(str::to_owned));
+        let target = key.filter(|k| !k.is_empty()).map(str::to_owned).or(fallback);
+        if matches!(effect, Effect::Page(..)) {
+            self.cards.clear();
+        }
+        self.take(effect, target.as_deref())
+    }
+
+    pub fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> Option<String> {
+        let effect = self.source.eclipse_act(action, key);
+        self.take_eclipse(effect, key)
+    }
+
+    pub fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Option<String> {
+        let effect = self.source.eclipse_act_code(code, key);
+        self.take_eclipse(effect, key)
+    }
+
+    pub fn eclipse_action_key(&mut self, key: &str) -> Option<String> {
+        let effect = self.source.eclipse_action_key(key);
+        self.take_eclipse(effect, None)
+    }
+
+    pub fn eclipse_navigate(&mut self, dir: &str) -> Option<String> {
+        let effect = self.source.eclipse_navigate(dir);
+        self.take_eclipse(effect, None)
+    }
+
+    pub fn eclipse_nav(&mut self, code: i32) -> Option<String> {
+        let effect = self.source.eclipse_nav(code);
+        self.take_eclipse(effect, None)
     }
 
     fn card_rows(&self, card: &Card) -> Vec<CardRow> {
@@ -552,7 +669,8 @@ impl<S: Source> Tool<S> {
                 }
                 let section = self.section_key();
                 let effect = self.source.act(action, Some(&key), &section);
-                if !matches!(effect, Effect::Page(..)) {
+                let keep = matches!(effect, Effect::Page(..)) || matches!(&effect, Effect::Host(h) if h.starts_with(crate::tools::cores::OPEN_FOLDER));
+                if !keep {
                     self.cards.clear();
                 }
                 self.take(effect, Some(&key))
@@ -667,6 +785,13 @@ impl Card {
             Card::List => tool.source.title().to_owned(),
         }
     }
+
+    fn page_key(&self) -> Option<&str> {
+        match self {
+            Card::Page { key, .. } => Some(key),
+            Card::List => None,
+        }
+    }
 }
 
 /// The plan's question as every tool asks it: No first and focused, Yes; B answers No (EmuSen_Interface.md §15.6).
@@ -757,5 +882,53 @@ impl Source for Box<dyn Source> {
     }
     fn changes_library(&self) -> bool {
         (**self).changes_library()
+    }
+    fn set_eclipse(&mut self, eclipse: bool) {
+        (**self).set_eclipse(eclipse)
+    }
+    fn set_console_counts(&mut self, counts: std::collections::HashMap<String, usize>) {
+        (**self).set_console_counts(counts)
+    }
+    fn card_breadcrumb(&self, key: &str) -> Option<String> {
+        (**self).card_breadcrumb(key)
+    }
+    fn card_detail_pane(&self, rows: &[CardRow], at: usize) -> Option<(String, String)> {
+        (**self).card_detail_pane(rows, at)
+    }
+    fn eclipse_view(&self) -> Option<serde_json::Value> {
+        (**self).eclipse_view()
+    }
+    fn eclipse_choose_filter(&mut self, key: &str) {
+        (**self).eclipse_choose_filter(key)
+    }
+    fn eclipse_toggle_view(&mut self) {
+        (**self).eclipse_toggle_view()
+    }
+    fn eclipse_focus_console(&mut self, console: &str) {
+        (**self).eclipse_focus_console(console)
+    }
+    fn eclipse_focus_core(&mut self, key: &str) {
+        (**self).eclipse_focus_core(key)
+    }
+    fn eclipse_focus_zone(&mut self, zone: &str) {
+        (**self).eclipse_focus_zone(zone)
+    }
+    fn eclipse_focus_zone_code(&mut self, code: i32) {
+        (**self).eclipse_focus_zone_code(code)
+    }
+    fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> Effect {
+        (**self).eclipse_act(action, key)
+    }
+    fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Effect {
+        (**self).eclipse_act_code(code, key)
+    }
+    fn eclipse_action_key(&mut self, key: &str) -> Effect {
+        (**self).eclipse_action_key(key)
+    }
+    fn eclipse_navigate(&mut self, dir: &str) -> Effect {
+        (**self).eclipse_navigate(dir)
+    }
+    fn eclipse_nav(&mut self, code: i32) -> Effect {
+        (**self).eclipse_nav(code)
     }
 }

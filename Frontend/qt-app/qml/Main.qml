@@ -723,6 +723,9 @@ Window {
             world: program.coresWorld
             padFamily: program.padFamily
             splashShown: program.splashShown
+            clock: clock
+            battery: machineBattery.level
+            consoleCounts: library.loading ? "" : library.settingsFacts("")
             // Open Folder on a firmware page, through the program's one action for it (EmuSen_Qt.md §7.7.E).
             onOpenFolder: (path) => folders.open(path)
             onSaid: (words) => program.said(words, true, false)

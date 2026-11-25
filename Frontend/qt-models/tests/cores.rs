@@ -567,3 +567,123 @@ fn qt_7_9_the_console_column_gives_way_to_the_first_console_and_a_count_in_the_c
     assert_eq!(columns.iter().map(|c| (c.title, c.gives_way)).collect::<Vec<_>>(), [("Core", false), ("Console", true), ("Status", false)]);
     assert!(tool.rows().iter().all(|i| i.cells[1].short.is_some() && i.cells[0].short.is_none() && i.cells[2].short.is_none()));
 }
+
+#[test]
+fn eclipse_cores_projection_filters_view_toggle_and_immediate_subpages() {
+    use emusen_qt_models::tools::cores::eclipse::parse_console_counts;
+    use emusen_qt_models::tools::cores::row::of_tool;
+    use emusen_qt_models::tools::cores::words::short_day_in;
+    use emusen_qt_models::tools::cores::{DETAILS, FIRMWARE, OPEN_FOLDER};
+    use serde_json::json;
+
+    assert_eq!(short_day_in("2026-10-28", 2026), Some("28 October".to_owned()));
+    assert_eq!(short_day_in("2025-10-28", 2026), Some("28 October 2025".to_owned()));
+
+    let tool_ev = json!({
+        "event": "core",
+        "stem": "swanstation",
+        "name": "Sony - PlayStation (SwanStation)",
+        "corename": "SwanStation",
+        "systems": ["psx"],
+        "build": "2026-10-28",
+        "offered": "2026-11-09",
+        "description": "Fast, with upscaling",
+        "state": "update"
+    });
+    let parsed = of_tool(&tool_ev, &Default::default()).unwrap();
+    assert_eq!(parsed.build.as_deref(), Some("2026-10-28"));
+    assert_eq!(parsed.offered.as_deref(), Some("2026-11-09"));
+    assert_eq!(parsed.description.as_deref(), Some("Fast, with upscaling"));
+
+    let (mut tool, _) = opened(WORLD);
+    tool.set_eclipse(true);
+    let view = tool.eclipse_view().expect("eclipse projection");
+    assert_eq!(view["readyCount"], 3);
+    assert_eq!(view["remainingCount"], 0);
+    // Game counts omitted when consoleCounts is not supplied.
+    assert_eq!(view["cards"][0]["makerLine"], "Nintendo");
+    assert_eq!(view["cards"][0]["coreName"], "Venus");
+    // Attention filter pills hide 0 counts; updates + approval are present on world.json.
+    let filter_keys: Vec<&str> = view["filters"].as_array().unwrap().iter().map(|f| f["key"].as_str().unwrap()).collect();
+    assert_eq!(filter_keys, ["ready", "updates", "approval"]);
+
+    tool.set_console_counts(parse_console_counts(r#"{"systems":{"SNES":214,"PlayStation":88,"PlayStation 2":56}}"#));
+    let view = tool.eclipse_view().unwrap();
+    assert_eq!(view["cards"][0]["makerLine"], "Nintendo · 214 games");
+
+    // Pad navigation: grid row 0 Up enters top strip, Down returns to grid, Right from row end enters aside, Left returns.
+    tool.eclipse_navigate("up");
+    assert_eq!(tool.eclipse_view().unwrap()["focusZone"], "top");
+    tool.eclipse_navigate("down");
+    assert_eq!(tool.eclipse_view().unwrap()["focusZone"], "grid");
+    tool.eclipse_navigate("right");
+    tool.eclipse_navigate("right");
+    assert_eq!(tool.eclipse_view().unwrap()["focusZone"], "grid");
+    tool.eclipse_navigate("right");
+    assert_eq!(tool.eclipse_view().unwrap()["focusZone"], "aside");
+    tool.eclipse_navigate("left");
+    assert_eq!(tool.eclipse_view().unwrap()["focusZone"], "grid");
+
+    // Toggle VIEW between ready and remaining consoles.
+    tool.eclipse_toggle_view();
+    assert_eq!(tool.eclipse_view().unwrap()["showingRemaining"], true);
+    tool.eclipse_toggle_view();
+    assert_eq!(tool.eclipse_view().unwrap()["showingRemaining"], false);
+
+    // Focus PlayStation (index 1) and enter Beetle PSX aside item -> A opens immediate Update confirmation.
+    tool.eclipse_focus_console("PlayStation");
+    tool.eclipse_navigate("accept");
+    tool.eclipse_navigate("down");
+    let view = tool.eclipse_view().unwrap();
+    assert_eq!(view["aside"]["installed"][1]["name"], "Beetle PSX");
+    assert_eq!(view["aside"]["installed"][1]["hasUpdate"], true);
+    tool.eclipse_navigate("accept");
+    assert_eq!(tool.question().unwrap().title, "Update Beetle PSX?");
+    tool.answer(0);
+
+    // Open #72 Core Page on PCEE2 (PlayStation 2) -> "Cores · PlayStation 2" breadcrumb, Open Folder via OPEN_FOLDER, Details "Core" label.
+    tool.eclipse_focus_console("PlayStation 2");
+    tool.eclipse_act("eclipse-page", Some("libretro:pcee2"));
+    let (title, crumb, rows, _) = tool.card().unwrap();
+    assert_eq!(title, "PCEE2");
+    assert_eq!(crumb, "Cores · PlayStation 2");
+    assert!(rows.iter().any(|r| r.key.starts_with(OPEN_FOLDER)));
+    assert!(rows.iter().all(|r| !r.label.starts_with("Mark")));
+    let det_idx = rows.iter().position(|r| r.key == DETAILS).unwrap();
+    tool.card_choose(det_idx);
+    let (_, det_crumb, det_rows, _) = tool.card().unwrap();
+    assert_eq!(det_crumb, "Cores · PlayStation 2");
+    assert!(det_rows.iter().any(|r| r.label == "Core"));
+    tool.card_back();
+    let (title, _, _, _) = tool.card().unwrap();
+    assert_eq!(title, "PCEE2");
+    tool.card_back();
+    tool.eclipse_act("eclipse-page", Some("libretro:pcsx2"));
+    let (_, _, p_rows, _) = tool.card().unwrap();
+    let det_idx = p_rows.iter().position(|r| r.key == DETAILS).unwrap();
+    tool.card_choose(det_idx);
+    let (_, _, det_rows, _) = tool.card().unwrap();
+    let from_idx = det_rows.iter().position(|r| r.label == "From").unwrap();
+    tool.card_focus(from_idx);
+    let (dl, dv) = tool.card_detail_pane().unwrap();
+    assert_eq!(dl, "From");
+    assert_eq!(dv, "buildbot.libretro.com, index CRC-32 3a224a58");
+    tool.card_back();
+    tool.card_back();
+    tool.eclipse_act("eclipse-page", Some("engine:Diamond"));
+    let (_, _, d_rows, _) = tool.card().unwrap();
+    let fw_idx = d_rows.iter().position(|r| r.key == FIRMWARE).unwrap();
+    tool.card_choose(fw_idx);
+    let (_, fw_crumb, fw_rows, _) = tool.card().unwrap();
+    assert_eq!(fw_crumb, "Cores · PlayStation");
+    assert!(fw_rows.len() >= 2 && fw_rows[fw_rows.len() - 2].section_end && fw_rows.last().unwrap().label == "Open Folder");
+
+    // Offline fetch refusal renders cleanly in Eclipse statusPill.
+    let (mut off, _) = opened(NO_CATALOGUE);
+    off.set_eclipse(true);
+    let off_view = off.eclipse_view().unwrap();
+    assert_eq!(off_view["statusPill"]["visible"], true);
+    assert_eq!(off_view["statusPill"]["text"], "Buildbot.libretro.com could not be reached.");
+    assert_eq!(off_view["statusPill"]["error"], true);
+}
+

@@ -4,6 +4,7 @@
 
 pub mod approval;
 pub mod backend;
+pub mod eclipse;
 pub mod options;
 pub mod plan;
 pub mod row;
@@ -58,10 +59,12 @@ pub struct Cores {
     host: Host,
     consoles: Consoles,
     order: Vec<String>,
+    maker_of: HashMap<String, String>,
     engines_of: HashMap<String, Vec<String>>,
     firmware_of: HashMap<String, String>,
     /// The consoles that start with no game in them, whose firmware every game needs.
     starts_empty: HashSet<String>,
+    eclipse: eclipse::EclipseState,
     have_firmware: RefCell<HashMap<String, Result<Have, String>>>,
     listing: Vec<Core>,
     tool_rows: Vec<Core>,
@@ -108,9 +111,11 @@ impl Cores {
             host,
             consoles: Consoles::default(),
             order: Vec::new(),
+            maker_of: HashMap::new(),
             engines_of: HashMap::new(),
             firmware_of: HashMap::new(),
             starts_empty: HashSet::new(),
+            eclipse: eclipse::EclipseState::default(),
             have_firmware: RefCell::new(HashMap::new()),
             listing: Vec::new(),
             tool_rows: Vec::new(),
@@ -188,6 +193,7 @@ impl Cores {
 
     fn read_runtime(&mut self) {
         self.consoles = Consoles::default();
+        self.maker_of.clear();
         self.engines_of.clear();
         self.firmware_of.clear();
         self.starts_empty.clear();
@@ -207,6 +213,9 @@ impl Cores {
             }
             if self.engines_of.contains_key(&s.console) {
                 continue;
+            }
+            if !s.manufacturer.is_empty() {
+                self.maker_of.insert(s.console.clone(), s.manufacturer.clone());
             }
             self.engines_of.insert(s.console.clone(), s.engines.clone());
             if !s.display_name.is_empty() {
@@ -669,14 +678,23 @@ impl Cores {
             facts.push(("File stem", stem.clone()));
         }
         if let Some(engine) = &row.engine {
-            facts.push(("Engine", engine.clone()));
+            let label = if self.eclipse.enabled { "Core" } else { "Engine" };
+            let shown = if self.eclipse.enabled && row.origin == Origin::Project { crate::library::without_port_mark(engine).to_owned() } else { engine.clone() };
+            facts.push((label, shown));
         }
         if let Some(library) = &row.library {
             facts.push(("Library", library.clone()));
         }
         if let Some(info) = self.info_of(row) {
             if let Some(from) = text(info, "from") {
-                facts.push(("From", format!("{from}, index CRC-32 {}", text(info, "index_crc32").unwrap_or_default())));
+                let shown_from = if self.eclipse.enabled && row.is_libretro() { host_of(&from).unwrap_or(from) } else { from };
+                let crc = text(info, "index_crc32").filter(|c| !c.is_empty());
+                let val = if self.eclipse.enabled {
+                    crc.map_or_else(|| shown_from.clone(), |c| format!("{shown_from}, index CRC-32 {c}"))
+                } else {
+                    format!("{shown_from}, index CRC-32 {}", crc.unwrap_or_default())
+                };
+                facts.push(("From", val));
             }
             if let Some(fetched) = text(info, "fetched") {
                 facts.push(("Downloaded", fetched));
@@ -753,6 +771,11 @@ impl Cores {
             rows.insert(0, CardRow::new("firmware.unread", "Firmware not read").pane(CardPane { lines, ..CardPane::default() }));
         }
         if let Some(folder) = folder {
+            if self.eclipse.enabled {
+                if let Some(last) = rows.last_mut() {
+                    last.section_end = true;
+                }
+            }
             rows.push(CardRow::new(&format!("{OPEN_FOLDER}{folder}"), "Open Folder"));
         }
         rows
@@ -988,6 +1011,9 @@ impl Source for Cores {
     /// The row's page under X: everything else it offers, each where it applies (EmuSen_Interface.md §15.5).
     fn page(&self, key: &str, marked: Option<&Mark>) -> Vec<CardRow> {
         let Some(row) = self.row(key) else { return Vec::new() };
+        if self.eclipse.enabled {
+            return self.eclipse_page(row);
+        }
         let mut rows = Vec::new();
         for mark in plan::marks_for(row) {
             rows.push(if marked == Some(&mark) {
@@ -1073,6 +1099,7 @@ impl Source for Cores {
                 }
             },
             (plan::INSTALL | plan::UPDATE | REMOVE_ASK, Some(_)) => Effect::Mark(action.to_owned(), true),
+            (eclipse::ECLIPSE_UPDATE | eclipse::ECLIPSE_INSTALL | eclipse::ECLIPSE_REMOVE, Some(row)) => self.eclipse_action(action, Some(&row.key)),
             (UNMARK, Some(_)) => Effect::Unmark,
             (DEFAULT, Some(row)) => {
                 self.make_default(&row.key, section);
@@ -1104,6 +1131,18 @@ impl Source for Cores {
                 self.roll_back(key);
             }
             return;
+        }
+        for (prefix, mark_key) in [(eclipse::ECLIPSE_UPDATE, plan::UPDATE), (eclipse::ECLIPSE_INSTALL, plan::INSTALL), (eclipse::ECLIPSE_REMOVE, plan::REMOVE)] {
+            if let Some(key) = asked.strip_prefix(&format!("{prefix}:")) {
+                if yes {
+                    if let Some(row) = self.row(key).cloned() {
+                        let mark = Mark { key: mark_key.to_owned(), label: mark_key.to_owned() };
+                        let steps = plan::steps(&[(&row, &mark)]);
+                        self.run(steps, Some(row.key));
+                    }
+                }
+                return;
+            }
         }
         let Some(key) = asked.strip_prefix(&format!("{APPROVE}:")) else { return };
         let Some(row) = self.row(key).cloned() else { return };
@@ -1187,5 +1226,73 @@ impl Source for Cores {
             self.notice = Some(format!("{} could not be changed: {e}", found.label));
         }
         Some(self.options(&row))
+    }
+
+    fn set_eclipse(&mut self, eclipse: bool) {
+        self.eclipse.enabled = eclipse;
+    }
+
+    fn set_console_counts(&mut self, counts: HashMap<String, usize>) {
+        self.eclipse.console_counts = counts;
+    }
+
+    fn card_breadcrumb(&self, key: &str) -> Option<String> {
+        self.eclipse_breadcrumb(key)
+    }
+
+    fn card_detail_pane(&self, rows: &[CardRow], at: usize) -> Option<(String, String)> {
+        self.eclipse.enabled.then(|| Self::eclipse_detail_pane(rows, at)).flatten()
+    }
+
+    fn eclipse_view(&self) -> Option<Value> {
+        self.eclipse.enabled.then(|| self.eclipse_projection())
+    }
+
+    fn eclipse_choose_filter(&mut self, key: &str) {
+        self.eclipse.showing_remaining = false;
+        self.eclipse.filter = eclipse::Filter::from_key(key);
+        self.eclipse.focused_console = None;
+        self.eclipse.focused_core = None;
+    }
+
+    fn eclipse_toggle_view(&mut self) {
+        Cores::eclipse_toggle_view(self);
+    }
+
+    fn eclipse_focus_console(&mut self, console: &str) {
+        self.eclipse.focused_console = (!console.is_empty()).then(|| console.to_owned());
+        self.eclipse.focused_core = None;
+    }
+
+    fn eclipse_focus_core(&mut self, key: &str) {
+        self.eclipse.focused_core = (!key.is_empty()).then(|| key.to_owned());
+    }
+
+    fn eclipse_focus_zone(&mut self, zone: &str) {
+        self.eclipse.focus_zone = zone.to_owned();
+    }
+
+    fn eclipse_focus_zone_code(&mut self, code: i32) {
+        self.eclipse_zone_code(code);
+    }
+
+    fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> Effect {
+        self.eclipse_action(action, key)
+    }
+
+    fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Effect {
+        Cores::eclipse_act_code(self, code, key)
+    }
+
+    fn eclipse_action_key(&mut self, key: &str) -> Effect {
+        Cores::eclipse_action_key(self, key)
+    }
+
+    fn eclipse_navigate(&mut self, dir: &str) -> Effect {
+        Cores::eclipse_navigate(self, dir)
+    }
+
+    fn eclipse_nav(&mut self, code: i32) -> Effect {
+        self.eclipse_nav_code(code)
     }
 }

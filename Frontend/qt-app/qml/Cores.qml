@@ -8,6 +8,13 @@ Kit.NormalizedCanvas {
     id: screen
     required property ToolModel tool
     property int padFamily
+    property Clock clock: null
+    property string clockText: ""
+    property int battery: -1
+    readonly property bool eclipseMode: Kit.Tokens.coronaRim > 0
+    readonly property bool eclipseCoresActive: screen.eclipseMode && screen.tool.tool === ToolModel.Cores
+    readonly property real boardUnit: Kit.CanvasUnits.designHeight / 1200
+    readonly property string shownClock: screen.clock ? screen.clock.shortTime : screen.clockText
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
     // B on the screen.
@@ -18,12 +25,13 @@ Kit.NormalizedCanvas {
         // Under a card or a question the screen is drawn and nothing on it is reached: a backdrop to the gate, as ThemeHost's screens are.
         property bool backdrop: screen.tool.cardOpen || screen.tool.asking
         anchors.fill: parent
+        visible: !screen.eclipseCoresActive
         form: Kit.Forms.BigScreen
         // While searching, the rows hold the keys once a shoulder has given them the focus (R-20261111-31).
-        focus: screen.inputs && !screen.tool.cardOpen && !screen.tool.searchKeys
+        focus: !screen.eclipseCoresActive && screen.inputs && !screen.tool.cardOpen && !screen.tool.searchKeys
         padFamily: screen.padFamily
         // The question draws its own help bar over the screen's.
-        helpShown: !screen.tool.asking && !screen.tool.searching && !screen.tool.cardOpen
+        helpShown: !screen.eclipseCoresActive && !screen.tool.asking && !screen.tool.searching && !screen.tool.cardOpen
         helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
@@ -77,7 +85,7 @@ Kit.NormalizedCanvas {
         // The list takes the keys back from a card as it closes.
         Connections {
             target: screen.tool
-            function onListFocused() { frame.forceActiveFocus() }
+            function onListFocused() { (screen.eclipseCoresActive ? eclipseView : frame).forceActiveFocus() }
             function onSearchOpened() { searchFrame.forceActiveFocus() }
         }
         Connections {
@@ -86,27 +94,18 @@ Kit.NormalizedCanvas {
             function onSelectedSectionChanged() { screen.tool.chooseSection(frame.controller.selectedSection) }
             function onBackDeclined() { screen.backed() }
         }
-        QuestionHost {
-            id: question
-            objectName: `${screen.objectName}Question`
-            controller: frame.controller
-            title: screen.tool.questionTitle
-            sentences: screen.tool.questionSentences
-            caption: screen.tool.questionCaption
-            choices: screen.tool.questionChoices
-            backIndex: screen.tool.questionBack
-            padFamily: screen.padFamily
-            titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
-            bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
-            captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
-            rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
-            helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
-            help: HelpModel {
-                screen: HelpModel.Question
-            }
-            showing: screen.tool.asking
-            onChosen: (index) => screen.tool.answer(index)
-        }
+    }
+    CoresEclipse {
+        id: eclipseView
+        anchors.fill: parent
+        visible: screen.eclipseCoresActive && !screen.tool.cardOpen
+        focus: screen.eclipseCoresActive && screen.inputs && !screen.tool.cardOpen
+        tool: screen.tool
+        padFamily: screen.padFamily
+        pixelScale: screen.unit
+        battery: screen.battery
+        clockText: screen.shownClock
+        onBacked: screen.backed()
     }
     // The search's words typed on the docked keyboard, from the List card's Search (EmuSen_Interface.md §15.2), as the grid's search types them.
     Kit.KeyboardModel {
@@ -161,6 +160,18 @@ Kit.NormalizedCanvas {
             }
         }
     }
+    Kit.Backdrop {
+        objectName: "coresCardBackdrop"
+        anchors.fill: parent
+        visible: screen.eclipseCoresActive && screen.tool.cardOpen
+        ground: "#0A1024"
+        pixelScale: screen.unit
+        fields: [
+            Kit.BackdropField { x: 1060 * screen.boardUnit; y: -140 * screen.boardUnit; width: 900 * screen.boardUnit; height: 760 * screen.boardUnit; color: "#1FC9A8"; blur: 90 * screen.boardUnit; opacity: 0.85 },
+            Kit.BackdropField { x: 1380 * screen.boardUnit; y: 420 * screen.boardUnit; width: 760 * screen.boardUnit; height: 760 * screen.boardUnit; color: "#6A4CF0"; blur: 110 * screen.boardUnit; opacity: 0.9 },
+            Kit.BackdropField { x: 900 * screen.boardUnit; y: -260 * screen.boardUnit; width: 700 * screen.boardUnit; height: 520 * screen.boardUnit; color: "#1D6BF2"; blur: 100 * screen.boardUnit; opacity: 0.8 }
+        ]
+    }
     // A row's page under X and the List card under Select, on the Card form over the screen (EmuSen_Interface.md §15.5).
     MenuCard {
         id: card
@@ -168,6 +179,10 @@ Kit.NormalizedCanvas {
         anchors.fill: parent
         visible: card.open || card.leaving
         open: screen.tool.cardOpen
+        eclipse: screen.eclipseMode
+        pixelScale: screen.unit
+        battery: screen.battery
+        clockText: screen.shownClock
         focus: screen.inputs && screen.tool.cardOpen
         padFamily: screen.padFamily
         rows: RowsModel {
@@ -178,6 +193,11 @@ Kit.NormalizedCanvas {
         current: screen.tool.cardCurrent
         paneLines: screen.tool.cardPaneLines
         paneMuted: screen.tool.cardPaneMuted
+        paneStatus: screen.tool.cardPaneStatus
+        paneStatusOk: screen.tool.cardPaneStatusOk
+        positionLine: screen.tool.cardPositionLine
+        paneDrawn: screen.eclipseCoresActive && screen.tool.cardDetailValue.length > 0
+        paneHeight: detailAside.implicitHeight
         help: HelpModel {
             screen: HelpModel.Card
         }
@@ -186,6 +206,64 @@ Kit.NormalizedCanvas {
         onFocused: (index) => screen.tool.cardFocus(index)
         onBacked: screen.tool.cardBack()
         onActed: (key) => screen.tool.cardBack()
+        Column {
+            id: detailAside
+            visible: card.paneDrawn
+            x: 36 * screen.boardUnit
+            y: 36 * screen.boardUnit
+            width: parent.width - 72 * screen.boardUnit
+            spacing: 22 * screen.boardUnit
+            CardLine {
+                objectName: "detailPaneLabel"
+                unit: screen.boardUnit
+                boardLine: true
+                boardLineHeight: 22
+                width: parent.width
+                text: screen.tool.cardDetailLabel
+                color: "#F3C9D2"
+                size: 18
+                weight: Font.DemiBold
+                spacing: 18 * 0.18
+                capitalization: Font.AllUppercase
+            }
+            CardLine {
+                objectName: "detailPaneValue"
+                unit: screen.boardUnit
+                boardLine: true
+                boardLineHeight: 34.8
+                width: parent.width
+                text: screen.tool.cardDetailValue
+                color: Kit.Tokens.textStrong
+                size: 24
+                weight: Font.Normal
+                wrapMode: Text.Wrap
+            }
+        }
+    }
+    QuestionHost {
+        id: question
+        objectName: `${screen.objectName}Question`
+        controller: screen.eclipseCoresActive ? eclipseView.controller : frame.controller
+        title: screen.tool.questionTitle
+        sentences: screen.tool.questionSentences
+        caption: screen.tool.questionCaption
+        choices: screen.tool.questionChoices
+        backIndex: screen.tool.questionBack
+        padFamily: screen.padFamily
+        titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
+        bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
+        captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
+        rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
+        help: HelpModel {
+            screen: HelpModel.Question
+        }
+        showing: screen.tool.asking
+        onChosen: (index) => screen.tool.answer(index)
+        onOpenedChanged: {
+            if (!question.opened && screen.eclipseCoresActive && !screen.tool.cardOpen && !screen.tool.asking)
+                eclipseView.forceActiveFocus()
+        }
     }
     // A job's events pulled while it runs, never pushed (EmuSen_Qt.md §1.1).
     Timer {

@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import EmuSen.Kit as Kit
 import EmuSen.Models
 
 // A tool on the tool screen with its own ToolModel: Cores from Home's place, or a tool of jobs (Library Manager, Compressed
@@ -18,6 +19,7 @@ Cores {
     property alias world: toolModel.world
     property alias scraperTest: toolModel.scraperTest
     property alias cheatsUrl: toolModel.cheatsUrl
+    property alias consoleCounts: toolModel.consoleCounts
     // Open Folder on a firmware page, and what failed, which the window answers.
     signal openFolder(string path)
     signal said(string words)
@@ -31,6 +33,7 @@ Cores {
         id: toolModel
         objectName: `${toolScreen.objectName}Model`
         open: toolScreen.screens.shown === toolScreen.shownAs
+        eclipse: Kit.Tokens.coronaRim > 0
         onOpenFolder: (path) => toolScreen.openFolder(path)
         onLibraryChanged: toolScreen.libraryChanged()
     }

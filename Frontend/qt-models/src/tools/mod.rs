@@ -8,7 +8,9 @@
 pub mod cheats;
 pub mod cores;
 pub mod jobs;
+pub mod library_eclipse;
 pub mod scraper;
+pub mod scraper_eclipse;
 
 use crate::card::Row as CardRow;
 use crate::question::{confirm, Question};
@@ -243,6 +245,16 @@ pub trait Source {
     fn eclipse_nav(&mut self, _code: i32) -> Effect {
         Effect::Done
     }
+    /// Eclipse search text update from the docked keyboard.
+    fn set_eclipse_search(&mut self, _words: &str) {}
+    /// Returns true once when a synchronous Eclipse edit changed games.db.
+    fn take_library_changed(&mut self) -> bool {
+        false
+    }
+    /// Eclipse screen selector (0=none, 1=cores, 2=scraper, 3=scrapeStatus, 4=libraryManager).
+    fn eclipse_screen_code(&self) -> i32 {
+        0
+    }
 }
 
 /// The cards over the screen: a row's page (X) and the List card (Select).
@@ -375,6 +387,7 @@ impl<S: Source> Tool<S> {
 
     pub fn set_search(&mut self, words: &str) {
         self.search = words.to_owned();
+        self.source.set_eclipse_search(&self.search);
     }
 
     pub fn mark_of(&self, key: &str) -> Option<&Mark> {
@@ -660,6 +673,12 @@ impl<S: Source> Tool<S> {
                 self.take(effect, None)
             }
             (Card::Page { key, .. }, action) => {
+                if action == SEARCH {
+                    self.cards.clear();
+                    self.searching = true;
+                    self.on_keys = true;
+                    return None;
+                }
                 let key = key.clone();
                 if let Some(again) = self.source.step(&key, action, 1) {
                     if let Some((Card::Page { rows, .. }, _)) = self.cards.last_mut() {
@@ -931,4 +950,177 @@ impl Source for Box<dyn Source> {
     fn eclipse_nav(&mut self, code: i32) -> Effect {
         (**self).eclipse_nav(code)
     }
+    fn set_eclipse_search(&mut self, words: &str) {
+        (**self).set_eclipse_search(words)
+    }
+    fn take_library_changed(&mut self) -> bool {
+        (**self).take_library_changed()
+    }
+    fn eclipse_screen_code(&self) -> i32 {
+        (**self).eclipse_screen_code()
+    }
+}
+
+/// Shared Eclipse table breadcrumb trail items for `ToolTableEclipse` and `ScrapeStatusEclipse`.
+pub(crate) fn eclipse_trail(parts: &[&str]) -> Vec<serde_json::Value> {
+    let last = parts.len().saturating_sub(1);
+    parts
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            serde_json::json!({
+                "label": label,
+                "current": i == last,
+                "slash": if i < last { "/" } else { "" },
+                "objectName": format!("trailWords.{i}"),
+                "slashObjectName": if i < last { format!("trailSlash.{i}") } else { String::new() },
+            })
+        })
+        .collect()
+}
+
+/// Shared Eclipse filter pill item for `ToolTableEclipse`.
+pub(crate) fn eclipse_filter(key: &str, label: &str, active: bool) -> serde_json::Value {
+    serde_json::json!({
+        "key": key,
+        "label": label,
+        "active": active,
+        "objectName": format!("filterPill.{key}"),
+        "labelObjectName": format!("filterWords.{key}"),
+    })
+}
+
+/// Shared Eclipse table column metadata and CSS Grid pixel widths for `ToolTableEclipse`.
+pub(crate) fn eclipse_columns(specs: &[(&str, f64, f64)]) -> (Vec<serde_json::Value>, Vec<f64>) {
+    let fixed_sum: f64 = specs.iter().map(|(_, f, _)| *f).sum();
+    let weight_sum: f64 = specs.iter().map(|(_, _, w)| *w).sum::<f64>().max(1.0);
+    let gaps = specs.len().saturating_sub(1) as f64 * 16.0;
+    let avail = 1160.0 - 40.0 - gaps - fixed_sum;
+    let widths: Vec<f64> = specs.iter().map(|(_, f, w)| if *f > 0.0 { *f } else { (*w / weight_sum) * avail }).collect();
+    let cols = specs
+        .iter()
+        .enumerate()
+        .map(|(idx, (title, _, _))| {
+            serde_json::json!({
+                "title": title,
+                "width": widths[idx],
+                "objectName": format!("tableCol.{idx}"),
+            })
+        })
+        .collect();
+    (cols, widths)
+}
+
+/// Shared Eclipse table row item for `ToolTableEclipse`.
+pub(crate) fn eclipse_row(idx: usize, key: &str, focused: bool, cells: Vec<String>) -> serde_json::Value {
+    let cell_names: Vec<String> = (0..cells.len()).map(|c| format!("tableCell.{idx}.{c}")).collect();
+    serde_json::json!({
+        "key": key,
+        "focused": focused,
+        "objectName": format!("tableRow.{idx}"),
+        "bgObjectName": format!("tableRowBg.{idx}"),
+        "ringObjectName": format!("tableRowRing.{idx}"),
+        "cells": cells,
+        "cellObjectNames": cell_names,
+    })
+}
+
+/// Shared Eclipse aside paragraph line item.
+pub(crate) fn eclipse_aside_line(idx: usize, text: &str, muted: bool) -> serde_json::Value {
+    serde_json::json!({
+        "text": text,
+        "muted": muted,
+        "objectName": format!("asideLine.{idx}"),
+    })
+}
+
+/// Shared Eclipse footer help bar entry for `RowsModel`.
+pub(crate) fn eclipse_help_entry(entries: &mut Vec<serde_json::Value>, button: UiButton, pair: Option<UiButton>, label: &str) {
+    let mut entry = serde_json::json!({
+        "button": button.index() as i32,
+        "label": label,
+        "enabled": true,
+    });
+    if let Some(p) = pair {
+        entry["pair"] = serde_json::json!(p.index() as i32);
+    }
+    entries.push(entry);
+}
+
+/// Shared Eclipse `#73` detail pane splitter for `detail.` rows.
+pub(crate) fn eclipse_detail_pane(rows: &[CardRow], at: usize) -> Option<(String, String)> {
+    let row = rows.get(at)?;
+    if !row.key.starts_with("detail.") {
+        return None;
+    }
+    let val = row.pane.lines.first().map(|l| l.0.clone()).filter(|s| !s.is_empty()).unwrap_or_else(|| row.value.clone());
+    Some((row.label.clone(), val))
+}
+
+/// Formats byte sizes concisely matching the Eclipse Library Manager board.
+pub(crate) fn eclipse_format_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let kb = bytes as f64 / 1024.0;
+    if kb < 1024.0 {
+        return format!("{:.0} KB", kb);
+    }
+    let mb = kb / 1024.0;
+    if mb >= 1024.0 {
+        return format!("{:.1} GB", mb / 1024.0);
+    }
+    if mb < 10.0 && (mb - mb.round()).abs() >= 0.05 {
+        format!("{mb:.1} MB")
+    } else {
+        format!("{:.0} MB", mb)
+    }
+}
+
+/// Steps filter pill index cleanly with wrap-around.
+pub(crate) fn eclipse_step_filter(len: usize, cur: usize, delta: i32) -> usize {
+    if len == 0 { 0 } else { (cur as i32 + delta).rem_euclid(len as i32) as usize }
+}
+
+/// Steps focused table row index clamped to visible rows.
+pub(crate) fn eclipse_move_row(len: usize, cur: usize, delta: i32) -> usize {
+    if len == 0 { 0 } else { (cur as i32 + delta).clamp(0, (len - 1) as i32) as usize }
+}
+
+/// Steps up inside a table zone, moving to filter pills from the first row.
+pub(crate) fn eclipse_step_row_up(vis_keys: &[String], focused: &mut Option<String>, focus_zone: &mut usize) -> bool {
+    let idx = focused.as_ref().and_then(|k| vis_keys.iter().position(|x| x == k)).unwrap_or(0);
+    if idx == 0 {
+        *focus_zone = 0;
+        false
+    } else {
+        *focused = vis_keys.get(eclipse_move_row(vis_keys.len(), idx, -1)).cloned();
+        true
+    }
+}
+
+/// Builds the 6-entry Eclipse table footer help list cleanly.
+pub(crate) fn eclipse_table_help(accept_label: &str, shoulder_label: &str) -> Vec<serde_json::Value> {
+    let mut help = Vec::new();
+    eclipse_help_entry(&mut help, emusen_kit_core::input::UiButton::Accept, None, accept_label);
+    eclipse_help_entry(&mut help, emusen_kit_core::input::UiButton::Back, None, "Back");
+    eclipse_help_entry(&mut help, emusen_kit_core::input::UiButton::PageUp, Some(emusen_kit_core::input::UiButton::PageDown), shoulder_label);
+    eclipse_help_entry(&mut help, emusen_kit_core::input::UiButton::Screensaver, None, "More");
+    eclipse_help_entry(&mut help, emusen_kit_core::input::UiButton::Options, None, "List");
+    eclipse_help_entry(&mut help, emusen_kit_core::input::UiButton::Menu, None, "Apply…");
+    help
+}
+
+/// Maps system ids to display console names from the client source.
+pub(crate) fn eclipse_console_lookup(source: &crate::clients::ClientSource) -> std::collections::HashMap<String, String> {
+    use crate::library::LibrarySource;
+    source
+        .systems()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| {
+            let name = crate::library::console_name(&s);
+            (s.id, name)
+        })
+        .collect()
 }

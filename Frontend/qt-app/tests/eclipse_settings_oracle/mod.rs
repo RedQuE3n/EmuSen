@@ -166,6 +166,10 @@ pub fn acted(scene: &mut Scene<'_>, page: &str, i: usize, how: &str, differences
                 back(scene);
                 wait_for(scene, "screens", "shown", "Settings", 2000);
                 settle(scene);
+            } else if scene.property("settingsModel", "shadersShown") == "true" {
+                back(scene);
+                wait_for(scene, "settingsModel", "shadersShown", "false", 2000);
+                settle(scene);
             } else if at(scene).1 != page {
                 back(scene);
                 settle(scene);

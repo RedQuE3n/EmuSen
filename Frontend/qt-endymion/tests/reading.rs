@@ -178,3 +178,29 @@ fn the_thread_hands_on_each_tick_and_stops_when_the_sink_refuses_or_the_reader_d
     assert_eq!(got.recv_timeout(wait).unwrap(), Err("no pads here".to_string()), "a failed opening is said once");
     drop(refused);
 }
+
+#[test]
+fn right_stick_x_applies_deadzone_scales_and_recovers_to_zero() {
+    let _world = World::new("reading-right-stick");
+    let p = Platform::load(library()).unwrap();
+    let set = SimSet::new(&p).unwrap();
+    let one = pad(&p, 3, "Xbox Wireless Controller");
+    set.connect(&one).unwrap();
+    let pads = Pads::simulated(&p, &set).unwrap();
+    let mut reading = Reading::default();
+    reading.start(&pads).unwrap();
+
+    one.set_axis(2, 0.15).unwrap();
+    assert_eq!(reading.poll(&pads).unwrap().right_x, None);
+
+    one.set_axis(2, 0.59).unwrap();
+    let half = reading.poll(&pads).unwrap().right_x.expect("right deflection emitted");
+    assert!((half - 0.5).abs() < 0.02, "expected ~0.5, got {half}");
+
+    one.set_axis(2, -1.0).unwrap();
+    let full_left = reading.poll(&pads).unwrap().right_x.expect("left deflection emitted");
+    assert!((full_left + 1.0).abs() < 0.02, "expected -1.0, got {full_left}");
+
+    one.set_axis(2, 0.0).unwrap();
+    assert_eq!(reading.poll(&pads).unwrap().right_x, Some(0.0));
+}

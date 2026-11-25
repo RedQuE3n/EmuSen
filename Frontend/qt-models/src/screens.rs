@@ -424,6 +424,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "consoleStarted"]
         fn console_started(self: Pin<&mut Screens>, key: QString);
+        /// Eclipse Power dialog row chosen: Sleep, Restart, Shut down, or Back to the desktop, by its key.
+        #[qsignal]
+        #[cxx_name = "powerAsked"]
+        fn power_asked(self: Pin<&mut Screens>, key: QString);
     }
 
     impl cxx_qt::Threading for Screens {}
@@ -550,6 +554,9 @@ impl qobject::Screens {
         let key = key.to_string();
         if key == crate::home_card::QUIT_EMUSEN {
             self.as_mut().quit();
+        }
+        if key == crate::home_card::POWER_DESKTOP || crate::power::Action::from_key(&key).is_some() {
+            self.as_mut().power_asked(QString::from(key.as_str()));
         }
         if key == crate::home_card::RESUME && self.shown == Screen::HomeCard {
             if !self.game_running {

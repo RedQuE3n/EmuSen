@@ -1,16 +1,27 @@
 NAME
-    for - loop over a list of words
+    for - iterate over a list of words
 
 SYNOPSIS
     for NAME in word...; do LIST; done
 
 DESCRIPTION
-    Sets variable NAME to each word in turn (already expanded - quoting,
-    $VAR, and $(...) all apply to the word list) and runs the body once per
-    word. 'break' exits the loop early; 'continue' skips to the next word.
-    Every iteration counts against a shared 10-second wall-clock safety
-    timeout (see 'while') that aborts a runaway loop with a clear error.
-    An interrupt stops it at the next iteration, as it does 'while'.
+    Expands the word list (applying quoting, variable expansion, and
+    command substitution), assigns each resulting word to NAME in turn,
+    and executes LIST once per word.
+
+    break(1) exits the loop early; continue(1) advances to the next word.
+    All loop iterations share the shell's 10-second wall-clock safety
+    timeout and check for interrupts between iterations.
 
 EXAMPLES
     for i in 1 2 3; do echo $i; done
+    for f in $(ls /Logs); do echo $f; done
+
+EXIT STATUS
+    0   The list was empty, or the last executed command in the loop body
+        exited 0.
+    N   Exit status of the last command executed in the loop body, or 130
+        if interrupted.
+
+SEE ALSO
+    while(1), break(1), continue(1), if(1)

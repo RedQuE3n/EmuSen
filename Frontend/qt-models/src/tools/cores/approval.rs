@@ -63,5 +63,6 @@ pub fn question(a: &Asking) -> Question {
         caption: small_print(a),
         choices: vec!["Not Now".to_owned(), "Approve".to_owned()],
         back: Some(0),
+        picture: String::new(),
     }
 }

@@ -86,7 +86,7 @@ Kit.NormalizedCanvas {
             function onSelectedSectionChanged() { screen.tool.chooseSection(frame.controller.selectedSection) }
             function onBackDeclined() { screen.backed() }
         }
-        Kit.Question {
+        QuestionHost {
             id: question
             objectName: `${screen.objectName}Question`
             controller: frame.controller
@@ -104,11 +104,8 @@ Kit.NormalizedCanvas {
             help: HelpModel {
                 screen: HelpModel.Question
             }
+            showing: screen.tool.asking
             onChosen: (index) => screen.tool.answer(index)
-        }
-        // Opened each time the tool asks; a Binding, since B closing the popup would undo a plain one.
-        Binding {
-            question.visible: screen.tool.asking
         }
     }
     // The search's words typed on the docked keyboard, from the List card's Search (EmuSen_Interface.md §15.2), as the grid's search types them.

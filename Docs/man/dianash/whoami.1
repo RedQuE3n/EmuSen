@@ -1,13 +1,18 @@
 NAME
-    whoami - print the account this shell is running as
+    whoami - print the active shell account
 
 SYNOPSIS
     whoami
 
 DESCRIPTION
-    Prints THIS shell's own current account (see 'su') - every shell starts
-    as 'root'. Unix flavor, not real access control - see 'su's own man page
-    for what that means today and what's still future work.
+    Prints the account name active in the current shell session. Every
+    shell starts as 'root'. Use su(1) to switch accounts.
 
 EXAMPLES
     whoami
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    who(1), su(1), useradd(1), userdel(1)

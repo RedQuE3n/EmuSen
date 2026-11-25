@@ -22,6 +22,11 @@ pub const SEARCH: &str = "search";
 pub const LIBRARY: &str = "openLibrary";
 pub const SETTINGS: &str = "settings";
 pub const QUIT_EMUSEN: &str = "quitEmuSen";
+/// Eclipse Power dialog actions (board #15).
+pub const POWER_SLEEP: &str = "powerSleep";
+pub const POWER_RESTART: &str = "powerRestart";
+pub const POWER_SHUTDOWN: &str = "powerShutdown";
+pub const POWER_DESKTOP: &str = "powerDesktop";
 /// The tools whose screens the program has, by their rows' keys: Cores, and Themes (the Themes tab).
 pub const CORES: &str = "cores";
 pub const THEMES: &str = "themes";
@@ -238,9 +243,9 @@ fn eclipse_first_page(f: &Facts) -> Page {
     rows.push(Row::new(TOOLS, crate::words::TOOLS_SECTION).value("Cores, Scraper, Packages").icon("menu.tools"));
     rows.push(Row::new(SETTINGS, "Settings").icon("menu.settings"));
     rows.push(Row::new(POWER, "Power").value("Sleep, restart, shut down").icon("menu.power"));
-    let quit_hint = if f.suspended.is_empty() { "" } else { "The game closes first" };
-    rows.push(Row::new(QUIT, "Quit EmuSen").value(quit_hint).icon("menu.quit"));
-    Page { title: "Menu".to_owned(), breadcrumb: String::new(), rows, footer: f.unread.clone(), menu: true, continue_card }
+    let (quit_key, quit_hint) = if f.suspended.is_empty() { (QUIT_EMUSEN, "") } else { (QUIT, "The game closes first") };
+    rows.push(Row::new(quit_key, "Quit EmuSen").value(quit_hint).icon("menu.quit"));
+    Page { title: "Menu".to_owned(), breadcrumb: String::new(), rows, footer: f.unread.clone(), menu: true, continue_card, ..Page::default() }
 }
 
 fn tools_page(f: &Facts) -> Page {
@@ -289,6 +294,29 @@ fn power_page() -> Page {
     Page { title: "Power".to_owned(), breadcrumb: TITLE.to_owned(), rows, footer: crate::words::version_line(), ..Page::default() }
 }
 
+/// Eclipse's circular Power dialog as board #15 draws it (EclipsePower.dc.html).
+fn eclipse_power_page(f: &Facts) -> Page {
+    let subtitle = if f.suspended.is_empty() { String::new() } else { format!("{} is suspended. It is saved before anything here happens.", f.suspended) };
+    let quit_key = if f.suspended.is_empty() { QUIT_EMUSEN } else { QUIT };
+    let rows = vec![
+        Row::new(POWER_SLEEP, "Sleep").value("Wakes where you are").icon("power.sleep"),
+        Row::new(POWER_RESTART, "Restart").icon("power.restart"),
+        Row::new(POWER_SHUTDOWN, "Shut down").icon("power.shutdown"),
+        Row::new(POWER_DESKTOP, "Back to the desktop").value("EmuSen keeps running").icon("power.desktop"),
+        Row::new(quit_key, "Quit EmuSen").icon("power.quit"),
+    ];
+    Page { title: "Power".to_owned(), subtitle, rows, power: true, ..Page::default() }
+}
+
+/// Eclipse's circular Quit EmuSen confirmation dialog when a game is suspended (board #14).
+fn eclipse_quit_page(f: &Facts) -> Page {
+    let subtitle = if f.suspended.is_empty() { "EmuSen closes." } else { "The game closes, then EmuSen." };
+    let mut page = question("Quit EmuSen?", subtitle);
+    page.dialog = true;
+    page.subtitle = subtitle.to_owned();
+    page
+}
+
 /// The card's pages.
 pub struct HomeCard;
 
@@ -309,8 +337,14 @@ impl Pages for HomeCard {
     }
 
     fn page_for(&self, key: &str, facts: &Value, eclipse: bool) -> Page {
-        if eclipse && key == FIRST {
-            return eclipse_first_page(&Facts::of(facts));
+        if eclipse {
+            let f = Facts::of(facts);
+            return match key {
+                FIRST => eclipse_first_page(&f),
+                POWER => eclipse_power_page(&f),
+                QUIT => eclipse_quit_page(&f),
+                _ => self.page(key, facts),
+            };
         }
         self.page(key, facts)
     }
@@ -321,7 +355,7 @@ impl Pages for HomeCard {
             (QUIT, _) => Choice::Back,
             (_, TOOLS | POWER | QUIT | START_CONSOLE) => Choice::Turn(row.to_owned()),
             (START_CONSOLE, console) => Choice::Act(console.to_owned()),
-            (_, RESUME | GAME_PAGE | SEARCH | LIBRARY | SETTINGS) => Choice::Act(row.to_owned()),
+            (_, RESUME | GAME_PAGE | SEARCH | LIBRARY | SETTINGS | QUIT_EMUSEN | POWER_SLEEP | POWER_RESTART | POWER_SHUTDOWN | POWER_DESKTOP) => Choice::Act(row.to_owned()),
             (TOOLS, tool) => Choice::Act(tool.to_owned()),
             _ => Choice::Owed,
         }
@@ -333,6 +367,14 @@ impl Pages for HomeCard {
     }
 
     fn help_for(&self, page: &str, eclipse: bool) -> crate::help::Screen {
-        if eclipse && page == FIRST { crate::help::Screen::CardHome } else { self.help(page) }
+        if eclipse {
+            return match page {
+                FIRST => crate::help::Screen::CardHome,
+                POWER => crate::help::Screen::QuestionBack,
+                QUIT => crate::help::Screen::Question,
+                _ => self.help(page),
+            };
+        }
+        self.help(page)
     }
 }

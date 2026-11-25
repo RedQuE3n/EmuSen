@@ -6,15 +6,31 @@ SYNOPSIS
     trace off
 
 DESCRIPTION
-    Arms this core's own live CPU instruction trace for the next <count>
-    instructions, counted from whenever this command runs (not from
-    power-on) - so a trace can be aimed at a specific moment in a play
-    session instead of burning its whole budget during boot. 'trace off'
-    cancels an in-progress trace early. <count> is at least 1: a trace of
-    no instructions is refused, since a core's trace armed with 0 never ends.
-    Not available for a core with no equivalent trace mechanism, or a
-    standalone launch with no core loaded.
+    Arms the attached core's live CPU instruction trace for the next
+    <count> instructions starting immediately (rather than from power-on),
+    or cancels an active trace early with 'trace off'.
+
+    <count> is parsed as hexadecimal (optional '0x' or '$' prefix) and
+    must be at least 1 (for example, 'trace 100' traces 0x100 = 256
+    instructions, and 'trace 500' traces 0x500 = 1,280 instructions).
+    Cores without a live trace hook print a message indicating no trace
+    switch is registered.
+
+OPTIONS
+    <count>
+        Hexadecimal number of instructions to trace (>= 1).
+
+    off
+        Cancel any in-progress instruction trace.
 
 EXAMPLES
-    trace 500
+    trace 100
+    trace 0x500
     trace off
+
+EXIT STATUS
+    0   Trace armed or disabled (or usage/unavailable message printed).
+    1   Count less than 1, invalid hex value, or session service fault.
+
+SEE ALSO
+    log(1), step(1), disasm(1), bp(1), cov(1)

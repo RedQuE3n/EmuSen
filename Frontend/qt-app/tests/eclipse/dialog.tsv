@@ -1,0 +1,35 @@
+# Eclipse Dialog and Failure Notice (#14) against EclipseDialog.dc.html (1920 by 1200, Chrome JSON dialog.json).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+noticeShadow	23	notice drop shadow 0 18 50	Kit.Glow	Glow	in:notice:0	top:notice:0	960	-	22	#99000000	-	built	glow 50 0 0 18
+notice	23	top-centered failure notice card	NoticeEclipse	Rectangle	-	56	960	-	22	Tokens.surfaceRaised	-	built	line 2 #FFF4F1EC
+noticeIcon	24	warning triangle icon 34 px	Marks.path	Item	in:notice:26	top:notice:24	34	34	-	Tokens.textStrong	-	built	-
+noticeHeading	26	"Tower Set could not start"	NoticePresenter.heading	CardLine	after:noticeIcon:18	top:notice:22	-	30	-	Tokens.textStrong	24	built	600 0 none
+noticeBody	27	failure notice body text	NoticePresenter.body	CardLine	after:noticeIcon:18	below:noticeHeading:6	-	55.1	-	#FFD8DBE6	19	built	400 0 none
+noticeAction	29	X Open its folder action pill	NoticePresenter.actionLabel	Item	-	top:notice:22	inright:notice:26	36	-	-	-	built	-
+noticeActionGlyph	29	X outlined glyph 36 px	CardGlyph	CardGlyph	in:noticeAction:0	mid:noticeAction	36	36	-	-	-	built	glyph 15 400
+noticeActionLabel	29	"Open its folder"	NoticePresenter.actionLabel	CardLine	after:noticeActionGlyph:10	mid:noticeAction	inright:noticeAction:0	-	-	#FFD8DBE6	18	built	400 0 none
+dialogScrim	21	dimming scrim rgba(4,5,10,0.72)	Rectangle	Rectangle	0	0	right:0	1200	-	#B804050A	-	built	-
+dialogDisc	32	centered 780x780 eclipse disc	Kit.CoronaDisc	CoronaDisc	-	300	780	780	-	Tokens.surface	-	built	-
+coronaRim	32	2 px corona rim	Tokens.coronaColor	Rectangle	in:dialogDisc:-2	top:dialogDisc:-2	784	784	-	Tokens.coronaColor	-	built	-
+coronaGlow.0	32	inner corona glow	44 px blur, 8 px spread, 0.6	-	in:dialogDisc:0	top:dialogDisc:0	780	780	-	-	-	built	corona 44 8 0.6
+coronaGlow.1	32	outer corona halo	170 px blur, 46 px spread, 0.28	-	in:dialogDisc:0	top:dialogDisc:0	780	780	-	-	-	built	corona 170 46 0.28
+dialogSection	34	dialog column at y 430 w 600	Column	Column	-	430	600	-	-	-	-	built	-
+dialogPreview	35	state preview 220x138	GamePageModel.questionPicture	Item	in:dialogSection:190	top:dialogSection:0	220	138	-	-	-	built	-
+dialogPreviewRim	35	preview 2 px rim	rgba(246,231,216,0.5)	Rectangle	in:dialogPreview:-2	top:dialogPreview:-2	224	142	18	#80F6E7D8	-	built	-
+dialogPreviewBox	35	preview rounded frame	Rectangle	Rectangle	in:dialogPreview:0	top:dialogPreview:0	220	138	16	-	-	built	-
+questionTitle	36	"Delete Slot 1?"	GamePageModel.questionTitle	CardLine	in:dialogSection:0	below:dialogPreview:22	600	56	-	Tokens.textStrong	44	built	600 0 none
+questionWords	37	body text container	Flickable	Flickable	in:dialogSection:0	below:questionTitle:22	600	60.9	-	-	-	built	-
+questionSentence.0	37	body text 21 px	GamePageModel.questionSentences	CardLine	in:questionWords:0	top:questionWords:0	600	60.9	-	#FFC9CDDB	21	built	400 0 none
+choices	38	horizontal button row	ListView	ListView	in:dialogSection:62	below:questionWords:32	476	72	-	-	-	built	-
+answer.0	39	Keep it button	Walkable	Walkable	in:choices:0	top:choices:0	230	72	-	-	-	built	-
+pillGlow.0	39	focused button glow	Kit.Glow	Glow	in:answer.0:0	top:answer.0:0	230	72	36	#66F0B4C4	-	built	glow 46 6 0 0
+pillRing.0	39	focused button 6 px ring	rgba(246,231,216,0.18)	Rectangle	in:answer.0:-6	top:answer.0:-6	242	84	42	#2EF6E7D8	-	built	-
+answerBg.0	39	focused cream pill	Tokens.accent	Rectangle	in:answer.0:0	top:answer.0:0	230	72	36	Tokens.accent	-	built	-
+answerLabel.0	39	"Keep it"	CardLine	CardLine	-	mid:answer.0	-	31	-	Tokens.overAccent	25	built	600 0 none
+answer.1	40	Delete button	Walkable	Walkable	after:answer.0:16	top:choices:0	230	72	-	-	-	built	-
+answerBg.1	40	unfocused outlined pill	Rectangle	Rectangle	in:answer.1:0	top:answer.1:0	230	72	36	-	-	built	line 2 #FF5A6076
+answerLabel.1	40	"Delete"	CardLine	CardLine	-	mid:answer.1	-	31	-	Tokens.textStrong	25	built	400 0 none
+dialogHelp	44	footer A Choose B Keep it	HelpModel	HelpBar	-	1122	-	38	-	#FFD8DBE6	21	built	400 0 none
+ownGlyph-Choose	45	A filled 34 px	CardGlyph	-	in:dialogHelp:0	mid:dialogHelp	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Keep it	46	B ringed 38 px	CardGlyph	-	-	mid:dialogHelp	38	38	-	-	-	built	glyph 16 400

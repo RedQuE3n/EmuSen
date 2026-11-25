@@ -1,0 +1,71 @@
+NAME
+    dma - what the block-transfer engine is set up to do, and what it did
+
+SYNOPSIS
+    dma
+    dma log on [<n>]
+    dma log off
+    dma log [<n>]
+    dma log clear
+    dma stats
+
+DESCRIPTION
+    On a SNES nearly everything the player sees arrives by DMA. Tiles,
+    palettes, sprite tables and the sound driver's samples are all block
+    transfers, and per-scanline effects - a status-bar split, a colour
+    gradient, a growing window wipe - are HDMA. So a large class of visual
+    bug is not a rendering bug at all: the data never arrived, or arrived
+    somewhere else, and the renderer faithfully drew what it was given.
+
+    'dma' alone prints the channel table: for each of the eight channels,
+    its direction, its B-bus write pattern, which register it targets (by
+    name, not just an address), where it reads from, how long the transfer
+    is, and for HDMA the table pointer and line counter it has reached. An
+    idle channel still shows its last configuration, which is usually the
+    thing you wanted to see.
+
+    On a SNES engine of the stable ABI the table is the system pack's
+    reading of the registers as last written, $4300-$437F with MDMAEN and
+    HDMAEN, from the engine's IO space. An enabled HDMA channel is shown
+    'on' while its line counter is not zero and 'arm' once it is, since a
+    header byte of 0 ends a channel until the next frame (fullsnes); a
+    counter the program itself wrote to 0 reads as ended too. The indirect
+    address is $43x5-$43x7, the byte count's own register, as on the
+    hardware. 'dma log' needs a transfer record the stable ABI does not
+    carry, and refuses there.
+
+TRANSFER LOG
+    'dma log on' records every transfer as it happens - channel, kind,
+    destination, source, length, and the frame and scanline it ran on.
+    This is the part the channel table cannot give you, because a general
+    DMA reconfigures and fires many times a frame and the table only ever
+    shows the last one.
+
+    The scanline column is what makes it worth reading. A VRAM transfer
+    during vblank is normal; the same transfer at scanline 100 is a bug
+    that will show as corrupt graphics, and 'dma log' names the frame it
+    first happened on. Pair it with 'bp when ppuaccess' to halt on one.
+
+BANDWIDTH
+    'dma stats' totals the whole armed run two ways: per channel, split
+    into general and HDMA because those cost very differently, and per
+    destination register, which answers 'where is the bandwidth going'.
+    A game that is slow during one scene and not another is usually
+    uploading something enormous, and the destination table names it.
+
+COST
+    Disarmed the log is a null field test at the end of each transfer, so
+    a normal run pays nothing. Armed, it is a fixed-size ring plus a set
+    of counters, so a long session cannot grow memory without bound -
+    'dma log' shows only what is still in the ring, while 'dma stats'
+    covers the whole armed run. The channel table is read on demand and
+    costs nothing at all when not being run.
+
+EXAMPLES
+    dma
+    dma log on
+    dma log 40
+    dma stats
+
+SEE ALSO
+    bp, copflow, mem, watch, tilemap

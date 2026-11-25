@@ -1,0 +1,11 @@
+NAME
+    continue - skip to the next iteration of the nearest enclosing loop
+
+SYNOPSIS
+    continue
+
+DESCRIPTION
+    A hardcoded, zero-argument parser keyword, same as 'break'. Skips the
+    rest of the current loop body and re-evaluates the loop's own condition
+    (or advances to the next word, for 'for'). Outside any loop it's a
+    silent no-op, matching bash.

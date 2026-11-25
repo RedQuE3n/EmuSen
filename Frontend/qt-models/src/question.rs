@@ -11,6 +11,8 @@ pub struct Question {
     pub choices: Vec<String>,
     /// The answer B gives; None goes back without answering.
     pub back: Option<usize>,
+    /// Optional preview thumbnail URL (used by Eclipse's circular dialog for state deletion).
+    pub picture: String,
 }
 
 /// A question that does something: No first and focused, then Yes; B answers No.
@@ -21,6 +23,7 @@ pub fn confirm(title: &str, sentences: &[&str]) -> Question {
         caption: String::new(),
         choices: vec!["No".to_string(), "Yes".to_string()],
         back: Some(0),
+        picture: String::new(),
     }
 }
 
@@ -33,10 +36,16 @@ pub fn resume(game: &str) -> Question {
         caption: "Settings ▸ EmuSen ▸ Saves and states ▸ Resume ◂ Ask each time ▸ stops the asking.".to_string(),
         choices: vec!["Continue".to_string(), "Start again".to_string()],
         back: None,
+        picture: String::new(),
     }
 }
 
 /// The index the kit's `Question` takes for B: the answer's, or -1 to go back without one.
 pub fn back_index(question: &Question) -> i32 {
     question.back.map_or(-1, |i| i as i32)
+}
+
+/// Footer label for B on an Eclipse dialog: the choice B answers when valid, else "Back".
+pub fn back_label(choices: &[String], back: i32) -> String {
+    usize::try_from(back).ok().and_then(|i| choices.get(i)).filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| "Back".to_owned())
 }

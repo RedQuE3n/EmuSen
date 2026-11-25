@@ -15,7 +15,7 @@ use crate::redact::redact;
 use crate::rules;
 use crate::runlog::{self, Lane, Log, Tally};
 use crate::store::{Key, Priority, Queued, Record, State, Stored};
-use crate::{Error, Scraper, layout};
+use crate::{Error, ScraperInner, layout};
 use emusen_galaxia::clock::TICKS_PER_SECOND;
 use emusen_galaxia::files::{file_exists, file_info};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -238,18 +238,9 @@ pub struct Runs {
     chosen: Mutex<HashMap<String, crate::answer::Game>>,
     pub failover: Mutex<Failover>,
     failover_stop: Arc<Stop>,
+    failover_cancel: Mutex<Option<Arc<emusen_net::Progress>>>,
+    failover_download: Mutex<Option<JoinHandle<()>>>,
     failover_thread: Mutex<Option<JoinHandle<()>>>,
-}
-
-/// A handle's address, sent to its own threads; the handle joins them before it is freed.
-#[derive(Clone, Copy)]
-struct Handle(*const Scraper);
-unsafe impl Send for Handle {}
-
-impl Handle {
-    fn get(&self) -> &'static Scraper {
-        unsafe { &*self.0 }
-    }
 }
 
 fn io(e: std::io::Error, at: &str) -> String {
@@ -262,7 +253,7 @@ enum Turn {
     Cancelled,
 }
 
-impl Scraper {
+impl ScraperInner {
     pub(crate) fn progress(&self) -> MutexGuard<'_, Progress> {
         self.runs.progress.lock().unwrap_or_else(|p| p.into_inner())
     }
@@ -306,7 +297,7 @@ impl Scraper {
     /// One run over a scope: the queue replaced by it unless resuming, ScreenScraper asked where it can be, the
     /// failover where it has nothing. How many games are queued; zero starts nothing.
     #[allow(clippy::too_many_arguments)]
-    pub fn start(&self, games: &[(String, String)], priority: Priority, one: bool, resume: bool, pick: Option<i64>, enabled: bool, choices: Choices) -> Result<usize, Error> {
+    pub(crate) fn start(self: &Arc<Self>, games: &[(String, String)], priority: Priority, one: bool, resume: bool, pick: Option<i64>, enabled: bool, choices: Choices) -> Result<usize, Error> {
         if self.is_running() {
             return Err(Error::Busy("A run is already going.".into()));
         }
@@ -336,6 +327,7 @@ impl Scraper {
             self.touch(&mut p);
         }
         *self.runs.paused.lock().unwrap_or_else(|p| p.into_inner()) = false;
+        self.runs.failover_stop.reset();
         if let Some(why) = self.unusable(enabled)? {
             let mut p = self.progress();
             p.why = Some(redact(&why));
@@ -378,7 +370,7 @@ impl Scraper {
         Ok(queued.len())
     }
 
-    fn ensure_workers(&self, w: &Arc<Workers>) {
+    fn ensure_workers(self: &Arc<Self>, w: &Arc<Workers>) {
         let mut handles = w.handles.lock().unwrap_or_else(|p| p.into_inner());
         if w.stop.is_stopped() {
             return;
@@ -391,8 +383,8 @@ impl Scraper {
         while handles.len() < wanted {
             let index = handles.len();
             *live += 1;
-            let (me, w2) = (Handle(self as *const Scraper), w.clone());
-            handles.push(std::thread::spawn(move || me.get().work(index, &w2)));
+            let (me, w2) = (Arc::clone(self), w.clone());
+            handles.push(std::thread::spawn(move || me.work(index, &w2)));
         }
     }
 
@@ -430,7 +422,7 @@ impl Scraper {
         w.log.write(&runlog::request_line(&runlog::Request { game, kind, code, outcome, bytes, took, worker: lane.index, live, allowed, pace, cap, hash, quota, matched, fingerprint }));
     }
 
-    fn work(&self, index: usize, w: &Arc<Workers>) {
+    fn work(self: &Arc<Self>, index: usize, w: &Arc<Workers>) {
         let mut lane = Lane::new(index);
         loop {
             let paused = Instant::now();
@@ -518,7 +510,7 @@ impl Scraper {
     }
 
     /// `ScrapeArrived`: a game's turn counted, the failover asked where no cover is shown, a stop's reason kept.
-    fn arrived(&self, result: Finished) {
+    fn arrived(self: &Arc<Self>, result: Finished) {
         let mut p = self.progress();
         if p.phase != Phase::Running {
             return;
@@ -547,7 +539,7 @@ impl Scraper {
     }
 
     /// ScreenScraper's part is over: a stop hands what is left to the failover; the run ends when the failover has answered too.
-    fn scraper_finished(&self, end: Phase) {
+    fn scraper_finished(self: &Arc<Self>, end: Phase) {
         let mut p = self.progress();
         p.workers_live = false;
         if p.phase != Phase::Running {
@@ -630,7 +622,7 @@ impl Scraper {
         }
     }
 
-    fn process(&self, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Turn {
+    fn process(self: &Arc<Self>, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Turn {
         match self.process_inner(item, w, lane) {
             Ok(Some(result)) => Turn::Done(result),
             Ok(None) => Turn::Cancelled,
@@ -651,7 +643,7 @@ impl Scraper {
     /// where its key is one; none when stopped.
     fn hash_once(&self, rom: &str, key: Option<&Key>, bytes: i64, modified: i64, w: &Workers, lane: &mut Lane) -> Result<Option<Hashes>, String> {
         let began = Instant::now();
-        let hashed = Scraper::hashes(rom, &w.stop)?;
+        let hashed = ScraperInner::hashes(rom, &w.stop)?;
         lane.hashed(began.elapsed(), hashed.as_ref().map_or(0, |h| h.size));
         if let Some(h) = &hashed {
             let store = self.store();
@@ -673,13 +665,13 @@ impl Scraper {
         Ok(fingerprint)
     }
 
-    fn process_inner(&self, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Result<Option<Finished>, String> {
+    fn process_inner(self: &Arc<Self>, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Result<Option<Finished>, String> {
         let rom = item.path.as_str();
         if !file_exists(rom) {
             self.store().dequeue(rom).map_err(|e| e.words())?;
             return Ok(Some(Finished { skipped: true, ..Finished::new(item, Outcome::Missing, "the file is gone") }));
         }
-        let Some(system_id) = Scraper::screenscraper_id(&item.system) else {
+        let Some(system_id) = ScraperInner::screenscraper_id(&item.system) else {
             self.store().dequeue(rom).map_err(|e| e.words())?;
             return Ok(Some(Finished { skipped: true, ..Finished::new(item, Outcome::Missing, "this game's console has no ScreenScraper system") }));
         };
@@ -819,7 +811,7 @@ impl Scraper {
     }
 
     /// One `jeuInfos`, its quota observed and counted; none when the run stopped while it was asked.
-    fn ask(&self, w: &Arc<Workers>, lane: &mut Lane, system_id: i32, hashes: Hashes, file_name: &str, game_id: Option<i64>) -> Option<client::JeuInfos> {
+    fn ask(self: &Arc<Self>, w: &Arc<Workers>, lane: &mut Lane, system_id: i32, hashes: Hashes, file_name: &str, game_id: Option<i64>) -> Option<client::JeuInfos> {
         let (client, cancel, name) = (w.client.clone(), w.cancel.clone(), file_name.to_string());
         let matched = if hashes.by_name_and_size() { "name+size" } else { "hash" };
         let answer = crate::clock::detached(&w.stop, move || client.jeu_infos(system_id, &hashes, &name, game_id, &cancel))?;
@@ -871,7 +863,7 @@ impl Scraper {
         let mut r = Record::new(key, State::Found, self.clock.now());
         r.game_id = Some(game.id);
         r.rom_id = game.rom_id;
-        r.system_id = game.system_id.or(Scraper::screenscraper_id(&item.system));
+        r.system_id = game.system_id.or(ScraperInner::screenscraper_id(&item.system));
         r.name = rules::choose_text(&game.names, &name_order, true).map(|t| t.text.clone());
         r.description = rules::choose_text(&game.synopses, &languages, choices.region_fallback).map(|t| t.text.clone());
         r.developer = game.developer.clone();
@@ -1024,7 +1016,7 @@ impl Scraper {
     }
 
     /// `FailoverFor`: the games of this run with no cover found handed to OpenEmu's sources, each once.
-    fn failover_for(&self, roms: Vec<String>) {
+    fn failover_for(self: &Arc<Self>, roms: Vec<String>) {
         let settings = self.settings();
         if !settings.openemu || self.progress().phase != Phase::Running {
             return;
@@ -1044,7 +1036,7 @@ impl Scraper {
         }
     }
 
-    fn ask_for_cover(&self, rom: &str, core: Core) -> bool {
+    fn ask_for_cover(self: &Arc<Self>, rom: &str, core: Core) -> bool {
         if core.openvgdb_systems.is_empty() {
             return false;
         }
@@ -1068,14 +1060,21 @@ impl Scraper {
                 self.start_failover(&mut f);
             } else {
                 f.downloading = true;
-                let me = Handle(self as *const Scraper);
-                std::thread::spawn(move || me.get().download_for_failover());
+                let cancel = Arc::new(emusen_net::Progress::default());
+                *self.runs.failover_cancel.lock().unwrap_or_else(|p| p.into_inner()) = Some(cancel.clone());
+                let me = Arc::clone(self);
+                let old = self.runs.failover_download.lock().unwrap_or_else(|p| p.into_inner()).replace(std::thread::spawn(move || me.download_for_failover(cancel)));
+                drop(f);
+                if let Some(h) = old {
+                    let _ = h.join();
+                }
+                return true;
             }
         }
         true
     }
 
-    fn start_failover(&self, f: &mut Failover) {
+    fn start_failover(self: &Arc<Self>, f: &mut Failover) {
         f.running = true;
         self.runs.failover_stop.reset();
         for (rom, core) in std::mem::take(&mut f.waiting) {
@@ -1083,18 +1082,18 @@ impl Scraper {
                 f.queue.push_back((rom, core));
             }
         }
-        let me = Handle(self as *const Scraper);
-        *self.runs.failover_thread.lock().unwrap_or_else(|p| p.into_inner()) = Some(std::thread::spawn(move || me.get().failover_worker()));
+        let me = Arc::clone(self);
+        *self.runs.failover_thread.lock().unwrap_or_else(|p| p.into_inner()) = Some(std::thread::spawn(move || me.failover_worker()));
     }
 
-    fn download_for_failover(&self) {
+    fn download_for_failover(self: &Arc<Self>, cancel: Arc<emusen_net::Progress>) {
         let wire = Wire::of(&self.settings());
-        let result = openemu::download(self.sqlite.clone(), &wire, &openemu::default_path(), &emusen_net::Progress::default());
+        let result = openemu::download(self.sqlite.clone(), &wire, &openemu::default_path(), &cancel);
         let mut f = self.runs.failover.lock().unwrap_or_else(|p| p.into_inner());
         f.downloading = false;
         match result {
             Ok(_) => {
-                if self.settings().openemu && self.is_running() {
+                if !cancel.is_cancelled() && !self.runs.failover_stop.is_stopped() && self.settings().openemu && self.is_running() {
                     self.start_failover(&mut f);
                 }
             }
@@ -1166,12 +1165,20 @@ impl Scraper {
 
     pub(crate) fn stop_failover(&self) {
         self.runs.failover_stop.stop();
+        if let Some(cancel) = self.runs.failover_cancel.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            cancel.cancel();
+        }
+        if let Some(h) = self.runs.failover_download.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            let _ = h.join();
+        }
         if let Some(h) = self.runs.failover_thread.lock().unwrap_or_else(|p| p.into_inner()).take() {
             let _ = h.join();
         }
         let mut f = self.runs.failover.lock().unwrap_or_else(|p| p.into_inner());
         f.running = false;
+        f.downloading = false;
         f.queue.clear();
+        f.waiting.clear();
         f.asked.clear();
     }
 }
@@ -1334,9 +1341,43 @@ mod cover_found_tests {
             library.change_request(&json!({ "op": "save_edits", "path": GAME, "changes": { field: value } }).to_string()).unwrap();
             let shown = shown.to_string_lossy().into_owned();
             assert_eq!(scraper.locate("snes", &game, "cover").unwrap().map(|(_, p)| p), Some(shown), "{field}: the picture shown");
-            assert_eq!(scraper.cover_found(GAME, &cores), None, "{field}: no cover found, so the failover still asks for one");
+            assert_eq!(scraper.inner.cover_found(GAME, &cores), None, "{field}: no cover found, so the failover still asks for one");
         }
         drop(scraper);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scraper_can_be_moved_after_start_and_shuts_down_cleanly() {
+        let Some(sqlite) = emusen_sqlite::for_tests() else {
+            eprintln!("scraper_can_be_moved_after_start_and_shuts_down_cleanly stood down: no SQLite for the scraper");
+            return;
+        };
+        let dir = std::env::var("TMPDIR").map(std::path::PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-scrape-move-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let rom = dir.join("Game.sfc");
+        std::fs::write(&rom, b"sixteen bytes!!!").unwrap();
+        let mut embedded = vec![b'E', b'S', b'S', b'D', 1, 1, 0x55];
+        embedded.extend(br#"{"devid":"dev","devpassword":"pass","softname":"EmuSen"}"#.iter().map(|b| b ^ 0x55));
+        let store_dir = dir.join("Media").to_string_lossy().into_owned();
+        let settings = json!({ "developer_files": false, "openemu": false, "test": { "offline": true } }).to_string();
+        let scraper = Scraper::open(sqlite.clone(), &store_dir, None, &embedded, &settings).unwrap();
+        let choices = crate::run::Choices { kinds: vec![crate::kinds::COVER], region: "wor".into(), language: "en".into(), region_fallback: true, threads: 1, refresh: false };
+        let queued = scraper.start(&[(rom.to_string_lossy().into_owned(), "snes".into())], crate::store::Priority::Library, false, false, None, true, choices).unwrap();
+        assert_eq!(queued, 1);
+        let boxed = Box::new(scraper);
+        std::thread::spawn(move || {
+            let moved = *boxed;
+            moved.wait(1, 2_000);
+            moved.cancel();
+            drop(moved);
+        })
+        .join()
+        .unwrap();
+        let reopened = Scraper::open(sqlite, &store_dir, None, &embedded, &settings);
+        assert!(reopened.is_ok(), "store lock must be released on drop after move");
+        drop(reopened);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

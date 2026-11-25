@@ -76,6 +76,8 @@ pub mod qobject {
         /// Whether the open game's sound reaches a player.
         #[qproperty(bool, sounding, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
+        /// Parent folder of the game that failed to open; empty when none.
+        #[qproperty(QString, failed_folder, cxx_name = "failedFolder", READ, NOTIFY)]
         #[qproperty(f64, first_picture_ms, cxx_name = "firstPictureMs", READ, NOTIFY)]
         /// The picture's width over its height as shown; 0 before the first picture, where it fills its item.
         #[qproperty(f64, picture_aspect, cxx_name = "pictureAspect", READ, NOTIFY)]
@@ -152,6 +154,11 @@ pub mod qobject {
 
         #[qinvokable]
         fn close(self: Pin<&mut SessionModel>);
+
+        /// Saves the active game's resume state before Sleep/Restart/Shut down, closing when `close_session` is true; empty on success.
+        #[qinvokable]
+        #[cxx_name = "saveForPower"]
+        fn save_for_power(self: Pin<&mut SessionModel>, close_session: bool) -> QString;
 
         /// The slot Save and Load act on.
         #[qinvokable]
@@ -320,8 +327,11 @@ pub struct SessionModelRust {
     paused: bool,
     sounding: bool,
     problem: QString,
+    failed_folder: QString,
     /// What a failure of the opening is said after, Mistress's "Failed to load {name}" or "Failed to start {console}".
     failing: String,
+    /// Parent folder of the game being opened, kept for failure notice "Open its folder".
+    opening_folder: String,
     first_picture_ms: f64,
     picture_aspect: f64,
     picture_crop: QRectF,
@@ -397,7 +407,9 @@ impl Default for SessionModelRust {
             paused: false,
             sounding: false,
             problem: QString::default(),
+            failed_folder: QString::default(),
             failing: String::new(),
+            opening_folder: String::new(),
             first_picture_ms: 0.0,
             picture_aspect: 0.0,
             picture_crop: QRectF::new(0.0, 0.0, 1.0, 1.0),
@@ -463,6 +475,9 @@ impl qobject::SessionModel {
 
     /// The opening failed: said in Mistress's form, after what was being opened.
     fn failed(mut self: Pin<&mut Self>, words: String) {
+        let folder = QString::from(self.opening_folder.as_str());
+        self.as_mut().rust_mut().failed_folder = folder;
+        self.as_mut().failed_folder_changed();
         let said = format!("{}: {words}", self.failing);
         self.as_mut().set_problem(QString::from(&said));
         // Named no longer, so choosing the same game again opens it afresh.
@@ -529,7 +544,7 @@ impl qobject::SessionModel {
         }
     }
 
-    fn open(self: Pin<&mut Self>, path: &QString) {
+    pub fn open(self: Pin<&mut Self>, path: &QString) {
         self.start(Opening::Game(path.to_string()));
     }
 
@@ -546,6 +561,14 @@ impl qobject::SessionModel {
         self.as_mut().close();
         // Cleared first, so the same failure twice is said twice.
         self.as_mut().set_problem(QString::default());
+        if !self.failed_folder.is_empty() {
+            self.as_mut().rust_mut().failed_folder = QString::default();
+            self.as_mut().failed_folder_changed();
+        }
+        self.as_mut().rust_mut().opening_folder = match &opening {
+            Opening::Game(path) => std::path::Path::new(path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
+            Opening::Console(_) => String::new(),
+        };
         self.as_mut().rust_mut().failing = crate::session::failing(&opening);
         let console = QString::from(match &opening {
             Opening::Console(console) => console.as_str(),
@@ -1181,6 +1204,29 @@ impl qobject::SessionModel {
             // The program has no desktop view to leave to (EmuSen_Qt.md §7.7.H6).
             Hotkey::ToggleBigPicture => {}
         }
+    }
+
+    fn save_for_power(mut self: Pin<&mut Self>, close_session: bool) -> QString {
+        if !self.paused {
+            self.as_mut().pause();
+        }
+        let played = self.session.as_ref().is_none_or(Session::played);
+        if played {
+            if let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) {
+                if let Err(e) = runtime.resume_save(session) {
+                    return QString::from(e.to_string().as_str());
+                }
+                if close_session {
+                    if let Some(running) = &self.session {
+                        running.skip_exit_save();
+                    }
+                }
+            }
+        }
+        if close_session {
+            self.close();
+        }
+        QString::default()
     }
 
     fn close(mut self: Pin<&mut Self>) {

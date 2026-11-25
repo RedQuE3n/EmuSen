@@ -184,9 +184,14 @@ impl Settings {
 
 /// One media store, its `media.db`, its quota and the SQLite and games.db it was opened with.
 pub struct Scraper {
+    pub(crate) inner: Arc<ScraperInner>,
+}
+
+/// Shared state held by `Scraper` and its worker threads so moving `Scraper` never invalidates threads.
+pub(crate) struct ScraperInner {
     store: Mutex<store::Store>,
-    pub clock: Clock,
-    pub quota: quota::Manager,
+    pub(crate) clock: Clock,
+    pub(crate) quota: quota::Manager,
     settings: RwLock<Settings>,
     embedded: Vec<u8>,
     pub(crate) sqlite: Arc<Sqlite>,
@@ -201,9 +206,9 @@ pub struct Scraper {
 
 impl Drop for Scraper {
     fn drop(&mut self) {
-        self.stop_workers();
-        self.stop_failover();
-        self.stop_background();
+        self.inner.stop_workers();
+        self.inner.stop_failover();
+        self.inner.stop_background();
     }
 }
 
@@ -220,7 +225,7 @@ impl Scraper {
         let store = if alone { store::Store::in_memory(sqlite.clone(), root)? } else { store::Store::open(sqlite.clone(), root)? };
         let quota = quota::Manager::new(&store, &clock)?;
         let art = artwork::Index::scan(settings.art.as_deref(), &consoles::cores(&settings.cores));
-        let scraper = Scraper {
+        let inner = Arc::new(ScraperInner {
             store: Mutex::new(store),
             clock,
             quota,
@@ -233,11 +238,11 @@ impl Scraper {
             art: RwLock::new(art),
             root: root.to_string(),
             _held: held,
-        };
+        });
         if !alone {
-            scraper.put_in_folders()?;
+            inner.put_in_folders()?;
         }
-        Ok(scraper)
+        Ok(Scraper { inner })
     }
 
     /// The store's lock, or why another holds it.
@@ -249,25 +254,114 @@ impl Scraper {
         })
     }
 
-    pub(crate) fn store(&self) -> MutexGuard<'_, store::Store> {
-        self.store.lock().unwrap_or_else(|p| p.into_inner())
-    }
-
     pub fn root(&self) -> String {
-        self.root.clone()
+        self.inner.root()
     }
 
     /// The SQLite the host lent, for a host's own database beside the store.
     pub fn sqlite(&self) -> Arc<Sqlite> {
-        self.sqlite.clone()
+        self.inner.sqlite()
     }
 
     /// The failover's own folder, apart from the player's art: `<store>/openemu/<console>/`.
     pub fn openemu_root(&self) -> String {
-        Path::new(&self.root).join("openemu").to_string_lossy().into_owned()
+        self.inner.openemu_root()
     }
 
     pub fn art(&self) -> std::sync::RwLockReadGuard<'_, artwork::Index> {
+        self.inner.art()
+    }
+
+    pub fn settings(&self) -> Settings {
+        self.inner.settings()
+    }
+
+    pub fn library(&self) -> Result<&emusen_library::Library, Error> {
+        self.inner.library()
+    }
+
+    pub fn developer(&self) -> Option<credentials::Developer> {
+        self.inner.developer()
+    }
+
+    /// The service's `get` request and answer.
+    pub fn get_request(&self, request: &str) -> Result<String, Error> {
+        reads::get(&self.inner, &json::parse(request)?)
+    }
+
+    /// The service's `change` request and answer.
+    pub fn change_request(&self, request: &str) -> Result<String, Error> {
+        changes::change(&self.inner, &json::parse(request)?)
+    }
+
+    pub fn locate(&self, esde_system: &str, game: &media::Game, media_type: &str) -> Result<Option<(media::Source, String)>, Error> {
+        self.inner.locate(esde_system, game, media_type)
+    }
+
+    pub fn found(&self, esde_system: &str, game: &media::Game, media_type: &str, choices: bool) -> Result<Option<media::Found>, Error> {
+        self.inner.found(esde_system, game, media_type, choices)
+    }
+
+    pub fn present(&self, system: &str, games: &[(String, String, bool)]) -> Result<Vec<String>, Error> {
+        self.inner.present(system, games)
+    }
+
+    pub fn stamp(&self, system: &str, choice: &str) -> String {
+        self.inner.stamp(system, choice)
+    }
+
+    pub fn start_request(&self, request: &str) -> Result<usize, Error> {
+        self.inner.start_request(request)
+    }
+
+    pub fn progress_request(&self, request: &str) -> Result<String, Error> {
+        self.inner.progress_request(request)
+    }
+
+    pub fn wait(&self, serial: u64, timeout_ms: u32) -> u64 {
+        self.inner.wait(serial, timeout_ms)
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.inner.is_running()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn start(&self, games: &[(String, String)], priority: store::Priority, one: bool, resume: bool, pick: Option<i64>, enabled: bool, choices: run::Choices) -> Result<usize, Error> {
+        self.inner.start(games, priority, one, resume, pick, enabled, choices)
+    }
+
+    pub fn pause(&self, paused: bool) -> bool {
+        self.inner.pause(paused)
+    }
+
+    pub fn cancel(&self) -> bool {
+        self.inner.cancel()
+    }
+
+    pub fn set_playing(&self, playing: bool) {
+        self.inner.set_playing(playing)
+    }
+}
+
+impl ScraperInner {
+    pub(crate) fn store(&self) -> MutexGuard<'_, store::Store> {
+        self.store.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub(crate) fn root(&self) -> String {
+        self.root.clone()
+    }
+
+    pub(crate) fn sqlite(&self) -> Arc<Sqlite> {
+        self.sqlite.clone()
+    }
+
+    pub(crate) fn openemu_root(&self) -> String {
+        Path::new(&self.root).join("openemu").to_string_lossy().into_owned()
+    }
+
+    pub(crate) fn art(&self) -> std::sync::RwLockReadGuard<'_, artwork::Index> {
         self.art.read().unwrap_or_else(|p| p.into_inner())
     }
 
@@ -275,7 +369,7 @@ impl Scraper {
         self.art.write().unwrap_or_else(|p| p.into_inner()).add(console, stem, file);
     }
 
-    pub fn settings(&self) -> Settings {
+    pub(crate) fn settings(&self) -> Settings {
         self.settings.read().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
@@ -284,7 +378,7 @@ impl Scraper {
         self.settings.read().unwrap_or_else(|p| p.into_inner()).test.fingerprint_above.unwrap_or(fingerprint::ABOVE)
     }
 
-    pub fn library(&self) -> Result<&emusen_library::Library, Error> {
+    pub(crate) fn library(&self) -> Result<&emusen_library::Library, Error> {
         self.library.as_deref().ok_or(Error::NoLibrary)
     }
 
@@ -298,19 +392,9 @@ impl Scraper {
         layout::put_in_folders(&store, &|p| settings.folder_of(p), self.clock.now())
     }
 
-    pub fn developer(&self) -> Option<credentials::Developer> {
+    pub(crate) fn developer(&self) -> Option<credentials::Developer> {
         let embedded = (!self.embedded.is_empty()).then_some(self.embedded.as_slice());
         credentials::developer(self.settings().developer_files, embedded)
-    }
-
-    /// The service's `get` request and answer.
-    pub fn get_request(&self, request: &str) -> Result<String, Error> {
-        reads::get(self, &json::parse(request)?)
-    }
-
-    /// The service's `change` request and answer.
-    pub fn change_request(&self, request: &str) -> Result<String, Error> {
-        changes::change(self, &json::parse(request)?)
     }
 
     pub(crate) fn apply_settings(&self, r: &Value) -> Result<(), Error> {

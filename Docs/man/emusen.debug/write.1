@@ -1,14 +1,23 @@
 NAME
-    write - write one byte to memory
+    write - write one byte to a memory space
 
 SYNOPSIS
     write <space> <addr> <value>
 
 DESCRIPTION
-    Writes a single byte to <space> at <addr>. Refuses outright if <space>
-    isn't writable (see 'spaces'). No pause/synchronization with the
-    emulation thread beyond whatever the current frontend provides (see the
-    'pause'/'resume' commands in EmuSen.Mistress's console window).
+    Writes a single hex byte <value> into memory space <space> at hex
+    address <addr>. Refuses read-only memory spaces (see spaces(1)).
+
+    For persistent per-frame writes or ROM-read intercepts, use cheat(1).
+    For bulk writes from a file, use load(1).
 
 EXAMPLES
     write WRAM 10 ff
+
+EXIT STATUS
+    0   Byte written (or usage/read-only refusal printed).
+    1   No target attached, unknown space, invalid hex argument, or
+        session service fault.
+
+SEE ALSO
+    mem(1), load(1), dump(1), spaces(1), cheat(1)

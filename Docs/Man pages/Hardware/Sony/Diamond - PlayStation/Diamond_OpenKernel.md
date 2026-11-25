@@ -1,363 +1,103 @@
-# Diamond_OpenKernel — the open BIOS kernel, phase 1
+# Diamond Open BIOS Kernel and Shell (`diamond-kernel`, `diamond-shell`)
 
-*Written 2026-10-11, at stage 3; its second phase, stage 10's, is `Diamond_OpenKernel_Phase2.md`, which continues
-this page's numbering from §12.* This page records the design of Diamond's open kernel: the program that occupies the
-PlayStation's BIOS range so that a test program, and later a game, finds a kernel where the documents say it is
-without a firmware file of Sony's (`Diamond_Plan.md` §5.9, option B; `EmuSen_Firmware.md` §0). It covers the first of
-the plan's two phases, the kernel's core; the second (the CD boot, files on the CD and the cards, the screen with no
-disc) is stage 10's. The marks are the plan's: **[M]** measured on 2026-10-11 with the tool named; **[R]** read from
-the source named; **[A]** argued; **[C]** a choice where the documents are silent or a rule set here, each listed in §9.
+Crates:
+- `EmuSen/Cores/Sony/Diamond - PlayStation/kernel/` (`diamond-kernel`, image `diamond-kernel.bin`)
+- `EmuSen/Cores/Sony/Diamond - PlayStation/kernel-shell/` (`diamond-shell`, embedded PS-EXE `diamond-shell.exe`)
+- `EmuSen/Cores/Sony/Diamond - PlayStation/guest/` (`diamond-guest`, shared `no_std` MIPS guest font, GPU, and Shift-JIS helpers)
+- `EmuSen/Cores/Sony/Diamond - PlayStation/kernel-harness/` (`diamond-kernel-harness`, standalone test harness and image builder)
 
-The source is `EmuSen/Cores/Sony/Diamond - PlayStation/kernel/` (crate `diamond-kernel`, the image
-`diamond-kernel.bin` beside it) and its host side `kernel-harness/` (crate `diamond-kernel-harness`). Both are their
-own Cargo roots; no host build reaches them.
+The open kernel is a clean-room `no_std` Rust + MIPS assembly BIOS image compiled for `mipsel-sony-psx` that occupies the PlayStation's 512 KiB ROM window (`0x1FC0_0000`–`0x1FC7_FFFF`). It allows `diamond` to boot retail PlayStation discs, side-loaded PS-EXE binaries, memory cards, and an interactive no-disc shell without requiring a proprietary Sony BIOS dump. Players may supply a retail BIOS file to override it for exact firmware accuracy (`effect: accuracy`).
 
 ---
 
-## 1. What it is, and what it is not yet
+## 1. ROM Image and RAM Layout
 
-A MIPS program of about 41 KiB in a 512 KiB image, run by the emulated R3000A from BFC00000h, written in Rust `no_std`
-for `mipsel-sony-psx` with an assembly entry (§6), as the tester decided on 2026-10-11 (the plan's Q3). It was written
-under the replacement writers' rules of the plan's §1.3 and §2.2: from psx-spx's descriptions of the kernel's
-interface, the R3000's documented behaviour and the test programs' sources, never from a BIOS image, a listing,
-disassembly or trace of one, an emulator's source, or OpenBIOS. §11 lists every document and file opened.
+### 1.1 ROM Sections (`kernel/kernel.ld`)
 
-**Phase 1 provides** [M, §7]: the reset path to the point where the kernel hands over (§3); the exception vector, the
-interrupt dispatch through the four priority chains and the exit structure of HookEntryInt (§4.2); the three syscalls
-(§4.3); the control blocks at the places the table of tables gives (§4.4); the A0h, B0h and C0h tables with all 576
-entries in psx-spx's order, 161 of them implemented (§5): the memory, string and conversion calls, the heaps, events,
-threads, the file layer with the TTY, printf, the program calls, the timers, the GPU's calls and the pads' entry points.
+| Physical Address | Virtual Address | Contents |
+|---|---|---|
+| `0x1FC0_0000` | `0xBFC0_0000` (KSEG1) | Reset entry (`<= 0x100` bytes) |
+| `0x1FC0_0100` | `0xBFC0_0100` (KSEG1) | ROM header: BCD date, console type `3` (retail), maker `"EmuSen"`, version `"Diamond open kernel, phase 2"` |
+| `0x1FC0_0140` | `0xBFC0_0140` (KSEG1) | `BEV=1` debug-break vector (self-loop during early boot) |
+| `0x1FC0_0180` | `0xBFC0_0180` (KSEG1) | `BEV=1` general exception vector (self-loop during early boot) |
+| `0x1FC0_0200`+ | `0x9FC0_0200` (KSEG0) | Kernel `.text`, `.rodata`, and `.data` load image (linked below `0x1FC6_0000`) |
+| `0x1FC6_0000`–`0x1FC7_FFFF` | `0x9FC6_0000` (KSEG0) | Embedded `diamond-shell.exe` PS-EXE image (`.shell`, up to 128 KiB) |
 
-**Phase 1 does not provide**: the CD-ROM device and the boot from a disc, files on the CD, the memory cards and their
-on-card format, the ROM's character sets, and a screen with no disc. Their calls exist and return the failure psx-spx
-documents (§5). The pads' entry points exist, and since Diamond's stage 6 (2026-10-11) each vblank reads both ports over
-SIO0 into their buffers (§4.13).
+Most kernel code executes cached via KSEG0; only the early reset path and `FlushCache` execute uncached via KSEG1.
 
-**What is not this page's**: the kernel's integration with Diamond's bus (being built on another branch, which this
-work neither read nor used), the switch of the crate's firmware declaration from `effect: none` to `accuracy`
-(`Diamond_Native.md` §2.5), and the ps1-tests gate of the plan's stage 3. §3.3 gives what a machine must provide to
-run the kernel.
-
-## 2. The image and the memory it uses
-
-### 2.1 The ROM
-
-| Physical | Run at | Contents | From |
-|---|---|---|---|
-| 1FC00000h | BFC00000h (KSEG1) | the reset entry, 15 instructions | §3 |
-| 1FC00100h | BFC00100h | the header: the BCD date 20261011h, the console type 3, then "EmuSen" and "Diamond open kernel, phase 1" | psx-spx "BIOS ROM Header/Footer"; the type 3 of every retail console, "1F802030h - DTL-H2000: Secondary IRQ10 Controller" [R] |
-| 1FC00140h, 1FC00180h | BFC00140h, BFC00180h | a jump to itself each, the debug-break and general vectors while SR.BEV is set during the boot | [C] |
-| 1FC00200h on | 9FC00200h (KSEG0) | the code and its constants, then the initial values of the kernel's variables | §6 |
-| to 1FC7FFFFh | — | zero | — |
-
-The code runs through KSEG0, so the I-cache holds it as it holds a game's [C, §9 item 1]; psx-spx notes that executing
-the kernel from cached ROM works ("BIOS Memory") [R]. Only the reset entry's first instructions and the cache flush
-run through KSEG1, the flush because it isolates the cache it would otherwise be fetched through.
-
-### 2.2 The kernel's RAM
-
-Every address is psx-spx's "BIOS RAM Map (1st 64Kbytes of RAM)" and "Table of Tables" [R] unless marked.
+### 1.2 Kernel RAM Map (First 64 KiB)
 
 | Address | Contents |
 |---|---|
-| 00000000h-0Fh | a copy of the exception vector's 16 bytes, which games read through null pointers |
-| 00000060h, 64h, 68h | 2 (the RAM's size in megabytes), 0, FFh |
-| 80000080h | the exception vector: a jump to C(06h)'s handler through k0 |
-| A0h, B0h, C0h | each a jump to its dispatcher, which indexes its table by t1 (§4.1) |
-| 100h-157h | the table of tables: ExCB, PCB, TCB, EvCB, FCB and DCB, each an address and a size in bytes |
-| 200h-4FFh | the A table, C0h entries |
-| from 500h | the kernel's variables [C]: the C table (80h entries) directly followed by the B table (100h entries), the 16 FCBs, the 10 DCBs, the 1000h-byte exception stack, and the rest; about 10 KiB, below DF80h by a link-time assertion; *since 2026-10-12* preceded by the exception path's code, 500h-1974h, copied from the ROM with them (`Diamond_OpenKernel_Phase2.md` §25.3), the variables ending at A310h |
-| A000E000h-A000FFFFh | B(00h)'s control-block memory: the ExCBs, the PCB, the TCBs and the EvCBs, allocated by SetConf |
+| `0x0000_0000`–`0x0000_000F` | Copy of the 16-byte exception vector at `0x8000_0080` |
+| `0x0000_0060`, `0x64`, `0x68` | RAM size in MiB (`2`), `0`, `0xFF` |
+| `0x8000_0080` | General exception vector (jumps via `k0` to `C(06h)` in `.ramtext`) |
+| `0x00A0`, `0x00B0`, `0x00C0` | A, B, and C function dispatch vectors (index by `$t1`) |
+| `0x0100`–`0x0157` | Table of Tables: `ExCB`, `PCB`, `TCB`, `EvCB`, `FCB`, `DCB` (address + byte size pairs) |
+| `0x0180`–`0x01FF` | Command-line argument copied from `SYSTEM.CNF` `BOOT` line |
+| `0x0200`–`0x04FF` | A-function table (`0xC0` entries) |
+| `0x8000_0500`–`0x8000_DF7F` | `.ramtext` exception/interrupt path, C-table (`0x80` entries) immediately followed by B-table (`0x100` entries so `C(80h+)` mirrors `B(00h+)`), 16 FCBs, 10 DCBs, `0x1000`-byte exception stack, `0x1800`-byte shell stack, and kernel `.data`/`.bss` (linker-asserted `<= 0x8000_DF80`) |
+| `0x8000_DF80`–`0x8000_DFFF` | Untouched game-patch scratch area |
+| `0xA000_E000`–`0xA000_FFFF` | Kernel control-block heap (`SysInitMemory` / `B(00h)`): `ExCB`, `PCB`, `TCB`, and `EvCB` allocations |
 
-The C table precedes the B table because psx-spx lists C(80h) and up as mirroring B(00h) and up ("C-Functions") [R];
-an index past C's 80h entries therefore reads B's, as the harness shows (§7). DF80h-DFFFh, the area psx-spx says games
-use for their patches, is left alone.
+## 2. Reset Path and Mid-Boot Hand-Over
 
-## 3. The reset path
+1. **Uncached hardware setup (`BFC00000h`, KSEG1):** Writes `DRAM_CTRL` (`0x1F80_1060 = 0x0B88`, 2 MiB mirrored across 8 MiB) before touching RAM, sets `$sp = 0x801F_FF00`, programs `BIOS_DELAY`, `DEV0`/`DEV8` bases, `DEV0`/`DEV1`/`SPU`/`CDROM`/`DEV8` delays, `COM_DELAY`, and `BCC` (`0xFFFE_0130 = 0x0001_E988`), invalidates all 256 I-cache tags via tag-test mode, and clears `Cause` and `DCIC`.
+2. **Cached kernel initialization (`9FC00200h`, KSEG0):** Zeroes kernel RAM (`0x8000_0000..0x8001_0000`), copies `.ramtext` and `.data` from ROM to `0x8000_0500`, populates `0x60..0x68`, installs the A/B/C tables and exception vectors, calls `ResetEntryInt` and `SetConf(EVENT=0x10, TCB=4, STACK=0x801F_FF00)`, clears `I_MASK`/`I_STAT`, mounts the standard TTY device on handles `0` and `1`, and clears `SR.BEV`.
+3. **Mid-boot entry (`0x8003_0000`):** Installs a 4-instruction jump to the ROM boot/shell entry at `0x8003_0000`, flushes the I-cache, and enters `0x8003_0000` with `SR = 0x0000_0401` (`IEc` and `IM2` set, `I_MASK = 0`). Side-loaders intercept execution at `0x8003_0000` to inject PS-EXE binaries using the same hook point as retail PlayStation BIOS images.
 
-### 3.1 The steps
+## 3. Kernel Subsystems
 
-1. **Before any store to RAM**, the RAM's size register 1F801060h gets 0B88h, psx-spx's usual value, which maps the
-   2 MiB as an 8 MiB bank with the mirrors some games rely on ("1F801060h - DRAM_CTRL") [R]; SP is set to SYSTEM.CNF's
-   default stacktop 801FFF00h ("CDROM File Playstation EXE and SYSTEM.CNF") [R].
-2. **From KSEG1**: the BIOS region's delay register first, then DEV0's and DEV8's bases, the delays of DEV0, DEV1, the
-   SPU, the CD-ROM and DEV8, and COM_DELAY, each to the value psx-spx's heading for that register calls usual
-   ("Memory Control") [R]; BCC (FFFE0130h) to the bits its table marks as usually set, 0001E988h ("FFFE0130h - BCC")
-   [R]; the I-cache's 256 tags cleared (§4.11); Cause and DCIC cleared [C].
-3. **Through KSEG0**: the kernel's 64 KiB zeroed and its initialised variables copied in; the words at 60h-68h; the
-   tables and the four vectors installed, and the exception vector copied to 0; ResetEntryInt; the I/O abort buffer;
-   SetConf with SYSTEM.CNF's defaults, EVENT = 10h, TCB = 4, STACK = 801FFF00h, which allocates the control blocks and
-   enqueues the default chain elements (§4.4); I_MASK and I_STAT cleared; the DUART TTY installed and standard input
-   and output opened on handles 0 and 1 (§4.9); SR cleared, which ends BEV.
-4. **The hand-over** (§3.3).
+### 3.1 Dispatch, Exceptions, and Syscalls
 
-[M] The harness runs the path in 74,332 instructions on blackmoon-r3000, taking no exception (§7).
+- **Function tables (`A0h`, `B0h`, `C0h`):** Four-instruction stubs dispatch via `$t1 << 2` into the respective table (`A(00h..BFh)`, `B(00h..FFh)`, `C(00h..7Fh)`). Unused trailing slots (`A(B5h+)`, `B(5Eh+)`, `C(1Eh..7Fh)`) jump to `0x0000_0000`.
+- **Exception path (`.ramtext`):** Runs directly from RAM (`0x8000_0500+`) to avoid uncached ROM fetch overhead. Saves `R1..R31` (except `k0`), `HI`, `LO`, `EPC`, `SR`, and `Cause` into the active TCB, switches to the `0x1000`-byte exception stack, advances `EPC` by 4 when an interrupt lands on a COP2 command, and walks priority chains `0..3`:
+  - Priority `0`: syscall handler (`SYS(00h)` no-op, `SYS(01h)` `EnterCriticalSection`, `SYS(02h)` `ExitCriticalSection`, `SYS(03h)` `ChangeThreadSubFunction`, other values deliver event `0xF000_0010`/`0x4000`), plus the CD-ROM IRQ handler while the kernel owns the drive.
+  - Priority `1`: vblank and root-counter timer handlers (delivering `0xF200_0000 + t`, spec `2`, auto-acknowledging according to `ChangeClearRCnt`; defaults are `1` for timers `0..2` and `0` for vblank so vblank reaches priority `2`).
+  - Priority `2`: pad and memory-card vblank driver (enqueued by `StartPAD2` / `StartCARD2`).
+  - Priority `3`: default IRQ handler (delivers default IRQ events and acknowledges sources enabled via `SetIrqAutoAck`).
+- **Unresolved exceptions:** Deliver `(0xF000_0010, 0x1000)` and invoke `A(40h)` through the A-table so user handlers installed there can recover before `ReturnFromException`.
+- **Exit:** Longjmps via the `HookEntryInt` structure (defaulting via `ResetEntryInt` to `ReturnFromException`, which restores registers and executes `JR` + `RFE`).
+- **Non-reproduced original bugs:** `SysDeqIntRP` removes any node in a chain cleanly, and `FlushCache` avoids the retail `$k0` hazard.
 
-### 3.2 Coprocessor 0
+### 3.2 Heaps, Events, Threads, Strings, TTY, and `printf`
 
-The documents describe the kernel's use of coprocessor 0 rather than a set-up sequence: the BEV=0 vectors only
-("Exception Vectors") [R]; interrupts left disabled through exception handling, which does not nest ("No Nested
-Exceptions") [R]; IEc and IM2 as the pair EnterCriticalSection and ExitCriticalSection change ("SYS(01h)") [R]; and
-the cache isolated with BCC's tag mode for the flush ("FFFE0130h - BCC") [R]. The kernel clears SR's BEV once its own
-vector is in place, and enters the hand-over with SR = 00000401h, IEc and IM2 set with I_MASK clear [C].
+- **Heaps:** `InitHeap` (`malloc`/`free`/`calloc`/`realloc`/`qsort`) and `SysInitMemory` (`B(00h)`/`B(01h)`) use 4-byte-aligned blocks preceded by a size word with bit `0` marking free blocks, first-fit allocation with coalescing and splitting.
+- **Events & Threads:** `EvCB` handles (`0xF100_0000 + idx`) support callback mode (`0x1000`) and wait/test mode (`0x2000`) across states free (`0`), disabled (`0x1000`), busy (`0x2000`), and ready (`0x4000`). `TCB` handles (`0xFF00_0000 + idx`) leave `SR` uninitialized (`0`) on first `OpenTh`.
+- **Memory, string, and conversion calls:** Reproduces deterministic documented PlayStation quirks (null/length checks in `memcpy`/`memset`/`memchr`/`bcopy`, `memmove` overlap rule, `memcmp`/`bcmp` post-mismatch return, `strcmp` signed byte compare, `strstr` mismatch resume, `strtol` `0b`/`0x`/`o` prefixes, `atoi` octal leading `0`, `atof`/`strtod` COP1 fault, `rand` LCG `x * 0x41C6_4E6D + 0x3039` returning bits `16..=30`, `printf` `h` sign extension).
+- **TTY & `printf`:** Mounts the DUART transmit TTY (`0x1F80_2023`) on handles `0` and `1` at boot (`KernelRedirect(0)` switches to the dummy sink). `putchar` expands `TAB` to 8-column stops and `LF` to `CR LF`. `printf` accepts flag/width/precision prefixes in any order before the conversion specifier (matching console behavior for forms such as `%2-d`).
+- **ROM font (`Krom2RawAdd`, `Krom2Offset`):** Because an open kernel carries no proprietary Shift-JIS kanji ROM, `kernel/src/charset.rs` serves Shift-JIS codes `0x8140`–`0x829A` (full-width Latin letters, digits, and common punctuation) rendered from `diamond-guest`'s 5×8 font, a blank glyph for `0x8140` (ideographic space), a missing-glyph box for other documented Shift-JIS codes, and `-1` for out-of-range codes.
 
-### 3.3 The hand-over at 80030000h, and what a machine must provide
+### 3.3 CD-ROM, ISO 9660 (`cdrom:`), and `LoadExec`
 
-psx-spx's "Mid-Boot Hook" describes the kernel starting the code that follows it at 80030000h once its tables are
-installed [R]. Phase 1 has no such code, so the kernel writes a jump to itself there, flushes the cache and enters it
-[C]. That is the point where a side-loader takes over: it copies a PS-EXE's body, zeroes its memfill region and sets
-PC, GP, SP and FP as Exec would (§4.11). The same point serves a player's own BIOS, which reaches 80030000h at the same
-stage of its own boot, so one side-loader serves both kernels [A].
+- **CD-ROM driver (`kernel/src/cdrom.rs`):** Drives the controller host interface (`0xBF80_1800`–`0xBF80_1803`) with mode `0xA0` (double-speed whole sector without sync) and transfers sector data via DMA channel 3 (`0xBF80_10B0`–`0xBF80_10B8`). Tracks kernel CD events (`0xF000_0003`: done DMA `0x10`, done `0x20`, dead `0x40`, end `0x80`, error `0x8000`). Synchronous CD calls coexist safely with game-installed CD handlers.
+- **ISO 9660 (`kernel/src/cdfs.rs`):** Parses the Primary Volume Descriptor and directory records (ECMA-119), supporting case-insensitive paths, optional `;version` matching, `cd`, `firstfile2`/`nextfile`, `open`/`read`/`lseek`/`close`, and `CdGetLbn`.
+- **`Exec` / `Load` / `LoadExec`:** `Exec` (`A(43h)`) saves caller `RA`/`SP`/`FP`/`GP`/`S0`, zeroes the PS-EXE memfill region, sets `SP`/`FP`/`GP`, and calls the executable's PC. `LoadExec` (`A(51h)`) masks all `I_MASK` sources and restores the default exception exit before loading over the caller's memory, entering the new binary with `I_MASK` and `I_STAT` cleared.
 
-A machine running the kernel must provide, beyond the R3000A and RAM: the BIOS region at 1FC00000h readable through
-KSEG0 and KSEG1; the memory control and RAM size registers as plain stores; BCC with the isolated cache's tag writes;
-I_STAT and I_MASK driving Cause.IP2; GPUSTAT's ready bits for the GPU calls; and **the TTY at 1F802023h**, the
-DUART's channel A transmit register, where each character of standard output is one byte store (§4.10). The test-ROM
-runner's TTY reader of the plan's §3.3 collects those bytes, and a program that writes the DUART's register itself
-reaches the same reader [A].
+### 3.4 Pads and Memory Cards (`bu00:`, `bu10:`)
 
-## 4. The kernel's parts
+- **Pads (`kernel/src/pad.rs`):** `InitPAD2` resets SIO0 (`MR = 0x0D`, `BR = 0x0088`); `StartPAD2` enables vblank in `I_MASK` and enqueues the priority-2 vblank driver. Each vblank polls active ports over SIO0 (`0x01`, `0x42`, `0x00`, ...), writes status `0x00` + ID + payload (or `0xFF` on no reply), updates `PAD_dr` when `button_dest` is set, and acknowledges IRQ0 when `ChangeClearPAD` is active.
+- **Game-patch compatibility behind `B(5Bh)` (`ChangeClearPAD`):** `entry.rs` aligns `change_clear_pad` on a 16-byte cache-line boundary and reserves a `0xA00`-byte fill region behind it with `JR $ra; NOP` returns at every `0x100`-byte boundary so games whose pad libraries write into and branch to fixed offsets past `B(5Bh)` return cleanly.
+- **Memory cards (`kernel/src/card.rs`, `kernel/src/bu.rs`):** Low-level sector reads/writes run on the shared vblank element (slot 1 on even frames, slot 2 on odd frames) and deliver hardware events on class `0xF000_0011` (`0x0004` OK, `0x0100` timeout, `0x2000` new card, `0x8000` error), plus the block-0 frame-`0x3F` write test. The `bu00:`/`bu10:` filesystem driver caches the first 36 frames of block 0 per slot and reads/writes standard PlayStation 128 KiB memory-card structures (15 directory blocks, block chains `0x51`/`0x52`/`0x53`, free `0xA0`, deleted `0xA1`, XOR checksums, asynchronous `0x8000` file operations, and blank-card formatting).
 
-### 4.1 The vectors and the dispatch
+## 4. Disc Boot and Shell Hand-Over v1 (`kernel-shell`)
 
-Each of the vectors at A0h, B0h and C0h is four instructions, a LUI and an ADDIU of its dispatcher's address into t0,
-a JR and a NOP; the dispatcher shifts t1, the function number, by two, adds its table's base and jumps to the entry
-[C]. The convention it serves is psx-spx's "Parameters, Registers, Stack": the number in R9 (t1), the arguments in R4
-to R7 and from [SP+10h], the result in R2, and R1-R15, R24, R25, R31, HI and LO the callee's to destroy [R]. The
-dispatchers use only t0 and at. No number is masked or checked, as none is documented; A(B5h) and up, B(5Eh) and up and
-C(1Eh) to C(7Fh) jump to 0 as psx-spx lists ("N/A - Jump 0") [R].
+When the kernel reaches `0x8003_0000` without a side-loader taking over:
 
-### 4.2 The exception entry, the chains and the exit
-
-The vector at 80000080h jumps through k0 to C(06h), the handler, whose address C(06h) gives for a game's own vector to
-pass control back, as psx-spx describes ("C(06h) - ExceptionHandler") [R]. The handler saves R1 to R31 but k0, HI, LO,
-EPC, SR and Cause into the current TCB at the offsets of "Thread Control Blocks" (registers from 08h, EPC 88h, HI and LO
-8Ch and 90h, SR 94h, Cause 98h) [R], the current TCB being the one the PCB names, and switches to the kernel's
-exception stack of 1000h bytes ("No Nested Exceptions") [R]. Then, in order:
-
-1. **An interrupt on a GTE command**: when ExcCode is 0 and the word at EPC is a COP2 command, the saved EPC is
-   advanced by 4, so the command the interrupt let run is not run again ("Interrupts vs GTE Commands") [R].
-2. **The four priority chains**, 0 to 3, each from its ExCB's first element; an element's first function is called,
-   and when it returns non-zero and a second function is present, the second is called ("Priority Chains", "C(02h)")
-   [R]; the second receives the first's result in a0 [C]. Any function may end the exception by ReturnFromException,
-   which skips the rest. The next element is read before an element's function runs [C].
-3. **An unresolved exception** (ExcCode neither 0 nor a handled syscall): DeliverEvent(F0000010h,1000h), then the A
-   table's entry 40h is called through the table, so that a program's own handler there runs, as ps1-tests' `cop`
-   installs one (`common/exception.cpp`) [R]; when it returns, ReturnFromException. The table's own entry 40h is
-   SystemErrorUnresolvedException, a jump to itself ("BREAK-Functions", "A(3Ah) ... SystemError") [R].
-4. **Otherwise the exit**: a longjmp to the current exit structure with v0 = 1. ResetEntryInt's default structure
-   holds ReturnFromException as RA and the exception stack's top less 4 as SP, the rest zero; HookEntryInt replaces it
-   ("B(18h)", "B(19h)") [R].
-
-**ReturnFromException** restores R1 to R31 but k0, HI, LO and SR from the current TCB and returns to its EPC with RFE
-in the jump's delay slot ("B(17h)", "cop0cmd=10h - RFE") [R]. psx-spx gives RFE's encoding but LLVM's assembler does
-not know the MIPS I instruction, so it is written as a `.word` [M].
-
-The kernel's **default elements**, enqueued at the priorities psx-spx's table gives [R]: the syscall handler at 0
-(§4.3); vblank and the three timers at 1, vblank first, by enqueuing timer 0, 1, 2 and vblank in that order, each
-delivering F2000000h+t,2 when its IRQ is pending and enabled ("Timer/Vblank Events") and, when ChangeClearRCnt's
-flag for it is set, acknowledging the IRQ and returning from the exception ("C(0Ah)") [R]; the pads' handler at 2 once
-StartPAD2 enqueues it (§4.13); and the default handler at 3, delivering the "Default IRQ Handler Events" for every
-pending IRQ, IRQ6 with timer 1's class F0000006h as the table lists it, and acknowledging only the IRQs SetIrqAutoAck
-enabled ("C(0Dh)") [R]. The CD's handlers at 0 are phase 2's.
-
-**Two documented defects are not reproduced** [C]: SysDeqIntRP removes an element wherever it is in its chain, where
-psx-spx says the original removes only the first reliably and otherwise reads an uninitialised stack word ("C(03h)");
-and the k0 hazard of the original FlushCache ("A(44h)"). Neither has a defined behaviour to reproduce.
-
-### 4.3 The syscalls
-
-SYSCALL is handled by the priority 0 element, which advances the saved EPC by 4 and, by a0: 0 nothing; 1 clears SR's
-bits 2 and 10 in the TCB, so that RFE leaves IEc and IM2 clear, and returns 1 when both were set; 2 sets them and
-changes no other register; 3 stores 1 in the current TCB's v0, makes the TCB in a1 current, and returns into it; any
-other value delivers F0000010h,4000h and returns ("SYS-Functions", "SYS(01h)", "SYS(02h)", "SYS(03h)",
-"SYS(04h..FFFFFFFFh)") [R]. It then returns from the exception.
-
-### 4.4 The control blocks
-
-SetConf (A(9Ch)) resets the control-block memory with SysInitMemory(A000E000h, 2000h), allocates from it the four
-ExCBs, the PCB, the TCBs and the EvCBs, writes their table entries, marks every TCB free (1000h) but TCB 0, the current
-thread's, used (4000h), points the PCB at it, and enqueues the default elements; the stacktop is kept for GetConf
-(A(9Dh)) ("A(9Ch)", "B(00h)", "Thread Control Blocks", "Event Control Blocks", "Exception Control Blocks") [R]. The
-order of the allocations is not documented [C]. Every block starts zeroed, so a TCB that OpenTh later opens starts with
-SR zero, which psx-spx's "BUG - Unitialized SR Register" describes for a TCB never used before [R]. The FCBs and DCBs
-are at fixed places in the kernel's variables ("B(00h)") [R].
-
-### 4.5 The heaps
-
-InitHeap's heap (malloc, free, calloc, realloc, qsort's temporary) and the control-block memory (SysInitMemory,
-B(00h), B(01h)) share one format: each block is preceded by a word holding its size, bit 0 set when free, which free's
-documented action, `[buf-4] OR 1` with no checks, requires ("A(34h) - free") [R]; a zero word ends the heap [C].
-Allocation is first fit, merging the free blocks it passes and splitting what it takes [C]. Sizes round up to 4 bytes
-and blocks are 4-aligned; malloc fails before InitHeap; calloc zeroes; realloc copies `new_size` bytes from the old
-block, as documented, and on a failed allocation returns 0 without copying or freeing [C, §9] ("A(33h)" to "A(39h)")
-[R].
-
-### 4.6 Events
-
-The EvCB fields and statuses are psx-spx's ("Event Control Blocks"): free 0, disabled 1000h, enabled and busy 2000h,
-ready 4000h; the handle is F1000000h plus the index ("B(08h)") [R]. OpenEvent opens disabled; CloseEvent, EnableEvent
-and DisableEvent return 1 whatever the handle; WaitEvent returns 0 for an event that is not enabled, or waits for it
-to become ready, returns 1 and makes it busy again; TestEvent likewise without waiting; DeliverEvent makes every busy
-event of matching class and spec ready (mode 2000h) or calls its function (mode 1000h), which never makes it ready;
-UnDeliverEvent makes ready events of mode 2000h busy again ("B(07h)" to "B(0Dh)", "B(20h)", "Event modes") [R].
-Choices: EnableEvent leaves a ready event ready, and neither it nor DisableEvent changes a free EvCB; a callback
-receives the class and spec in a0 and a1, which no document promises [C]. WaitEvent's documented instability is not
-reproduced [C].
-
-### 4.7 Threads
-
-OpenTh takes the first free TCB, marks it used with 1000h at offset 4, and stores PC, SP and FP (one value) and GP,
-leaving SR as the TCB held it; the handle is FF000000h plus the index. CloseTh marks a TCB free and returns 1. ChangeTh
-issues syscall 3 with the TCB's address, so the old thread receives 1 when it is changed back to ("B(0Eh)" to "B(10h)",
-"C(05h)", "SYS(03h)") [R]. A handle is not checked, as documented [R].
-
-### 4.8 Memory, strings and conversion
-
-**The rule for documented bugs** [C]: a defect psx-spx describes precisely enough to have one outcome is reproduced,
-because a game may depend on it; a defect described as unstable, garbage or unpredictable is not, and the call does its
-evident intent. Reproduced: memcpy, memset, memchr and bcopy refusing a null pointer and lengths over 7FFFFFFFh, with
-their documented return values; memmove copying forward into an overlap and backward, `len+1` bytes, only when
-`src < dst` and `dst >= src+len`; memcmp and bcmp returning the difference of the bytes after the first mismatch;
-strcmp comparing sign-extended bytes and answering 0, -1 or +1 for null pointers; strpbrk returning `src` when nothing
-matches unless `src` is empty; strstr resuming after the mismatching character, so that it does not find "aab" in
-"aaab"; strtol taking the prefixes 0b, 0x and o over any base and treating "+" as the string's end; atoi's leading 0 as
-the octal prefix; atof and strtod faulting on the absent COP1, which reaches A(40h) as on the console; printf's "h"
-sign-extending for the unsigned conversions too ("BIOS Memory Fill/Copy/Compare", "BIOS String Functions", "BIOS
-Number/String/Character Conversion", "A(3Fh) - Printf") [R].
-
-Three descriptions are read rather than followed [A]: strncat's "MaxSrc=(min(0,maxlen)+1)" appends nothing for any
-positive maxlen as written, so `max` is taken, the only reading under which the call appends, and the one psx-spx's
-following sentences describe; for strspn and strcspn, psx-spx's own text doubts its description against POSIX's, quoted
-beside it, so POSIX's is implemented; for strtok, psx-spx's two examples are reproduced exactly by skipping the
-separators that follow a token only when the list is one character long, the simplest rule that fits both. Each is a
-candidate for a console measurement (§10).
-
-The random generator is the documented `x = x*41C64E6Dh + 3039h`, returning bits 16-30 ("A(2Fh)") [R]; its seed at
-power-on is not documented and is 0 [C].
-
-### 4.9 Files
-
-psx-spx's "BIOS File Functions" and "BIOS Control Blocks" [R]: a name's device is the lower-case letters before an
-optional port number and the colon, matched against the DCBs' short names; the port is read in hexadecimal so that
-"bu10:" gives 10h as the FCB's port field holds it [C]. open takes the first free FCB, fills it as the FCB table gives,
-and calls the device's open; read and write call the device's read or write, or for the TTY its in_out with the
-transfer address and length in FCB[08h] and FCB[0Ch]; isatty returns bit 1 of the device's flags; getc's result is
-sign-extended and putc takes the handle second, as documented; lseek moves from the start or the current position and
-refuses the documented-broken "from the end" [C]; the error numbers are psx-spx's table, with B(54h) the last error and
-B(55h) the FCB's. cd, format, erase, undelete, testdevice, firstfile2, nextfile and rename pass to the device's
-function with an FCB taken for the call; with only the TTY installed in phase 1, a "cdrom:" or "bu00:" name is an
-unknown device (13h). The device functions' own calling convention is not documented and is the kernel's [C]: open
-returns 0 or an error number, in_out takes command 1 to read and 2 to write. AddDrv copies a 50h-byte DCB into a free
-one and calls its init; DelDrv clears the DCB of that name; PrintInstalledDevices prints each device's short and long
-name.
-
-### 4.10 The TTY and printf
-
-**Where the output goes** [C, §9 item 2]: the TTY device of psx-spx's "BIOS TTY Console (std_io)" writes to the
-DUART on the expansion port ("DEV8 Dual Serial Port"), channel A's transmit holding register at 1F802023h, one byte
-store a character, without polling the status register; TAB is expanded with spaces to the next multiple of eight
-columns and LF to CR LF, as putchar's description gives ("A(3Ch)") [R]. The retail kernel mounts the dummy TTY by
-default and the DUART TTY only by KernelRedirect(1) [R]; the open kernel mounts the DUART TTY at boot, so that a test
-program's output reaches the runner's reader, as psx-spx records the nocash BIOS doing when it finds the chip [R]. No
-detection is attempted: on a console without the chip the stores go nowhere. KernelRedirect(0) mounts the dummy TTY,
-whose output is discarded; C(13h) closes and reopens handles 0 and 1.
-
-There is **no input device** in phase 1: a read from the TTY returns no characters, getchar returns 0, and gets ends
-its line at the end of the input; gets's line editing is psx-spx's (TAB, BS and DEL, CR or LF, the 16h prefix, BELL
-for a full line or a stray control code) [R], unexercised until input exists.
-
-**printf** spills its four register arguments into the caller's home area at [SP] (the caller's duty by "Parameters,
-Registers, Stack") [R], so that every argument lies in one row from [SP+4], and formats in Rust: the conversions c, s,
-i, d, D, u, U, o, O, p, x, X and n, the prefixes "+", space, a width, ".precision", "*", ".*", "-", "#", "0", "L", "h"
-and "l", each through putchar ("A(3Fh) - Printf") [R]. Precision pads numbers with zeros and clips strings; "#" adds
-0x or 0X to a non-zero hexadecimal and a leading 0 to a non-zero octal; a null %s prints `<NULL>` as puts does; the
-return value is the count of characters before LF's expansion [C]. puts prints without resolving % and adds no
-newline, and prints `<NULL>` for a null pointer ("A(3Eh)") [R].
-
-**The prefixes' order** (corrected 2026-10-11). psx-spx lists the prefixes as a set "inserted between "%" and escape
-code" and gives no order among them [R]; C's printf takes the flags before the width, so a flag after it is not C.
-The first image followed C's order: in `%2-d`, which ps1-tests' `cpu/access-time` prints for its table's hundredths
-(`main.cpp`, line 48), the "-" ended the specification and the text `-d` was printed, so stage 3's gate failed that
-program on Diamond's bus. The program's console log answers what the console's kernel does: its cells read `5.3 `
-followed by the column's spaces where `%2d.%2-d` prints 5 and 3, the 3 left-justified in a width of 2 (`psx.log`) [R].
-The kernel now reads the prefixes in any order until the conversion, every flag applying wherever it stands, which is
-the reading psx-spx's unordered list supports and the one the log shows. Undocumented, and chosen [C]: a second run of
-width digits replaces the first, a "0" opens no width but is the zero flag wherever it stands, and a second precision
-replaces the first. The harness's `printf_takes_a_flag_after_the_width_as_the_console_s_log_shows` fails on the first
-image and passes on the corrected one [M].
-
-### 4.11 Programs and the cache
-
-**Exec** (A(43h)), in assembly: the caller's RA, SP, FP, GP and S0 into headerbuf[28h..3Bh], the memfill region (the
-header's 28h and 2Ch, headerbuf's 18h and 1Ch) zeroed by words, SP and FP set to base plus offset unless the base is 0,
-GP set, and the program's PC called with param1 and param2 in a0 and a1; a program that returns gets the caller's
-registers back and Exec returns 1 ("A(43h)", "CDROM File Playstation EXE and SYSTEM.CNF") [R]. The order of the five
-saved registers within the 20 bytes is not documented [C].
-
-**LoadTest and Load** read the 800h-byte header into a sector buffer through the file layer, copy its bytes 10h-4Bh to
-headerbuf, and Load reads the body to its destination and flushes the cache; 1 or 0 [C on the return value]
-("A(41h)", "A(42h)") [R]. **LoadExec** copies the name with its path upper-cased and ";1" added when no version is
-given, enables interrupts by syscall 2, loads and runs the program with the given stack by Exec(headerbuf,1,0), and
-then ends in the documented lock-up; the reload of the boot program it would attempt is phase 2's ("A(51h)") [R]. *Since
-2026-10-12* (`Diamond_OpenKernel_Phase2.md` §26.2): before it loads, LoadExec masks every source in I_MASK and restores
-the default exit, since the load replaces the memory its caller's handlers lie in, and it enters the program with
-I_MASK and I_STAT clear [C]. With
-no device holding files before phase 2, each fails.
-
-**FlushCache** (A(44h)) runs from KSEG1 with interrupts off, sets BCC's tag mode (TAG and IS1), isolates the cache, and
-stores 0 at each of the 256 line offsets 0-FF0h, which psx-spx's description of the tag test mode says invalidates
-every line ("FFFE0130h - BCC") [R]; it then restores BCC and SR. It clears the tags only [C].
-
-### 4.12 Miscellany, the timers and the GPU
-
-GetSystemInfo returns the kernel's date, 3, the version string's address, the RAM in kilobytes, and for 06h-0Eh the
-halfwords psx-spx lists, 0 otherwise ("A(B4h)") [R]. SetMem writes bits 8-10 of the RAM's size register for 2 or 8 MiB
-with bit 11 assumed set, and the size at 60h ("A(9Fh)") [R]. exit calls A(3Ah) through the table, which locks up
-("A(06h)") [R]. qsort sorts by the callback with a temporary element of `width` bytes from the heap, as documented
-("A(31h)") [R]; its algorithm is the kernel's, so equal elements may end in another order than the original's [C].
-lsearch and bsearch take the callback as their fifth argument from the stack. _ioabort prints its two strings and
-longjmps through the I/O abort buffer, which holds a lock-up until something records one [C] ("C(19h)", "A(B2h)") [R].
-
-The timer calls B(02h)-B(06h) and the GPU calls A(46h)-A(4Eh) make the port accesses psx-spx lists, with their
-documented return values, among them enable_timer_irq's 0 for vblank and gpu_abort_dma's I/O address; SendGP1Command is
-assembly so that v0 stays as it was ("BIOS Timer Functions", "BIOS GPU Functions") [R]. Not reproduced [C]: the stack
-words GPU_dw and gpu_send_dma write back into the caller's frame, and the TTY messages send_gpu_linked_list prints,
-whose text is not documented. gpu_sync's timeout is a count of 100000h polls [C].
-
-### 4.13 The pads
-
-InitPAD2 remembers the two buffers, zero-fills them to their given sizes and enables the pad; StartPAD2 enqueues the
-pads' element at priority 2; StopPAD2 removes it; PAD_init2 accepts only the types 20000000h and 20000001h, fills the
-kernel's own buffers with FFh, calls InitPAD2 and StartPAD2, remembers button_dest and returns 2; PAD_dr assembles pad
-1's buttons in the low half and pad 2's in the high, each with its first byte high, for IDs 41h and 23h, FFFFh
-otherwise, and stores the result at button_dest even when it is 0 ("BIOS Joypad Functions") [R]. For ID 23h the
-OR with 07C7h is applied but not the clearing of bits 6 and 7 by the analogue inputs, whose inputs psx-spx does not
-name [C]. InitCARD2's pad flag is honoured; its card half is phase 2's.
-
-~~On each vblank the pads' element, until stage 6 reads SIO0, writes FFh to both buffers' status bytes.~~ *Since
-stage 6 (2026-10-11):* on each vblank the pads' element reads each port with a buffer over SIO0, as the driver of
-psx-spx's "Emulation Note" and "Signals" does (each byte sent, about 100 cycles waited, IRQ7 acknowledged in I_STAT
-and then SIO0's CR, the next IRQ7 awaited for about 100 µs, the reply taken on RXRDY): 01h, 42h, 00h, then the
-halfwords the ID's low nibble counts, writing status 00h, the ID and the data, up to 22h bytes, or status FFh, psx-spx's
-value for a pad that did not answer or whose second byte was not 5Ah [R]; InitPAD2 resets SIO0 and sets MR 0Dh and BR
-0088h, the kernel's rate by "Signals" [C on which call does it]; no multitap request is sent [C]; StartPAD2 also sets
-I_MASK's vblank bit, which Peter Lemon's `Cube` needs, calling only PAD_init2 [A]
-(`Diamond_Pad.md` §10). It then calls PAD_dr when button_dest is set, and, while ChangeClearPAD's flag is set,
-acknowledges IRQ0 and returns from the exception [C on the flag's meaning and default, §9 item 4]. *Since 2026-10-12*
-ChangeClearPAD is four instructions of assembly with a stretch of fill behind its table entry, which Mega Man Legends'
-pad library stores into and calls (`Diamond_OpenKernel_Phase2.md` §27).
+1. **Drive identification (`kernel/src/shell.rs`):** Issues `GetID` (`0x1A`) up to 40 times across spin-up frames and classifies the result by flag bits into `Disc::Data` (licensed data disc), `Disc::Empty` (`flag & 0x40`), `Disc::Audio` (`flag & 0x10`), or `Disc::Refused` (`status & 0x08` with `0x80`).
+2. **Data disc boot:** Reads `cdrom:\SYSTEM.CNF;1` (defaulting to `cdrom:PSX.EXE;1` when absent), parses `BOOT` (copying any trailing argument to `0x8000_0180`), `TCB`, `EVENT`, and `STACK`, calls `SetConf` and `_96_init`, loads the executable via `Load`, and transfers control via `Exec`. Warm boot (`A(A0h)`) re-enters via the reset path with `k1 = 0x5741_524D` (`"WARM"`).
+3. **Shell hand-over v1 (no bootable disc):** Copies `diamond-shell.exe` from `.shell` (`0x9FC6_0000`) to its PS-EXE load address in RAM, flushes the I-cache, clears `I_MASK`/`I_STAT`, and runs `Exec(header, 1, reason)` where `reason` is `0` (empty), `1` (audio disc), or `2` (refused disc).
+4. **Shell program (`kernel-shell/`):** A standalone MIPS PS-EXE communicating with the kernel exclusively through the standard A/B/C tables (and polling CD-ROM `GetID` directly while the drive is idle). It provides:
+   - **Home screen** and **Memory Cards** manager (inspects both slots, displays save icons and Shift-JIS/ASCII titles, copies, deletes, and formats cards with confirmation sheets).
+   - **Automatic disc insertion hand-back:** When polling detects a bootable data disc (`Held::Data`), the shell stops its pad/card drivers, masks vblank, and returns `0` to the kernel, which proceeds directly to boot the disc.
 
 ## 5. The call table
 
-Printed by `cargo run --release --bin diamond-kernel -- calls` in `kernel-harness/` from the one place each status is
-written, `kernel/src/table.rs`, and checked against this page by the harness's `page` test. "No function, as
-documented" is psx-spx's own: return 0, a jump to 00000000h, a jump to itself (SystemError), or for atof and strtod
-the COP1 fault. ~~"Phase 2 stub" returns the failure psx-spx documents for the call~~ *Since phase 2 (2026-10-11,
-`Diamond_OpenKernel_Phase2.md` §19)* no stub is left: "absent from an open kernel" is Krom2RawAdd and Krom2Offset,
-which ~~return -1~~ *since 2026-10-12* answer the full-width Latin letters, digits and punctuation from the kernel's
-own 5x8 font, a blank space and a box for every other documented code, and -1 for any other (`Diamond_OpenKernel_Phase2.md` §25.1), as the kernel carries no character sets. "Undocumented, returns 0" is a call psx-spx names without describing: SysInitKernelVariables,
-the four TTY circular-buffer functions C(15h)-C(18h) and AdjustA0Table.
+Generated from `kernel/src/table.rs` by `cargo run --release --bin diamond-kernel -- calls` in `kernel-harness/` and asserted verbatim against this file by `kernel-harness/tests/page.rs`.
+- `implemented`: active kernel routine.
+- `absent from an open kernel`: `Krom2RawAdd` and `Krom2Offset` (served via the open 5×8 Latin/box fallback rather than a proprietary kanji ROM).
+- `no function, as documented`: documented no-op return `0`, jump to `0x0000_0000`, `SystemError` halt, or `atof`/`strtod` COP1 fault.
+- `undocumented, returns 0`: named in hardware documentation without a defined contract (`SysInitKernelVariables`, `C(15h)`–`C(18h)`, `AdjustA0Table`).
 
 576 entries: 222 implemented, 2 absent from an open kernel, 346 no function as documented, 6 undocumented.
 
@@ -625,192 +365,20 @@ the four TTY circular-buffer functions C(15h)-C(18h) and AdjustA0Table.
 | C(1Dh) | `get_card_find_mode()` | implemented |
 | C(1Eh..7Fh) | `jump_to_00000000h` | no function, as documented |
 
-## 6. Language, build and reproducibility
+## 6. Build, Toolchain, and Reproducibility
 
-**The toolchain**: `nightly-2026-10-01` (rustc 1.101.0-nightly 21b707e3f, LLVM 23.1.1) with `rust-src`, pinned by
-`kernel/rust-toolchain.toml`; the target `mipsel-sony-psx` is tier 3, `core` only, built with `-Z build-std`
-(rustc's target page, read for the plan) [R, M]. `kernel/.cargo/config.toml` sets the target, builds `core` and
-`compiler_builtins` with its memory functions, passes `-Z location-detail=none` so that no panic location carries
-the sysroot's path into the image, and reserves GP (below) [M]. `build.rs` passes the linker script, `kernel.ld`, which places each section at
-the addresses of §2 in a segment of its own, so that no segment holds the ELF headers [M]. The release profile is
-opt-level 2, fat LTO, one codegen unit, panic=abort. The compiler warns that MIPS I support is experimental [M]. The
-assembly needs `asm_experimental_arch`, which only a nightly allows.
+- **Toolchain:** Pinned in `kernel/rust-toolchain.toml` (`nightly-2026-10-01` with `rust-src`), compiling for tier-3 target `mipsel-sony-psx` with `-Z build-std=core,compiler_builtins`, `-Z location-detail=none`, fat LTO, single codegen unit, and `panic=abort`.
+- **`$gp` reservation:** The PlayStation ABI reserves `$gp` for the game's small-data pointer. `kernel/.cargo/config.toml` passes `-C target-feature=+noabicalls`, `-C llvm-args=-mgpopt`, and `-C llvm-args=-mips-ssection-threshold=0` so LLVM preserves `$gp` across all Rust kernel calls; only hand-written assembly (`exception_entry`, `ReturnFromException`, `setjmp`, `longjmp`, `Exec`) saves or loads `$gp`.
+- **Flattening and digest:** `diamond-kernel-harness` flattens each `PT_LOAD` segment from physical `0x1FC0_0000` into the 512 KiB `kernel/diamond-kernel.bin` image and records its SHA-256 digest in `kernel/diamond-kernel.bin.sha256` (`92dad42f277f4a8fd64e6404219da5de4c97d999ea479ce16c0429ce89388012`).
+- **Verification (`kernel-harness/`):** Runs standalone tests over `blackmoon-r3000` (`reset`, `exceptions`, `strings`, `tty`, `kernel`, `registers`, `pad_entry`, `image`, `sha256`, and `page`). Setting `DIAMOND_KERNEL_REBUILD=require` verifies byte-for-byte reproducible rebuilds from source.
 
-**GP** [M]. GP belongs to the game, which addresses its small data through it, and psx-spx's convention leaves it to
-the program ("Parameters, Registers, Stack") [R]. Under the target's default model (`abicalls` with `.option pic0`)
-LLVM treats $gp as an ordinary register that a function need not preserve: the first image's SetConf returned with GP
-zeroed, as the harness's `registers` test, added with the change in `573e205a`, showed against it. The kernel is now built with
-`abicalls` off and small sections on with a threshold of 0 (`-C target-feature=+noabicalls`, `-C llvm-args=-mgpopt`,
-`-C llvm-args=-mips-ssection-threshold=0`), under which LLVM reserves GP and places no object in a small section. The
-emitted assembly names $gp only in the hand-written exception entry, ReturnFromException, setjmp, longjmp and Exec,
-each of which saves or sets it on purpose. rustc warns that `noabicalls` is an unknown feature it passes through to
-LLVM and may one day refuse; the pinned nightly accepts it, and the `registers` test fails if a later toolchain loses
-the reservation.
+## 7. Accuracy Boundaries
 
-**The image**: `diamond-kernel-harness`'s `flatten` writes each loadable segment's bytes at its physical address less
-1FC00000h into 512 KiB of zeros; `diamond-kernel image` runs the pinned cargo in `kernel/` with its own target
-directory and writes `diamond-kernel.bin` and `diamond-kernel.bin.sha256`. [M] 524,288 bytes, 41,464 of them before the
-last non-zero byte, SHA-256 `ef5c8362064bb4cf5bf9ab2fc47af0fffc456ad65eac3808b40734c3c30736b2` since the prefixes' correction
-(§4.10; before it `2bb2c125fde742e06738e917c3e99c0dd9277d5ac6df84f1cd078a3aecc3d4ff`). *Since the pads' SIO0 read
-(stage 6, 2026-10-11):* 42232 bytes before the last non-zero byte, SHA-256
-`135549cd26268e0a50f56649ac4a1cdfdf6287ca2660698023648bc3bf011629`, rebuilt byte for byte with
-`DIAMOND_KERNEL_REBUILD=require`. *Since phase 2 (stage 10, 2026-10-11):* 92,440 bytes before the last non-zero byte,
-SHA-256 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebuilt byte for byte the same way and from a
-copy at another path (`Diamond_OpenKernel_Phase2.md` §20.4). *Since the card request's fix (2026-10-11, `Diamond_OpenKernel_Phase2.md`
-§23):* 92,504 bytes, SHA-256 `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`. *Since the three defects found in play
-(2026-10-12, `Diamond_OpenKernel_Phase2.md` §25):* 100,544 bytes, SHA-256
-`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`. *Since the stretch behind B(5Bh)'s entry, with
-LoadExec's and the synchronous CD operations' fixes (2026-10-12, `Diamond_OpenKernel_Phase2.md` §27):* 103,256 bytes,
-SHA-256 `c1a002e88aa4e8b1be0257ca486bdb8309cd63f229e1f5070e36e4c72559c785`.
+The open kernel is declared with `effect: accuracy` so a player's retail PlayStation BIOS overrides it when provided. Known differences relative to retail Sony BIOS ROMs:
 
-**Reproducibility** [M]: the harness's `image` tests check the committed bytes against their digest always, and
-against a rebuild whenever the pinned toolchain is present (the project's cache under `~/.cache/emusen/toolchains`,
-then rustup's cargo on PATH), skipping otherwise unless `DIAMOND_KERNEL_REBUILD=require`. Copies of `kernel/` built at
-two other paths gave the same digest as the checkout's own build, for the first image and for the current one, so the
-checkout's location does not reach the bytes. CI's
-`diamond-kernel` job in `rust-cores.yml` installs the same nightly with `rust-src` and runs the harness with the
-rebuild required.
+- **Execution speed:** Kernel routines execute from cached KSEG0 ROM and `.ramtext` in RAM rather than uncached ROM, so kernel calls complete faster than on retail hardware.
+- **Game BIOS patches:** Standard tables (`A0h`/`B0h`/`C0h`, Table of Tables, `B(5Bh)` pad-library fill stretch) match retail layout, but games that patch undocumented internal ROM addresses or inspect retail version strings/dates may behave differently.
+- **Default TTY:** The DUART transmit TTY (`0x1F80_2023`) is mounted at boot so test programs emit output without calling `KernelRedirect(1)`; `isatty` therefore reports a terminal by default.
+- **Kanji font:** `Krom2RawAdd` / `Krom2Offset` serve the open 5×8 Latin/punctuation fallback and missing-glyph box rather than Sony's proprietary Shift-JIS bitmap ROM.
+- **Startup screen:** Empty-drive and non-bootable-disc boots run EmuSen's `diamond-shell` rather than the retail PlayStation BIOS menu.
 
-## 7. The harness, and what it proved
-
-The machine is blackmoon-r3000 on a bus of the harness's own (`kernel-harness/src/machine.rs`): 2 MiB of RAM mirrored
-through 8 MiB, the scratchpad, the BIOS holding the image, I_STAT and I_MASK driving the interrupt line, GPUSTAT reading
-ready, BCC, the DUART's transmit register captured as the TTY, and every other port a logged store. It models no
-device's timing and is not Diamond's bus. A call is made through the real vector, dispatcher and table with the
-arguments in a0-a3 and on the stack, returning to a loop; a test program is MIPS source assembled by emusen-mips into a
-PS-EXE and side-loaded as §3.3 describes.
-
-[M] 49 tests, all passing, `cargo test --release` in `kernel-harness/`, the page's table among them (§5); *55 since
-2026-10-12, with a memory card on the harness's SIO0 (`Diamond_OpenKernel_Phase2.md` §25.4), and 60 with the five of
-`pad_entry.rs` (§27.5 there)*:
-
-| File | Tests | What they show |
-|---|---|---|
-| `reset.rs` | 5 | the RAM's size register before any RAM store; the memory control values; BCC; 256 tags cleared; the hand-over at 80030000h with SR 401h and SP 801FFF00h, no exception taken; 60h-68h; the vector at 80h jumping to C(06h)'s handler and its copy at 0, a non-zero halfword there; the three call vectors; C(80h) reading B(00h); the header's date and console type; the table of tables' six entries and sizes, the unused ones zero; TCB 0 used and current; the chains' lengths 1, 4, 0, 1; the TTY's DCB and handles 0 and 1; every one of the 576 entries pointing into the kernel, and the shared stubs shared |
-| `exceptions.rs` | 8 | EnterCriticalSection's result and SR, ExitCriticalSection, syscall 0 changing nothing, the TCB's saved EPC and Cause; syscall 4's event; BREAK and an address error each delivering F0000010h,1000h and reaching a handler installed at A0[40h] that moves the TCB's EPC on, as ps1-tests' does; chains by priority, newest first, with the default handler's event; the second function with the first's result; the hook entered with v0 = 1 after the chains, and ResetEntryInt's structure; a timer IRQ's root-counter event and its acknowledgement; an interrupt on a GTE command running it once |
-| `strings.rs` | 12 | every memory, string and conversion call against its description, the documented bugs and refusals included, psx-spx's two strtok examples, its strstr example; rand's sequence; setjmp and longjmp |
-| `tty.rs` | 8 | printf's conversions and prefixes, %n, * widths, a flag after the width as `cpu/access-time`'s console log shows; putchar's TAB and LF expansion, puts with `<NULL>`; the C table read on into the B table; the file layer's handles, errors and the unknown devices of phase 2; KernelRedirect; a PS-EXE that calls A(1Bh), B(3Fh), A(3Ch), C(BDh) and A(3Fh) and prints `strlen("printf")=6` and `printf 1997` |
-| `kernel.rs` | 11 | events through their statuses and modes, a callback, sixteen EvCBs; WaitEvent returning once a timer IRQ delivers; two threads changing to each other with ChangeTh returning 1; the heap's format and first fit, calloc, realloc, kernel memory; qsort, bsearch, lsearch; Exec with its stack, GP, memfill, parameters and the caller's registers; LoadTest and Load failing; FlushCache's 256 tag stores and restored BCC and SR; SetConf and GetConf; GetSystemInfo; SetMem; the timer, GPU and pad calls' ports and returns; the phase 2 stubs' failures |
-| `registers.rs` | 1 | every implemented entry that returns, called with S0-S7, GP, SP and FP set, returning them unchanged (§6, GP) |
-| `image.rs`, `sha256.rs`, `page.rs` | 4 | the image's size and digest; the rebuild's bytes; SHA-256's standard vectors; §5's table |
-
-**Negative controls** [M]: a kernel built with memcmp's documented bug removed and the GTE skip removed, run through
-`DIAMOND_KERNEL_IMAGE`, failed exactly the memcmp test and the GTE test, besides the image's digest and rebuild tests;
-the first image, which did not reserve GP, fails the `registers` test at SetConf.
-
-**Not shown**: anything that needs Diamond's devices (the pads over SIO0, the TTY reader in the runner, the ps1-tests
-gate), timing against a console, and input to the TTY.
-
-## 8. The accuracy cost, and the risks
-
-**In a player's words** (the plan's §5.9, for the whole kernel): "Most games start and save as on a console. A game
-that relies on an undocumented kernel call, reads the kernel's code, or depends on its exact timing may behave
-differently, and the start-up screen is EmuSen's own." ~~**For phase 1** it adds: "Until the rest of the kernel exists,
-only programs loaded directly run without your BIOS; discs and memory cards need your own."~~ *Withdrawn at phase 2
-(`Diamond_OpenKernel_Phase2.md` §20.3).* `effect: accuracy`.
-
-**The risks** [A]:
-
-- **Timing.** The kernel runs from cached ROM, where the original runs most calls from uncached ROM; psx-spx measures
-  its memcpy at about 160 cycles a byte. A program that times a kernel call, or a game whose pacing absorbs the
-  original's slowness, behaves differently. Matching the original's cycle counts would need measurements of them,
-  which only a console run can supply.
-- **Games that patch the kernel.** psx-spx's excluded "BIOS Patches" section describes patches games apply to the
-  kernel's code and tables; a replacement writer learns of them only by a game failing (the plan's P7). The tables are
-  at the documented places, but code a patch expects at a fixed address is not there. *Found 2026-10-12*: Mega Man
-  Legends calls three addresses past ChangeClearPAD's entry, which now return (`Diamond_OpenKernel_Phase2.md` §26.1).
-- **Games that read the kernel**: its version string or date to decide on patches (this kernel's are its own), its
-  garbage area at 0-0Fh (§10 Q1), or its code.
-- **Undocumented defaults and conventions** (§9): wrong guesses show as misbehaving games rather than failures.
-- **The DUART default.** A program that probes the TTY's flags with isatty finds a terminal where the original reports
-  none.
-- **Phase 2's size**: the card format must match bit for bit so that cards move between kernels.
-- **The toolchain.** The target is tier 3 and its MIPS I support experimental; GP's reservation rests on a feature rustc
-  passes through with a warning (§6). A re-pin is checked by the rebuild and the `registers` test.
-
-## 9. Choices where the documents are silent
-
-1. The code runs through KSEG0; the reset entry and the cache flush through KSEG1 (§2.1).
-2. The DUART TTY at 1F802023h is mounted at boot, without detection or polling (§4.10).
-3. The hand-over at 80030000h holds a loop for a side-loader (§3.3); SR 401h there.
-4. Defaults: ChangeClearRCnt's flags 1, 1, 1 for the timers and 0 for vblank, so that by default each IRQ source has one
-   handler that acknowledges it and vblank reaches the pads' element at priority 2, which would never see it if the
-   priority 1 handler acknowledged and returned; ChangeClearPAD's flag 1, with the meaning "acknowledge vblank and
-   return" by analogy with ChangeClearRCnt, which psx-spx does not state; rand's seed 0; SetIrqAutoAck off, as
-   documented.
-5. Bugs: reproduced when their outcome is determined, not when described as unstable (§4.8); the two chain and cache
-   defects not reproduced (§4.2).
-6. Interfaces no document fixes: the second chain function's argument; the next element read before a function runs;
-   DeliverEvent's callback arguments; EnableEvent on a ready or free EvCB; the device functions' convention; Exec's
-   order of saved registers; the return values of InitPAD2, AddDrv, LoadTest and printf; lseek's "from the end"
-   refused; realloc's failure; the port number read in hexadecimal; gpu_sync's timeout; the allocation order of the
-   control blocks; printf's repeated width or precision, and "0" after a width (§4.10).
-7. Not provided in phase 1, though documented: the expansion ROM's pre-boot and post-boot entry points at 1F000080h and
-   1F000000h ("DEV0 Expansion ROM Header"), which cheat cartridges use; the POST register writes ("DEV8 Post
-   Registers"); the command line at 180h, which SYSTEM.CNF fills.
-
-## 10. Questions for the tester
-
-1. **Q1, the garbage area.** psx-spx gives the four words games read at 0-0Fh, a copy of the original's exception
-   vector, and says Fade to Black crashes on a wrong byte at 5. The open kernel holds a copy of its own vector there,
-   whose byte 5 depends on where its handler lies. May the kernel place its handler so that the documented bytes
-   result (they are documented data, read by games), or does the copy stay its own? *Recommended*: keep its own until a
-   game is seen to fail, then decide with the failure in hand.
-2. **Q2, the undocumented defaults** (§9 item 4). A test program that prints ChangeClearRCnt's and ChangeClearPAD's
-   returned old values, rand's first value and SR at entry would settle them on a console with the player's own BIOS,
-   as program output, never a trace of the BIOS. *Recommended*: yes, when a console run is possible.
-3. **Q3, the TTY default.** Keep the DUART TTY mounted at boot (output observable, isatty true), or mount the dummy as
-   the original does and have the runner call KernelRedirect(1)? *Recommended*: keep it, as test programs never call
-   KernelRedirect.
-4. **Q4, the screening list.** Four passages that quote or render BIOS code lie inside pages the replacement writers'
-   list allows, and were read in a sequential reading before they were recognised (§11): `kernelbios.md` lines 147-152
-   and 2490-2503, `memorycontrol.md` lines 58-70 and 274-297. Nothing in the kernel is taken from them (§4.11 and §3.1
-   say where its register values and its cache flush come from). ps1-tests' `common/cop0.hpp` declares on its fourth
-   line that it was taken from an emulator's source; its first 60 lines were read before that line was noticed, and
-   nothing was taken. *Recommended*: add all five to `DOCS.txt`'s exclusions, and screen `kernelbios.md`'s "BIOS
-   Internal Boot Functions", "BIOS More Internal Functions" and "BIOS Versions" before phase 2 needs them.
-5. **Q5, the firmware declaration.** With the kernel loaded by Diamond's bus, the crate's three firmware entries change
-   from `effect: none` to `accuracy` with §8's words. *Recommended*: in the same change that integrates the kernel.
-
-## 11. Reading log
-
-Every document and file opened to write the kernel and this page, 2026-10-11. **Never opened**: any BIOS image or
-firmware, anything under `~/.cache/emusen/probe/diamond/sysdir/` or `~/Documents/BIOS/` (a listing of
-`~/.cache/emusen/probe/diamond/` showed `sysdir` by name; its contents were not listed), any disassembly, listing or
-trace of a BIOS, OpenBIOS, any emulator's source, PSX_MiSTer, `Diamond_References.md` (not opened at all), Diamond's
-bus branch. No reference emulator was run.
-
-**psx-spx**, `~/.cache/emusen/probe/diamond/docs/psx-spx/`, stable at `6d7d1bc`:
-
-- `docs/kernelbios.md`: the heading list; lines 1-2228 ("BIOS Overview" to "BIOS Misc Functions", every function
-  section) and 2318-2646 ("BIOS PC File Server", "BIOS TTY Console (std_io)", "BIOS Character Sets", "BIOS Control
-  Blocks"). Not read: 2229-2317 ("BIOS Internal Boot Functions", "BIOS More Internal Functions", to be screened),
-  2647-2740 ("BIOS Versions", to be screened), 2741-3333 ("BIOS Patches", excluded). Within the lines read, 147-152 (the
-  original's vector words) and 2490-2503 (an instruction listing) quote BIOS code (§10 Q4).
-- `docs/cpuspecifications.md`: the heading list; lines 529-735, "COP0 - Register Summary" and "COP0 - Exception
-  Handling", including "Interrupts vs GTE Commands".
-- `docs/interrupts.md`: whole.
-- `docs/memorycontrol.md`: whole (324 lines); lines 58-70 and 274-297 render BIOS code (§10 Q4).
-- `docs/expansionportpio.md`: the heading list; lines 1-130 (the expansion regions, "DEV0 Expansion ROM Header", the
-  DUART's data registers), 195-230 (its interrupt and status registers), 334-346 (its notes), 376-416 (1F802030h and the
-  console type at BFC00104h), 440-460 ("DEV8 Post Registers").
-- `docs/cdromfileformats.md`: lines 128-218, "CDROM File Playstation EXE and SYSTEM.CNF".
-- The heading lists of `memorymap.md`, `iomap.md` and `interrupts.md`.
-- `DOCS.txt` (the exclusions) and `PROVENANCE.txt` (its first 80 lines).
-
-**Test programs**, `~/.cache/emusen/probe/diamond/tests/`: ps1-tests' `README.md` (its first 60 lines),
-`common.mk` (its first 40), `common/exception.cpp` (its first 80), `common/exception.hpp`, `common/cop0.hpp` (its
-first 60, §10 Q4), `cpu/cop/main.cpp` (lines 1-200) and `cpu/cop/psx.log`; for the prefixes' correction,
-`cpu/access-time/main.cpp` (its printf lines, by a search) and `cpu/access-time/psx.log` (its first 30 lines), and
-psx-spx's "A(3Fh) - Printf" (`kernelbios.md` 2391-2428) again; a count of the kernel calls named across
-ps1-tests' sources (a search, no file read whole); the directory listing of PSn00bSDK's examples. No test program
-whose source is a BIOS listing was opened.
-
-**EmuSen's own**: `Diamond_Plan.md` lines 1-310, 504-572, 696-760 and 848-935; the Diamond `README.md`;
-`Diamond_Native.md`'s headings and §2.5; `EmuSen_Firmware.md` lines 1-150; `Nephrite_Native.md` (a search for its
-replacements' declaration); blackmoon-r3000's `lib.rs`, `boundary.rs` and `cop0.rs` (lines 1-80); emusen-mips's
-`lib.rs` (1-60) and `asm.rs` (1-120); Diamond's `Cargo.toml`; `.github/workflows/rust-cores.yml` (lines 1-150, and a
-search); `EmuSen/Cores/RustCores.props` (a search); the man-pages indexes. The toolchain's own outputs: rustc's target
-specification for `mipsel-sony-psx`, printed by the pinned compiler. For the prefixes' correction: `Diamond_Native.md` §11.12, §11.14 to
-§11.17 and a search for the corpus's path, and `EmuSen.WiseMan/Cores/DiamondTests.cs` lines 200-260 (the gate's test);
-Diamond's bus sources were not read.

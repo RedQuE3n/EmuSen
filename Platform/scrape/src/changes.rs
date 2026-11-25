@@ -2,12 +2,13 @@
 
 pub(crate) use emusen_galaxia::clock::local_offset;
 use crate::json::{self, quoted, strings_into};
-use crate::{Error, Scraper, credentials, layout};
+use crate::{Error, ScraperInner, credentials, layout};
 use serde_json::Value;
+use std::sync::Arc;
 
 /// The instant a request names in `at` (a round-trip text with its offset) with that offset, else now on the handle's
 /// clock with the machine's: the UTC ticks and the offset in seconds.
-fn given_now(s: &Scraper, r: &Value) -> Result<(i64, i64), Error> {
+fn given_now(s: &ScraperInner, r: &Value) -> Result<(i64, i64), Error> {
     if let Some(at) = json::text_or_none(r, "at")? {
         let utc = emusen_galaxia::clock::instant(&at).ok_or_else(|| Error::BadRequest("The request's at is not a time.".into()))?;
         return Ok((utc, offset_written(&at)));
@@ -26,7 +27,7 @@ fn offset_written(text: &str) -> i64 {
     0
 }
 
-pub(crate) fn change(s: &Scraper, r: &Value) -> Result<String, Error> {
+pub(crate) fn change(s: &Arc<ScraperInner>, r: &Value) -> Result<String, Error> {
     let op = json::text(r, "op")?;
     let mut out = String::new();
     match op.as_str() {

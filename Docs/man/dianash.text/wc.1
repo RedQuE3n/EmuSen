@@ -1,15 +1,32 @@
 NAME
-    wc - count lines, words, bytes
+    wc - count lines, words, and bytes
 
 SYNOPSIS
     wc [-l] [-w] [-c] [path]
 
 DESCRIPTION
-    Counts lines/words/bytes of piped stdin, or a real file if <path> is
-    given (walled to the project's own directory tree). With no flags,
-    prints all three in that fixed order regardless of what order flags are
-    given in, matching real wc.
+    Counts lines, whitespace-delimited words, and UTF-8 bytes from piped
+    standard input, or from [path] inside the shell sandbox when no
+    standard input is piped. With no flags, prints all three counts in
+    the fixed order lines, words, bytes (followed by [path] when given).
+
+    Lines are counted by splitting on '\n', so a file ending with a
+    trailing newline reports one more line than the same text piped with
+    its trailing newline stripped.
+
+OPTIONS
+    -l  Print the line count.
+    -w  Print the word count.
+    -c  Print the byte count.
 
 EXAMPLES
     history | wc -l
-    wc -l notes.txt
+    wc -l /Logs/notes.txt
+    wc /Logs/notes.txt
+
+EXIT STATUS
+    0   Counts printed.
+    1   Path outside sandbox or file read error.
+
+SEE ALSO
+    cat(1), head(1), tail(1), grep(1)

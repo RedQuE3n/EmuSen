@@ -1,5 +1,5 @@
 NAME
-    memcard - manage memory cards, paks and a console's save memory
+    memcard - manage memory cards, controller paks, and console backup RAM
 
 SYNOPSIS
     memcard ls [<card>]
@@ -12,70 +12,85 @@ SYNOPSIS
     memcard rename <card> <new card>
 
 DESCRIPTION
-    The card manager of every console that keeps saves on a medium of its
-    own: the PlayStation's and the PlayStation 2's memory cards, and as
-    their cores declare them the N64's Controller Paks and the Sega CD's
-    backup RAM. A <card> is a file in the sandbox, named as 'ls' and 'cp'
-    name it:
+    Manages save media across consoles that store saves on dedicated cards
+    or backup RAM: PlayStation (.mcr), PlayStation 2 (.ps2), Sega CD
+    internal backup RAM (.brm) and RAM cartridges (.crm), and N64
+    Controller Paks (.mpk). Does not require a running game.
 
-        Saves/PlayStation/Cards/Card 1.mcr     a shared or named card
-        Saves/PlayStation/Amber Saga.mcr       a game's own card
-        Saves/PlayStation 2/Cards/Card 1.ps2   a PlayStation 2 card
-        Saves/Sega CD/Console/Backup RAM 1.brm the console's own memory
+    Each <card> is a file path inside the shell sandbox, for example:
 
-    Its medium is known by its extension, among the media the program's
-    engines declare, listed in the systems table's order.
-    A <save> is the save's name on the card, or its number in 'memcard ls'.
+        /Saves/PlayStation/Cards/Card 1.mcr       shared or named card
+        /Saves/PlayStation/Amber Saga.mcr         per-game card
+        /Saves/PlayStation 2/Cards/Card 1.ps2     PlayStation 2 card
+        /Saves/Sega CD/Console/Backup RAM 1.brm   console backup RAM
 
-    'ls' with no card lists every card under Saves by console, with its
-    medium, its free space and whether a game holds it; with a card, the
-    saves on it, each with its size, its name and its title. 'cp' copies
-    a save onto another card of the same medium; 'mv' copies it, reads it
-    back from the second card, and only then deletes it from the first.
-    'rm' deletes a save as the console's own manager does: the PlayStation
-    card's directory marks it deleted and keeps its blocks; a PlayStation 2
-    save is a directory, removed with every file in it.
+    Media types are identified case-insensitively by file extension from
+    the media declared by installed engines in systems-table order. A
+    <save> is identified either by its save ID on the card or by its
+    1-based index from 'memcard ls <card>'.
 
-    'import' copies every save of the <from> cards onto <card>, ALL OR
-    NONE. It is refused whole when the saves need more than the card's
-    free space (15 blocks on a PlayStation card, 7,998 kilobytes on a
-    formatted PlayStation 2 card), with each save and what it needs listed, or when two of the cards hold different saves
-    of one name; a save already on <card> is left as it is. The <from>
-    cards are read and never written, so a game's own card stays as it was
-    and Per game, chosen again in Graphics Settings, finds it unchanged.
+OPTIONS
+    ls [<card>]
+        With no argument, list every card under /Saves grouped by console
+        with its medium, free capacity, and lock status. With <card>, list
+        each save on the card with its index, size, ID, and title.
 
-    'new' makes a card under a name, formatted where the medium's module
-    can write its format; otherwise the name is the card, and the game
-    formats it when it first saves, as a new card. 'dup' copies a whole
-    card to a new name and 'rename' renames one; neither needs to read
-    the medium's format, so they work for every medium.
+    cp <card>:<save> <card>
+        Copy a save onto another card of the same medium.
 
-THE LOCK
-    A running game holds a lock on each card it was given, <card>.lock
-    beside the file, for as long as it runs. Every write refuses a card
-    that is held, and says by whom: "in use by Amber Saga" for a game of
-    this program, "in use by another program" otherwise. Close the game,
-    then change its cards; the machine would otherwise write over them.
+    mv <card>:<save> <card>
+        Copy a save to the destination card, verify by reading it back,
+        and only then delete it from the source card.
 
-FORMATS
-    A medium's saves are read by its format module, pure functions over
-    the card's bytes: the PlayStation's (psx-spx, "Memory Card Data
-    Format"), the PlayStation 2's (Ross Ridge's "PlayStation 2 Memory Card
-    File System", through emusen-ps2-card; Sapphire_Native.md §30.17) and
-    the Sega CD's, its backup RAM and RAM cartridge alike
-    (Nephrite_Bram.md). A medium with no module yet (the N64's) lists
-    its size, and offers only new, dup and rename.
+    rm <card>:<save>
+        Delete a save using the console's native deletion semantics
+        (marking directory entries deleted on PlayStation cards; removing
+        the save directory and its files on PlayStation 2 cards).
+
+    import <card> <from>...
+        Copy every save from all <from> cards onto <card> atomically (all
+        or none). Refuses if total space exceeds free capacity (15 blocks
+        on PlayStation, 7,998 KB on formatted PlayStation 2) or if two
+        sources hold conflicting saves with the same ID. Saves already on
+        <card> are preserved and <from> cards are never modified, leaving
+        per-game cards intact if Per Game mode is later re-selected in
+        Save Media settings.
+
+    new <card>
+        Create a new card, formatted when the medium has a format module;
+        otherwise create an unformatted image for the game to format on
+        first save.
+
+    dup <card> <new card>
+        Duplicate an entire card image byte-for-byte (works for all media).
+
+    rename <card> <new card>
+        Rename a card file in place (works for all media).
+
+LOCKING AND FORMATS
+    A running game creates <card>.lock beside each card it holds. Any
+    mutating subcommand refuses a locked card and names the holder ("in
+    use by <game>" or "in use by another program"). Close the game before
+    modifying its cards.
+
+    Format modules handle save-level inspection and transfers for
+    PlayStation, PlayStation 2, and Sega CD backup RAM/cartridge media.
+    Media without a format module (such as N64 Controller Paks) report
+    file size in 'ls' and support 'new', 'dup', and 'rename'.
 
 EXAMPLES
     memcard ls
-    cd Saves/PlayStation
+    cd /Saves/PlayStation
     memcard new Cards/Blue.mcr
     memcard ls "Amber Saga.mcr"
     memcard cp "Amber Saga.mcr:1" Cards/Blue.mcr
     memcard import Cards/Blue.mcr "Amber Saga.mcr" "Basalt Run.mcr"
     memcard ls "../PlayStation 2/Cards/Card 1.ps2"
 
+EXIT STATUS
+    0   Operation succeeded.
+    1   Invalid arguments, unknown extension, path outside sandbox, locked
+        card, insufficient space, name conflict, or I/O error.
+
 SEE ALSO
-    EmuSen_SaveMedia.md (the model, the modes and the lock),
-    Diamond_Cards.md (the PlayStation's cards),
-    Sapphire_Native.md §30.17 (the PlayStation 2's cards)
+    pkg(1), hier(7)

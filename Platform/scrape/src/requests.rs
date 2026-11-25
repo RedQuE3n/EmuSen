@@ -10,9 +10,10 @@ use crate::quota::Status;
 use crate::redact::redact;
 use crate::run::{Choices, Phase};
 use crate::store::Priority;
-use crate::{Error, Scraper, credentials, openemu};
+use crate::{Error, ScraperInner, credentials, openemu};
 use emusen_galaxia::clock::TICKS_PER_SECOND;
 use serde_json::Value;
+use std::sync::Arc;
 
 /// `ScrapeCost.Kinds`: the share of §17.9's 39 found answers offering each kind, and the mean size the region rule took.
 #[allow(clippy::eq_op)] // Each share is found/39 as counted, 39/39 included.
@@ -61,9 +62,9 @@ pub(crate) fn choices(r: Option<&Value>, refresh: bool) -> Result<Choices, Error
     })
 }
 
-impl Scraper {
+impl ScraperInner {
     /// The service's `start` request: the games queued, or a status; a store opened for its sources alone runs nothing.
-    pub fn start_request(&self, request: &str) -> Result<usize, Error> {
+    pub(crate) fn start_request(self: &Arc<Self>, request: &str) -> Result<usize, Error> {
         if self.settings().sources_alone {
             return Err(Error::BadRequest("The scraper is open for finding pictures alone, with no media store, so it runs nothing; scraping opens the store.".into()));
         }
@@ -266,7 +267,7 @@ impl Scraper {
         if let Some(why) = self.unusable(json::flag(r, "enabled", true)?)? {
             return Ok(answer("failed", &format!("ScreenScraper cannot be used: {why}.")));
         }
-        let Some(system_id) = Scraper::screenscraper_id(&system) else { return Ok(answer("bad_request", "This game's console has no ScreenScraper system.")) };
+        let Some(system_id) = ScraperInner::screenscraper_id(&system) else { return Ok(answer("bad_request", "This game's console has no ScreenScraper system.")) };
         let Some(client) = self.client(Some(credentials::Member::load()).filter(|m| m.is_set())) else { return Ok(answer("failed", credentials::NONE_HERE)) };
         let stop = Stop::default();
         if self.quota.take_turn_with(&|| self.store(), &self.clock, &stop)? != Some(true) {

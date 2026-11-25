@@ -1,76 +1,42 @@
-# Beryl Hardware (the shared hardware of the Sega cores)
+# Beryl-HW — Shared Sega Chip Crates
 
-Not a console core: the chips more than one Sega core uses, one crate each in `EmuSen/Cores/Sega/Beryl-HW/`, so that
-each can be used alone. The processors came first, planned in `Nephrite_Plan.md` §8 since Nephrite is their first
-user; each crate's own record is beside this page. *Decided 2026-10-05: crates shared between the Sega cores live in
-Beryl, whatever the chip; the folder, once named for the CPUs alone, is `Beryl-HW` (Beryl Hardware).* The interface
-below is the processors'; a crate of another kind keeps the contract its own section gives.
+`Beryl-HW` (`EmuSen/Cores/Sega/Beryl-HW/`) is a collection of standalone Rust crates implementing chips and shared hardware assets used by more than one Sega console core. Each chip lives in its own crate so any core can depend only on the hardware it carries.
 
-- [`Beryl_M68k.md`](Beryl_M68k.md) — `beryl-m68k`, the Motorola 68000, graded by SingleStepTests' 68000 suite and
-  TomHarte's 680x0 tests, their disagreements refereed by fx68k and Nuked-MD's 68000 run as black boxes (its §6).
-- [`Beryl_Z80.md`](Beryl_Z80.md) — `beryl-z80`, the Zilog Z80, graded by SingleStepTests' Z80 suite and ZEXALL.
-- [`Beryl_SH2.md`](Beryl_SH2.md) — `beryl-sh2`, the Hitachi SH-2 (SH7604), for which no single-step suite exists.
-- [`Beryl_SN76489.md`](Beryl_SN76489.md) — `beryl-sn76489`, the SN76489 PSG and Sega's copy of it, written from SMS
-  Power's document; the first crate here that is not a processor.
-- [`Beryl_SmsVdp.md`](Beryl_SmsVdp.md) — `beryl-sms-vdp`, the Master System's VDP family (315-5124, 315-5246, 315-5378)
-  in mode 4, the TMS9918's modes and the TMS9918A, its mode 4 composition shared with the Genesis, which Nephrite draws
-  with it; a chip that is not a processor, keeping the contract below with the additions its opening lists. Created
-  2026-10-19 at Endou's stage 3, its TMS9918 modes and Nephrite's move at stage 4.
-- `beryl-sms-colours` — the Master System VDP family's colours (the 315-5124's, the 315-5246's and the TMS9918A's) as
-  RGBA, read by Endou's picture and the `sms` pack's palette view; no dependencies. Created 2026-10-19 at Endou's stage
-  8, its record `Beryl_SmsVdp.md` §10.
-- [`Beryl_FmTables.md`](Beryl_FmTables.md) — `beryl-fm-tables`, the log-sine and exponent ROMs of the Yamaha FM operator,
-  one pair for Endou's YM2413 and Nephrite's YM2612; data only, no dependencies. Created 2026-10-27.
-- `beryl-asm` — the front half of the processors' assemblers, below; no record page of its own, the processors' §8 being
-  where its readings are measured.
-- [`Beryl_Font.md`](Beryl_Font.md) — `beryl-font`, the open firmware's own five-by-seven font, drawn for Nephrite's open
-  Sega CD BIOS and shared with Endou's open boot program since 2026-10-19; a build dependency, each core making its own
-  tiles from the glyphs.
+## Crate Index
 
-## The interface every crate keeps
+| Crate | Hardware / Asset | Status | Reference |
+|---|---|---|---|
+| `beryl-m68k` | Motorola 68000 CPU (Genesis main CPU, Sega CD sub-CPU) | Implemented (`BUILT = true`) | [Beryl_Cpus.md](Beryl_Cpus.md#beryl-m68k) |
+| `beryl-z80` | Zilog Z80 CPU (Genesis sound CPU, Master System / Game Gear main CPU) | Implemented | [Beryl_Cpus.md](Beryl_Cpus.md#beryl-z80) |
+| `beryl-sh2` | Hitachi SH-2 / SH7604 CPU (32X, Saturn) | Stub (`BUILT = false`) | [Beryl_Cpus.md](Beryl_Cpus.md#beryl-sh2) |
+| `beryl-asm` | Shared assembler front end (build/dev tool only) | Implemented | [Beryl_Cpus.md](Beryl_Cpus.md#beryl-asm) |
+| `beryl-sms-vdp` | Sega Master System VDP family (`315-5124`, `315-5246`, `315-5378`), `TMS9918A`, and Genesis mode 4 composition | Implemented | [Beryl_Devices.md](Beryl_Devices.md#beryl-sms-vdp) |
+| `beryl-sms-colours` | Master System, Game Gear, and TMS9918A RGBA colour tables | Implemented | [Beryl_Devices.md](Beryl_Devices.md#beryl-sms-colours) |
+| `beryl-sn76489` | TI SN76489 / Sega integrated PSG with Game Gear stereo | Implemented | [Beryl_Devices.md](Beryl_Devices.md#beryl-sn76489) |
+| `beryl-fm-tables` | Yamaha FM operator 256-entry `LOGSIN` and `EXP` ROM tables | Implemented | [Beryl_Devices.md](Beryl_Devices.md#beryl-fm-tables) |
+| `beryl-font` | 47-glyph 5×7 open-firmware font (build tool only) | Implemented | [Beryl_Devices.md](Beryl_Devices.md#beryl-font) |
 
-- **A bus trait in the processor's own terms**, which the core implements: the 68000's cycles with their function
-  code, the Z80's machine cycles with the opcode fetch's refresh address and I/O, the SH-2's external accesses by width;
-  each with the processor's interrupt lines and acknowledge cycle.
-- **The bus owns the clock.** The processor reports every access and every internal cycle through the bus, which
-  advances its own time and adds its wait states; the processor keeps no clock. One implementation then serves a flat
-  test bus, a console's bus with its waits and a second instance on a coprocessor's bus alike. The reason is the
-  scheduler of `Nephrite_Plan.md` §5.1: every access advances the master clock, so devices can be caught up exactly at
-  the access that couples them.
-- **The debugger through `emusen-native`'s `Observer`** (`debug.rs`, added 2026-10-04). Each crate has `step`, which
-  is `step_observed` with `Unobserved`, so the plain step is compiled with no hook at all; the observed step is
-  compiled again with the shared `Hooks` and reports the instruction boundary (breakpoints, stepping, coverage on its
-  processor), each stored byte, and calls, exceptions and returns. Processor 0's breakpoints are the hooks'; another
-  processor's are its core's to keep, as `Hooks` already arranges.
-- **State, disassembly and an assembler.** Each processor's registers are a block of its core's state written with
-  `StateWriter`; each crate decodes its instructions for `DEBUG_DISASSEMBLE` and carries an assembler as a development
-  tool, for its test programs and for the firmware replacements `Nephrite_Plan.md` §5.6 writes in assembly.
-- **The single-step oracle lives in the crate**, as unit tests (their shared half in `emusen-singlestep`, `EmuSen_SingleStep.md`) that find the corpus through `EMUSEN_BERYL_CORPUS`
-  (`~/.cache/emusen/probe/nephrite/singlestep` on the desktop) and pass unrun without it, or while the crate's `BUILT`
-  is false.
+## Processor Crate Contract
 
-## A chip that is not a processor
+Every CPU crate in `Beryl-HW` (`beryl-m68k`, `beryl-z80`, `beryl-sh2`) follows the same architectural boundary:
 
-A sound chip, or any other device more than one Sega core carries, keeps none of the processors' interface above: it
-has no bus of its own to report cycles through, nothing for the debugger to step, and no instructions to assemble.
-Its contract, first kept by `beryl-sn76489`:
+- **The bus owns the clock.** A processor keeps no clock of its own. Every external bus cycle and every internal delay is reported to the console's `Bus` implementation in the processor's own terms (68000 bus cycles with function codes, Z80 machine cycles with M1 refresh addresses and 16-bit I/O ports, SH-2 external accesses by width). The bus advances the console's master clock and applies wait states, allowing coupled devices to catch up at the exact cycle of an access. The same CPU crate serves a flat test bus, a console's main bus, or a coprocessor's bus.
+- **Zero-overhead debugging via `Observer` / `Unobserved`.** Each processor re-exports `emusen_native::debug::{Observer, Unobserved}`. `step(bus)` delegates directly to `step_observed(bus, &mut Unobserved)`, so normal execution monomorphises away all debugger hooks. Observed stepping reports instruction boundaries, memory stores, calls, exceptions, and returns to the shared debugger hooks.
+- **State serialization via `StateWriter` / `StateReader`.** Each implemented processor implements `emusen_native::State` (`write_state` / `read_state`), producing a fixed-layout byte block embedded inside the owning core's save state. Truncated reads return `Err(Truncated)` without mutating CPU state.
+- **Disassembly and optional compile-time assembler.** Each implemented processor provides a `disasm` module for debugger disassembly and an optional `asm` module gated behind the `asm` Cargo feature (backed by `beryl-asm`). Assemblers are build/development tools for test programs and open firmware built in `build.rs`; no core runtime library links them.
+- **Single-step verification.** Where a hardware-derived or microcode-derived single-step corpus exists (`beryl-m68k`, `beryl-z80`), the unit-test harness lives inside the crate (using `emusen-singlestep` and `EMUSEN_BERYL_CORPUS`). Tests skip cleanly when the corpus environment variable is unset.
 
-- **The caller owns the clock.** The crate counts the chip's own clock (`advance(ticks, ...)`), and the console divides
-  its master clock for it; nothing in the crate knows a console's crystal.
-- **Writes are the chip's port**, a byte at a time as the hardware takes them; the console decides when they arrive.
-- **Output is levels, not samples.** The crate reports its output when it changes, in fixed units, and the console
-  mixes and resamples it (Nephrite through `emusen-native`'s step synthesiser, `EmuSen_NativeCores.md` §12.6). No mix
-  level, no filter and nothing else of one console is in the crate; what differs between consoles' copies of the chip
-  is a variant the caller picks (`Variant::SEGA`).
-- **State through `StateWriter`/`StateReader`**, a fixed block in the console's state.
+## Non-Processor Chip Contract
 
+Shared peripheral chips (`beryl-sn76489`, `beryl-sms-vdp`) have no bus of their own, no instructions to assemble, and nothing for a CPU debugger to step. They follow a narrower device contract:
 
-## The assemblers
+- **The caller owns the clock.** The crate advances in the chip's own clock units (`advance` or `run`). The console core divides its master crystal and owns all cross-chip synchronization; no console crystal frequency appears inside the device crate.
+- **Hardware port writes.** Registers and memories are written through the chip's own port interface one byte at a time, at the moment the console bus delivers them.
+- **Raw chip outputs, not console outputs.** Devices output hardware-level values — voltage levels for `beryl-sn76489`, colour/CRAM indices for `beryl-sms-vdp` — never resampled audio or RGB pixels. Console-specific DAC curves, analogue filters, and audio mixers stay in the console core (or zero-dependency data crates like `beryl-sms-colours`).
+- **Revision differences via `Variant`.** Behaviour that varies between silicon revisions (such as LFSR tap width or VDP table masks) is selected through a `Variant` constant supplied by the caller.
+- **Fixed-layout state blocks.** Device state serializes through `StateWriter` and `StateReader` into the owning console core's save state.
 
-Each processor's assembler is a development tool behind its crate's `asm` feature, for test programs and the open
-firmware a core assembles at compile time (`Beryl_M68k.md` §8, `Beryl_Z80.md` §8). *Since 2026-10-19* their common front
-half is the crate `beryl-asm`: expressions in C's order with `$`, `0x` and `%` numbers and character constants; labels,
-with local ones (`.name`, `@name`) scoped to the label before them; constants, by the words each processor names;
-`if`/`else`/`endif` over constants and the caller's defines; `include` through a reader the caller passes; and the
-splitting of a line into its label, word and operands. A processor's crate keeps its operands, its encoding, its data
-directives and its layout. `beryl-asm` depends on nothing, and no core's library links it.
+## Zero-Dependency Data and Build Crates
+
+- `beryl-sms-colours` and `beryl-fm-tables` have no dependencies so both console cores and platform debugger packs (`emusen-systems`) can read the same authoritative tables without pulling in chip or runtime code.
+- `beryl-asm` and `beryl-font` have no dependencies and are used strictly as build-time or test-time dependencies.

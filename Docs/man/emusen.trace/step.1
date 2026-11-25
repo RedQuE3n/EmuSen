@@ -1,5 +1,5 @@
 NAME
-    step - single-step, step over a call, or step out of a routine
+    step - single-step instructions, step over a call, or step out
 
 SYNOPSIS
     step [<count>]
@@ -9,31 +9,27 @@ SYNOPSIS
     step <cpu> [<count>|over|out]
 
 DESCRIPTION
-    Arms a halt and lets emulation run just far enough to reach it, then
-    halts again at the same interactive prompt - 's' is recognized as a
-    plain alias, not a separate command. Needs a ROM loaded.
+    Advances execution from a halt and halts again once the requested step
+    completes. 's' is registered as a direct alias for 'step'. Any active
+    breakpoint reached before the step count finishes still halts early.
 
-    Bare 'step' executes exactly one instruction. 'step <count>' executes
-    <count> of them (hex, like every other address/count in this shell), for
-    walking past a delay loop without holding down 's'. A real breakpoint
-    that fires part-way through still wins and halts early - a multi-step is
-    a convenience, not a way to suppress breakpoints.
+    Prefixing a processor name from cpus(1) steps that processor while
+    other processors continue running on the shared timebase. 'over' and
+    'out' require a processor that advertises a call stack ('bt' in
+    cpus(1), such as main CPU and SA-1 on SNES).
 
-    'step over' runs the call at the current instruction to completion and
-    halts on the instruction after it. It works by depth, not by address:
-    it records the call stack's current depth and halts at the first
-    instruction executed once the stack is back down to it. That makes it
-    correct for recursion (an inner call at the same address doesn't stop
-    it early) and it degrades gracefully on a non-call instruction, where
-    the depth never rises and it behaves exactly like a plain 'step'.
+OPTIONS
+    <count>
+        Execute <count> instructions (parsed as hexadecimal; default 1).
 
-    'step out' is the same mechanism with a target of depth - 1: run until
-    the routine currently executing returns to its caller. It errors rather
-    than running away when the call stack is already empty.
+    over
+        Run a call at the current instruction to completion and halt on
+        the next instruction at the original call-stack depth (safe across
+        recursion; acts like a 1-instruction step on non-call opcodes).
 
-    Both depend on the call stack, so both need a core that reports one -
-    see 'man bt', which also covers what makes a depth reading go wrong
-    (a game that manipulates its own stack) and how to resync it.
+    out
+        Run until the current routine returns to its caller (call-stack
+        depth - 1). Fails if the tracked call stack is empty.
 
 EXAMPLES
     step
@@ -42,16 +38,10 @@ EXAMPLES
     step out
     step sa1 out
 
-OTHER PROCESSORS
-    A scope word steps another chip - see 'man cpus'. 'over' and 'out'
-    additionally need that chip to report a call stack, so on an SNES they
-    work for the main CPU and the SA-1 but not the GSU or SPC700, which
-    still accept a plain instruction step.
-
-    Stepping one chip lets the others keep running - they share a timebase,
-    and freezing everything but one processor would change the behaviour
-    being investigated, which on a coprocessor handshake is usually the
-    entire bug.
+EXIT STATUS
+    0   Step armed and resume requested.
+    1   No target attached, empty call stack on 'out', unsupported
+        processor, invalid hex count, or session service fault.
 
 SEE ALSO
-    cpus, bt, runto, bp, resume
+    cpus(1), bt(1), runto(1), bp(1), resume(1)

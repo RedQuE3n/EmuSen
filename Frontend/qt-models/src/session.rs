@@ -59,6 +59,10 @@ struct Control {
     device_asked: AtomicBool,
     /// Sync to display: frames run one a swap where the display's rate allows it, else on the game's own clock.
     sync: AtomicBool,
+    /// True once at least one frame has run.
+    played: AtomicBool,
+    /// Set by `save_for_power(true)` once resume state is already saved so drop does not save a second time.
+    skip_exit_save: AtomicBool,
 }
 
 /// What the game hears and plays through, each when the window has it: the game's side of the pads and the sound player;
@@ -183,6 +187,16 @@ impl Session {
     pub fn sounded(&self) -> u64 {
         self.control.sounded.load(Ordering::Relaxed)
     }
+
+    /// Whether the session has executed at least one frame.
+    pub fn played(&self) -> bool {
+        self.control.played.load(Ordering::Relaxed)
+    }
+
+    /// Skips the exit `resume_save` on drop when the caller already saved immediately before closing.
+    pub fn skip_exit_save(&self) {
+        self.control.skip_exit_save.store(true, Ordering::Relaxed);
+    }
 }
 
 impl Drop for Session {
@@ -303,6 +317,7 @@ fn run(
             }
         }
         played = true;
+        control.played.store(true, Ordering::Relaxed);
         ran += 1;
         let since = counted.elapsed();
         if since >= RATE_EVERY {
@@ -367,7 +382,11 @@ fn run(
     handoff.withdraw();
     drop(input);
     // Where the game was left off, written as it closes with its thread stopped, as Mistress's `WriteResumeState` does.
-    let left_off = if played { runtime.resume_save(session).err().map(|e| format!("Could not save where you left off: {e}")) } else { None };
+    let left_off = if played && !control.skip_exit_save.load(Ordering::Relaxed) {
+        runtime.resume_save(session).err().map(|e| format!("Could not save where you left off: {e}"))
+    } else {
+        None
+    };
     let _ = runtime.close(session);
     let mut failed = failed.into_inner().unwrap_or_else(PoisonError::into_inner);
     if failed.is_none() {

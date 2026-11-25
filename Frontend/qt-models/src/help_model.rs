@@ -87,6 +87,8 @@ pub mod qobject {
         #[base = QAbstractListModel]
         #[qml_element]
         #[qproperty(HelpScreen, screen)]
+        /// Optional override for the Back button's label on Eclipse dialogs (e.g. "Keep it").
+        #[qproperty(QString, back_label, cxx_name = "backLabel")]
         #[qproperty(QString, action_lines, cxx_name = "actionLines", READ, NOTIFY)]
         type HelpModel = super::HelpModelRust;
     }
@@ -125,24 +127,31 @@ use qobject::HelpScreen;
 /// The model's state: the screen whose entries it lists.
 pub struct HelpModelRust {
     screen: HelpScreen,
+    back_label: QString,
     /// The screen's actions as the kit's frame reads them (EmuSen_Kit.md §7.19).
     action_lines: QString,
 }
 
 impl Default for HelpModelRust {
     fn default() -> Self {
-        HelpModelRust { screen: HelpScreen::Home, action_lines: QString::from(action_lines(Screen::Home).as_str()) }
+        HelpModelRust { screen: HelpScreen::Home, back_label: QString::default(), action_lines: QString::from(action_lines(Screen::Home).as_str()) }
     }
 }
 
 impl cxx_qt::Initialize for qobject::HelpModel {
-    fn initialize(self: Pin<&mut Self>) {
-        self.on_screen_changed(|mut model| {
+    fn initialize(mut self: Pin<&mut Self>) {
+        self.as_mut()
+            .on_screen_changed(|mut model| {
+                model.as_mut().begin_reset_model();
+                model.as_mut().end_reset_model();
+                let lines = QString::from(action_lines(model.listed()).as_str());
+                model.as_mut().rust_mut().action_lines = lines;
+                model.as_mut().action_lines_changed();
+            })
+            .release();
+        self.on_back_label_changed(|mut model| {
             model.as_mut().begin_reset_model();
-            model.as_mut().end_reset_model();
-            let lines = QString::from(action_lines(model.listed()).as_str());
-            model.as_mut().rust_mut().action_lines = lines;
-            model.as_mut().action_lines_changed();
+            model.end_reset_model();
         })
         .release();
     }
@@ -214,7 +223,13 @@ impl qobject::HelpModel {
         };
         match role {
             BUTTON => QVariant::from(&(button.index() as i32)),
-            LABEL => QVariant::from(&QString::from(*label)),
+            LABEL => {
+                if *button == emusen_kit_core::input::UiButton::Back && !self.back_label.is_empty() {
+                    QVariant::from(&self.back_label)
+                } else {
+                    QVariant::from(&QString::from(*label))
+                }
+            }
             PAIR => QVariant::from(&crate::help::pair_of(*button).map_or(-1, |b| b.index() as i32)),
             _ => QVariant::default(),
         }

@@ -1,0 +1,16 @@
+NAME
+    callers - find static call/jump references to an address
+
+SYNOPSIS
+    callers <addr> [<scanstart> <scanlen>]
+
+DESCRIPTION
+    Scans CpuBus (default: <addr>'s own bank, $8000-$FFFF) for instructions
+    statically calling/jumping to <addr> - a static-analysis alternative to
+    setting a breakpoint and waiting for it to hit: finds every place that
+    COULD jump there, whether or not it was ever actually reached during a
+    given play session. See 'writers'/'readers' for the memory-access
+    equivalents.
+
+EXAMPLES
+    callers 8000

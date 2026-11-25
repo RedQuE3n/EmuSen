@@ -1,22 +1,26 @@
 NAME
-    trust - approve a module file you added, by its hash
+    trust - approve a module file by SHA-256 hash
 
 SYNOPSIS
     trust <path>
 
 DESCRIPTION
-    Records a file's SHA-256 hash as approved, so that a command module
-    you added to the shell can be loaded once loading one is supported:
-    a module runs inside the program with your full permissions, and is
-    approved once, by you, at the prompt. A changed file has another hash
-    and must be approved again.
+    Computes the SHA-256 digest of <path> (resolved inside the shell
+    sandbox) and appends '<sha256>  <resolved-path>' to
+    /etc/EmuSen/dianash/trusted. If the file changes later, its hash no
+    longer matches and it must be approved again.
 
-    The approval is given only at the prompt: 'trust' refuses inside a
-    script run with 'source' and inside $(...), so a script cannot approve
-    a file on your behalf. The path is resolved through the sandbox, as
-    every path is (see 'man hier'). Approvals are kept, one hash and path
-    to a line, in the 'trusted' file of the 'dianash' folder beside the
-    program's configuration.
+    Because approving a module grants it full process privileges, trust
+    is permitted only when typed interactively at the prompt; it is
+    refused inside source(1) scripts and $(...) command substitutions.
 
 EXAMPLES
-    trust /lib/dianash/mymodule.so
+    trust /Cores/mymodule.so
+
+EXIT STATUS
+    0   File hash recorded in /etc/EmuSen/dianash/trusted.
+    1   Missing path, invoked non-interactively, path outside sandbox,
+        file missing, or I/O error.
+
+SEE ALSO
+    modules(7), cores(1), source(1), hier(7)

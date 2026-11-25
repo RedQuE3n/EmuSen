@@ -22,7 +22,7 @@ Kit.NormalizedCanvas {
         helpShown: false
         focus: resumeCanvas.session.resumeAsked
         controller.navigationShown: false
-        Kit.Question {
+        QuestionHost {
             id: resumeQuestion
             objectName: "resumeQuestion"
             controller: resumeFrame.controller
@@ -40,11 +40,8 @@ Kit.NormalizedCanvas {
             help: HelpModel {
                 screen: HelpModel.QuestionBack
             }
+            showing: resumeCanvas.session.resumeAsked
             onChosen: (index) => resumeCanvas.session.answerResume(index)
-        }
-        // Opened each time it is asked; a Binding, since B closing the popup would undo a plain one.
-        Binding {
-            resumeQuestion.visible: resumeCanvas.session.resumeAsked
         }
     }
 }

@@ -1,19 +1,20 @@
 NAME
-    hwcount - host instructions, cycles and IPC of a program's window
+    hwcount - count host CPU instructions, cycles, and IPC for a window
 
 SYNOPSIS
     hwcount --from TEXT [--to TEXT] [--per N] [--units FILE]
-            [--functions N] [--period N] -- <program> [args]
+            [--functions N] [--period N] -- <program> [args...]
 
 DESCRIPTION
-    A development tool of the emusen.dev module, Linux only. It runs
-    <program>, watches its standard error, and counts between the first
-    line that holds --from and the first after it that holds --to, or
-    the program's end. Time before the window, a state being loaded for
-    instance, is not counted. The program's standard error passes through
-    to hwcount's own, and its standard output follows the report.
+    Linux-only command of the emusen.dev module. Launches <program>,
+    monitors its standard error, and records hardware performance
+    counters between the first stderr line containing --from and the
+    first subsequent line containing --to (or process exit). Program
+    stderr passes through to hwcount's stderr; program stdout follows
+    the report.
 
-    The report is plain rows, one fact a line, for grep and awk:
+    The report consists of whitespace-delimited records designed for
+    grep(1) and awk(1):
 
         window seconds S per N ms_each M
         thread TID NAME instr I cycles C ipc R branches B misses M
@@ -22,47 +23,55 @@ DESCRIPTION
         function instr I cycles C ipc R share P% NAME
         exit STATUS
 
-    A thread row is a count: a group of four hardware events (cycles,
-    instructions, branches, branch misses), user mode only, opened on
-    every thread alive when --from was seen. A thread started later is
-    not counted. --per N divides every count and gives ms_each, so
-    --per 200 over 200 fields prints figures a field.
+    Each thread row counts a group of four user-mode perf_event_open(2)
+    hardware events (cycles, instructions, branches, branch misses)
+    opened on every thread alive when --from matched. Threads spawned
+    later are not counted. On CPUs with fewer than six programmable
+    counters, the kernel multiplexes and scales group totals by active
+    time.
 
-    With --units FILE the program's first thread is sampled as well,
-    once every --period (default 1,000,000) cycles and once every --period
-    instructions, and each address is taken to a place: a symbol of the
-    program (nm -n --defined-only -C), a row of /tmp/perf-<pid>.map for
-    compiled code, 'compiled ?' for anonymous memory without a row, or a
-    library's file name. The file gives a unit to a place, one line
-    'pattern  unit', two spaces between them, # for comments; the first
-    pattern found in the place's name wins, and a place no pattern finds
-    is 'compiled' or 'other'. A unit row's counts are its share of
-    samples times that thread's counted total, so they are estimates,
-    with an error of about the square root of the row's samples, and its
-    IPC is the ratio of its samples. --functions N adds the N largest
-    places.
+    When --units FILE is provided, the program's primary thread is also
+    sampled every --period cycles and every --period instructions.
+    Sampled addresses resolve against program symbols
+    (nm -n --defined-only -C), /tmp/perf-<pid>.map (for JIT code,
+    removed on exit), 'compiled ?' for unmapped anonymous code, or the
+    backing library filename. Unit files contain 'pattern  unit' lines
+    (two spaces separating pattern and unit name, '#' for comments);
+    the first matching pattern wins, with unmatched addresses classified
+    as 'compiled' or 'other'. Unit instruction and cycle counts are
+    estimated from sample shares times counted thread totals.
 
-    A program started through 'systemd-run --scope' keeps its process, so
-    a capped scope may stand between hwcount and the program. The map
-    /tmp/perf-<pid>.map is removed at the end. The exit status is 2 when
-    the command could not run, the window never opened or the kernel
-    refused the counters, and otherwise 0, with the program's own status
-    in the exit row.
+    A program launched via 'systemd-run --scope' preserves its PID and
+    can be wrapped directly by hwcount. Sapphire's unit table is located
+    at Sapphire/examples/scripts/units.txt.
 
-    The counters are perf_event_open(2)'s generic hardware events, so the
-    rows mean the same on any host the kernel names them for. On AMD Zen
-    4, instructions is event C0h and cycles 76h. The two samplers and the
-    group need six counters, which that core has; a smaller core
-    multiplexes, and the group's totals are scaled by the time it ran.
-
-    Sapphire's table of units is its examples/scripts/units.txt.
+OPTIONS
+    --from TEXT
+        Required substring on stderr that opens the measurement window.
+    --to TEXT
+        Substring on stderr that closes the measurement window (default:
+        program exit).
+    --per N
+        Divide all counts by N and compute ms_each (for example,
+        --per 200 across 200 fields).
+    --units FILE
+        Enable instruction/cycle sampling and map addresses to units
+        using FILE.
+    --functions N
+        Include the top N individual symbols/places by sample count.
+    --period N
+        Sampling period in cycles and instructions (default: 1,000,000).
 
 EXAMPLES
-    The arena's window, a field's figures on every thread and by unit:
+    dianash -c 'hwcount --from "frame 9100 at" --to "frame 9300 at"
+        --per 200 --units units.txt --functions 40 -- bench game ...'
+    dianash -c 'hwcount --from start --to end -- prog' | grep '^thread'
 
-        dianash -c 'hwcount --from "frame 9100 at" --to "frame 9300 at"
-            --per 200 --units units.txt --functions 40 -- bench game ...'
+EXIT STATUS
+    0   Measurement window completed (the program's own exit code is
+        reported in the 'exit STATUS' row).
+    2   Invalid options, program failed to start, window never opened,
+        or kernel refused perf_event_open(2).
 
-    Only the threads' rows:
-
-        dianash -c 'hwcount --from start --to end -- prog' | grep '^thread'
+SEE ALSO
+    dupes(1), profile(1), grep(1), awk(1)

@@ -1,9 +1,21 @@
 NAME
-    unset - remove a shell variable
+    unset - remove shell variables
 
 SYNOPSIS
-    unset NAME
+    unset NAME...
 
 DESCRIPTION
-    Removes NAME from this shell's variables. Referencing an unset variable
-    afterward ($NAME) expands to an empty string, same as bash.
+    Removes each named variable from both the current shell's variable
+    table and its exported variable set. Subsequent references to an
+    unset variable ($NAME) expand to an empty string.
+
+EXAMPLES
+    FOO=bar
+    unset FOO
+    echo "$FOO"
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    export(1), source(1)

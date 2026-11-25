@@ -1,0 +1,22 @@
+NAME
+    sed - stream substitution
+
+SYNOPSIS
+    sed s/pattern/replacement/[gi]
+    sed <expr> <text...>
+
+DESCRIPTION
+    A basic sed-style filter supporting only the s/// substitution command
+    (no line addressing, no d/p/hold-space/etc). The delimiter can be any
+    character, matching real sed's own 's#/bin#/usr/bin#' convention, with
+    '\<delim>' escaping a literal delimiter inside the pattern/replacement.
+    Pattern is a .NET regex. Without 'g', only the first match on EACH LINE
+    is replaced (not just the first match in the whole piped blob) - most
+    output this runs against (regs, watch log, ...) is multi-line, so this
+    matters. Replacement supports '&' (whole match) and \1-\9 (capture
+    groups), same as real sed. Real use is as a pipeline stage; standalone
+    'sed <expr> <text...>' works too when there's nothing to pipe from.
+
+EXAMPLES
+    regs | sed s/PC=/pc=/
+    echo hello | sed s/hello/hi/

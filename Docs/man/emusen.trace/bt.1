@@ -1,5 +1,5 @@
 NAME
-    bt - backtrace the live call chain
+    bt - display or reset the live call-stack backtrace
 
 SYNOPSIS
     bt [<count>]
@@ -7,49 +7,40 @@ SYNOPSIS
     bt <cpu> [<count>|reset]
 
 DESCRIPTION
-    Prints the calls currently on the stack, innermost frame first: what was
-    called, where it was called from, and which frame number the call
-    happened on. This is the dynamic counterpart to 'callers' (see 'man
-    callers'), and the two answer genuinely different questions. 'callers'
-    scans code and reports every instruction that COULD reach an address;
-    'bt' reports the one path that actually did, this time. When a routine
-    has six static callers, 'callers' gives you six suspects and 'bt' gives
-    you the answer.
+    Prints the inferred call chain currently on the stack, innermost frame
+    first, showing the called target (resolved via label(1)), call site,
+    and frame number. Frames are tracked from call/return opcodes and
+    interrupt entries (NMI and IRQ frames are labelled as interrupts).
 
-    Frames are recorded from the CPU's own call and return opcodes plus its
-    interrupt entry points, so an NMI or IRQ frame is labelled as such
-    rather than looking like an ordinary call. Addresses are resolved
-    through the label registry - see 'man label'.
+    Because the call stack is inferred from control-flow seams rather than
+    read from a frame pointer, routines that manually push/pop return
+    addresses or rewrite the stack pointer can cause drift. Rising
+    'unmatched returns' counts or an ever-growing depth indicate stack
+    drift; run 'bt reset' to resynchronize before relying on 'step out' or
+    profile(1). Stack depth is capped to prevent unbounded growth. Frames
+    entered before the debug session attached are not tracked.
 
-ACCURACY
-    A call stack tracked this way is an inference, not machine state, and
-    it can drift on code that manipulates its own stack directly: a routine
-    that pushes a return address and jumps, that pulls a return address it
-    never intends to return through, or that unwinds several frames with a
-    stack-pointer write rather than matched returns. Two symptoms give this
-    away - a depth that only ever grows, and a rising 'unmatched returns'
-    count, which 'bt' reports whenever it is nonzero.
+    Prefixing a processor name from cpus(1) inspects that processor's call
+    stack. Only processors advertising 'bt' in cpus(1) maintain a call
+    stack (for example, main CPU and SA-1 on SNES, not GSU or SPC700).
 
-    'bt reset' forgets the current chain and starts counting again from the
-    current instruction. Do that after stepping through a routine known to
-    play with its own stack, and before trusting 'step out' or a 'profile'
-    run that has to survive it. Depth is also capped, so a runaway chain
-    stops recording rather than growing without bound.
+OPTIONS
+    <count>
+        Maximum number of stack frames to print.
 
-    Frames opened before the debug target attached are not on the stack -
-    code already running at that moment shows up in 'profile' under
-    '(outside any recorded call)' rather than under its real caller.
+    reset
+        Discard the tracked call chain and start fresh from the current
+        instruction.
 
 EXAMPLES
     bt
     bt 8
     bt reset
+    bt sa1
 
-OTHER PROCESSORS
-    'bt <cpu>' backtraces another chip - see 'man cpus'. Only a chip with a
-    real call/return seam has a stack to report: on an SNES that is the
-    main CPU and the SA-1, both 65816s. The GSU and the SPC700 report none,
-    and say so rather than inventing frames.
+EXIT STATUS
+    0   Backtrace printed or reset.
+    1   No target attached, processor has no call stack, or session fault.
 
 SEE ALSO
-    cpus, callers, step, profile, bp, label
+    cpus(1), callers(1), step(1), profile(1), bp(1), label(1)

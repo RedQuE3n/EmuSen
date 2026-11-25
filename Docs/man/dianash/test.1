@@ -1,24 +1,48 @@
 NAME
-    test, [ - evaluate a condition
+    test, [ - evaluate conditional expressions
 
 SYNOPSIS
     test EXPR
     [ EXPR ]
 
 DESCRIPTION
-    The main way an if/while condition does anything besides check another
-    command's own exit code. A deliberately small subset of real test(1):
-    a single VALUE (true if non-empty); -z/-n VALUE (string emptiness); -f/-d
-    PATH (file/directory existence, with PATH read as every path in this
-    shell is - '/' is this shell's root, and a path above the root is
-    false, never a question about the machine's own files; before
-    2026-10-10 PATH was the machine's); VALUE = / != VALUE (string comparison);
-    VALUE -eq/-ne/-lt/-le/-gt/-ge VALUE (numeric comparison); a leading '!'
-    negates any of the above. No -a/-o/parenthesized compound expressions -
-    combine conditions with the shell's own && / || instead ('[ -f a ] && [
-    -f b ]'). '[' is the same evaluator under a different name - the
-    trailing ']' is required, matching real bash.
+    Evaluates a conditional expression and reports the result solely via
+    exit status. '[' is an alias requiring a final ']' argument.
+
+    Supported expressions:
+
+    VALUE               True if VALUE is non-empty.
+    -z VALUE            True if VALUE is empty.
+    -n VALUE            True if VALUE is non-empty.
+    -f PATH             True if PATH resolves inside the sandbox and is
+                        a regular file. Paths outside the sandbox
+                        evaluate to false.
+    -d PATH             True if PATH resolves inside the sandbox and is
+                        a directory. Paths outside the sandbox evaluate
+                        to false.
+    LHS = RHS           True if strings LHS and RHS are equal.
+    LHS == RHS          True if strings LHS and RHS are equal.
+    LHS != RHS          True if strings LHS and RHS differ.
+    LHS -eq RHS         True if 64-bit integers LHS and RHS are equal.
+    LHS -ne RHS         True if integers LHS and RHS differ.
+    LHS -lt RHS         True if integer LHS is less than RHS.
+    LHS -le RHS         True if integer LHS is less than or equal to RHS.
+    LHS -gt RHS         True if integer LHS is greater than RHS.
+    LHS -ge RHS         True if integer LHS is greater than or equal to
+                        RHS.
+    ! EXPR              Logical negation of EXPR.
+
+    Compound operators (-a, -o, parentheses) are not supported; combine
+    tests with shell && and || operators instead.
 
 EXAMPLES
-    if [ -f save.state ]; then echo found; fi
-    if test $X -eq 5; then echo five; fi
+    if [ -f /Logs/run.log ]; then echo found; fi
+    if test "$X" -eq 5; then echo five; fi
+    [ "$A" == "$B" ] && [ -d /Saves ]
+
+EXIT STATUS
+    0   Expression evaluated to true.
+    1   Expression evaluated to false, or expression syntax/type error.
+
+SEE ALSO
+    [(1), if(1), while(1), true(1), false(1)

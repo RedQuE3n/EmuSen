@@ -1,0 +1,27 @@
+NAME
+    memfind - locate a byte sequence in a memory space
+
+SYNOPSIS
+    memfind <space> <bytes> [<max>]
+
+DESCRIPTION
+    Scans <space> for every offset where <bytes> occurs. Where 'search'
+    matches one 1/2/4-byte scalar and then narrows it down over time, this
+    matches a whole block in a single pass - the tool for asking where a
+    tile's 32 bytes, a decompressed buffer, or a string came from.
+
+    <bytes> is hex byte pairs; ',', ':', '-' and '_' between them are
+    ignored, and so is whitespace, so '00FF11', '00 FF 11' and '00:FF:11'
+    are the same pattern. '??' in place of a pair matches any byte, which
+    is how you skip over the parts of a block that legitimately differ.
+
+    Stops after <max> hits (default 20) and says so, so a pattern that is
+    too short to be distinctive reports quickly instead of listing
+    thousands of offsets. Same live-hardware-space refusal as 'search' and
+    'dump': a byte-by-byte scan of CpuBus could change real emulation
+    state, so it is refused outright.
+
+EXAMPLES
+    memfind WRAM 00FFFFFFFF00FF00
+    memfind VRAM 00??FF??11 5
+    memfind ROM 4E696E74656E646F

@@ -1,17 +1,30 @@
 NAME
-    ls - list directory entries
+    ls - list directory contents
 
 SYNOPSIS
-    ls [-a] [-l] [path]
+    ls [-a] [-l] [-al | -la] [path]
 
 DESCRIPTION
-    Lists a real directory's entries (default: current directory), or a
-    single file listed as itself. One entry per line, no multi-column
-    terminal layout. -a includes dotfiles; -l shows a simplified type/size/
-    modified-time/name line (no permission bits/owner/group - this project
-    has no such concept to show). Walled to the project's own directory
-    tree - see 'cd'.
+    Lists entries of [path] (default: current directory) inside the
+    shell sandbox, one entry per line in ordinal name order. Directory
+    names carry a trailing '/' in short format. When [path] names a
+    single file, prints that file's entry.
+
+OPTIONS
+    -a  Include entries starting with '.'.
+    -l  Long format: entry type ('d' or '-'), byte size (0 for
+        directories), local modification timestamp, and name.
+    -al, -la
+        Combine -a and -l.
 
 EXAMPLES
     ls
-    ls -la EmuSen
+    ls -la /Logs
+    ls -l /Games
+
+EXIT STATUS
+    0   Listing printed.
+    1   Path outside sandbox or path does not exist.
+
+SEE ALSO
+    find(1), cd(1), pwd(1), hier(7)

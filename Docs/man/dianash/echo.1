@@ -1,16 +1,23 @@
 NAME
-    echo - print arguments
+    echo - print arguments to standard output
 
 SYNOPSIS
-    echo <text...>
+    echo [text...]
 
 DESCRIPTION
-    Prints its arguments back, joined by single spaces - real argument
-    quoting applies ('echo 'a b'' is one argument, not two). Ignores stdin
-    entirely, matching real echo. Its real use is scripting: a marker line
-    in a source'd script, or the natural pipeline source for a text filter
-    ('echo <text> | sed s/.../.../ ').
+    Prints all arguments joined by single spaces. Standard shell quoting
+    applies before echo runs. Standard input is ignored.
+
+    echo does not parse flags such as -n or -e; every argument is printed
+    literally.
 
 EXAMPLES
     echo hello world
-    echo $X
+    echo "$NAME"
+    echo "line one" | sed s/one/two/
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    cat(1), sed(1), awk(1)

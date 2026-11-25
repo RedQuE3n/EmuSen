@@ -72,6 +72,10 @@ pub mod qobject {
         #[qproperty(QStringList, question_sentences, cxx_name = "questionSentences", READ, NOTIFY)]
         #[qproperty(QStringList, question_choices, cxx_name = "questionChoices", READ, NOTIFY)]
         #[qproperty(i32, question_back, cxx_name = "questionBack", READ, NOTIFY)]
+        /// Preview picture URL for Eclipse's circular delete-state dialog (board #14).
+        #[qproperty(QString, question_picture, cxx_name = "questionPicture", READ, NOTIFY)]
+        /// Whether Eclipse dialog wording is active on questions asked by this page.
+        #[qproperty(bool, eclipse)]
         /// The scraper's test seam, the `test` member of its settings as JSON (a loopback server and its root); empty for
         /// ScreenScraper itself.
         #[qproperty(QString, scraper_test, cxx_name = "scraperTest")]
@@ -461,6 +465,8 @@ pub struct GamePageModelRust {
     question_sentences: QStringList,
     question_choices: QStringList,
     question_back: i32,
+    question_picture: QString,
+    eclipse: bool,
     /// What the question asks about.
     pending: Option<Pending>,
     page: GamePage,
@@ -536,6 +542,8 @@ impl Default for GamePageModelRust {
             question_sentences: QStringList::default(),
             question_choices: QStringList::default(),
             question_back: -1,
+            question_picture: QString::default(),
+            eclipse: false,
             pending: None,
             page,
             file: GameFile::default(),
@@ -1001,10 +1009,12 @@ impl qobject::GamePageModel {
             model.as_mut().rust_mut().question_sentences = list(question.sentences.into_iter());
             model.as_mut().rust_mut().question_choices = list(question.choices.into_iter());
             model.as_mut().rust_mut().question_back = back;
+            model.as_mut().rust_mut().question_picture = QString::from(cover_url(&question.picture).as_str());
             model.as_mut().question_title_changed();
             model.as_mut().question_sentences_changed();
             model.as_mut().question_choices_changed();
             model.as_mut().question_back_changed();
+            model.as_mut().question_picture_changed();
             model.as_mut().rust_mut().asking = true;
             model.asking_changed();
         });
@@ -1484,7 +1494,7 @@ impl qobject::GamePageModel {
             crate::help::DELETE => {
                 let outcome = match self.viewer.as_ref() {
                     Some(v) => self.page.viewer_delete(v),
-                    None => self.page.delete(self.focus.1),
+                    None => self.page.delete_for_now(self.focus.1, self.eclipse),
                 };
                 self.did(outcome)
             }

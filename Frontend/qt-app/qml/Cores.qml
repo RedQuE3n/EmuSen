@@ -12,26 +12,52 @@ Kit.NormalizedCanvas {
     property string clockText: ""
     property int battery: -1
     readonly property bool eclipseMode: Kit.Tokens.coronaRim > 0
-    readonly property bool eclipseCoresActive: screen.eclipseMode && screen.tool.tool === ToolModel.Cores
+    readonly property int eclipseScreen: screen.eclipseMode ? screen.tool.eclipseScreen : 0
+    readonly property bool eclipseCoresActive: screen.eclipseScreen === 1
+    readonly property bool eclipseAnyActive: screen.eclipseScreen > 0
     readonly property real boardUnit: Kit.CanvasUnits.designHeight / 1200
-    readonly property string shownClock: screen.clock ? screen.clock.shortTime : screen.clockText
+    readonly property string shownClock: screen.clock ? screen.clock.shortTime : (screen.clockText.length > 0 ? screen.clockText : fallbackClock.shortTime)
+    readonly property int shownBattery: screen.battery >= 0 ? screen.battery : fallbackBattery.level
+    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : frame
+    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : frame.controller
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
     // B on the screen.
     signal backed()
+    Clock {
+        id: fallbackClock
+    }
+    Battery {
+        id: fallbackBattery
+        platformLibrary: screen.visible && screen.eclipseScreen > 1 && screen.battery < 0 ? screen.tool.platformLibrary : ""
+    }
+    Timer {
+        interval: 60000
+        repeat: true
+        triggeredOnStart: true
+        running: screen.visible && screen.eclipseScreen > 1 && !screen.clock && screen.clockText.length === 0
+        onTriggered: fallbackClock.tick()
+    }
+    Timer {
+        interval: fallbackBattery.every
+        repeat: true
+        triggeredOnStart: true
+        running: screen.visible && screen.eclipseScreen > 1 && screen.battery < 0
+        onTriggered: fallbackBattery.read()
+    }
     Kit.ToolScreen {
         id: frame
         objectName: `${screen.objectName}Screen`
         // Under a card or a question the screen is drawn and nothing on it is reached: a backdrop to the gate, as ThemeHost's screens are.
         property bool backdrop: screen.tool.cardOpen || screen.tool.asking
         anchors.fill: parent
-        visible: !screen.eclipseCoresActive
+        visible: !screen.eclipseAnyActive
         form: Kit.Forms.BigScreen
         // While searching, the rows hold the keys once a shoulder has given them the focus (R-20261111-31).
-        focus: !screen.eclipseCoresActive && screen.inputs && !screen.tool.cardOpen && !screen.tool.searchKeys
+        focus: !screen.eclipseAnyActive && screen.inputs && !screen.tool.cardOpen && !screen.tool.searchKeys
         padFamily: screen.padFamily
         // The question draws its own help bar over the screen's.
-        helpShown: !screen.eclipseCoresActive && !screen.tool.asking && !screen.tool.searching && !screen.tool.cardOpen
+        helpShown: !screen.eclipseAnyActive && !screen.tool.asking && !screen.tool.searching && !screen.tool.cardOpen
         helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
@@ -85,8 +111,9 @@ Kit.NormalizedCanvas {
         // The list takes the keys back from a card as it closes.
         Connections {
             target: screen.tool
-            function onListFocused() { (screen.eclipseCoresActive ? eclipseView : frame).forceActiveFocus() }
+            function onListFocused() { screen.activeView.forceActiveFocus() }
             function onSearchOpened() { searchFrame.forceActiveFocus() }
+            function onEclipseScreenChanged() { screen.activeView.forceActiveFocus() }
         }
         Connections {
             target: frame.controller
@@ -103,7 +130,42 @@ Kit.NormalizedCanvas {
         tool: screen.tool
         padFamily: screen.padFamily
         pixelScale: screen.unit
-        battery: screen.battery
+        battery: screen.shownBattery
+        clockText: screen.shownClock
+        onBacked: screen.backed()
+    }
+    ScraperEclipse {
+        id: scraperView
+        anchors.fill: parent
+        visible: screen.eclipseScreen === 2 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 2 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        tool: screen.tool
+        padFamily: screen.padFamily
+        pixelScale: screen.unit
+        battery: screen.shownBattery
+        clockText: screen.shownClock
+        onBacked: screen.backed()
+    }
+    ScrapeStatusEclipse {
+        id: scrapeStatusView
+        anchors.fill: parent
+        visible: screen.eclipseScreen === 3 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 3 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking
+        tool: screen.tool
+        padFamily: screen.padFamily
+        pixelScale: screen.unit
+        battery: screen.shownBattery
+        clockText: screen.shownClock
+    }
+    LibraryManagerEclipse {
+        id: libraryView
+        anchors.fill: parent
+        visible: screen.eclipseScreen === 4 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 4 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        tool: screen.tool
+        padFamily: screen.padFamily
+        pixelScale: screen.unit
+        battery: screen.shownBattery
         clockText: screen.shownClock
         onBacked: screen.backed()
     }
@@ -163,7 +225,7 @@ Kit.NormalizedCanvas {
     Kit.Backdrop {
         objectName: "coresCardBackdrop"
         anchors.fill: parent
-        visible: screen.eclipseCoresActive && screen.tool.cardOpen
+        visible: screen.eclipseAnyActive && screen.tool.cardOpen
         ground: "#0A1024"
         pixelScale: screen.unit
         fields: [
@@ -181,7 +243,7 @@ Kit.NormalizedCanvas {
         open: screen.tool.cardOpen
         eclipse: screen.eclipseMode
         pixelScale: screen.unit
-        battery: screen.battery
+        battery: screen.shownBattery
         clockText: screen.shownClock
         focus: screen.inputs && screen.tool.cardOpen
         padFamily: screen.padFamily
@@ -196,7 +258,7 @@ Kit.NormalizedCanvas {
         paneStatus: screen.tool.cardPaneStatus
         paneStatusOk: screen.tool.cardPaneStatusOk
         positionLine: screen.tool.cardPositionLine
-        paneDrawn: screen.eclipseCoresActive && screen.tool.cardDetailValue.length > 0
+        paneDrawn: screen.eclipseAnyActive && screen.tool.cardDetailValue.length > 0
         paneHeight: detailAside.implicitHeight
         help: HelpModel {
             screen: HelpModel.Card
@@ -243,7 +305,7 @@ Kit.NormalizedCanvas {
     QuestionHost {
         id: question
         objectName: `${screen.objectName}Question`
-        controller: screen.eclipseCoresActive ? eclipseView.controller : frame.controller
+        controller: screen.activeController
         title: screen.tool.questionTitle
         sentences: screen.tool.questionSentences
         caption: screen.tool.questionCaption
@@ -261,8 +323,8 @@ Kit.NormalizedCanvas {
         showing: screen.tool.asking
         onChosen: (index) => screen.tool.answer(index)
         onOpenedChanged: {
-            if (!question.opened && screen.eclipseCoresActive && !screen.tool.cardOpen && !screen.tool.asking)
-                eclipseView.forceActiveFocus()
+            if (!question.opened && screen.eclipseAnyActive && !screen.tool.cardOpen && !screen.tool.asking)
+                screen.activeView.forceActiveFocus()
         }
     }
     // A job's events pulled while it runs, never pushed (EmuSen_Qt.md §1.1).

@@ -18,6 +18,10 @@ const TABLE_PAGE: &str = include_str!("../eclipse/cores_page.tsv");
 const TABLE_DETAILS: &str = include_str!("../eclipse/cores_details.tsv");
 const TABLE_FIRMWARE: &str = include_str!("../eclipse/cores_firmware.tsv");
 
+fn midnight() -> i64 {
+    emusen_qt_models::words::now().div_euclid(86_400) * 86_400
+}
+
 fn write_board_world(dir: &std::path::Path) -> PathBuf {
     let year = emusen_qt_models::tools::cores::words::current_year();
     let have_date = format!("{year}-10-28");
@@ -196,6 +200,7 @@ fn open_cores<'a>(harness: &'a mut Harness, world_path: &std::path::Path) -> Sce
     wait_for(&mut scene, "screens", "shown", "Cores", 3000);
     wait_for(&mut scene, "coresModel", "busy", "false", 5000);
     assert!(scene.set_property("cores", "battery", "82"));
+    assert!(scene.set_property("clock", "now", &(midnight() + 21 * 3600 + 41 * 60).to_string()));
     assert!(scene.set_property("cores", "clockText", "9:41 PM"));
     scene.wait(250);
     scene
@@ -258,6 +263,7 @@ fn hold_cores_board(scene: &mut Scene<'_>, differences: &mut Vec<String>) {
 
 /// Runs all 4 Eclipse Cores boards (#10, #72-#74), pad navigation, and undrawn states on the active backend.
 pub fn cores(backend: &str) {
+    std::env::set_var("TZ", "UTC");
     let world = sandbox(&format!("qt-app-eclipse-cores-{backend}"), &[("SNES", "Alpha.sfc")]);
     let dir = world.dir("worlds");
     let board_path = write_board_world(&dir);

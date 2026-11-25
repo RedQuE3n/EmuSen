@@ -1503,6 +1503,12 @@ impl SettingsView {
             "focus": b.focus,
             "headerFocus": if b.keys { -1 } else { self.header_focus },
             "capturing": b.capturing,
+            "crumbSettings": "Settings",
+            "crumbSlash": "/",
+            "crumbControllers": "Controllers",
+            "forWord": "For",
+            "profilePre": "in the profile",
+            "keyboardLabel": self.cw("keyboard_tab"),
             "navTabs": ["Players", "Buttons", "Keyboard keys", "Hotkeys", "Profiles"],
             "navActive": if b.keys { 2 } else { 1 },
             "players": players,
@@ -1588,10 +1594,19 @@ impl SettingsView {
                     let lo = (pad_edge + 14.0).clamp(856.0, 984.0);
                     (lo + frac * (1000.0 - lo)).max(ax)
                 };
+                let side = if left { "left" } else { "right" };
+                let leader_side = if left { "Left" } else { "Right" };
                 json!({
                     "index": index,
                     "left": left_text,
                     "right": right_text,
+                    "cardName": format!("{side}Card.{k}"),
+                    "ringName": format!("{side}CardRing.{k}"),
+                    "fillName": format!("{side}CardFill.{k}"),
+                    "leftName": format!("{side}CardLeft.{k}"),
+                    "rightName": format!("{side}CardRight.{k}"),
+                    "leaderName": format!("leader{leader_side}.{k}"),
+                    "leaderFocusedName": format!("leaderFocused{leader_side}.{k}"),
                     "y": ys[k],
                     "ax": ax,
                     "ay": ay,

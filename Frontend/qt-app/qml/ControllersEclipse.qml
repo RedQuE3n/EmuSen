@@ -31,12 +31,13 @@ FocusScope {
         required property real diagramWidth
         id: leaderRep
         Shape {
+            id: leaderShape
             required property int index
             required property var modelData
-            readonly property real cardMid: (modelData.y ?? 0) + 28 - leaderRep.scrollPx
-            readonly property bool inView: cardMid >= 24 && cardMid <= 496
-            objectName: (leaderRep.focusPass ? "leaderFocused" : "leader") + (leaderRep.leftSide ? "Left." : "Right.") + index
-            visible: inView && (modelData.focused === true) === leaderRep.focusPass
+            readonly property real cardMid: (leaderShape.modelData.y ?? 0) + 28 - leaderRep.scrollPx
+            readonly property bool inView: leaderShape.cardMid >= 24 && leaderShape.cardMid <= 496
+            objectName: leaderRep.focusPass ? (leaderShape.modelData.leaderFocusedName ?? "") : (leaderShape.modelData.leaderName ?? "")
+            visible: leaderShape.inView && (leaderShape.modelData.focused === true) === leaderRep.focusPass
             anchors.fill: parent
             ShapePath {
                 fillColor: "transparent"
@@ -44,11 +45,11 @@ FocusScope {
                 strokeWidth: (leaderRep.focusPass ? 2.5 : 1.5) * leaderRep.px
                 capStyle: ShapePath.RoundCap
                 joinStyle: ShapePath.RoundJoin
-                startX: ((modelData.ax ?? 0) + leaderRep.offsetX) * leaderRep.px
-                startY: (modelData.ay ?? 0) * leaderRep.px
-                PathLine { x: ((modelData.elbowX ?? 0) + leaderRep.offsetX) * leaderRep.px; y: (modelData.ay ?? 0) * leaderRep.px }
-                PathLine { x: ((modelData.elbowX ?? 0) + leaderRep.offsetX) * leaderRep.px; y: cardMid * leaderRep.px }
-                PathLine { x: leaderRep.leftSide ? 0 : leaderRep.diagramWidth; y: cardMid * leaderRep.px }
+                startX: ((leaderShape.modelData.ax ?? 0) + leaderRep.offsetX) * leaderRep.px
+                startY: (leaderShape.modelData.ay ?? 0) * leaderRep.px
+                PathLine { x: ((leaderShape.modelData.elbowX ?? 0) + leaderRep.offsetX) * leaderRep.px; y: (leaderShape.modelData.ay ?? 0) * leaderRep.px }
+                PathLine { x: ((leaderShape.modelData.elbowX ?? 0) + leaderRep.offsetX) * leaderRep.px; y: leaderShape.cardMid * leaderRep.px }
+                PathLine { x: leaderRep.leftSide ? 0 : leaderRep.diagramWidth; y: leaderShape.cardMid * leaderRep.px }
             }
         }
     }
@@ -62,7 +63,6 @@ FocusScope {
         required property real contentH
         required property var cards
         required property SettingsModel modelSettings
-        readonly property string sideName: col.leftSide ? "left" : "right"
         clip: col.scrolls
         interactive: col.scrolls
         contentWidth: col.width
@@ -79,13 +79,13 @@ FocusScope {
                 required property int index
                 required property var modelData
                 readonly property bool focusedCard: card.modelData.focused === true
-                objectName: col.sideName + "Card." + card.index
+                objectName: card.modelData.cardName ?? ""
                 x: col.reach
                 y: ((card.modelData.y ?? 0) + (col.scrolls ? 0 : 48)) * col.px
                 width: 344 * col.px
                 height: 56 * col.px
                 Kit.FocusRing {
-                    objectName: col.sideName + "CardRing." + card.index
+                    objectName: card.modelData.ringName ?? ""
                     visible: card.focusedCard
                     anchors.fill: parent
                     radius: 14 * col.px
@@ -98,7 +98,7 @@ FocusScope {
                     pixelScale: canvas.unit
                 }
                 Rectangle {
-                    objectName: col.sideName + "CardFill." + card.index
+                    objectName: card.modelData.fillName ?? ""
                     anchors.fill: parent
                     radius: 14 * col.px
                     color: card.focusedCard ? "#151826" : "#0F111A"
@@ -107,7 +107,7 @@ FocusScope {
                 }
                 CardLine {
                     id: leftText
-                    objectName: col.sideName + "CardLeft." + card.index
+                    objectName: card.modelData.leftName ?? ""
                     x: 16 * col.px
                     y: (card.height - leftText.height) / 2
                     width: col.leftSide ? Math.min(implicitWidth, Math.max(0, card.width - 32 * col.px - 12 * col.px - rightText.width)) : implicitWidth
@@ -121,7 +121,7 @@ FocusScope {
                 }
                 CardLine {
                     id: rightText
-                    objectName: col.sideName + "CardRight." + card.index
+                    objectName: card.modelData.rightName ?? ""
                     x: card.width - rightText.width - 16 * col.px
                     y: (card.height - rightText.height) / 2
                     width: col.leftSide ? implicitWidth : Math.min(implicitWidth, Math.max(0, card.width - 32 * col.px - 12 * col.px - leftText.width))
@@ -262,17 +262,17 @@ FocusScope {
                 objectName: "mark"
                 x: 0
                 y: 13 * root.px
-                width: 34
-                height: 34
-                scale: root.px
+                readonly property real box: 24
+                width: crescent.box
+                height: crescent.box
+                scale: (34 * root.px) / crescent.box
                 transformOrigin: Item.TopLeft
                 preferredRendererType: Shape.CurveRenderer
                 ShapePath {
                     fillColor: "#F6E7D8"
                     strokeColor: "transparent"
-                    PathSvg {
-                        path: "M24 4.5A13.5 13.5 0 1 0 24 29.5 10.5 10.5 0 1 1 24 4.5Z"
-                    }
+                    fillRule: ShapePath.OddEvenFill
+                    PathSvg { path: Marks.crescent }
                 }
             }
             Item {
@@ -291,7 +291,7 @@ FocusScope {
                     size: 24
                     weight: Font.Normal
                     color: "#B9BED0"
-                    text: "Settings"
+                    text: root.model.crumbSettings ?? ""
                     MouseArea {
                         anchors.fill: parent
                         enabled: !root.fromCard
@@ -309,7 +309,7 @@ FocusScope {
                     size: 24
                     weight: Font.Normal
                     color: "#8E94AB"
-                    text: "/"
+                    text: root.model.crumbSlash ?? ""
                 }
                 CardLine {
                     id: crumbCtrl
@@ -321,7 +321,7 @@ FocusScope {
                     size: 24
                     weight: Font.DemiBold
                     color: "#F4F1EC"
-                    text: "Controllers"
+                    text: root.model.crumbControllers ?? ""
                 }
             }
             Item {
@@ -480,7 +480,7 @@ FocusScope {
                     size: 20
                     weight: Font.Normal
                     color: "#D8DBE6"
-                    text: "For"
+                    text: root.model.forWord ?? ""
                 }
                 Rectangle {
                     id: consoleDrop
@@ -554,7 +554,7 @@ FocusScope {
                     size: 20
                     weight: Font.Normal
                     color: "#D8DBE6"
-                    text: "in the profile"
+                    text: root.model.profilePre ?? ""
                 }
                 CardLine {
                     id: profileNameItem
@@ -595,7 +595,7 @@ FocusScope {
                             size: 20
                             weight: Font.DemiBold
                             color: "#07080F"
-                            text: "Keyboard"
+                            text: root.model.keyboardLabel ?? ""
                         }
                     }
                     Repeater {

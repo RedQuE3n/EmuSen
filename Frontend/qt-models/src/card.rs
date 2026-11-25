@@ -7,18 +7,37 @@ use serde_json::Value;
 
 /// What the pane beside the rows shows for a row: lines (each a line and a muted line under it), or a picture with its
 /// caption, or nothing. A card whose pane holds more (the rewind reel, the slots) draws its own in `MenuCard`'s slot.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Pane {
     pub lines: Vec<(String, String)>,
     /// A picture's URL, as a model supplies it; empty for none.
     pub picture: String,
     pub caption: String,
+    /// Optional core name, planet index (-3 for none) and firmware status line for Eclipse cards.
+    pub core: String,
+    pub planet: i32,
+    pub status: String,
+    pub status_ok: bool,
+}
+
+impl Default for Pane {
+    fn default() -> Self {
+        Pane { lines: Vec::new(), picture: String::new(), caption: String::new(), core: String::new(), planet: -3, status: String::new(), status_ok: false }
+    }
 }
 
 impl Pane {
     pub fn said(line: &str, muted: &str) -> Pane {
         Pane { lines: vec![(line.to_owned(), muted.to_owned())], ..Pane::default() }
     }
+}
+
+/// Top Continue card summary shown on Eclipse's Home Card when a game is suspended.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ContinueCard {
+    pub title: String,
+    pub subtitle: String,
+    pub picture: String,
 }
 
 /// One row: its key (what choosing it does, `Pages::choose`), its words, how it is drawn, and its pane.
@@ -33,6 +52,8 @@ pub struct Row {
     pub opens: bool,
     /// The last row of a section, its rule drawn lighter.
     pub section_end: bool,
+    /// Optional stroke icon key in `marks.rs`, used by Eclipse's Home Card menu rows.
+    pub icon: String,
     pub pane: Pane,
 }
 
@@ -53,6 +74,10 @@ impl Row {
         Row { steps: true, ..self }
     }
 
+    pub fn icon(self, icon: &str) -> Row {
+        Row { icon: icon.to_owned(), ..self }
+    }
+
     pub fn pane(self, pane: Pane) -> Row {
         Row { pane, ..self }
     }
@@ -66,6 +91,10 @@ pub struct Page {
     pub rows: Vec<Row>,
     /// A line under the rows (the Home card's Power page: the program's version); empty for none.
     pub footer: String,
+    /// True on Eclipse's Home Card menu root (compact header, icon rows, no detail card or footer bar).
+    pub menu: bool,
+    /// Optional Continue card shown as row 0 on Eclipse's Home Card when a game is suspended.
+    pub continue_card: Option<ContinueCard>,
 }
 
 pub const NO: &str = "no";
@@ -74,7 +103,7 @@ pub const YES: &str = "yes";
 /// A question as a page, as Mistress's `Ask` turns a row into one: its title the question, its sentence above it, No
 /// then Yes, so the focus starts on the answer that changes nothing.
 pub fn question(title: &str, sentence: &str) -> Page {
-    Page { title: title.to_owned(), breadcrumb: sentence.to_owned(), rows: vec![Row::new(NO, "No"), Row::new(YES, "Yes")], footer: String::new() }
+    Page { title: title.to_owned(), breadcrumb: sentence.to_owned(), rows: vec![Row::new(NO, "No"), Row::new(YES, "Yes")], ..Page::default() }
 }
 
 /// The section a row ends: the row before the one that starts a new section has its rule drawn lighter.
@@ -104,6 +133,11 @@ pub enum Choice {
 pub trait Pages {
     fn first(&self) -> &'static str;
     fn page(&self, key: &str, facts: &Value) -> Page;
+    /// Page projection selecting Eclipse card wording and layout when `eclipse` is true.
+    fn page_for(&self, key: &str, facts: &Value, eclipse: bool) -> Page {
+        let _ = eclipse;
+        self.page(key, facts)
+    }
     fn choose(&self, page: &str, row: &str) -> Choice;
     /// Left (-1) or Right (+1) on a row: the action the host carries out, if the row steps.
     fn step(&self, page: &str, row: &str, by: i32) -> Option<String> {
@@ -114,6 +148,11 @@ pub trait Pages {
     fn help(&self, page: &str) -> crate::help::Screen {
         let _ = page;
         crate::help::Screen::Card
+    }
+    /// Help bar screen selecting Eclipse card hints when `eclipse` is true.
+    fn help_for(&self, page: &str, eclipse: bool) -> crate::help::Screen {
+        let _ = eclipse;
+        self.help(page)
     }
 }
 

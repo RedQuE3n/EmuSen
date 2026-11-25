@@ -493,6 +493,8 @@ Window {
             padFamily: program.padFamily
             esdeLook: program.esdeLook
             esdeView: program.esdeView
+            clock: clock
+            battery: machineBattery.level
         }
         // Settings, from Home's Settings place and the Home card's Settings row (EmuSen_Qt.md §7.7); its Library ▸ Themes opens
         // the Themes tab.
@@ -560,6 +562,24 @@ Window {
             function onLeft() { screens.back() }
             function onPassed(key) { screens.act(key) }
             function onRefocus(row) { settingsModel.setFocused(row) }
+        }
+        // Key listener for Hotkeys rebinding while the chosen theme draws Settings (EmuSen_Input.md §10.6).
+        FocusScope {
+            id: settingsThemeListener
+            objectName: "settingsThemeListener"
+            focus: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.listening && !settingsModel.listeningPad
+            Keys.onPressed: (event) => event.accepted = settingsModel.heardKey(event.key, event.modifiers)
+            Connections {
+                target: Kit.PadRouter
+                enabled: settingsThemeListener.activeFocus
+                function onPressed(button) { settingsModel.padPressed(button) }
+            }
+            Timer {
+                interval: 8
+                repeat: true
+                running: settingsThemeListener.activeFocus && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
+                onTriggered: Kit.PadRouter.pump()
+            }
         }
         // A console's options asked for on Choose a console: Settings opens at that console's page (none for an empty one).
         Connections {
@@ -631,6 +651,8 @@ Window {
             clock: clock
             gameMode: program.gameMode
             padFamily: program.padFamily
+            inHand: program.inHand
+            battery: machineBattery.level
         }
         PauseScreen {
             screens: screens
@@ -640,6 +662,8 @@ Window {
             padFamily: program.padFamily
             pauseShown: program.pauseShown
             gameShown: program.gameShown
+            clock: clock
+            battery: machineBattery.level
         }
         ResumeQuestion {
             session: player.session

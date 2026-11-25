@@ -372,8 +372,8 @@ pub fn held(
     let named = |n: &str| tree.nodes.iter().rev().find(|m| m.name == n && m.visible).or_else(|| tree.nodes.iter().rev().find(|m| m.name == n));
     // A "Line" row is held by Eclipse's Line itself, the box a board's CSS gives the line, not by its words within it, which a
     // board line stands on Chrome's baseline (themes/eclipse/parts/Line.qml boardLine): the outer visible item of the name.
-    let outer = |n: &str| tree.nodes.iter().find(|m| m.name == n && m.visible && m.cls.starts_with("Line"));
-    for row in rows.iter().filter(|r| r.part == "Line") {
+    let outer = |n: &str| tree.nodes.iter().find(|m| m.name == n && m.visible && (m.cls.starts_with("Line") || m.cls.starts_with("CardLine")));
+    for row in rows.iter().filter(|r| r.part == "Line" || r.part == "CardLine") {
         if let Some(line) = outer(&row.name) {
             got.insert(row.name.clone(), Boxed { x: line.x / unit, y: line.y / unit, w: line.w / unit, h: line.h / unit });
         }
@@ -408,7 +408,7 @@ pub fn held(
             }
             continue;
         }
-        let part_of = if row.part == "Line" { outer(&row.name).unwrap_or(node) } else { node };
+        let part_of = if row.part == "Line" || row.part == "CardLine" { outer(&row.name).unwrap_or(node) } else { node };
         if row.part != "-" && !part_of.ty.contains(&row.part) && !part_of.cls.contains(&row.part) {
             differences.push(format!("{at}: {} is drawn by {} ({}), not {}", row.name, part_of.ty, part_of.cls, row.part));
         }

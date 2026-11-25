@@ -251,7 +251,7 @@ impl Bindings {
         let mut files = vec![File::Keys];
         if let Some(action) = self.hotkey_of(key) {
             let name = spelling(&self.hotkeys, &action);
-            object(&mut self.hotkeys).remove(&name);
+            object(&mut self.hotkeys).insert(name, json!("None"));
             files.push(File::Hotkeys);
         }
         let map = entry(&mut self.keys, console);
@@ -284,12 +284,12 @@ impl Bindings {
     }
 
     pub fn hotkey(&self, action: &str) -> Option<String> {
-        text(get(&self.hotkeys, action))
+        text(get(&self.hotkeys, action)).filter(|k| !same(k, "None"))
     }
 
     /// The action a key fires, if any.
     pub fn hotkey_of(&self, key: &str) -> Option<String> {
-        self.hotkeys.as_object()?.iter().find(|(_, k)| text(Some(k)).is_some_and(|k| same(&k, key))).map(|(a, _)| a.clone())
+        self.hotkeys.as_object()?.iter().find(|(_, k)| text(Some(k)).is_some_and(|k| !same(&k, "None") && same(&k, key))).map(|(a, _)| a.clone())
     }
 
     /// A hotkey bound to a key, taken from every console's controls first.
@@ -311,7 +311,7 @@ impl Bindings {
 
     pub fn clear_hotkey(&mut self, action: &str) -> File {
         let name = spelling(&self.hotkeys, action);
-        object(&mut self.hotkeys).remove(&name);
+        object(&mut self.hotkeys).insert(name, json!("None"));
         File::Hotkeys
     }
 

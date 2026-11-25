@@ -61,7 +61,7 @@ pub mod qobject {
         PageOpen,
         PageDetail,
         PageOption,
-        /// 1.16: Eclipse's boards for Media, Cheats and Package.
+        /// 1.18: Eclipse's boards for Media, Cheats and Package.
         PageMedia,
         PageCheatOn,
         PageCheatOff,
@@ -69,7 +69,9 @@ pub mod qobject {
         PagePackageMake,
         PagePackageStop,
         PagePackageInfo,
-        /// 1.19: Eclipse's boards for Edit Details, Scrape This Game, Media Viewer and This game's crop.
+        /// 1.19: Eclipse's Settings Hotkeys bar (board #55: A Change, X Clear, B Back, START Home).
+        SettingsHotkeys,
+        /// 1.20: Eclipse's boards for Edit Details, Scrape This Game, Media Viewer and This game's crop.
         PageEditText,
         PageScrape,
         PageViewerBoard,
@@ -125,7 +127,7 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 45] = [
+pub const KINDS: [HelpKind; 46] = [
     HelpKind::Continue,
     HelpKind::Game,
     HelpKind::Console,
@@ -163,6 +165,7 @@ pub const KINDS: [HelpKind; 45] = [
     HelpKind::PagePackageMake,
     HelpKind::PagePackageStop,
     HelpKind::PagePackageInfo,
+    HelpKind::SettingsHotkeys,
     HelpKind::PageEditText,
     HelpKind::PageScrape,
     HelpKind::PageViewerBoard,
@@ -186,6 +189,7 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::SettingsPage => Screen::SettingsPage,
         HelpKind::SettingsConsole => Screen::SettingsConsole,
         HelpKind::SettingsChoices => Screen::SettingsChoices,
+        HelpKind::SettingsHotkeys => Screen::SettingsHotkeys,
         HelpKind::Page => Screen::GamePage,
         HelpKind::PageResume => Screen::GamePageResume,
         HelpKind::PageResumeSlots => Screen::GamePageResumeSlots,
@@ -418,7 +422,11 @@ impl qobject::ThemeHelpEntries {
 
     /// The screen's list as Eclipse's Settings boards name it (`help::settings_named`), set once when it is made.
     fn show_settings(mut self: Pin<&mut Self>, screen: Screen, defaultable: bool) {
-        let list = help::settings_named(help::entries(screen).to_vec());
+        let list = if screen == Screen::SettingsHotkeys {
+            help::entries(screen).to_vec()
+        } else {
+            help::settings_named(help::entries(screen).to_vec())
+        };
         let lines = help::lines_of(screen, &list);
         self.as_mut().rust_mut().screen = screen;
         self.as_mut().rust_mut().defaultable = defaultable;

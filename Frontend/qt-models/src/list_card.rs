@@ -90,7 +90,7 @@ fn sort_sentence(sort: &str) -> String {
     .to_owned()
 }
 
-fn first_page(f: &Value) -> Page {
+fn first_page_for(f: &Value, eclipse: bool) -> Page {
     let sort = words(f, "sort");
     let filter = words(f, "filter");
     // A theme's gamelist names its own orders (gamelists.rs); the grid's are `Sort::ALL`.
@@ -98,7 +98,12 @@ fn first_page(f: &Value) -> Page {
         Some(sorts) => sorts.iter().filter_map(Value::as_str).collect(),
         None => Sort::ALL.iter().map(|s| s.words()).collect(),
     };
-    let others: Vec<&str> = offered.into_iter().filter(|s| *s != sort).collect();
+    let sort_muted = if eclipse {
+        offered.join(" · ")
+    } else {
+        let others: Vec<&str> = offered.into_iter().filter(|s| *s != sort).collect();
+        format!("Also: {}", others.join(" · "))
+    };
     let shows = match filter {
         "" => "Shows every game in the section.".to_owned(),
         crate::words::FAVOURITES_FILTER => "Shows the section's favourites.".to_owned(),
@@ -107,8 +112,7 @@ fn first_page(f: &Value) -> Page {
     };
     let mut rows = Vec::new();
     let mut footer = String::new();
-    // A theme's gamelist of a console that starts empty offers it first (Mistress's `AddStartConsoleOption`); a console
-    // the facts name and that cannot be read is said under the rows, never dropped unsaid.
+    // A theme's gamelist of a console that starts empty offers it first (Mistress's `AddStartConsoleOption`).
     match f.get("console").cloned().map(serde_json::from_value::<crate::home_card::Startable>) {
         Some(Ok(s)) => {
             let page = crate::home_card::start_console_page(std::slice::from_ref(&s), "List");
@@ -120,16 +124,31 @@ fn first_page(f: &Value) -> Page {
     }
     rows.extend([
         Row::new(SEARCH, "Search").opens().pane(Pane::said("Type part of a name; the covers narrow as you type.", "The keyboard docks at the foot of the screen.")),
-        Row::new(SORT, "Sort").value(sort).steps().pane(Pane::said(&sort_sentence(sort), &format!("Also: {}", others.join(" · ")))),
+        Row::new(SORT, "Sort").value(sort).steps().pane(Pane::said(&sort_sentence(sort), &sort_muted)),
         Row::new(FILTER, "Filter").value(filter).opens().pane(Pane::said(&shows, "Choose Favourites to narrow it, or a collection to show it in the strip's place.")),
         Row::new(JUMP, "Jump to").value(words(f, "letter")).steps().pane(Pane::said("Moves to the first game under the letter.", words(f, "letters"))),
         Row::new(RANDOM, "Random game").pane(Pane::said("Moves to a game chosen at random.", "A plays it.")),
     ]);
+    let lower = rows.len();
     if !startable(f).is_empty() {
         rows.push(Row::new(START_CONSOLE, "Start Console").opens().pane(Pane::said("Starts a console with no disc in it.", "Change Disc on the Pause Card puts a game in.")));
     }
     rows.push(Row::new(COLLECTIONS, crate::words::COLLECTIONS_SECTION).opens().pane(Pane::said("Your collections, and the automatic ones.", "A opens a collection as a section of the library.")));
-    Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer }
+    if eclipse {
+        crate::card::end_section_before(&mut rows, lower);
+    }
+    Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer, ..Page::default() }
+}
+
+/// Detail card text for a Filter row as Eclipse's board #45 draws it.
+fn filter_pane(key: &str, name: &str) -> Pane {
+    let lead = match key {
+        EVERY_GAME => "Shows every game in the section.".to_owned(),
+        FAVOURITES_ONLY => "Shows the section's favourites.".to_owned(),
+        NOT_PLAYED => "Shows the section's games never played.".to_owned(),
+        _ => format!("Shows {name}."),
+    };
+    Pane::said(&lead, "Choose Favourites to narrow it, or a collection to show it in the strip's place.")
 }
 
 /// The words under the List card's rows where the console its gamelist starts could not be read.
@@ -142,20 +161,29 @@ fn startable(f: &Value) -> Vec<crate::home_card::Startable> {
     f.get("startable").cloned().and_then(|s| serde_json::from_value(s).ok()).unwrap_or_default()
 }
 
-/// The Filter page: the grid's choices as `listing::choices` makes them where the facts carry them; else every game, then Favourites except in the Favourites section, then the player's collections.
-fn filter_page(f: &Value) -> Page {
-    if let Some(choices) = f.get("filters").cloned().and_then(|c| serde_json::from_value::<Vec<crate::listing::Choice>>(c).ok()) {
-        let rows = choices.iter().map(|c| Row::new(&c.key, &c.name)).collect();
-        return Page { title: "Filter".to_owned(), breadcrumb: "List".to_owned(), rows, footer: String::new() };
+/// The Filter page: the grid's choices where the facts carry them; else every game, Favourites, and collections.
+fn filter_page_for(f: &Value, eclipse: bool) -> Page {
+    let mut rows: Vec<Row> = if let Some(choices) = f.get("filters").cloned().and_then(|c| serde_json::from_value::<Vec<crate::listing::Choice>>(c).ok()) {
+        choices.iter().map(|c| Row::new(&c.key, &c.name)).collect()
+    } else {
+        let mut out = vec![Row::new(EVERY_GAME, crate::words::EVERY_GAME)];
+        if !f.get("favouritesSection").and_then(Value::as_bool).unwrap_or(false) {
+            out.push(Row::new(FAVOURITES_ONLY, crate::words::FAVOURITES_FILTER));
+        }
+        for c in f.get("collections").and_then(Value::as_array).into_iter().flatten() {
+            out.push(Row::new(words(c, "key"), words(c, "name")));
+        }
+        out
+    };
+    if eclipse {
+        for row in &mut rows {
+            row.pane = filter_pane(&row.key, &row.label);
+        }
+        if let Some(at) = rows.iter().position(|r| is_collection(&r.key)) {
+            crate::card::end_section_before(&mut rows, at);
+        }
     }
-    let mut rows = vec![Row::new(EVERY_GAME, crate::words::EVERY_GAME)];
-    if !f.get("favouritesSection").and_then(Value::as_bool).unwrap_or(false) {
-        rows.push(Row::new(FAVOURITES_ONLY, crate::words::FAVOURITES_FILTER));
-    }
-    for c in f.get("collections").and_then(Value::as_array).into_iter().flatten() {
-        rows.push(Row::new(words(c, "key"), words(c, "name")));
-    }
-    Page { title: "Filter".to_owned(), breadcrumb: "List".to_owned(), rows, footer: String::new() }
+    Page { title: "Filter".to_owned(), breadcrumb: "List".to_owned(), rows, ..Page::default() }
 }
 
 /// The List card's facts for a theme's gamelist, from what its last listing summed up, the entry at `focused` selected.
@@ -182,10 +210,14 @@ impl Pages for ListCard {
     }
 
     fn page(&self, key: &str, facts: &Value) -> Page {
+        self.page_for(key, facts, false)
+    }
+
+    fn page_for(&self, key: &str, facts: &Value, eclipse: bool) -> Page {
         match key {
-            FILTER => filter_page(facts),
+            FILTER => filter_page_for(facts, eclipse),
             START_CONSOLE => crate::home_card::start_console_page(&startable(facts), "List"),
-            _ => first_page(facts),
+            _ => first_page_for(facts, eclipse),
         }
     }
 

@@ -239,12 +239,14 @@ pub enum Page {
     Shaders(String),
     /// A console's shader's levers, each a slider or a row of its named values.
     Levers(String),
+    /// Sound ▸ Output: the machine's audio devices as a page of choices (R-20261116-22).
+    Output,
 }
 
 impl Page {
     fn console(&self) -> Option<&str> {
         match self {
-            Page::Group(_) | Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys | Page::Bindings | Page::ShaderConsoles { .. } => None,
+            Page::Group(_) | Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys | Page::Bindings | Page::ShaderConsoles { .. } | Page::Output => None,
             Page::Shaders(c) | Page::Levers(c) => Some(c),
             Page::Console(c) | Page::Engine(c) | Page::Firmware(c) | Page::Cards(c) | Page::Drawer(c, _) => Some(c),
             Page::Saves(c, _) | Page::Save(c, _, _) | Page::Delete(c, _, _) => Some(c),
@@ -467,7 +469,7 @@ impl SettingsView {
         match self.page() {
             None => Screen::Settings,
             Some(Page::Console(_)) if self.pages.len() == 1 => Screen::SettingsConsole,
-            Some(Page::Engine(_) | Page::Shaders(_)) => Screen::SettingsChoices,
+            Some(Page::Engine(_) | Page::Shaders(_) | Page::Output) => Screen::SettingsChoices,
             Some(_) => Screen::SettingsPage,
         }
     }
@@ -609,6 +611,7 @@ impl SettingsView {
                 }
                 rows
             }
+            Some(Page::Output) => self.output_choices().into_iter().map(|(v, label)| json!({ "id": format!("output:{v}"), "output": v, "output_label": label })).collect(),
             Some(page) => self.console_entries(page),
             None if self.description["sections"][self.section]["from"] == "consoles" => {
                 self.listed_consoles().into_iter().map(|c| json!({ "id": format!("console:{}", c.console), "console": c.console })).collect()
@@ -802,6 +805,40 @@ impl SettingsView {
         choices
     }
 
+    /// Sound's Output entry from the description, shared by the Output row and the Output choices page.
+    fn output_entry(&self) -> Option<Value> {
+        self.description["sections"]
+            .as_array()?
+            .iter()
+            .find(|s| s["id"] == "sound")?["rows"]
+            .as_array()?
+            .iter()
+            .find(|r| r["id"] == "output")
+            .cloned()
+    }
+
+    /// Sound's Output choices (System default, machine devices, and any unplugged stored device).
+    fn output_choices(&self) -> Vec<(String, String)> {
+        let Some(entry) = self.output_entry() else { return Vec::new() };
+        let Some(keyed) = self.keyed(&entry) else { return Vec::new() };
+        self.choices(&entry, &keyed)
+    }
+
+    /// The currently stored SoundOutputDevice value, defaulting to Galaxia's default when blank.
+    fn output_stored(&self) -> String {
+        let Some(entry) = self.output_entry() else { return String::new() };
+        let Some(keyed) = self.keyed(&entry) else { return String::new() };
+        self.stored(&keyed).into_iter().next().unwrap_or_default()
+    }
+
+    /// The Output row's sentence for a given device label, read from Sound's description entry.
+    pub(crate) fn output_sentence(&self, label: &str) -> String {
+        let Some(entry) = self.output_entry() else { return String::new() };
+        let by = &entry["pane"]["by_value"];
+        let line = by.get(label).or_else(|| by.get("*")).map(text_of).unwrap_or_default();
+        self.fill(&line, label)
+    }
+
     /// The CRT row's choices: off, then each of the filter's setting's named values.
     pub(crate) fn filter_choices(&self, entry: &Value) -> Vec<String> {
         let filter = self.filter(entry);
@@ -927,6 +964,19 @@ impl SettingsView {
         }
         if let Some(row) = self.console_row(entry) {
             return row;
+        }
+        if let Some(device) = entry["output"].as_str() {
+            let label = text_of(&entry["output_label"]);
+            let chosen = self.output_stored() == device;
+            return Row {
+                id: text_of(&entry["id"]),
+                label,
+                value: if chosen { "● In use".to_owned() } else { String::new() },
+                kind: RowKind::Choice,
+                held: false,
+                marked: chosen,
+                code: false,
+            };
         }
         let keyed = self.keyed(entry);
         let label = keyed.as_ref().map_or_else(|| text_of(&entry["label"]), |k| text_of(&k.row["label"]));
@@ -1059,6 +1109,11 @@ impl SettingsView {
         if let Some(words) = self.console_pane(&entry) {
             let mut lines = words.lines.into_iter();
             return Pane { sentence: lines.next().unwrap_or_default(), lines: lines.collect(), muted: words.muted, tones: words.tones, ..Pane::default() };
+        }
+        if entry["output"].is_string() {
+            let label = text_of(&entry["output_label"]);
+            let muted = self.output_entry().map(|e| strings(&e["pane"]["muted"])).unwrap_or_default();
+            return Pane { sentence: self.output_sentence(&label), muted, ..Pane::default() };
         }
         let keyed = self.keyed(&entry);
         let (value, chosen, count) = self.value(&entry);
@@ -1295,6 +1350,13 @@ impl SettingsView {
         }
         if let Some(outcome) = self.console_choose(&entry, index) {
             return outcome;
+        }
+        if entry["page"] == "output" {
+            return self.open(Page::Output, self.row(&entry).label, index);
+        }
+        if let Some(device) = entry["output"].as_str() {
+            set_at(&mut self.read.app, "SoundOutputDevice", json!(device));
+            return Outcome::Saved(Model::App, self.read.app.clone());
         }
         if self.keyed(&entry).is_some() || entry.get("filter").is_some() {
             return self.step(index, 1);

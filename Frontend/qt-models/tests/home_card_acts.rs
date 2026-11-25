@@ -15,8 +15,8 @@ fn act(key: &str) -> Ask {
 
 fn startable() -> Vec<Startable> {
     vec![
-        Startable { console: "PlayStation".into(), name: "PlayStation".into(), engine: "Diamond".into(), firmware: "✓ Firmware found.".into(), system: "psx".into() },
-        Startable { console: "Saturn".into(), name: "Saturn".into(), engine: "Topaz".into(), firmware: String::new(), system: "saturn".into() },
+        Startable { console: "PlayStation".into(), name: "PlayStation".into(), engine: "Diamond".into(), firmware: "✓ Firmware found.".into(), system: "psx".into(), ..Default::default() },
+        Startable { console: "Saturn".into(), name: "Saturn".into(), engine: "Topaz".into(), firmware: String::new(), system: "saturn".into(), ..Default::default() },
     ]
 }
 

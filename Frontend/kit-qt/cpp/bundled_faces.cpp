@@ -18,6 +18,8 @@ QStringList bundled_families()
             if (!families.isEmpty() && !found.contains(families.first()))
                 found.append(families.first());
         }
+        // Bundled symbol fallback for Sora (●, ✓, ⚠) so glyph width matches the boards across machines.
+        QFont::insertSubstitution(QStringLiteral("Sora"), QStringLiteral("JetBrains Mono"));
         return found;
     }();
     return families;

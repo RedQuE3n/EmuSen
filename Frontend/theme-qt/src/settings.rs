@@ -88,6 +88,9 @@ pub mod qobject {
         /// From 1.17 (boards #58, #63, #64): whether row short lines wrap at 1.35 line-height and whether Memory cards' help bar is shown.
         #[qproperty(bool, board_wrap_about, cxx_name = "boardWrapAbout", READ, NOTIFY = shown)]
         #[qproperty(bool, cards_help, cxx_name = "cardsHelp", READ, NOTIFY = shown)]
+        /// From 1.18 (boards #52-#56): Eclipse secondary aside lines and rounded-box Start glyph flag.
+        #[qproperty(QStringList, board_lines, cxx_name = "boardLines", READ, NOTIFY = shown)]
+        #[qproperty(bool, box_menu, cxx_name = "boxMenu", READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -135,6 +138,7 @@ pub struct SettingsFacts {
     pub board_heading: String,
     pub board_about_heading: String,
     pub board_sentence: String,
+    pub board_lines: Vec<String>,
     pub board_muted: Vec<String>,
     pub consoles_subtitle: String,
     pub consoles_filtered: bool,
@@ -145,6 +149,7 @@ pub struct SettingsFacts {
     pub card_subtitle: String,
     pub board_wrap_about: bool,
     pub cards_help: bool,
+    pub box_menu: bool,
 }
 
 /// The facts of a view whose rows were last told as `rows`; an error where those are not the view's rows.
@@ -245,6 +250,7 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         board_heading: aside.heading,
         board_about_heading: aside.about_heading,
         board_sentence: aside.sentence,
+        board_lines: aside.lines,
         board_muted: aside.muted,
         consoles_subtitle: aside.consoles_subtitle,
         consoles_filtered: view.consoles_with_games(),
@@ -255,6 +261,7 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         card_subtitle: aside.card_subtitle,
         board_wrap_about: aside.wrap_about,
         cards_help: aside.cards_help,
+        box_menu: aside.box_menu,
     })
 }
 
@@ -307,6 +314,7 @@ pub struct ThemeSettingsRust {
     board_heading: QString,
     board_about_heading: QString,
     board_sentence: QString,
+    board_lines: QStringList,
     board_muted: QStringList,
     consoles_subtitle: QString,
     consoles_filtered: bool,
@@ -317,6 +325,7 @@ pub struct ThemeSettingsRust {
     card_subtitle: QString,
     board_wrap_about: bool,
     cards_help: bool,
+    box_menu: bool,
     last: SettingsFacts,
 }
 
@@ -355,6 +364,7 @@ impl Default for ThemeSettingsRust {
             board_heading: QString::default(),
             board_about_heading: QString::default(),
             board_sentence: QString::default(),
+            board_lines: QStringList::default(),
             board_muted: QStringList::default(),
             consoles_subtitle: QString::default(),
             consoles_filtered: false,
@@ -365,6 +375,7 @@ impl Default for ThemeSettingsRust {
             card_subtitle: QString::default(),
             board_wrap_about: false,
             cards_help: false,
+            box_menu: false,
             last: SettingsFacts { help: -1, card_planet: -3, ..SettingsFacts::default() },
         }
     }
@@ -445,6 +456,7 @@ impl qobject::ThemeSettings {
         me.board_heading = QString::from(facts.board_heading.as_str());
         me.board_about_heading = QString::from(facts.board_about_heading.as_str());
         me.board_sentence = QString::from(facts.board_sentence.as_str());
+        me.board_lines = list(&facts.board_lines);
         me.board_muted = list(&facts.board_muted);
         me.consoles_subtitle = QString::from(facts.consoles_subtitle.as_str());
         me.consoles_filtered = facts.consoles_filtered;
@@ -455,6 +467,7 @@ impl qobject::ThemeSettings {
         me.card_subtitle = QString::from(facts.card_subtitle.as_str());
         me.board_wrap_about = facts.board_wrap_about;
         me.cards_help = facts.cards_help;
+        me.box_menu = facts.box_menu;
         me.last = facts.clone();
         drop(me);
         self.shown();

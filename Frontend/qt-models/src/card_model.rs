@@ -66,6 +66,22 @@ pub mod qobject {
         #[qproperty(QString, pane_caption, cxx_name = "paneCaption", READ, NOTIFY)]
         /// The help bar the page shows, as QML names it (`HelpModel.Card`).
         #[qproperty(i32, help, READ, NOTIFY)]
+        /// Whether Eclipse card wording and layout are active.
+        #[qproperty(bool, eclipse)]
+        /// True on Eclipse's Home Card menu root page.
+        #[qproperty(bool, menu, READ, NOTIFY)]
+        /// Footer row position ("2 of 7") for Eclipse cards.
+        #[qproperty(QString, position_line, cxx_name = "positionLine", READ, NOTIFY)]
+        /// Optional core name, planet index (-3 for none) and firmware status in the detail card.
+        #[qproperty(QString, pane_core, cxx_name = "paneCore", READ, NOTIFY)]
+        #[qproperty(i32, pane_planet, cxx_name = "panePlanet", READ, NOTIFY)]
+        #[qproperty(QString, pane_status, cxx_name = "paneStatus", READ, NOTIFY)]
+        #[qproperty(bool, pane_status_ok, cxx_name = "paneStatusOk", READ, NOTIFY)]
+        /// Top Continue card fields on Eclipse's Home Card when a game is suspended.
+        #[qproperty(bool, has_continue, cxx_name = "hasContinue", READ, NOTIFY)]
+        #[qproperty(QString, continue_title, cxx_name = "continueTitle", READ, NOTIFY)]
+        #[qproperty(QString, continue_subtitle, cxx_name = "continueSubtitle", READ, NOTIFY)]
+        #[qproperty(QString, continue_picture, cxx_name = "continuePicture", READ, NOTIFY)]
         type CardModel = super::CardModelRust;
     }
 
@@ -159,6 +175,17 @@ pub struct CardModelRust {
     pane_picture: QString,
     pane_caption: QString,
     help: i32,
+    eclipse: bool,
+    menu: bool,
+    position_line: QString,
+    pane_core: QString,
+    pane_planet: i32,
+    pane_status: QString,
+    pane_status_ok: bool,
+    has_continue: bool,
+    continue_title: QString,
+    continue_subtitle: QString,
+    continue_picture: QString,
     deck: Deck,
     page_shown: Page,
 }
@@ -181,6 +208,17 @@ impl Default for CardModelRust {
             pane_picture: QString::default(),
             pane_caption: QString::default(),
             help: crate::help_model::shown_screen(crate::help::Screen::Card),
+            eclipse: false,
+            menu: false,
+            position_line: QString::default(),
+            pane_core: QString::default(),
+            pane_planet: -3,
+            pane_status: QString::default(),
+            pane_status_ok: false,
+            has_continue: false,
+            continue_title: QString::default(),
+            continue_subtitle: QString::default(),
+            continue_picture: QString::default(),
             deck: Deck::default(),
             page_shown: Page::default(),
         }
@@ -191,6 +229,13 @@ impl cxx_qt::Initialize for qobject::CardModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_card_changed(|model| model.read()).release();
         self.as_mut()
+            .on_eclipse_changed(|model| {
+                if model.shown {
+                    model.read();
+                }
+            })
+            .release();
+        self.as_mut()
             .on_shown_changed(|mut model| {
                 if model.shown {
                     model.as_mut().read();
@@ -198,8 +243,7 @@ impl cxx_qt::Initialize for qobject::CardModel {
                 }
             })
             .release();
-        // A hidden card's words wait for it to show: rewritten while hidden, they made the window swap a frame with
-        // nothing visible changed (the paused game's minute, under Home; EmuSen_Qt.md §7.8).
+        // A hidden card's words wait for it to show: rewritten while hidden, they swap a frame unseen (EmuSen_Qt.md §7.8).
         self.on_facts_changed(|model| {
             if model.shown {
                 model.read();
@@ -228,6 +272,7 @@ impl qobject::CardModel {
             opens: r.opens,
             section_end: r.section_end,
             dimmed: false,
+            icon: &r.icon,
         });
         row_roles::data(shown, role)
     }
@@ -308,9 +353,16 @@ impl qobject::CardModel {
             self.as_mut().rust_mut().current = at;
             self.as_mut().current_changed();
         }
+        let pos = QString::from(crate::words::position_line(at as usize, self.page_shown.rows.len()).as_str());
+        if self.position_line != pos {
+            self.as_mut().rust_mut().position_line = pos;
+            self.as_mut().position_line_changed();
+        }
         let pane = self.page_shown.rows.get(at as usize).map(|r| r.pane.clone()).unwrap_or_default();
-        let lines = list(pane.lines.iter().map(|(l, _)| l.clone()));
-        let muted = list(pane.lines.iter().map(|(_, m)| m.clone()));
+        let drop_status = self.eclipse && !pane.status.is_empty();
+        let kept: Vec<_> = pane.lines.iter().filter(|(l, m)| !(drop_status && *l == pane.status && m.is_empty())).collect();
+        let lines = list(kept.iter().map(|(l, _)| l.clone()));
+        let muted = list(kept.iter().map(|(_, m)| m.clone()));
         if self.pane_lines != lines || self.pane_muted != muted {
             self.as_mut().rust_mut().pane_lines = lines;
             self.as_mut().rust_mut().pane_muted = muted;
@@ -324,7 +376,24 @@ impl qobject::CardModel {
         }
         if self.pane_caption != caption {
             self.as_mut().rust_mut().pane_caption = caption;
-            self.pane_caption_changed();
+            self.as_mut().pane_caption_changed();
+        }
+        let (core, status) = (QString::from(pane.core.as_str()), QString::from(pane.status.as_str()));
+        if self.pane_core != core {
+            self.as_mut().rust_mut().pane_core = core;
+            self.as_mut().pane_core_changed();
+        }
+        if self.pane_planet != pane.planet {
+            self.as_mut().rust_mut().pane_planet = pane.planet;
+            self.as_mut().pane_planet_changed();
+        }
+        if self.pane_status != status {
+            self.as_mut().rust_mut().pane_status = status;
+            self.as_mut().pane_status_changed();
+        }
+        if self.pane_status_ok != pane.status_ok {
+            self.as_mut().rust_mut().pane_status_ok = pane.status_ok;
+            self.pane_status_ok_changed();
         }
     }
 
@@ -337,10 +406,13 @@ impl qobject::CardModel {
         }
         let facts: serde_json::Value = serde_json::from_str(&self.facts.to_string()).unwrap_or(serde_json::Value::Null);
         let key = self.deck.page().to_owned();
-        let shown = pages.page(&key, &facts);
-        // The same page with the same rows changes their words in place, so a row's value steps under the focus; a
-        // page turn resets the rows.
-        let same = self.page.to_string() == key && self.page_shown.rows.len() == shown.rows.len() && !shown.rows.is_empty();
+        let shown = pages.page_for(&key, &facts, self.eclipse);
+        // Same page and shape updates row values in place so focus stays; page or layout turns reset.
+        let same = self.page.to_string() == key
+            && self.page_shown.rows.len() == shown.rows.len()
+            && self.page_shown.menu == shown.menu
+            && self.page_shown.continue_card.is_some() == shown.continue_card.is_some()
+            && !shown.rows.is_empty();
         if same {
             let count = shown.rows.len() as i32;
             self.as_mut().rust_mut().page_shown = shown;
@@ -369,7 +441,7 @@ impl qobject::CardModel {
             self.as_mut().rust_mut().breadcrumb = breadcrumb;
             self.as_mut().breadcrumb_changed();
         }
-        let help = crate::help_model::shown_screen(pages.help(&key));
+        let help = crate::help_model::shown_screen(pages.help_for(&key, self.eclipse));
         if self.help != help {
             self.as_mut().rust_mut().help = help;
             self.as_mut().help_changed();
@@ -378,6 +450,32 @@ impl qobject::CardModel {
         if self.footer != footer {
             self.as_mut().rust_mut().footer = footer;
             self.as_mut().footer_changed();
+        }
+        let menu = self.page_shown.menu;
+        if self.menu != menu {
+            self.as_mut().rust_mut().menu = menu;
+            self.as_mut().menu_changed();
+        }
+        let has_continue = self.page_shown.continue_card.is_some();
+        let (c_title, c_sub, c_pic) = self.page_shown.continue_card.as_ref().map_or_else(
+            || (QString::default(), QString::default(), QString::default()),
+            |c| (QString::from(c.title.as_str()), QString::from(c.subtitle.as_str()), QString::from(c.picture.as_str())),
+        );
+        if self.has_continue != has_continue {
+            self.as_mut().rust_mut().has_continue = has_continue;
+            self.as_mut().has_continue_changed();
+        }
+        if self.continue_title != c_title {
+            self.as_mut().rust_mut().continue_title = c_title;
+            self.as_mut().continue_title_changed();
+        }
+        if self.continue_subtitle != c_sub {
+            self.as_mut().rust_mut().continue_subtitle = c_sub;
+            self.as_mut().continue_subtitle_changed();
+        }
+        if self.continue_picture != c_pic {
+            self.as_mut().rust_mut().continue_picture = c_pic;
+            self.as_mut().continue_picture_changed();
         }
         // Said after a reset, since a view's current row does not survive its model's reset.
         let current = self.current;

@@ -741,14 +741,20 @@ impl LibraryView {
             }
         }
         seen.sort_by(|a, b| (a.manufacturer.to_lowercase(), a.release_year).cmp(&(b.manufacturer.to_lowercase(), b.release_year)));
-        let row = |id: &str| self.rows.rows().iter().find(|r| r.key == id).map(|r| r.engine_name.clone()).filter(|e| !e.is_empty());
+        let row = |id: &str| self.rows.rows().iter().find(|r| r.key == id);
         seen.into_iter()
-            .map(|s| crate::home_card::Startable {
-                console: if s.console.is_empty() { s.id.clone() } else { s.console.clone() },
-                name: console_name(s),
-                engine: row(&s.id).unwrap_or_else(|| s.engines[0].clone()),
-                firmware: self.catalog.firmware.iter().find(|(id, _)| *id == s.id).map(|(_, line)| line.clone()).unwrap_or_default(),
-                system: s.id.clone(),
+            .map(|s| {
+                let matched = row(&s.id);
+                let engine = matched.map(|r| r.engine_name.clone()).filter(|e| !e.is_empty()).unwrap_or_else(|| s.engines[0].clone());
+                let libretro = matched.is_some_and(|r| r.libretro);
+                crate::home_card::Startable {
+                    console: if s.console.is_empty() { s.id.clone() } else { s.console.clone() },
+                    name: console_name(s),
+                    engine,
+                    firmware: self.catalog.firmware.iter().find(|(id, _)| *id == s.id).map(|(_, line)| line.clone()).unwrap_or_default(),
+                    system: s.id.clone(),
+                    libretro,
+                }
             })
             .collect()
     }

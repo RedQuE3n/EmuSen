@@ -1,15 +1,22 @@
 NAME
-    userdel - remove an account
+    userdel - remove a shell account
 
 SYNOPSIS
     userdel <name>
 
 DESCRIPTION
-    Removes <name> from the account directory - root only. Refuses to
-    remove 'root' itself (the one account that always exists), and refuses
-    to remove an account that's currently active in any live session (or
-    this shell itself, with no session manager registered) - 'su' that
-    session to another account first.
+    Removes <name> from the process-wide account directory. Only 'root'
+    may remove accounts. userdel refuses to remove 'root' itself or any
+    account currently active in any live session (switch that session
+    away with su(1) first).
 
 EXAMPLES
-    userdel kid
+    userdel guest
+
+EXIT STATUS
+    0   Account removed.
+    1   Missing name, caller is not root, account does not exist,
+        target is root, or account is currently in use.
+
+SEE ALSO
+    useradd(1), su(1), who(1), whoami(1)

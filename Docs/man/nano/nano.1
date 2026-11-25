@@ -1,24 +1,37 @@
 NAME
-    nano - simple full-screen text editor
+    nano - full-screen terminal text editor
 
 SYNOPSIS
     nano <path>
 
 DESCRIPTION
-    A small full-screen editor for creating/editing a real file (a 'source'
-    script, say) without leaving the shell for an external editor. NOT a
-    full GNU nano clone - no search, no cut/paste ring, no syntax
-    highlighting - just arrow-key movement, insert/Backspace/Delete, and
-    Ctrl+O to save / Ctrl+X to exit (prompting to save first if there are
-    unsaved changes). <path> is created if it doesn't exist yet, and is
-    walled to the project's own directory tree like every other real-file
-    command here (see 'cd'). Needs a REAL interactive terminal - it takes
-    over the console with raw key reads and full-screen redraws the same
-    way this shell's own line editor does for a single line, just for a
-    whole buffer - so it refuses cleanly (rather than failing strangely) when
-    stdin/stdout is redirected (a piped script, a 'source'd file, a headless
-    test) or when there's no real terminal at all (EmuSen.Mistress's GUI
-    console window).
+    Shipped external DianaSh program providing a minimal full-screen
+    text editor for creating and editing files inside the shell sandbox.
+    If <path> does not exist yet, it is created when saved. Saved files
+    always use LF ('\n') line endings.
+
+    nano requires an interactive terminal for both standard input and
+    standard output, and exits with an error when input or output is
+    redirected or when run in a non-terminal console.
+
+    Supported keys:
+
+    Up, Down, Left, Right   Move cursor (Left/Right wrap across lines).
+    Home, End               Jump to start or end of the current line.
+    PageUp, PageDown        Scroll up or down by one screen page.
+    Enter                   Insert a newline at the cursor.
+    Backspace, Delete       Delete character before or at the cursor.
+    Ctrl-O                  Save the buffer to <path>.
+    Ctrl-X                  Exit (prompts to save if modified; y, n, or
+                            Esc to cancel).
 
 EXAMPLES
-    nano setup.txt
+    nano /Logs/setup.sh
+
+EXIT STATUS
+    0   Editor exited normally (whether saved or not).
+    1   Missing path, path outside DIANASH_ROOT sandbox, non-terminal
+        environment, or file read error.
+
+SEE ALSO
+    cat(1), source(1), export(1), dianash(1)

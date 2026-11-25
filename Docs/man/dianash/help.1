@@ -1,10 +1,22 @@
 NAME
-    help - list every command with a brief explanation
+    help - list all available commands with one-line summaries
 
 SYNOPSIS
     help
 
 DESCRIPTION
-    Prints every command, one line each, with a brief explanation of what it
-    does - the quick "what's available" overview. Ignores any arguments;
-    for a specific command's full manual page, use 'man <command>' instead.
+    Prints every registered builtin, module command, shipped program,
+    and language construct, one per line, with a brief usage summary.
+    Any arguments are ignored.
+
+    To read the full manual page for a single command, use man(1).
+
+EXAMPLES
+    help
+    help | grep trace
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    man(1), which(1), command(1)

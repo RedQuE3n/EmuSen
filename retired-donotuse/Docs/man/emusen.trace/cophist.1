@@ -1,0 +1,24 @@
+NAME
+    cophist - coprocessor register history
+
+SYNOPSIS
+    cophist [<reg>] [<count>]
+
+DESCRIPTION
+    Prints the retained history of the cartridge coprocessor's registers -
+    the SuperFX GSU, the SA-1, or a NEC DSP - one row per refresh, oldest
+    first. Where `regs` shows the instant, this shows the run-up to it.
+
+    Give <reg> to follow a single register (SFR, PBR, R15, ...) instead of
+    the whole file, and <count> to change how many rows are shown from the
+    default 16. The header also reports how many refreshes the registers
+    have gone unchanged, which is the direct answer to "when did the chip
+    stop".
+
+    Prints nothing useful on a cartridge with no coprocessor, which is most
+    of them.
+
+EXAMPLES
+    cophist
+    cophist SFR 64
+    cophist R15

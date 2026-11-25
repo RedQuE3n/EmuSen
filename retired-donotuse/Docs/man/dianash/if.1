@@ -1,0 +1,16 @@
+NAME
+    if - conditional execution
+
+SYNOPSIS
+    if LIST; then LIST; [elif LIST; then LIST;] ... [else LIST;] fi
+
+DESCRIPTION
+    Runs the 'if' condition; if its last pipeline exits 0 (success), runs the
+    'then' body and stops. Otherwise tries each 'elif' condition in turn the
+    same way, finally falling through to 'else' if none matched. Works
+    across multiple physical lines at the interactive prompt (a secondary
+    '> ' prompt appears until 'fi' closes it) and inside a 'source'd script
+    the same way.
+
+EXAMPLES
+    if [ -f save.state ]; then echo found; else echo missing; fi

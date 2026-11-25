@@ -1,14 +1,15 @@
-# BlackMoon Hardware (the shared hardware of the Sony cores)
+# BlackMoon Hardware (Shared Sony Chip Crates)
 
-Not a console: one Rust crate per chip that more than one Sony core can use, so that each can be used alone. The
-first are the PlayStation's processors, then its SPU's voice.
+Shared Rust hardware crates used across Sony console cores (`diamond` and `sapphire`). Each crate models one chip independently of any console bus or memory map:
 
-- `blackmoon-r3000` — the R3000A, the MIPS I processor of the PlayStation's CPU, and later the PlayStation 2's I/O
-  processor (Sapphire).
-- `blackmoon-gte` — the GTE, the PlayStation's geometry coprocessor on the R3000A's coprocessor 2.
-- `blackmoon-spu` — the SPU's voice (ADPCM, interpolation, envelopes, noise, pitch modulation, the reverb's algorithm),
-  the PlayStation's SPU and both cores of the PlayStation 2's SPU2 (Sapphire).
+- `blackmoon-r3000` — MIPS I R3000A CPU core (PlayStation CPU in `diamond`; PlayStation 2 IOP in `sapphire`).
+- `blackmoon-gte` — PlayStation Geometry Transformation Engine on COP2 (`diamond`).
+- `blackmoon-spu` — `no_std` SPU voice engine (SPU-ADPCM, Gaussian interpolation, ADSR/sweeps, noise, pitch modulation, reverb) shared by `diamond`'s SPU and both cores of `sapphire`'s SPU2.
 
-Named for the Black Moon Clan, the Sony cores' faction, as Beryl Hardware is for the Sega cores' (decided 2026-10-11,
-`Diamond_Plan.md` §11 Q10; `EmuSen_Core_Naming_Scheme.md` §4). The interface and each crate's record are in
-`Man pages/Hardware/Sony/BlackMoon-HW/`.
+## Documentation
+
+- [BlackMoon Hardware Contracts](../../../../Docs/Man%20pages/Hardware/Sony/BlackMoon-HW/README.md)
+- [R3000A Reference](../../../../Docs/Man%20pages/Hardware/Sony/BlackMoon-HW/BlackMoon_R3000.md)
+- [GTE Reference](../../../../Docs/Man%20pages/Hardware/Sony/BlackMoon-HW/BlackMoon_GTE.md)
+- [SPU Voice Engine Reference](../../../../Docs/Man%20pages/Hardware/Sony/BlackMoon-HW/BlackMoon_SPU.md)
+- [Core and Component Naming Scheme](../../../../Docs/EmuSen%20Manual/Overview_and_Architecture.md#core-and-component-naming-scheme) (Black Moon Clan faction)

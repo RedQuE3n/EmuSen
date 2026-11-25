@@ -5,10 +5,21 @@ SYNOPSIS
     readers <addr> [<scanstart> <scanlen>]
 
 DESCRIPTION
-    The read-side complement to 'writers': finds every instruction
-    statically reading <addr>, e.g. every branch of game logic that checks
-    a flag's value - not just the one spot noticed while manually tracing
-    execution. Same addressing-mode limitation as 'writers'.
+    Scans CpuBus for instructions that statically read hex address
+    <addr>. By default the scan covers <addr>'s own bank from $8000 to
+    $FFFF; supply hex <scanstart> and <scanlen> to scan another range.
+
+    Only statically encoded addressing modes (absolute and absolute-long)
+    are detected. Indexed or indirect reads are not visible to static
+    analysis; use bp(1) with 'bp read' for runtime read detection.
 
 EXAMPLES
     readers 13c6
+    readers 13c6 808000 8000
+
+EXIT STATUS
+    0   Scan completed (or usage message printed).
+    1   No target attached, invalid hex argument, or session service fault.
+
+SEE ALSO
+    writers(1), callers(1), disasm(1), bp(1), watch(1)

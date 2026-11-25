@@ -1,5 +1,5 @@
 # Esmeraude (Sony PSP)
 
-Reserved for a future PSP core. Not started yet.
+Reserved for a future Sony PlayStation Portable core. Not started yet.
 
-Black Moon Clan codename — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.
+Black Moon Clan codename — see the [Core and Component Naming Scheme](../../../../Docs/EmuSen%20Manual/Overview_and_Architecture.md#core-and-component-naming-scheme).

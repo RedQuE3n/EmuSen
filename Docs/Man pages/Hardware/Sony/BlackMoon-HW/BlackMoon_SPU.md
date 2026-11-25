@@ -1,107 +1,67 @@
-# BlackMoon_SPU — the SPU voice's record
+# BlackMoon SPU Voice Engine (`blackmoon-spu`)
 
-*Written 2026-10-25, at Sapphire's stage S26.* `blackmoon-spu`, the part of the PlayStation's SPU that the PlayStation
-2's SPU2 runs twice over: SPU-ADPCM decoding, the Gaussian interpolation, the ADSR envelope and the volume sweeps, the
-noise generator, pitch modulation, each voice's state, and the reverb's algorithm with its work area and offsets as
-parameters. Planned in `Sapphire_Plan.md` §9.3 and decided by the tester's Q10 (2026-10-24); moved out of Diamond's
-`src/spu`, where it was written at Diamond's stage 8 (`Diamond_SPU.md`). Its users are Diamond's SPU and both cores of
-Sapphire's SPU2 (`Sapphire_Native.md` §32).
+Crate path: `EmuSen/Cores/Sony/BlackMoon-HW/blackmoon-spu/`.
+`#![no_std]` crate with zero dependencies and zero allocations. Implements the sample-by-sample audio voice and reverb engine shared by `diamond` (PlayStation SPU at 44,100 Hz, 512 KiB RAM) and `sapphire` (both PlayStation 2 SPU2 cores at 48,000 Hz, 2 MiB RAM).
 
-The marks are the plan's: **[M]** measured on 2026-10-25 on the desktop (Ryzen 7 7700X, Fedora 44) with the tool named;
-**[R]** read from a source, named; **[A]** argued; **[C]** a choice.
+## Responsibility Split
 
----
-
-## 1. What is in the crate, and what is not
-
-The rules are psx-spx's as `Diamond_SPU.md` §3 to §5 records them, with Diamond's readings where psx-spx stops (D-34,
-D-35 and D-36 of `Diamond_Disputes.md`: the prediction's products shifted apart, the interpolation's products summed
-before the shift, the envelope stepping after the sample it scales) [R]. The crate holds what a voice does sample by
-sample and nothing that a console decides:
-
-| In the crate | In each core |
+| Owned by `blackmoon-spu` | Owned by Each Console Core |
 |---|---|
-| `voice`: a voice's registers as values, its block address, pitch counter, decoded samples, decoder history, envelope, phase, current volumes and output; key on and off; one sample (`Voice::tick`); the pitch step with modulation (`voice::step`); a volume register's cycle (`voice::sweep`) | the register map and its widths, where each value is read and written |
-| `envelope`: the step that ADSR and the sweeps share | the clock: when a sample is made, and at what rate (44,100 Hz on the PlayStation, 48,000 Hz on the PlayStation 2) |
-| `noise`: the generator's level and timer, one sample at a shift and step | which voices take the noise, and when its timer restarts (Diamond's D-37 rule is the core's, on its register write) |
-| `reverb`: the formula, its accesses in psx-spx's order, the 39-tap filter at half the rate, the buffer address | the reverb's registers: their layout, their units, where the work area ends |
-| `tables`: the interpolation's 512 entries, the filter's 39 taps, the five ADPCM filters | the mix, the routing, the transfers, the capture or output areas, external inputs |
+| `voice::Voice`: per-voice state, SPU-ADPCM decode, 4-point Gaussian interpolation, ADSR phase machine, per-voice volume sweeps, `voice::step` pitch modulation | Register addresses, bit layouts, and read/write side effects |
+| `envelope::Envelope` & `Rate`: shared ADSR and volume-sweep step engine | Sample clock and output sample rate (44,100 Hz vs 48,000 Hz) |
+| `noise::Noise`: LFSR noise generator and countdown timer | Voice noise-enable routing and timer reset on register write |
+| `reverb::Reverb`: half-rate stereo reverb algorithm, 39-tap FIR down/up-sampling filter, work-area address wrap | Reverb register decoding into `reverb::Params` and `reverb::Area` |
+| `tables`: 512-entry `GAUSS`, 39-tap `FIR`, 5 ADPCM filter pairs (`POS`, `NEG`) | Voice mixing, dry/wet routing, DMA/FIFO transfers, capture buffers, CD/external inputs, IRQ comparison |
 
-**A core lends sound RAM** as a byte slice whose length is a power of two (512 KiB on the PlayStation, 2 MiB on the
-PlayStation 2); every address wraps within it [C]. **Nothing keeps time**: a core calls `Voice::tick` once a sample.
-**The IRQ address is the core's**: every access a voice or the reverb makes is reported through the trait `Touch`, which
-the core implements with its own comparison (Diamond's in 8-byte units, Sapphire's by halfword for both cores at once);
-`()` watches nothing. The crate is `no_std`, allocates nothing, and depends on nothing.
+Sound RAM is lent by the core as a power-of-two `&[u8]` (or `&mut [u8]` for reverb); all byte addresses wrap via `ram.len() - 1`. Every sound-RAM read or write invokes `Touch::touch(&mut self, byte_addr: u32)` so the core can evaluate its own IRQ address match (`()` disables watching).
 
-## 2. The interface's units
+## Voice Processing (`voice.rs`)
 
-- A voice's **start and loop addresses** are 32-bit values in 8-byte units, PlayStation's SSA and LSAX as they are;
-  its **block address** is in bytes. A core converts: Diamond's registers are already 8-byte units; Sapphire's halfword
-  addresses lose their two low bits on the way in (`Sapphire_Disputes.md` D-268) [C].
-- The **reverb** takes each sample's coefficients and offsets as `Params` (coefficients sign-extended, offsets in
-  bytes from the buffer address, each pair left then right in psx-spx's order) and its work area as `Area` (start and
-  end in bytes). The buffer address advances by a halfword after the right side, to the area's start when it reaches
-  the end, and never below the start: psx-spx's `MAX(ESA, (BufferAddress+2) AND 7FFFEh)` with the area's end in place of
-  the end of RAM [R psx-spx "SPU Reverb Formula"; A for the generalisation]. A degenerate area of less than a halfword is
-  taken as one halfword [C].
+### Units and Key On/Off
 
-## 3. The extraction, and its gate (measured 2026-10-25)
+- `Voice::start` and `Voice::repeat` are stored as `u32` addresses in **8-byte units** (matching PlayStation `SSA`/`LSAX`; PlayStation 2 halfword addresses shift right by 2 before entering `Voice`). `Voice::address` is the current ADPCM block byte offset.
+- `Voice::key_on(ram)` sets `address = (start * 8) & mask`, clears `counter`, `decoded`, the 31-sample ring (`samples`), the 2-sample ADPCM history (`history`), and `envelope`, enters `Phase::Attack`, and latches `repeat = address >> 3` if the first block's flag byte has bit 2 (loop start) set.
+- `Voice::key_off()` switches `phase` to `Phase::Release`.
 
-What moved: `voice.rs`, `envelope.rs` (with its five tests), `reverb.rs`'s algorithm and `tables.rs`; the noise step,
-which was inline in Diamond's `Spu`, became `noise.rs`; the pitch step with modulation, inline in Diamond's sample,
-became `voice::step`. What Diamond kept: `src/spu/mod.rs` (the registers, the transfer and its FIFO, the capture
-buffers, CD audio, the mix and the clock), `state.rs`, a `reverb.rs` that holds the reverb registers' layout and turns
-them into `Params` each sample, and a `voice.rs` that re-exports the voice and keeps the IRQ address's comparison.
+### SPU-ADPCM Decode
 
-**Every address Diamond computes is the one it computed before** [A]: a start or loop address of at most FFFFh units is
-at most 7FFF8h bytes, inside 512 KiB, so the new masks (from the slice's length, 7FFFFh) change nothing; a loop start
-flag's LSAX is the block's address over 8, below 10000h; the reverb area's end is RAM's end, so the new wrap rule is
-psx-spx's. Diamond's state block keeps its layout: SSA and LSAX are still written as halfwords.
+Each 16-byte block encodes `BLOCK_SAMPLES = 28` signed 16-bit samples in 7 halfwords following a 2-byte header:
+- Byte 0: low nibble `shift` (`0..=12`, values `13..=15` clamp to `9`), bits `4..=6` `filter` (`0..=4`, values `5..=7` use `(0, 0)`).
+- Five filter coefficient pairs (`POS` / `NEG`, divided by 64): `(0, 0)`, `(60, 0)`, `(115, -52)`, `(98, -55)`, `(122, -60)`.
+- Prediction computes each product's `>> 6` shift separately before summing:
+  `sample = clamp((nibble_shifted >> shift) + (h0 * POS[f] >> 6) + (h1 * NEG[f] >> 6), -0x8000, 0x7FFF)`.
+- Words are decoded lazily as the pitch counter reaches them; on block end, any remaining words are decoded so decoder history stays exact, the last 3 samples copy into `samples[0..3]` for Gaussian continuity, and block flag byte 1 controls looping:
+  - Bit 0 (loop end): jump to `repeat * 8`. If bit 1 (loop repeat) is clear, also enter `Phase::Release` and zero `envelope.level`.
+  - Bit 2 (loop start): latched on block entry into `repeat = address >> 3`.
 
-**The gate**, run before any Sapphire code used the crate [M, `cargo test --release` in `diamond` and `diamond-v1`,
-with `EMUSEN_DIAMOND_PS1TESTS` naming ps1-tests' release 158 and `EMUSEN_DIAMOND_DISCS` the tester's bench discs]:
+### Pitch Modulation and Gaussian Interpolation
 
-| What | Result |
-|---|---|
-| `tests/goldens/programs.txt`: every project program, 60 frames, picture, **sound**, state, VRAM and TTY digests | unchanged |
-| `tests/goldens/ps1-tests.txt`: ps1-tests' 48 programs on the open kernel | unchanged |
-| `tests/goldens/discs.txt`: the eight bench discs to frame 3,000, the **sound folded from the start** at every 300th frame | unchanged, 80 anchors |
-| `diamond` lib (the SPU's 23 rule tests unchanged in `src/spu/tests.rs`) | 176 of 176 |
-| `diamond` programs (`spu-voices.s`'s samples pinned, `spu-capture.s`'s records, the transfer's timing) | 84 of 84 |
-| `diamond` shell; `diamond-v1` | 10 of 10; 5 of 5 |
+- `voice::step(pitch, modulator)` computes the 4.12 fixed-point counter increment. When modulated by the previous voice's post-envelope output (`modulator: Some(prev)`):
+  `step = (((pitch as i16 as i64) * (prev as i32 + 0x8000)) >> 15) as u32 & 0xFFFF`, then clamped to `MAX_STEP = 0x4000`.
+- When not in noise mode, `Voice::tick` selects Gaussian index `g = (counter >> 4) & 0xFF` across the 4 samples `s[0..4]` and sums all four products before shifting right by 15:
+  `(GAUSS[0xFF - g]*s[0] + GAUSS[0x1FF - g]*s[1] + GAUSS[0x100 + g]*s[2] + GAUSS[g]*s[3]) >> 15`.
+- `Voice::out` is scaled by the current `envelope.level` **before** the envelope advances for the next sample. `Voice::volumes()` then steps both left/right volume sweeps and returns `[left, right]` as `i32`.
 
-The tests that need a GPU (`renderer`, `precise`, `scaled`, `filtered`, `colour`) were not run, the stage being CPU work
-by the tester's limit of 2026-10-24; they reach no SPU code. The firmware tests that need the player's BIOS
-(`EMUSEN_DIAMOND_FIRMWARE`) were not run either.
+## Envelopes and Volume Sweeps (`envelope.rs`)
 
-**Speed** [M, Diamond's `bench` on Spyro the Dragon, frames 300 to 1,500, three runs each, the base built from
-66771c4f7 beside it, interleaved, other work on the machine]: mean 1.970–2.339 ms a frame before and 1.982–2.224 after,
-every picture, sound and state digest identical (sound `486DDC01FC9337E2`). The change is inside the runs' spread.
+Both ADSR phases and swept volume registers (`bit 15 == 1`) share `Envelope::tick(Rate)`:
+- `Rate` carries `shift` (`0..=31`), `step` (`0..=3`), `decreasing`, `exponential`, and `negative` (inverted phase).
+- Base step magnitude is `7 - rate.step` (bitwise-inverted when `decreasing != negative`), shifted left by `max(0, 11 - shift)`.
+- Counter increment is `0x8000 >> max(0, shift - 11)`.
+- **Exponential increase** slows above `level > 0x6000` (shift `< 10`: `step >>= 2`; shift `== 10`: `step >>= 1`, `increment >>= 1`; shift `>= 11`: `increment >>= 2`).
+- **Exponential decrease** scales `step = (step * level) >> 15`.
+- Rates with `shift * 4 + step != 0x7F` clamp `increment >= 1` (so shifts `26..=30` step every 32,768 samples); rate `0x7F` (`shift = 31, step = 3`) never steps.
+- When `counter + increment` sets bit 15, `counter` resets to `0` and `level` clamps to `[-0x8000, 0x7FFF]` (increasing), `[0, 0x7FFF]` (positive decreasing), or `[-0x8000, 0]` (negative decreasing).
+- Direct volume registers (`bit 15 == 0`) set `current.level = (reg << 1) as i16`.
 
-## 4. Tests
+## Noise Generator (`noise.rs`)
 
-`cargo test` in the crate: **6 of 6** — the envelope's five, moved from Diamond unchanged, and one added at S26 that
-decodes a block through each of the five filters against psx-spx's "Pos/neg Tables" written out as numbers, so that a
-coefficient changed in `tables.rs` fails in the crate itself and not only in Diamond's goldens (§5). Also under
-`test-checked`; clippy clean.
+`Noise::tick(shift, step)` subtracts `(step & 3) + 4` from `timer`. When `timer < 0`, `level` shifts left by 1 with inverted parity of bits `15, 12, 11, 10` in bit 0, and `timer` recharges by `0x2_0000 >> (shift & 0xF)` (applied a second time if still negative).
 
-## 5. Seeded fault (2026-10-25)
+## Reverb (`reverb.rs`)
 
-Filter 1's positive weight changed from 60 to 61 in `tables.rs`: caught by the crate's new filter test, by Diamond's
-`the_capture_program_records_the_voices_as_the_referees_do`, `the_voice_scenes_play_to_their_end` and
-`the_projects_programs_give_their_goldens` (the `spu-capture.s` state digest), and not by Diamond's lib tests, whose
-filter test's values happen to round alike, nor by Sapphire's gate, whose record of a voice is this crate run apart
-(`Sapphire_Native.md` §32.9). Restored.
-
-## 6. Where the PlayStation 2's referee parts from the crate
-
-PCSX2, the one lineage that reaches the SPU2 (`Sapphire_Referees.md` §4.3), departs from these rules in ways the
-PlayStation's referees did not: a key on's first samples, the interpolation's rounding, the prediction's rounding, the
-exponential attack above 6000h, rate 7Fh, and the noise's clock at slow rates; its noise sequence is the crate's. The
-crate keeps psx-spx's and the PlayStation referees' readings; the evidence and the ruling are
-`Sapphire_Disputes.md` D-269.
-
-## 7. What was read
-
-Diamond's `src/spu` whole (the project's own code, moved); `Diamond_SPU.md` §1 to §9; `BlackMoon_R3000.md` §2 and this
-directory's `README.md` for the interface every crate keeps. No emulator's or library's source.
+`Reverb::tick(ram, watch, params, area, enabled, input)` runs at half the sample rate by alternating left and right sides on consecutive samples:
+- Inputs are pushed into a 64-entry ring (`RING = 64`) and decimated through the 39-tap symmetric `FIR` filter (`>> 15`).
+- Each side executes the reflections (`mSAME`, `mDIFF`), 4-tap comb filter (`mCOMB1..4`), and 2-stage all-pass filter (`mAPF1..2`) in hardware access order. When `enabled == false` (reverb master write disable), writes still call `Touch::touch` without modifying sound RAM.
+- All reverb offsets wrap within `Area { start, end }` (degenerate areas `< 2` bytes clamp to 2 bytes). After the right-side sample, `Reverb::address` advances by 2 bytes, wrapping to `area.start` at `area.end` and clamping to `>= area.start`.
+- Half-rate outputs are zero-stuffed into the output rings and upsampled through the 39-tap `FIR` (`>> 14`, saturated to `i16`).

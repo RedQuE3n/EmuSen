@@ -1,14 +1,21 @@
 NAME
-    touch - create an empty file, or update its modified time
+    touch - create an empty file or update its modification time
 
 SYNOPSIS
     touch <path>
 
 DESCRIPTION
-    Creates <path> as an empty file if it doesn't exist yet, or just updates
-    an existing file's last-modified time otherwise - walled to the
-    project's own directory tree (see 'cd'). Refuses a path that's already
-    a directory.
+    Creates an empty file at <path> inside the shell sandbox if it does
+    not exist, or updates its last-modified timestamp if it is an
+    existing file. Refuses paths that name an existing directory.
 
 EXAMPLES
-    touch scratch.txt
+    touch /Logs/scratch.txt
+
+EXIT STATUS
+    0   File created or timestamp updated.
+    1   Missing path, path outside sandbox, path is a directory, or I/O
+        error.
+
+SEE ALSO
+    cp(1), ls(1), nano(1)

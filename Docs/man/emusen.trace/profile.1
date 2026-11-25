@@ -1,5 +1,5 @@
 NAME
-    profile - which routines the instruction budget actually goes to
+    profile - rank emulated routines by exclusive instruction count
 
 SYNOPSIS
     profile on
@@ -9,33 +9,34 @@ SYNOPSIS
     profile <cpu> on|off|clear|top [<n>]
 
 DESCRIPTION
-    Charges every executed instruction to whichever routine is innermost on
-    the call stack at the time, then ranks routines by the count. That makes
-    the figure EXCLUSIVE: a routine that spends all its time inside a call
-    it made scores low, and the callee scores high. Inclusive ('this
-    routine and everything under it') is deliberately not reported, because
-    on a stack that can drift (see 'man bt') an inclusive number compounds
-    the drift while an exclusive one localizes it.
+    Charges every executed instruction to the innermost routine currently
+    on the inferred call stack (exclusive counts, not inclusive) and ranks
+    routines by instruction count alongside call count. Instructions
+    executed with an empty tracked call stack are charged to
+    '(outside any recorded call)'; run 'bt reset' first if the stack has
+    drifted (see bt(1)).
 
-    The unit is instructions, not cycles. Instructions are what the
-    per-instruction seam this rides on can count exactly; a cycle figure
-    would have to be attributed across a boundary the seam doesn't see. For
-    'which routine is hot', the two rank almost identically.
+    Prefixing a processor name from cpus(1) profiles that processor,
+    provided the processor advertises a call stack ('bt' in cpus(1), such
+    as main CPU and SA-1 on SNES).
 
-    Counting only happens while armed, so 'profile on' ... 'profile off'
-    brackets the window being studied. Both the call count and the
-    instruction count are reported per routine, so a routine that is hot
-    because it is slow is distinguishable from one that is hot because it is
-    called constantly.
+    'profile' measures emulated guest code inside the game. For host-side
+    emulator performance counters and CPU profiling, use hwcount(1) or
+    Linux perf.
 
-    Instructions executed while nothing is on the call stack are charged to
-    '(outside any recorded call)'. A large share there is normal and means
-    the code was already running when profiling started - it is not a bug,
-    but it is a reason to arm profiling from a known point and to run 'bt
-    reset' first if the stack looks wrong.
+OPTIONS
+    on
+        Start charging executed instructions to active routines.
 
-    This profiles the GAME, not the emulator. For where EmuSen's own frame
-    time goes, see 'perf' and 'coretop'.
+    off
+        Stop profiling while retaining collected counts for 'top'.
+
+    clear
+        Reset all instruction and call counts to zero while staying armed.
+
+    top [<n>]
+        Print the <n> hottest routines (default 20), resolved through
+        label(1).
 
 EXAMPLES
     profile on
@@ -43,10 +44,10 @@ EXAMPLES
     profile off
     profile sa1 top 10
 
-OTHER PROCESSORS
-    A scope word profiles another chip - see 'man cpus'. Since this is
-    built on the call stack, it only works for a chip that reports one: on
-    an SNES, the main CPU and the SA-1.
+EXIT STATUS
+    0   Command completed (or usage message printed).
+    1   No target attached, processor has no call stack, invalid argument,
+        or session service fault.
 
 SEE ALSO
-    cpus, bt, counters, cov, coretop
+    cpus(1), bt(1), counters(1), cov(1), label(1), hwcount(1)

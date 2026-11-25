@@ -5,12 +5,21 @@ SYNOPSIS
     tilemap <space> <addr> <cols> <rows>
 
 DESCRIPTION
-    Decodes <cols>x<rows> tilemap/nametable entries starting at <addr> as a
-    text grid, one label per cell - complementary to 'tile' (which decodes
-    one tile's actual pixel content). The caller supplies the exact base
-    address (see BG1SC/etc via 'regs') - this doesn't resolve BG-layer-to-
-    tilemap-address mapping itself. Built to confirm a menu cursor's
-    position or a HUD change numerically, without eyeballing a screenshot.
+    Decodes a <cols> by <rows> grid of tilemap or nametable entries
+    starting at <addr> in memory space <space>, printing one core-
+    formatted label per cell. Numeric arguments are parsed as hex.
+
+    The caller supplies the exact base address (for example, from BG1SC or
+    equivalent registers in regs(1)); 'tilemap' does not resolve
+    background-layer register mappings automatically.
 
 EXAMPLES
-    tilemap VRAM 0 32 32
+    tilemap VRAM 0 20 20
+
+EXIT STATUS
+    0   Tilemap grid printed (or usage message printed).
+    1   No target attached, unknown space, invalid argument, or session
+        service fault.
+
+SEE ALSO
+    tile(1), pal(1), sprites(1), regs(1), mem(1), spaces(1)

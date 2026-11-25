@@ -1,0 +1,13 @@
+NAME
+    log - master logging on/off switch
+
+SYNOPSIS
+    log off
+    log on
+    log status
+
+DESCRIPTION
+    Silences (or restores) every trace/diagnostic logging flag across the
+    project at once, without changing any of their individually-set values -
+    'log on' afterward brings back exactly whatever was individually enabled
+    before. A global settings toggle, not scoped to a particular core instance.

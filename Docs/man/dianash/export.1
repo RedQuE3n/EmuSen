@@ -1,18 +1,28 @@
 NAME
-    export - set a shell variable
+    export - set and export shell variables
 
 SYNOPSIS
-    export NAME[=value]
+    export NAME[=value]...
 
 DESCRIPTION
-    Real bash exports a variable into child processes' environment; there is
-    no such thing here (this shell never spawns a subprocess), so 'export' is
-    just a plain variable assignment - or a no-op declaration if no '=value'
-    is given and the name is already set. Kept purely so a script written
-    with real bash habits ('export FOO=bar') still does something sane
-    instead of erroring as an unknown command. Plain 'NAME=value' (no
-    'export' keyword) works exactly the same way.
+    Marks each NAME for export and, when '=value' is provided, assigns
+    value to NAME in the current shell's variable table. If '=value' is
+    omitted and NAME is unset, NAME is created as an empty string and
+    marked exported.
+
+    Exported variables are passed into the environment of child programs
+    spawned by the shell (such as nano(1)), alongside the shell-provided
+    variables DIANASH_ROOT, DIANASH_USER, and DIANASH_SHELL. Plain
+    'NAME=value' sets a variable only within the shell without exporting
+    it to child programs.
 
 EXAMPLES
     export FOO=bar
+    export EDITOR_MODE
     echo $FOO
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    unset(1), source(1), nano(1)

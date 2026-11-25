@@ -1,0 +1,111 @@
+NAME
+    impact - the units a change can affect, with the rule and the file
+
+SYNOPSIS
+    impact [--base REV] [--head REV] [--tier T] [--depth N] [--also TERMS] [--map-age DAYS] [--inputs FILE] [--lunap-base REV] [--lunap-head REV] [--repo DIR]
+    impact --explain FILE [--tier T]
+    impact --base REV --head REV --blast FILE
+    impact --base REV --head REV --format blast
+
+DESCRIPTION
+    A command of the emusen.testing module. It reads the files that
+    differ between the merge base of --base (default WiseMan) and --head
+    (default HEAD, with the working tree's uncommitted changes) and prints
+    one line per unit, tab-separated:
+
+        kind    unit    reason    via
+
+    kind is cargo or dotnet; unit a crate folder or a test class's full
+    name; reason the rule that chose it; via the file that brought it.
+    The rules, in order, the first reason for a unit kept:
+
+        recording  a changed recording (a line of kind 'recording' in
+                   Testing/inputs.json) selects its owner, or, when the
+                   owner is mapped by case and the map has the group the
+                   recording's name keys (Main-1280x800.spec to
+                   Owner#Main), that group alone; a file ending as a
+                   recording does (.spec, .golden, ...) that no line owns
+                   selects the tier's whole set
+        always     a test class's own file selects the class; a unit that
+                   failed in this branch's last trial is selected again
+        declared   a folder line of Testing/inputs.json matching the file
+                   adds its units and narrows a reached test project to
+                   them; a line on another crate the closure reaches adds
+                   its units, and such lines narrow only when every crate
+                   through which the closure enters C# (an edge to a
+                   project or an MSBuild file) has one. An entry covered:PATHSPEC
+                   adds the classes the coverage map saw execute the files
+                   the pathspec names (a Rust crate's C# surface, which
+                   coverlet cannot see from the Rust side), and without a
+                   map adds nothing and narrows nothing. For a covered
+                   file only a line's cargo: and lunap entries apply
+        covered    a changed .cs file the coverage map has seen selects
+                   the classes that executed it (`man coverage`), plus
+                   every class the map has no report for. A .cs file the
+                   change adds selects the classes that executed the
+                   changed files the map has seen that name its types,
+                   directly or through other added files; an added file
+                   nothing names, a file never executed, or a file that
+                   is not C# falls to the rules below. A unit CLASS#KEY
+                   is one group of a class's cases, mapped by case, run
+                   by its display name
+        graph      the file's owner (its nearest crate or project, or the
+                   project that imports it) and everything in its reverse
+                   closure over Cargo path dependencies, workspaces,
+                   ProjectReference and Import, and the host's crate edges
+                   (the parts of xtask/libraries.tsv); a test project the
+                   closure reaches and no line narrows is selected whole
+        closed     a file no rule claims selects the tier's whole set:
+                   unknown is closed, never open
+
+    A line of kind 'none' (documentation, ignore lists, CI files) claims a
+    file and selects nothing. A tier's named_only classes (WindowFitAudit-
+    Tests at land) are selected only by a line naming them, or by the
+    covered rule when they executed the file; its excluded tags (nightly)
+    are left out. --depth limits the reverse closure, as the fast tier
+    does with 1. --also TERMS adds the classes the |-separated filter
+    terms name, with the reason 'given'. --inputs FILE reads the lines
+    from that file instead of the head revision's Testing/inputs.json,
+    to try a line before committing it or to replay history with
+    today's lines.
+
+    The toolkit's own changes can count too: with --lunap-base REV the
+    sibling LunaP checkout that LunaP.props names is diffed from REV to
+    --lunap-head (default HEAD, with its uncommitted changes), and each
+    file enters as lunap:<path>, which the map records the toolkit's
+    files under: a file the map has seen selects the units that
+    executed it, and one it has never seen closes to the tier's whole
+    set, never to nothing. The count is said on standard error. Off by
+    default (none): held on 2026-11-03 while LunaP's move into this
+    repository is decided, which would make the sibling diff
+    unnecessary.
+
+    The map is used when its revision is at most --map-age days (default
+    1) older than the merge base of --base and --head; an older map, or
+    none, is said on standard error and the covered rule is off, so the
+    graph answers as before. The map is rebuilt by the nightly.
+
+    --format blast prints the selection as blast.sh prints its answer:
+    'dotnet filter: ' with a FullyQualifiedName~ term per class and the
+    tier's exclusion, 'cargo: ' per crate, 'lunap: selected', and
+    'closed: FILE' for each file that fell to the closed rule, which is
+    where land.sh lets blast.sh's map answer instead.
+
+    --explain FILE prints the file's owner, what its closure reaches, the
+    lines it matches and its selection. --blast FILE compares the
+    selection with what blast.sh printed for the same revisions: each
+    unit as 'agree', 'impact' (impact only) or 'blast' (blast.sh only),
+    blast.sh's filter terms resolved to classes under its own exclusions,
+    its unmapped files, and a summary line. land.sh logs this while the
+    two run side by side.
+
+    Terms that name no class are reported on standard error. See
+    EmuSen_Testing.md §3.2 and §6.
+
+EXAMPLES
+    impact
+    impact --base WiseMan --head approve-fix --tier land
+    impact | grep -c '^dotnet'
+    impact --explain EmuSen.Mistress/Views/CoresWindow.axaml.cs
+    impact --base f1592d39e^1 --head f1592d39e^2 --blast blast.txt | grep -v ^agree
+    impact --base WiseMan --head pausecard --format blast | sed -n 's/^dotnet filter: //p'

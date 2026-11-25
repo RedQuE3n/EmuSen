@@ -1,24 +1,38 @@
 NAME
-    kill - remove a breakpoint, watch, or session by its 'ps' id
+    kill - cancel a job, remove a breakpoint or watch, or kill a session
 
 SYNOPSIS
     kill <id>
 
 DESCRIPTION
-    One verb for tearing down whatever 'ps' just showed, instead of needing
-    to know which of 'bp remove'/'watch remove'/'tmux kill' owns a given id -
-    all three of those still work exactly as before, this just routes to
-    whichever one already owns <id>'s kind of thing, based on its shape:
-    'bp<N>' removes breakpoint N, 'watch<N>' removes watch N, and anything
-    else is looked up as a session name (same rules as 'tmux kill' - can't
-    kill the only remaining session; killing the CURRENT session switches you
-    to whichever one is left, the same hand-off 'tmux kill' already does).
-    A session literally NAMED like 'bp3' or 'watch1' is only reachable this
-    way by accident of that ambiguity - 'kill' always tries the breakpoint/
-    watch reading of an id shaped like one first; use 'tmux kill <name>'
-    directly for a session whose name collides with that shape.
+    Terminates or removes an active entry shown by ps(1) using its id.
+    kill routes <id> to the module claiming its prefix (case-insensitive)
+    before falling back to session names:
+
+    bp<N>       Remove breakpoint N (emusen.trace).
+    watch<N>    Remove watch N (emusen.trace).
+    chd<N>      Cancel background CHD job N (emusen.library).
+    pkg<N>      Cancel background package job N (emusen.library).
+    rom<N>      Cancel background ROM job N (emusen.library).
+    cores<N>    Cancel background core job N (emusen.cores).
+    scrape<N>   Cancel background scrape job N (emusen.scrape).
+    <session>   Destroy named tmux(1) session.
+
+    Killing a session follows the same rules as 'tmux kill': the last
+    remaining session cannot be killed, and killing the active session
+    switches to a remaining one. If a session's name collides with a
+    claimed job prefix, use 'tmux kill <name>' directly.
 
 EXAMPLES
     kill bp1
     kill watch3
+    kill scrape1
     kill investigation
+
+EXIT STATUS
+    0   Target job, breakpoint, watch, or session was removed.
+    1   Missing id, unknown id, no session manager, or refusal to kill
+        the last remaining session.
+
+SEE ALSO
+    ps(1), tmux(1), bp(1), watch(1)

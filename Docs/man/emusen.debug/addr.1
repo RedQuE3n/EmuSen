@@ -1,36 +1,28 @@
 NAME
-    addr - decode a CPU-bus address
+    addr - decode a CPU-bus address into its backing target
 
 SYNOPSIS
     addr <addr>
 
 DESCRIPTION
-    Says what a 24-bit CPU-bus address actually reaches: a ROM file offset,
-    a RAM offset, or a hardware register. The CPU's view and the ROM file's
-    layout are different coordinate systems, and every task that crosses
-    between them - comparing against a ROM in a hex editor, writing a patch,
-    reading a disassembly someone else produced - needs the translation.
-    Doing it by hand means knowing the mapper, which is exactly the detail
-    worth not having to remember.
+    Decodes a hex CPU-bus address through the loaded core's cartridge and
+    bus mapper, reporting whether it maps to a ROM file offset, a RAM
+    offset, a hardware register, or unmapped space.
 
-    The decode is the cartridge's own, the same one a real read goes
-    through, so it is right for whatever mapper this ROM uses rather than
-    assuming LoROM. ROM offsets are reported modulo the ROM's real size,
-    matching how an undersized ROM mirrors on hardware.
-
-    Addressable results print a ready-made 'mem' command underneath, since
-    looking at the bytes is almost always the next thing wanted. A hardware
-    register reports as a register rather than being given a fake offset -
-    there is nothing there to point 'mem' at.
-
-    An address the cartridge does not map and the bus does not claim
-    reports as unmapped, which is itself an answer: a pointer that decodes
-    to nothing is a pointer that was computed wrong.
+    ROM offsets are reported modulo the actual ROM size, matching hardware
+    mirroring. When the result maps to an addressable memory space, a
+    matching 'mem' command is printed underneath for quick inspection.
+    Hardware registers and unmapped addresses are reported directly
+    without a synthetic offset.
 
 EXAMPLES
     addr 808000
     addr 7E0DB3
     addr 002100
 
+EXIT STATUS
+    0   Address decoded (or usage message printed).
+    1   No target attached, invalid hex address, or session service fault.
+
 SEE ALSO
-    mem, dump, spaces, vectors, cheat
+    mem(1), dump(1), spaces(1), vectors(1), cheat(1)

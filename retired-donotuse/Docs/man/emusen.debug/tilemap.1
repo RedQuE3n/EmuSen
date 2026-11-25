@@ -1,0 +1,16 @@
+NAME
+    tilemap - decode a grid of tilemap entries as text
+
+SYNOPSIS
+    tilemap <space> <addr> <cols> <rows>
+
+DESCRIPTION
+    Decodes <cols>x<rows> tilemap/nametable entries starting at <addr> as a
+    text grid, one label per cell - complementary to 'tile' (which decodes
+    one tile's actual pixel content). The caller supplies the exact base
+    address (see BG1SC/etc via 'regs') - this doesn't resolve BG-layer-to-
+    tilemap-address mapping itself. Built to confirm a menu cursor's
+    position or a HUD change numerically, without eyeballing a screenshot.
+
+EXAMPLES
+    tilemap VRAM 0 32 32

@@ -5,13 +5,22 @@ SYNOPSIS
     writers <addr> [<scanstart> <scanlen>]
 
 DESCRIPTION
-    Scans CpuBus (default: <addr>'s own bank, $8000-$FFFF) for instructions
-    statically storing to <addr> - answers 'what code exists that's capable
-    of writing here', regardless of whether that write path was ever
-    actually reached during a traced run (which is all a live 'watch' can
-    tell you). Only finds statically-known addressing modes (absolute/
-    absolute-long); indexed/indirect writes aren't visible to static
-    analysis and won't show up here - use 'watch' for those.
+    Scans CpuBus for instructions that statically store to hex address
+    <addr>. By default the scan covers <addr>'s own bank from $8000 to
+    $FFFF; supply hex <scanstart> and <scanlen> to scan another range.
+
+    Only statically encoded addressing modes (absolute and absolute-long)
+    are detected. Indexed or indirect writes are not visible to static
+    analysis; use watch(1) or 'bp write' in bp(1) for runtime write
+    detection.
 
 EXAMPLES
     writers 13c6
+    writers 13c6 808000 8000
+
+EXIT STATUS
+    0   Scan completed (or usage message printed).
+    1   No target attached, invalid hex argument, or session service fault.
+
+SEE ALSO
+    readers(1), callers(1), watch(1), bp(1), disasm(1)

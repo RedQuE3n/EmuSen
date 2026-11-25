@@ -1,5 +1,5 @@
 NAME
-    log - master logging on/off switch
+    log - toggle the global diagnostic logging master switch
 
 SYNOPSIS
     log off
@@ -7,7 +7,30 @@ SYNOPSIS
     log status
 
 DESCRIPTION
-    Silences (or restores) every trace/diagnostic logging flag across the
-    project at once, without changing any of their individually-set values -
-    'log on' afterward brings back exactly whatever was individually enabled
-    before. A global settings toggle, not scoped to a particular core instance.
+    Controls the process-wide master logging switch across all trace and
+    diagnostic log flags without altering any individual flag's configured
+    setting. Turning logging off silences all diagnostic output; turning
+    it back on restores whichever individual flags were enabled before.
+
+OPTIONS
+    off
+        Disable diagnostic logging globally without changing individual
+        flag settings.
+
+    on
+        Re-enable diagnostic logging using each flag's saved state.
+
+    status
+        Print whether the master logging switch is currently on or off.
+
+EXAMPLES
+    log status
+    log off
+    log on
+
+EXIT STATUS
+    0   Command completed (or usage message printed).
+    1   Session service fault.
+
+SEE ALSO
+    trace(1), bp(1), framelog(1)

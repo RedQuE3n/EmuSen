@@ -1,0 +1,52 @@
+NAME
+    profile - which routines the instruction budget actually goes to
+
+SYNOPSIS
+    profile on
+    profile off
+    profile clear
+    profile top [<n>]
+    profile <cpu> on|off|clear|top [<n>]
+
+DESCRIPTION
+    Charges every executed instruction to whichever routine is innermost on
+    the call stack at the time, then ranks routines by the count. That makes
+    the figure EXCLUSIVE: a routine that spends all its time inside a call
+    it made scores low, and the callee scores high. Inclusive ('this
+    routine and everything under it') is deliberately not reported, because
+    on a stack that can drift (see 'man bt') an inclusive number compounds
+    the drift while an exclusive one localizes it.
+
+    The unit is instructions, not cycles. Instructions are what the
+    per-instruction seam this rides on can count exactly; a cycle figure
+    would have to be attributed across a boundary the seam doesn't see. For
+    'which routine is hot', the two rank almost identically.
+
+    Counting only happens while armed, so 'profile on' ... 'profile off'
+    brackets the window being studied. Both the call count and the
+    instruction count are reported per routine, so a routine that is hot
+    because it is slow is distinguishable from one that is hot because it is
+    called constantly.
+
+    Instructions executed while nothing is on the call stack are charged to
+    '(outside any recorded call)'. A large share there is normal and means
+    the code was already running when profiling started - it is not a bug,
+    but it is a reason to arm profiling from a known point and to run 'bt
+    reset' first if the stack looks wrong.
+
+    This profiles the GAME, not the emulator. For where EmuSen's own frame
+    time goes, see 'perf' and 'coretop'.
+
+EXAMPLES
+    profile on
+    profile top 10
+    profile off
+    profile sa1 top 10
+
+OTHER PROCESSORS
+    A scope word profiles another chip - see 'man cpus'. Since this is
+    built on the call stack, it only works for a chip that reports one: on
+    an SNES, the main CPU and the SA-1.
+
+SEE ALSO
+    cpus, bt, counters, cov, coretop

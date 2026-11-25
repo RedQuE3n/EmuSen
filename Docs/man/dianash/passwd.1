@@ -1,20 +1,28 @@
 NAME
-    passwd - set an account's password
+    passwd - set an account password
 
 SYNOPSIS
     passwd <newpassword>
     passwd <name> <newpassword>
 
 DESCRIPTION
-    Stores a hash of <newpassword> for your OWN account (no other arguments)
-    or, root only, for <name>'s account. NOT checked by 'su' or anything
-    else today - see that command's own man page for why. No masked/
-    interactive prompt either: there's no reliable blocking-input read
-    across every host this shell runs under (a real terminal, a GUI
-    TextBox-driven console, a headless test), so the new password is just a
-    plain trailing argument, the same way 'bp add'/'watch add' take theirs -
-    it will show up in this shell's own 'history' in plain text.
+    Stores a password hash for the current session's account (one
+    argument) or, when running as root, for <name>'s account (two
+    arguments).
+
+    Passwords are passed as a command argument rather than read from a
+    masked prompt, so they appear in command history(1). Account
+    passwords are stored in memory for the lifetime of the process and
+    are not currently prompted for by su(1).
 
 EXAMPLES
-    passwd hunter2
-    passwd kid hunter2
+    passwd newpass
+    passwd guest guestpass
+
+EXIT STATUS
+    0   Password updated.
+    1   Invalid usage, non-root attempt to change another account's
+        password, or target account does not exist.
+
+SEE ALSO
+    su(1), useradd(1), userdel(1), whoami(1)

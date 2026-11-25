@@ -1,0 +1,229 @@
+NAME
+    cheat - manage RAM pokes and ROM patches
+
+SYNOPSIS
+    cheat add <code> [description]
+    cheat poke <space> <addr> <value> [description]
+    cheat gg <code> [description]
+    cheat rompatch <addr> <value> [<compare>|-] [description]
+    cheat list
+    cheat master [on|off]
+    cheat enable <id>
+    cheat disable <id>
+    cheat remove <id>
+    cheat clear
+    cheat save <name>
+    cheat load <name>
+    cheat files
+
+DESCRIPTION
+    Unifies two SNES-specific cheat mechanisms under one command: RAM pokes
+    (Pro Action Replay/Game Wizard style) and ROM-read patches (Game Genie
+    style). 'add' decodes an 8-character code, guessing which format it is
+    from its punctuation (best-effort, not a guarantee - use 'gg' or 'poke'
+    directly if the guess is wrong). 'poke'/'rompatch' add a cheat directly
+    without code decoding, e.g. for an address already found with 'search'.
+    'enable'/'disable' toggle a cheat without removing it.
+
+    Some consoles' codes are wider than a byte or longer than a line - the
+    N64 GameShark's 16-bit writes, tests and repeaters. 'add' takes such a
+    code whole and makes ONE cheat of all its lines. The shell splits on
+    spaces, so join the lines with '+' and leave the space out of each:
+    'cheat add D00002000005+810001001234 lives'. A line the console's
+    format will not apply is refused with the reason, not stored.
+
+THE MASTER SWITCH
+    'cheat master off' silences every cheat at once; 'cheat master on'
+    brings them back. It is a SECOND AXIS, not a bulk edit: it does not
+    touch any individual cheat's own enabled flag, so switching off to
+    check whether a cheat is causing a bug and switching back on returns
+    exactly the arrangement you had, however many were on. A cheat added
+    while it is off is inert until it is switched back on. 'cheat list'
+    says so at the top while it is off, because otherwise every [on] in
+    that listing would be a lie.
+
+    It is runtime state and is NOT saved. 'cheat save' does not write it
+    and 'cheat load' does not set it: a set saved months ago with the
+    switch off would otherwise silently kill every cheat in a session that
+    had it on. It starts on, which costs nothing - everything imports
+    disabled anyway, so nothing is applying until you say so.
+
+    'save'/'load' persist a named set to /etc/EmuSen/cheats/<name>.json - see
+    'man hier'. That file is ordinary JSON with addresses and bytes written
+    as hex text, so it can be written or corrected by hand from this shell;
+    an entry whose hex doesn't parse is skipped and reported, and the rest of
+    the file still loads. 'load' ADDS to whatever is already loaded rather
+    than replacing it - run 'cheat clear' first to replace. 'files' lists the
+    saved sets. Nothing is loaded automatically: a cheat set applies only
+    when you ask for it, so a saved file can't silently alter a later run.
+
+THE WRITE MODEL
+    A cheat is one description, one enable flag, and a LIST of writes. That
+    matters because real cheats are rarely one address: 'max every item' is
+    a run of twenty, and they have to arm and disarm together. One cheat,
+    one ID, one toggle, however many addresses it drives - 'cheat list'
+    prints a header line and then one indented line per write.
+
+    Each write carries:
+
+        width         1, 2 or 4 bytes. A wide write covers consecutive
+                      addresses.
+        byte order    little-endian unless the write says otherwise. Only
+                      meaningful above one byte.
+        type          set, increase or decrease. Increase/decrease read what
+                      is there and adjust it, so they accumulate every frame
+                      - 'increase by 1' climbs, it does not hold at 1.
+                      Or a TEST - if-equal / if-not-equal - which writes
+                      nothing: the next write in the cheat that is not a
+                      test happens only if it passes, and a run of tests
+                      must all pass. 'cheat list' prints one as 'if ... =='.
+        bit position  makes the write touch a single bit instead of whole
+                      bytes, leaving the other seven alone. For flag bytes
+                      where poking the whole byte would clobber unrelated
+                      state.
+        repeat        count, address stride and value stride. One write can
+                      cover a whole run: 8 repetitions stepping the address
+                      by 2 pokes every other byte of an inventory table.
+
+    Two combinations are refused rather than half-implemented. A ROM patch
+    cannot increase or decrease - the substitution happens at read time and
+    the real byte is never written, so there is nothing to accumulate into.
+    And a compare byte only works on a single-byte ROM patch, because the
+    read hook is handed one byte at a time and cannot check a compare that
+    spans several addresses; allowing it would give a torn patch where the
+    first byte declines and the rest apply.
+
+IMPORTING RETROARCH CHEATS
+    'cheat import <path.cht>' reads RetroArch/libretro .cht files - the
+    format the libretro cheat database ships in, one file per game. Both
+    shapes a .cht can take are handled:
+
+        cheatN_code       the core-native code string, hex, with several
+                          codes joined by '+' becoming one multi-write cheat.
+                          Decoded through the same code decoder 'cheat add'
+                          uses, so the per-system layout is never hardcoded.
+        cheatN_address    RetroArch's own handler fields - cheat_type,
+                          memory_search_size, address_bit_position,
+                          big_endian, repeat_count and the two strides. These
+                          are DECIMAL in a .cht file, unlike the code string.
+
+    memory_search_size 3/4/5 are 1/2/4-byte writes; 0-2 are sub-byte and
+    become bit writes at address_bit_position. cheat_type 0 means the entry
+    exists but does nothing, and is skipped rather than imported as a no-op.
+    An entry that cannot be decoded is skipped and counted; the rest of the
+    file still imports.
+
+    Everything imports DISABLED. A database file routinely holds dozens of
+    cheats and switching them all on at once is never what anyone meant -
+    'cheat list' then 'cheat enable <id>' picks the ones you want.
+
+    'cheat export <path.cht>' writes RAM pokes back out in RetroArch's
+    handler form, which round-trips every field above. ROM patches are
+    skipped and counted: RetroArch's model has no ROM-read substitution, so
+    there is nothing honest to write for them. A cheat containing a test
+    is skipped and counted too: one handler entry holds one write, and a
+    test with the write it guards dropped would be a different cheat.
+
+THE CHEAT DATABASE
+    'cheat db' works over a DIRECTORY TREE of .cht files - one file per
+    game, in per-system folders, which is exactly how RetroArch stores its
+    cheats. EmuSen ships no cheat data of its own and redistributes none.
+    There are two ways to have a database, and neither involves us hosting
+    anything:
+
+        Use one you already have. Set AppSettings.CheatDatabaseDirectory to
+        an existing RetroArch cheats folder and it is indexed as-is - no
+        copying, no conversion. Unset, it defaults to home/Cheats (see
+        'man hier').
+
+        'cheat db update' downloads one. It fetches the same archive
+        RetroArch's own Online Updater does, straight from libretro to your
+        machine, on your explicit request. The data is licensed CC BY-SA 4.0;
+        the codes themselves were aggregated from community sources,
+        substantially GameHacking.org, and credit belongs to their original
+        authors. That notice is printed with the result rather than buried
+        here, because attribution is a condition of the licence.
+
+    Only .cht entries are extracted, and an archive entry that tries to
+    write outside the target directory is skipped rather than followed.
+
+    'cheat db' with no argument reports where the database is and how many
+    files per system. 'find' searches it; 'load' imports the best match,
+    disabled, the same way 'import' does. Matching tolerates a loaded ROM's
+    file name - 'cheat db load Super Mario World (USA).sfc' finds
+    'Super Mario World (USA).cht' - and prefers an exact name over a prefix
+    over a substring, so a game whose title is a prefix of another still
+    wins for its own name.
+
+    In EmuSen.Mistress the same thing is on the menu bar at Settings > Cheat
+    Database..., which shows the folder, what is installed per system, the
+    attribution notice, and a download button. Selecting a system there
+    lists that system's games (with a filter box - a real SNES folder holds
+    several thousand), and picking one loads its cheats into the active
+    list, disabled, the same way 'cheat db load' does. It REPLACES that
+    list rather than adding to it, unlike the command: picking the same
+    game twice from a list is an ordinary thing to do and must not double
+    every cheat, whereas typing the command twice is not. An Active
+    Cheats... button sits next to Close, since turning a list on is what
+    anyone does next.
+
+    Settings > Active Cheats... is the GUI half of 'list', 'enable',
+    'disable', 'remove', 'clear' and 'master' - one checkbox per cheat, the
+    master switch, and a box to type a code into using the same format
+    guess 'add' makes. That list is owned by the frontend rather than by
+    the running core, so it survives a Reset and can be built before any
+    ROM is loaded; loading a DIFFERENT ROM clears it, since one game's
+    addresses mean nothing in another. See EmuSen_Settings_Reference.md
+    section 4.14.
+
+    Its Apply Cheats button is not an arm/commit step - ticking a box
+    already takes effect on the next frame, the same as 'cheat enable'.
+    Apply forces one poke immediately (useful while paused, where no next
+    frame is coming) and reports how many landed; it also turns the master
+    switch back on, since applying cheats that the switch would swallow is
+    not what the button says.
+
+    Save Cheat List writes the list under the running game's file name,
+    the same store 'cheat save' uses - so 'cheat load <game>' finds it
+    from the shell. Mistress reloads it by itself the next time that game
+    starts, which is the point: a saved list is not re-imported from the
+    database every session. It never overwrites a list already in hand, so
+    a Reset or a close-and-reopen keeps whatever was edited since. See
+    section 4.15.
+
+PRUNING THE DATABASE
+    The libretro database ships around 44 systems and a build with one
+    core can use one of them, so most of a 250MB download is dead weight
+    that every database scan still walks. `cheat db prune` deletes the
+    system folders no core in this build claims.
+
+    It is core-agnostic: each core declares the cheat-database folder
+    names it covers (CoreDescriptor.CheatSystems), and the pruner keeps
+    those and drops the rest - so a second core is one registry entry
+    rather than an edit to the pruner. Venus claims both the main SNES
+    folder and Satellaview, which is the same cartridge hardware.
+
+    Deleting is irreversible and the only way back is another 250MB
+    download, so a bare `cheat db prune` only ever lists what would go;
+    `--apply` is what actually deletes. It refuses outright rather than
+    emptying the database in the two cases that would: when no core
+    claims any system at all, and when nothing on disk matches anything
+    claimed (a wrong folder, or a wrong mapping). In Mistress the same
+    thing is the Prune Unsupported button, whose first click reports and
+    whose second deletes; a finished download offers it, since that is
+    when the 250MB actually lands. See section 4.16.
+
+EXAMPLES
+    cheat poke WRAM 9c 63 infinite lives
+    cheat list
+    cheat disable 1
+    cheat master off
+    cheat save zelda
+    cheat clear && cheat load zelda
+    cheat import "Super Mario World (USA).cht"
+    cheat export my-cheats.cht
+    cheat db update
+    cheat db find mario
+    cheat db prune
+    cheat db prune --apply
+    cheat db load Super Mario World (USA)

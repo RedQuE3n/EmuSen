@@ -1,11 +1,21 @@
 NAME
-    spaces - list available memory spaces
+    spaces - list memory spaces exposed by the attached core
 
 SYNOPSIS
     spaces
 
 DESCRIPTION
-    Lists every named memory space the current core's IDebugTarget exposes -
-    the <space> argument every mem/write/watch/dump/... command takes - along
-    with each one's size and whether it's writable. Run this first if a
-    space name isn't already known.
+    Lists every named memory space published by the attached core along
+    with its byte size and access mode (R/W or R/O). These names are the
+    <space> arguments accepted by mem(1), write(1), dump(1), load(1),
+    search(1), memfind(1), snapshot(1), watch(1), and bp(1).
+
+EXAMPLES
+    spaces
+
+EXIT STATUS
+    0   Space list printed.
+    1   No target attached or session service fault.
+
+SEE ALSO
+    mem(1), write(1), dump(1), load(1), search(1), memfind(1), watch(1)

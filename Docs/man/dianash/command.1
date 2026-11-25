@@ -1,20 +1,32 @@
 NAME
-    command - run a command as itself, or say whether it exists
+    command - run a command without alias expansion, or check existence
 
 SYNOPSIS
     command <name> [args...]
     command -v <name>...
 
 DESCRIPTION
-    'command <name>' runs <name> with its arguments without mapping it
-    through the shell's aliases: 'command quit' is refused as an unknown
-    command where 'quit' alone shuts the shell down. The language's own
-    names still mean themselves.
+    With no options, runs <name> with [args...] while bypassing shell
+    aliases. For example, 'command quit' fails as an unknown command even
+    though 'quit' is an alias for shutdown(1). Built-in language commands
+    still resolve to themselves.
 
-    'command -v' prints each name that would run, one to a line, and
-    nothing for one that would not; the exit status is 1 when any would
-    not, so it serves as a test in an 'if'.
+    With -v, prints each <name> that resolves to a builtin, alias, or
+    command, one per line, and prints nothing for names that do not
+    resolve.
+
+OPTIONS
+    -v  Print resolvable command names instead of executing them.
 
 EXAMPLES
     command echo hello
     if command -v grep; then echo found; fi
+
+EXIT STATUS
+    0   In execution mode, the invoked command's exit status (0 on
+        success). With -v, every named command was found.
+    1   Unknown command, invalid usage, or with -v at least one name was
+        not found.
+
+SEE ALSO
+    which(1), help(1), dianash(1)

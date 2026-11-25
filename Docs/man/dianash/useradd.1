@@ -1,14 +1,20 @@
 NAME
-    useradd - add a new account
+    useradd - create a shell account
 
 SYNOPSIS
     useradd <name>
 
 DESCRIPTION
-    Adds <name> to the process-wide account directory shared by every tmux
-    session (like a real /etc/passwd) - root only. In-memory only, like
-    every other piece of DianaSh state; accounts don't survive a process
-    restart yet. See 'su' to switch to the new account.
+    Adds <name> to the process-wide account directory shared across all
+    tmux(1) sessions. Only the 'root' account may add users. Accounts
+    are stored in memory for the lifetime of the shell process.
 
 EXAMPLES
-    useradd kid
+    useradd guest
+
+EXIT STATUS
+    0   Account added.
+    1   Missing name, caller is not root, or account already exists.
+
+SEE ALSO
+    userdel(1), su(1), passwd(1), who(1), whoami(1)

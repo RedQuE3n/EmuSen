@@ -1,16 +1,20 @@
-# Endou (Sega Master System)
+# Endou (Sega Master System, Mark III, SG-1000, and Game Gear)
 
-The Sega Master System core, crate `endou`, in Rust on the core ABI v1, with the SG-1000's cartridges as a second
-system, offered to players since stage 7 (2026-10-19). Stage 2 (2026-10-19) runs the machine: Beryl's Z80 on the bus, the cartridge boards,
-the I/O chip, the Pause and Reset buttons, a frame at a time; stage 3 (2026-10-19) gives the Master System its picture
-through Beryl's `beryl-sms-vdp`; stage 4 (2026-10-19) the SG-1000 its TMS9918A and the Mark III as its second model; stage 5 (2026-10-19) mixes and
-outputs Beryl's SN76489 (`src/sound.rs`); stage 6 (2026-10-19) adds the open boot program (`src/boot/`); stage 7
-(2026-10-19) the Game Genie's patches, the battery table from SMS Power!'s tag and the kit's sample, `kit/sms-sample.txt`.
-Stage 8 (2026-10-19) gives the debugger the Z80, its bus as a space and four units (`src/debug.rs`), the views being
-the `sms` pack's in `emusen-systems`.
-Its test programs are in `programs/`, assembled with Beryl's Z80 assembler.
-The plan is `Man pages/Hardware/Sega/Endou - Master System/Endou_Plan.md`, the build record `Endou_Native.md` beside it.
+Rust Core ABI v1 emulation core (`endou`) for the Sega Master System (`sms`), Mark III, SG-1000 (`sg1000`), and Game Gear (`gg`, currently flagged in-development in the system descriptor).
 
-Renamed from **Endymion**, which is now the audio output layer (`EmuSen.Endymion`) — see
-`Man pages/EmuSen_Core_Naming_Scheme.md` §3 for the full core naming scheme, and §10 for
-why the name moved.
+## Features and Architecture
+
+- **CPUs & Devices (`Beryl-HW`)**: `beryl-z80` main CPU, `beryl-sms-vdp` (`315-5124`, `315-5246`, `315-5378`, `TMS9918A`), `beryl-sms-colours`, `beryl-sn76489` (Sega integrated and discrete variants with Game Gear stereo), and `beryl-fm-tables`.
+- **Console Models (`src/model.rs`)**: Master System I, Master System II, Japanese Master System (built-in YM2413), Mark III, Mark III + FM Sound Unit, SG-1000, and export/Japanese Game Gear.
+- **Audio (`src/sound.rs`, `src/opll.rs`)**: SN76489 PSG and YM2413 (OPLL) FM synthesis with port `$F2` routing, resampled to 48 kHz stereo via `emusen-native`'s step synthesizer.
+- **Cartridges (`src/board.rs`, `src/cart.rs`, `src/eeprom.rs`)**: Plain, SG-1000 RAM, Sega, Codemasters, and Game Gear `93C46B` serial EEPROM boards, plus battery saves and Game Genie patches.
+- **Game Gear (`src/gg.rs`, `src/ggio.rs`)**: Native 160×144 12-bit LCD window, Master System compatibility 160×146 subpixel/vertical LCD shrink, ports `$00`–`$06`, stereo routing, and TH H-counter latch.
+- **Open Boot ROMs (`src/boot/`, `build.rs`)**: Compile-time assembled 8 KiB export/Japanese Master System and 1 KiB Game Gear open boot ROMs (using `beryl-z80` `asm` and `beryl-font`), with optional per-console player BIOS override.
+- **Save States & Debugging (`src/state.rs`, `src/debug.rs`)**: Versioned `"ENDO"` save states and Z80 debugger integration (memory spaces, watches, breakpoints, disassembly).
+
+## Documentation
+
+- [Endou Hardware Reference (Master System, Mark III, SG-1000)](../../../../Docs/Man%20pages/Hardware/Sega/Endou%20-%20Master%20System/Endou_Hardware.md)
+- [Endou Game Gear Hardware Reference](../../../../Docs/Man%20pages/Hardware/Sega/Endou%20-%20Master%20System/Endou_GameGear.md)
+- [Beryl-HW Shared Chip Crates](../../../../Docs/Man%20pages/Hardware/Sega/Beryl-HW/README.md)
+- [Core and Component Naming Scheme](../../../../Docs/EmuSen%20Manual/Overview_and_Architecture.md#core-and-component-naming-scheme)

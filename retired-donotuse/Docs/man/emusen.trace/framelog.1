@@ -1,0 +1,20 @@
+NAME
+    framelog - sample a memory value once per frame
+
+SYNOPSIS
+    framelog add <space> <addr> [<width>]
+    framelog list
+    framelog show <id> [<count>]
+    framelog clear <id>
+    framelog remove <id>
+
+DESCRIPTION
+    Unlike 'watch' (triggered by an actual read/write), a frame log samples
+    its value once every frame regardless of whether anything touched it -
+    useful for 'what does this value do over time' questions a write watch
+    can't answer, e.g. a counter written once at level start but read every
+    frame afterward. <width> is 1, 2, or 4 bytes (default 1).
+
+EXAMPLES
+    framelog add WRAM 1fb0 2
+    framelog show 1

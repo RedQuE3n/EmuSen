@@ -1,0 +1,51 @@
+NAME
+    freeze - pin an address by undoing every write to it
+
+SYNOPSIS
+    freeze add <space> <addr> [<value>]
+    freeze list
+    freeze remove <id>
+    freeze clear
+
+DESCRIPTION
+    Holds an address at a value by writing that value straight back the
+    instant anything writes something else. Without a <value> it pins
+    whatever the address holds right now, which is the common case: find an
+    address with 'search', freeze it, watch what stops moving.
+
+    This is a debugging instrument, not a cheat. 'cheat poke' re-applies
+    once per frame, so the game's own value is live for most of that frame
+    and every read in between sees it; a freeze undoes the write
+    immediately, so nothing ever observes the value the game tried to store.
+    That difference is the whole point when the question is 'what breaks if
+    this counter never changes' or 'is this the variable driving that
+    animation' - a per-frame poke answers neither cleanly.
+
+    The restore is itself a write, and is suppressed from re-entering the
+    freeze check, so it cannot recurse. Writes matching the frozen value are
+    left alone and not counted. 'freeze list' reports how many writes each
+    entry has undone, which doubles as a cheap 'is anything even writing
+    here' signal - a freeze with a blocked count of zero means the address
+    you suspected is not the one being written.
+
+    Only spaces the core reports writes for can be frozen; freezing an
+    address in a read-only space is refused rather than silently ignored.
+    Freezing an address whose writes the core does not observe will also
+    show a blocked count of zero - see 'man watch' for which paths report.
+
+ON A CORE OF THE STABLE ABI
+    Such a core reports a store only after its frame, so the host cannot
+    undo a write as it happens. It reads each frozen byte at the end of
+    every frame and writes the value back where it has changed, as it
+    applies cheats. The game can therefore read its own value within the
+    frame, as with a per-frame poke, and the count in 'freeze list' is of
+    frames whose end found the byte changed, not of writes.
+
+EXAMPLES
+    freeze add WRAM 13c6
+    freeze add WRAM 0dbf 63
+    freeze list
+    freeze clear
+
+SEE ALSO
+    cheat, watch, search, counters

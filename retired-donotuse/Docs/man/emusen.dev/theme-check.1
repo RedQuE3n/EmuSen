@@ -1,0 +1,598 @@
+NAME
+    theme-check - hold an EmuSen theme package to its manifest's schema,
+    the QML rules and the kit's tokens, then load its screens and audit
+    their fit and reach
+
+SYNOPSIS
+    theme-check [--static] [--state DIR] <folder>...
+    theme-audit [--gpu] [--state DIR] [--states LIST] [--sizes LIST]
+                [--crowd with|without|only] [--catalogue FILE]
+                [--section KEY] [--focus NAME] [--mockups DIR] <folder>
+    theme-audit --list-states
+
+DESCRIPTION
+    The development tool of the emusen.dev module for EmuSen theme
+    packages (EmuSen_Qt.md §3.4, §3.7): a folder holding theme.json,
+    screens/Home.qml, Consoles.qml, Games.qml and optionally Splash.qml,
+    parts/ and assets/. It runs in two steps. The static step loads and
+    draws nothing. The loaded step, run only on a package whose static
+    step found nothing, is theme-audit, a Qt program of its own
+    (Frontend/theme-check/audit), which theme-check runs as a process and
+    whose lines it reads back: this module is linked into the
+    standalone shell and its tree holds no Qt (decided 2026-11-08).
+
+    Findings print one a line:
+
+        file:line kind words
+
+    the manifest's in line order, then each .qml file's in path order,
+    and the last line is 'ok' or 'N findings'. The kinds:
+
+        schema      theme.json is missing, is not JSON, lacks a required
+                    key (schema, api, name, author, licence, variants,
+                    screens) or has one of the wrong shape; a text scale
+                    in fontSizes outside the kit's 1 to 1.3
+        api         a schema number above 1, or an api newer than this
+                    build's EmuSen.Theme 1.0 (a newer major, or a newer
+                    minor of the same major); the words name both
+        path        a file the manifest names (a cue, a preview) that
+                    leaves the package or is missing; a quoted folder
+                    import in QML that leaves the package or is not one
+                    of its folders
+        screen      a screen listed whose file is missing, or a screen
+                    file present but not listed (it would never load)
+        token       an override naming no token of the kit, or a value
+                    not of the token's type
+        contrast    a contrast pair of the kit under its floor once the
+                    overrides are applied, in the variant that sets them
+        note        a key schema 1 does not know: ignored, and not
+                    counted (EmuSen_Qt.md §5.2)
+
+    and the kinds of qml-rules(1) for each .qml file (function,
+    callLater, literal, words, onCompleted, rows, import), under its
+    theme profile: §1.3's rules as a view's, with the imports limited to
+    the sandboxed engine's allow-list, matched whole: QtQuick,
+    QtQuick.Layouts, QtQuick.Effects, QtQuick.Shapes, QtQuick.Controls
+    and EmuSen.Theme, and quoted relative folders of the package. So
+    EmuSen.Models, EmuSen.Kit, QtQml, QtQuick.Templates, QtMultimedia
+    and Qt.labs are each a finding.
+
+    Where each rule's facts come from. The schema is the crate
+    emusen-theme-manifest (Frontend/theme-check/manifest), its one owner,
+    which the theme host reads too. The QML rules and THEME_IMPORTS are
+    qml-rules'. A token is a read-only property of the kit's Tokens
+    singleton in the committed registry,
+    Testing/qmltypes/EmuSen.Kit-1.1.qmltypes, with the type it declares
+    there: QColor a colour written #RRGGBB or #AARRGGBB, double a number,
+    int a whole number, bool true or false. The contrast pairs, their
+    floors (4.5:1 for words, 3:1 for graphics; WCAG 2.1 1.4.3 and
+    1.4.11) and the ratio are emusen-kit-core's (contrast_pairs,
+    Colour::contrast). A pair is measured only when the theme overrides
+    one of its two tokens, since the kit's own pairs are held by the
+    kit's tests. A translucent override is composited before it is
+    measured, as a compositor paints it: the surface over black, any
+    other back over that surface, the fore over its back.
+
+THE LOADED STEP
+    theme-audit places each screen the package lists through the theme
+    host (emusen-theme-host, EmuSen_Qt.md §3.5.1), the program's own
+    route: a window holding the host and one slot, the package's folder
+    given to the host, and the screen placed when the host is ready. A
+    fresh engine is made for each screen. The views of EmuSen.Theme are
+    then fed as the program's host feeds them, after the screen is
+    placed, since the program places a theme's screens before its
+    library is read; a theme must take the focus when its rows come.
+
+    The library is synthetic and read through the real clients
+    (emusen-client-fixture's world, the platform library built from the
+    same commit, or the one EMUSEN_PLATFORM_LIBRARY names): eight games
+    with made-up titles, two on each of four consoles, each played three
+    hours apart, two hearted; a game paused on the NES for 12 minutes;
+    one controller, 21:42, a battery at 64%. Choose a console is placed a
+    second time over the same library grown to 120 consoles, as a player
+    with many cores installed has it (decided 2026-11-08): the real ones
+    and synthetic ones copied from a real row under made-up names, 40
+    under one maker in all, ten under no maker, the rest under the
+    table's other makers.
+
+    The kit's Tokens of the theme's engine (each engine has its own
+    singletons) are set to the big screen form with reduced motion on,
+    so a resting motion stops and every state is at rest when read.
+    Each screen is first held to stillness at 1280 x 800: once its
+    animations stop, no frame may be swapped for 2 s. Then, in each
+    variant the package's variants key lists and in no other (a
+    dark-only theme is never judged in light), at 1280 x 800, 1920 x 1200, 1920 x 1080,
+    1280 x 720 and 3840 x 2160 (the gate's sizes, EmuSen_Interface.md
+    §24.7), the harness of emusen-qt-test reads the window's item tree
+    and walks it: from each operable element each of the four
+    directions is pressed as Qt's arrow keys, which the kit's Frame
+    answers as the pad's (EmuSen_Qt.md §1.7) and KeyNavigation answers
+    natively, and what moved is put back. kit-core's rules then judge
+    the state: fit (fit), pad reach from the focus along the walk's
+    edges (pad_reach), pointer reach of what the walk reaches
+    (pointer_reach), no desktop chrome (no_chrome) and contrast
+    (contrast), with the measures of the big screen form. Contrast is
+    measured, not read from the tokens: the harness hides every text,
+    grabs the window once and samples each text's box on a grid, so
+    words over a picture, a translucent fill or a gradient are judged
+    against what is drawn behind them; kit-core composites the text's
+    ink over each sample and needs WCAG 2.1's 4.5:1, or 3:1 for large
+    type, over all but a tenth of the samples; a text with no words draws
+    nothing and is not judged (the rule the program's
+    own gate holds, EmuSen_Kit.md §7.10; theme-audit added it on
+    2026-11-08, when its passes judged no theme's text). The static
+    step's contrast holds the declared tokens alone. The crowd's states are judged in the dark
+    variant alone, the pointer held to every element on the screen, and
+    the pad's reach by a sweep in place of the walk, in two parts. First
+    Up and Left until the focus stops, then each row Right to its end and
+    Left to its other end, with Down between, as a player looks for one
+    console among many. Both ends, since Down may land anywhere along the
+    next row: over a design that goes Down to the nearest console in x, a
+    sweep that walked each row one way heard 52 consoles of 120 (measured
+    2026-11-08). Then, only when the rows missed a console, each element's
+    own neighbours are followed from where the rows ended: every element
+    the pad lands on is pressed Up, Down, Left and Right, each new landing
+    followed before coming back by the opposite press. An element is told
+    by its objectName and the name a reader hears, since a view makes a
+    row's delegate again elsewhere once it scrolls away. The second part
+    was added on 2026-11-15: over a column of makers beside the chosen
+    maker's grid, every row's Left ended on its maker and Down went to the
+    next maker, so the rows heard 4 of 11 consoles that the pad reaches.
+    Because the second part starts where the rows ended, at the last
+    maker, the side-column fixture binds Up between its makers as well as
+    Down. Qt's written-back Up did not take there (Up from the last maker
+    stayed put, measured 2026-11-15), so without it the sweep heard 46 and
+    then 28 of 120 consoles.
+    A console counts as
+    reached when the name a reader hears for the focused element
+    (Accessible.name, else the first words under it) is its name, short
+    or full (Library.consoles' name or displayName: Eclipse's plates say
+    the full one, as its board does, and the sweep that knew only the
+    short one heard 118 of 120, missing NES and Super Nintendo, measured
+    2026-11-16), and the element's centre is inside the window, so a
+    theme that lays consoles out by hand, or names its tiles for no
+    reader, fails it.
+
+    The sweep reads the window's tree once a press. Sampled on
+    2026-11-16 (eu-stack every 5 s over theme-audit --mockups
+    Testing/themes on Horizon, Meridian and Orrery, the desktop, Ryzen 7
+    7700X), 84 to 91 per cent of each run was spent reading trees, two
+    thirds of it under the sweep, which read four a press: the focus
+    before the press, the tree the views settle by, the focus after,
+    and the focus again for the row's end. Nothing but reading happens
+    between one press's settled reading and the next press, so the one
+    after a press stands for the one before the next, and when every
+    view was already at rest (the harness's settle says it waited
+    none) the tree it settled by is the one the focus is read from.
+    Both parts of the sweep keep this saving; in the second part, when
+    the focus is given straight back to an element it left, the next
+    reading is made afresh, since that gift is no press.
+    The findings, what was held and what was accepted are byte for
+    byte those of trunk 385db3952 over all six built-in themes but for
+    the ratio of an accepted contrast line, whose last digit trunk's
+    own two runs over Orrery do not repeat (4.39:1 and 4.41:1); the
+    three tests that hold Horizon, Meridian and Orrery to their mockups
+    compare the whole account with Testing/themes/audit, every word of
+    it. In the front end's gate (gate.sh, ordinary tests four at
+    a time) on 2026-11-16, the Horizon test took 184 s and Meridian's
+    292 s, against 480 s and 647 s for trunk's gate the same day;
+    Orrery's took 1204 s there and 386 s run by itself after the change
+    (cargo test --release --test audit, beside another gate). Run side
+    by side with the other built-in themes, the audit over Orrery took
+    1512 s and 1500 s on trunk and 448 s after.
+
+    Where a size of the crowd's pass went, measured on 2026-11-16 with
+    a timestamp a press (a build of the audit that printed them, over
+    Eclipse and n120 at 1280 x 800 and 1920 x 1200, beside a landing's
+    tests): 1269 and 1280 presses, 66 consoles heard by the rows' part
+    (12.6 s and 18.5 s) and 138 elements found by the second (82 s and
+    98 s), 74 direct gifts of focus, each read from a whole tree, and the
+    resize 74 ms and 123 ms. Of each press, the key took 2.6 ms, the
+    settle 0.3 ms and never waited (no view was moving in 2549 presses),
+    and the window's whole tree, 2525 items, 73 ms: 86 s and 105 s of
+    the two sizes' 95 s and 116 s. The judging of the size itself, every
+    rule, took under half a second. Stacks sampled every 3 s over
+    Orrery's crowd held harness_tree in 19 of 25 (building each item's
+    node, QJsonObject and QJsonDocument::toJson) and serde's parse in 2.
+    So a size of the crowd costs a hundred times a mockup state's: the
+    sweep reads the whole window once a press, and there are about ten
+    presses a console.
+
+    The sweep now reads the focus's tree (emusen-qt-test's focus_tree,
+    EmuSen_Kit.md 7.9): the focus's ancestors, the whole subtree of the
+    walkable it stands in, and every view, each node written by the code
+    that writes the whole tree's. That is every node a press's reading
+    looks at: the views the settle waits on, the focus and its walkable,
+    its box, its objectName and the words under it. A direct gift of
+    focus still reads the whole tree, since it looks for an element the
+    focus is not on. Every recording of Eclipse over n30 and n120 (each
+    size's spec and picture, the states after each size's sweep among
+    them), its lines and what it held were byte for byte those of the
+    whole-tree sweep, and so were the three recorded accounts, whose
+    crowd lines at the four later sizes are judged where the previous
+    size's sweep left the focus. Eclipse over n120 at the five sizes
+    took 127 s, against 566 s for the whole-tree sweep run beside it,
+    and over n30 25 s against 70 s (2026-11-16, the two side by side
+    beside a landing's tests).
+
+    The crowd's pass is not divided, by size, by maker or by a range of
+    consoles. By size, because a size is judged in the state the
+    previous size's sweep left (PARTS). By maker or by range, because
+    the sweep is one continuous walk by the pad from the screen's own
+    first focus: its rows' part steps Up and Left to the start and then
+    each row in turn, and its second part follows every press from
+    where the first ended, each console heard only when a press reaches
+    it. A part that began at another maker would have the focus given
+    there, which is no press, so it would judge a reach the player never
+    has, and the size after it would be judged in another state.
+
+    Each size of a state is read once the screen rests after its
+    resize (the harness's rest), no longer 150 ms after it; a held
+    clock's states, under which nothing moves, keep the 150 ms. The ratio
+    that varied was read while the sky's glow still eased to the centre
+    the resize gave it: the canvas's width in design units follows the
+    window's shape, so glowX changes, and the glow eases over Pan
+    (320 ms) on a clock summed from frame times, so the glow behind the
+    maker's name under Choose a console's hub depended on how many
+    frames had been drawn by the read. The running animations listed at
+    that read on 2026-11-16 held the sky's FrameAnimation at every size
+    of the dark states whose lines varied; the harness took every
+    FrameAnimation for a resting motion and did not wait for it, and
+    now does (EmuSen_Kit.md section 7.49). Recorded again with the
+    change, the three accounts differ from trunk's only in the ratios of
+    accepted contrast lines (Horizon's in none, Meridian's in 2,
+    Orrery's in 23 lines), and two runs over Orrery wrote them byte for
+    byte. The audit over Orrery had stopped about once in three runs on
+    a SIGSEGV in QQuickItem::geometryChange under Scene::resize: the
+    dial's EdgeFade deleted its layer inside the resize that widened it
+    (EmuSen_Kit.md section 7.35). Run with glibc's thread cache off and
+    freed memory overwritten, the old build stopped there on every run,
+    38 s in, and the fixed one ran to its end, its account the same as
+    without the tunables.
+
+    The loaded step's kinds, each line naming the screen's file, line 1
+    (Qt keeps no line for an item), the size and the variant:
+
+        fit         a kit-core fit fault: past its panel or its clip,
+                    overlap, cut at an edge with no fade, an ellipsis,
+                    runs past its box, too small to read, and the rest
+                    of EmuSen_Kit.md §3's fit rules; the items are named
+                    by number, type, objectName or words, and box
+                    An ellipsis is a fault only on the program's fixed
+                    words (qt-models' words::is_fixed: the words of
+                    words.rs and the shelves' names); a title, a name or
+                    a phrase counted or built from them is data and may
+                    elide, as a design's limits say (decided 2026-11-08).
+                    The words are told apart by what a reader hears, so
+                    a theme cannot mark its own words as data.
+        reach       an operable element the pad does not reach from the
+                    focus; for the crowd, the consoles the sweep did not
+                    hear
+        pointer     a click at an element's centre hits another, or does
+                    not call what A calls; a list the wheel does not move;
+                    never on the splash, which is watched and not operated
+                    (decided 2026-11-08: its focus is the screen itself,
+                    and what stands at its centre is the design's)
+        chrome      desktop chrome on the big screen
+        name        an operable element with no name a reader hears
+                    (Accessible.name, else the words under it;
+                    EmuSen_InterfaceSpec.md §4.3, kit-core's named), as a
+                    Continue entry drawn with no game, or a tile whose
+                    title is drawn only beside its cover
+        contrast    words under 4.5:1 (3:1 large) against what the
+                    grab shows behind them, in that state's variant
+                    and size; the line gives the ratio and the text.
+                    Two kinds of words are not judged. A place the
+                    host declines (available false), found by the
+                    name a reader hears, is an inactive component,
+                    whose words WCAG 2.2's 1.4.3 exempts ("Text or
+                    images of text that are part of an inactive user
+                    interface component ... have no contrast
+                    requirement"; https://www.w3.org/TR/WCAG22/,
+                    read 2026-11-09), but only while it is drawn
+                    apart from its offered look: the place is read
+                    declined, then offered (Library.show_declined,
+                    the focus on it both times), on a grid of points
+                    a design unit apart or less, and some point must
+                    change by 3:1, the ratio 2.4.13 asks between the
+                    same pixels of two states; else the line reads
+                    "a declined place drawn as if offered" and its
+                    words stay judged. 2.4.13's area (a perimeter 2
+                    CSS pixels thick) is not asked: words dimmed to
+                    38% in a 480 x 56 row change about 2% of it, the
+                    ring 7.9%. No other dim words are exempt. Under a
+                    held clock (the splash states), contrast is
+                    judged at rest: a text whose ink, its colour with
+                    its opacity, changed over the frame before the
+                    held time (16 ms) is mid-change and not judged;
+                    a text resting faint is still a finding.
+        exempted    an item a rule let pass by an exemption, each by
+                    itself, as kit-core's exempted lists it and the
+                    program's tests report it (EmuSen_Kit.md 7.102):
+                    words that reach their contrast over all but the
+                    spare tenth of what is behind them, words under it
+                    at a scroller's faded edge, and words under the
+                    floor that SMALL_TEXT_EXCEPTIONS names. A scene's
+                    colour outside the palette is not one: no palette
+                    rule runs over a theme. An exemption of a class
+                    the tester has accepted (kit-core's ACCEPTED,
+                    EmuSen_Kit.md 7.102) is not a line here: it goes
+                    to stderr as "theme-audit: accepted by <ruling>:
+                    <file> <size> <variant>: <words>" and fails
+                    nothing. Only an exemption of a class with no
+                    ruling is an exempted line, and a finding.
+        motion      a screen not still under reduced motion
+        load        the host could not place the screen: the engine's
+                    and the sandbox's words, a line each
+        warning     anything Qt logged while the screen was shown, the
+                    theme engine's warnings among them
+        stopped     a pass the audit could not finish: the harness
+                    panicked (a view still moving after 5 s), so the
+                    state it names, by size and variant, and every
+                    later state of that pass were not judged; the line
+                    gives the harness's words and fails the check like
+                    any finding (decided 2026-11-08: a pass that stops
+                    is never silent, and the passes agree only when
+                    both finish)
+        recording   with --state, a picture whose size is not its
+                    state's: the harness turns Qt's high-DPI scaling off
+                    so one device pixel is a window pixel whatever the
+                    screen's scale (a window on a desktop at 125% was
+                    grabbed at 1600 x 1000 for 1280 x 800, and an
+                    offscreen screen of 120 dpi over 96 the same,
+                    measured 2026-11-08), and a picture that still
+                    differs is a finding, not a quiet mismatch
+
+    The Games screen is shown a section as the program's showBrowse
+    shows one (emusen-theme-qt's browse::facts_of, the one owner of a
+    section's heading, world, count and neighbours): the first console's,
+    or the console or shelf --section KEY names, with its games, the
+    focus on the first.
+
+    --state DIR writes each state's recording into DIR as
+    Screen-variant-WxH.spec and .png (EmuSen_InterfaceSpec.md's format),
+    the recordings a theme's side-by-sides are made from; with several
+    folders, each package's go into DIR/<its folder's name>. Each picture
+    is taken once the screen rests after the walk's last put-back: no
+    animation running but those that loop without end (a design's
+    resting motion), or with none, no frame swapped for 100 ms; a screen
+    that has not rested in 5 s is a stopped finding. The put-back moves
+    the focus home, and a world that rises on a change of focus was
+    caught half-faded (measured 2026-11-08, Horizon's Choose a console);
+    a fixed wait would go stale under a theme's own longer transitions.
+
+    --gpu (theme-audit alone) draws on the GPU: Qt Quick's Vulkan
+    renderer in Wayland windows of a compositor the run starts for
+    itself (kwin_wayland --virtual at 3840 x 2160, as the program's GPU
+    tests run, emusen-qt-test's Compositor), stopped when the run ends.
+    Its scale is 1 by construction, so the desktop's own scale and
+    settings never reach a picture, and no window shows on the desk;
+    the recording finding still guards each picture's size. Without it
+    the run is offscreen on the software renderer, which draws no
+    shader effect (a layer's mask or blur). The offscreen platform was
+    not used for the GPU: it drives the RX 6800 through OpenGL but has
+    no Vulkan instance, and its OpenGL window draws only its first size
+    when grown (a 1920 x 1200 picture came out drawn in its lower left
+    1280 x 800 alone, the rest black or stale; measured 2026-11-09).
+    Either way theme-audit sets QSG_RENDER_LOOP to basic, whatever the
+    environment says: a threaded render loop installs an animation
+    driver of its own, which the held clock of the timed states would
+    have to replace (EmuSen_Kit.md 7.36).
+
+    --mockups DIR (theme-audit alone) holds each screen to its mockup in
+    DIR, the file <package>-<Screen>.mockup.spec (the package's folder
+    name and the screen's, Home, Consoles or Games, in any case), in the
+    default state, by night, at 1280 x 800 and 1920 x 1200, where a design
+    unit is the window's height over 800. Each element the mockup names is
+    found by its objectName and held within two units of every edge it
+    states, to its token's colour as the package's night overrides give
+    it, and to its words (EmuSen_Qt.md 8.2; qt-test's mockup comparison).
+    A difference is a line of kind mockup:
+        .../screens/Home.qml:1 mockup 1280x800 dark: ring: Y 451.1, the
+            mockup's 447.1
+    A theme's mockups in Testing/themes are held by theme-audit's tests
+    (EmuSen_Kit.md 7.104; none are kept since 2026-11-23); a mockup is never written to the program's
+    numbers.
+
+    --focus NAME (theme-audit alone, with --catalogue) gives the focus to
+    the console a reader hears as NAME before each size is judged, where
+    the crowd's sweep stands for the walk: a canvas that focuses another
+    console than the first (the reference canvas focuses the second).
+
+    --catalogue FILE (theme-audit alone) places Choose a console once,
+    over the synthetic library with FILE's consoles in place of its own,
+    and judges it in each listed variant at the five sizes, the pad's reach by
+    the crowd's sweep over those consoles; no other screen is placed. The
+    states are labelled by the file's stem (Consoles-dark-n30-1280x800).
+    A catalogue is plain text, one console a line, tab-separated: the
+    maker (- for none), the name, how many games it holds, the engine it
+    runs on, that engine's kind (emusen or libretro), and the table's
+    console whose look (its body, hue and year) it takes; the last three
+    may be left out, a console without its own look taking the first
+    shelved console's under a made-up hue and year. # begins a comment.
+    It is how a design's capacity states are recorded beside its canvas's
+    #state= (decided 2026-11-08: one console, 30, 120, one maker of 40):
+    Testing/themes/catalogues holds the canvases' own, eleven, one-console,
+    n30, n120, maker40, long and empty, written from consoles.html's
+    synthetic catalogue. A line it cannot read is named and nothing runs.
+
+    theme-check finds theme-audit as EMUSEN_THEME_AUDIT names it, else on
+    PATH; without it the command does not run unless --static is given,
+    which stops after the static step. A package with static findings is
+    not loaded, and a note says so.
+
+    The audit has no glue of its own. The kit's Tokens of a theme's
+    engine is found through emusen-theme-qt's host::kit_tokens, the one
+    owner of that lookup (QQmlEngine::singletonInstance, which cxx-qt-lib
+    does not bind); a second bridge of the same name would not link
+    beside it (decided 2026-11-08). The screen's object is reached by its
+    number in the harness's tree, which is its QObject's address.
+
+    Proof, measured on 2026-11-08: the fixture packages under
+    Frontend/theme-check/tests/themes, loaded is ok; cut-games places
+    its count in window pixels at y 730 and is past its panel at
+    1280 x 720; unreachable has a tile no walk leads to; by-hand lays
+    its rows out as tall as they are, and with 120 consoles runs off
+    every size. A package takes about 80 s, most of it the crowd.
+
+PARTS
+    --sizes LIST judges the window sizes LIST names, comma-separated as
+    the lines write them (1280x800,3840x2160), or all of them for all,
+    the default; a size the gate does not have is refused, naming the
+    gate's own (kit-core's audit SIZES, the list's one owner, in whose
+    order the sizes are judged whatever the list's order). Stillness
+    under reduced motion is judged by the run whose list holds the
+    gate's first size, once a screen, as without the option.
+    --crowd with|without|only judges the default state's Choose a
+    console over 120 consoles with the other passes (the default),
+    without it, or alone. A run of fewer sizes or passes judges each
+    state it keeps exactly as the whole run does.
+
+    The two options let one package's audit run as six processes side
+    by side, one a size without the crowd and one for the crowd at
+    every size: theme-audit's test of Eclipse in every state is a test a
+    part (tests/audit.rs). The crowd is not cut by size, for the pass
+    is history: one placing is judged at each size in turn, and the
+    sweep at one size leaves the focus, the views' positions and their
+    delegates where the next size is judged. Run alone at 1920 x 1200,
+    Eclipse over n30 was recorded with the first maker focused where
+    the whole run had the last (Amstrad), and Orrery's crowd lines at
+    1920 x 1200, 1920 x 1080, 1280 x 720 and 3840 x 2160 named other
+    items than its recorded account (measured 2026-11-16). For the same
+    reason a --catalogue run, which is that pass over a catalogue, is
+    not cut by size: the tests of one to 120 consoles stay whole.
+    Every other pass places its screen afresh and puts the focus back
+    after its walk; its lines at each size alone were those of the whole
+    run (Orrery, all five sizes, 2026-11-16).
+
+    Retired 2026-11-23 (decided 2026-11-23): the recorded accounts of Horizon, Meridian and Orrery, and the tests that held them, are removed with those themes; the next paragraph is kept as the record of how they were held.
+
+    A recorded account (Testing/themes/audit/<theme>.findings) is held
+    whole by its parts. Each part's test compares its run with the
+    part's share of the file: the lines naming its size and not the
+    crowd, or the crowd's lines, each in the file's order, and the held
+    lines cut as the passes are (the crowd holds Consoles once a size,
+    in the first variant, never against a mockup; every other state is
+    judged at every size, and against its mockup at the sizes of the
+    canvas's shape alone). The shares joined are the file byte for
+    byte, which qt_3_7_the_recorded_accounts_are_their_parts_joined
+    holds for the three files: the findings, then the held lines
+    summed, screens in the order first held, then the lines a ruling
+    lets pass; within each of those two, a screen at a time, each
+    listed variant in the package's order, each size in the gate's
+    order, then the crowd, a part's own lines in its own order. That is
+    the nesting of a whole run's loops (screens, then variants, then
+    sizes, the crowd after Consoles' own pass), so every part passing
+    is the whole file matched.
+
+STATES
+    --states LIST records the states LIST names, comma-separated, or all
+    of them for all; without it the run is the default alone. A state
+    is fed through the theme's own surfaces as the program feeds them
+    (Library.show with the places the host declines, Browse, Session,
+    Device, the kit's Tokens), never by editing the theme's files, and
+    each screen it names that the package lists is placed afresh and
+    judged as the default is: the rules above at the five sizes in each
+    listed variant, the recording and its size. Lines and recordings carry
+    the state's name (Home-dark-nogame-1280x800). The list's one owner
+    is the audit's states.rs; theme-audit --list-states prints it, a
+    line a state (name, screens, words, tab-separated), and a test holds
+    this section to it. One run for every state, since each run builds
+    the synthetic library, draws its covers and starts Qt once.
+
+    The default library's games have covers (decided 2026-11-09, so the
+    default is the canvases' and nocover a state of its own): each a
+    flat colour with its console and title, drawn by Qt Quick into an
+    ES-DE media folder that the host is given as the theme's cover
+    store, as the program's start gives it (emusen-qt-test's covers).
+
+    default     the synthetic library with Fable of Tiles suspended;
+                the splash finished under reduced motion; Choose a
+                console again over 120 consoles; Settings on its
+                Display page, its first row focused, as the program's
+                settings read from the world's Galaxia give it
+    nogame      Home with no game to continue
+    empty       Home, Consoles and Games over Testing/themes/catalogues/
+                empty.tsv: no console and no game; Games shows the
+                All shelf
+    one-console the synthetic library's NES games alone, one suspended
+    one-game    Games over one-game.tsv: a console holding one game
+    many        Games over many.tsv: a console holding 9,000 games
+    nocover     the default library with no cover
+    norecent    the same games never played and none hearted, no game
+                suspended
+    long        a ninth game whose title is too long for any place,
+                played last and suspended
+    pressed     Return held on the first focus, which a Walkable
+                answers as A, while the state is judged and recorded
+    disabled    Home with the Scraper declined by the host (its row's
+                available false) and the focus walked to it by the
+                pad along the walk's own presses; its words are held
+                to contrast only if it is drawn as if offered
+                (contrast, above)
+    loud        Home with the navigation sound at full volume, so the
+                Settings place's line is the longest it can be, "Light ·
+                100% sound" in the light variant
+    splash-1s   the splash with motion allowed and every animation's
+                clock held 1 s after it is placed
+    splash-3s   the same at 3 s
+    splash-5s   the same at 5 s
+
+    The capacity states (n30, n120, maker40) are --catalogue's. A held
+    clock is the harness's (EmuSen_Kit.md §7.36): Qt's animation driver
+    replaced by one moved only by the audit, a frame's 16 ms at a time
+    from the placing, so a theme's splash is held as it is written and
+    the theme API gains nothing. Under it the screen is placed afresh in
+    each variant, since a change of variant animates colours that a held
+    clock would never finish, and is recorded without waiting for rest.
+    A Timer is not an animation and is not held. Letting the clock go
+    leaves Qt's default driver in place of a threaded render loop's own,
+    so the held states run last. The reference theme has no Splash.qml
+    and no splash states: its splash is Moonrise, the kit's.
+
+    What theme-audit judged goes to stderr, a line a screen:
+        theme-audit: held Consoles in 10 states, 2 against its mockup
+    a state counted once every rule has judged it at its size and
+    variant, and against its mockup when one was compared. A pass that
+    stopped, or a screen that did not load, counts none, so a caller
+    tells a screen judged and clean from one never judged; theme-audit's
+    tests read these lines (EmuSen_Kit.md 7.104).
+
+EXIT STATUS
+    0 for no finding, 1 for one or more, 2 when it could not run (no
+    folder given, a folder missing, an option unknown, theme-audit not
+    found, or theme-audit unable to run).
+
+ENVIRONMENT
+    EMUSEN_THEME_AUDIT  the theme-audit program, where it is not on PATH
+    EMUSEN_PLATFORM_LIBRARY, EMUSEN_TEST_CORE
+                        a prebuilt platform library and test core for
+                        the synthetic library; else cargo builds them
+
+EXAMPLES
+    theme-check Frontend/themes/emusen
+    theme-check --static Frontend/themes/emusen
+    theme-check --state /tmp/eclipse Frontend/themes/eclipse
+    theme-audit --gpu --state /tmp/eclipse-gpu Frontend/themes/eclipse
+    theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
+    theme-audit --states all --state /tmp/states Frontend/themes/eclipse
+    theme-audit --states nogame,splash-3s Frontend/themes/eclipse
+    theme-audit --mockups Testing/themes --sizes 1920x1080 --crowd without Frontend/themes/eclipse
+    theme-audit --mockups Testing/themes Frontend/themes/eclipse
+    theme-audit --catalogue Testing/themes/catalogues/eleven.tsv --focus "Super Nintendo" --mockups /tmp/m Frontend/themes/emusen
+    theme-audit Frontend/theme-check/tests/themes/dim-picture
+
+        .../dim-picture/screens/Home.qml:1 contrast 1280x800 dark: low
+            contrast: <n> at <r>:1, needs 4.5:1 (<n> QQuickText caption ...)
+        ...
+
+    theme-check Frontend/theme-check/tests/themes/low-contrast
+
+        .../low-contrast/theme.json:11 contrast accent on surface is
+            2.13:1, under the 3:1 floor (dark)
+        ...
+        4 findings
+
+SEE ALSO
+    qml-rules(1), esde-check(1); EmuSen_Qt.md §3.4, §3.5, §3.7 and §5.2;
+    EmuSen_Kit.md §1.

@@ -1,0 +1,24 @@
+NAME
+    dump - write a raw memory range to disk
+
+SYNOPSIS
+    dump <space> <addr> <len> <file>
+
+DESCRIPTION
+    Writes <len> raw bytes from <space> starting at <addr> to
+    home/Logs/<CoreName>/<file> - no header or
+    metadata, so a hex editor can open the result directly. The write-side
+    counterpart is 'load'. Same live-hardware-space refusal as
+    'search'/'snapshot'.
+
+    The file name is taken from home/Logs/<CoreName>/: a bare name or one
+    with '../' in it is resolved from there, one with a leading '/' from
+    this shell's root, as every other command reads a path (see 'man
+    hier'). A name that lands above the root is refused, so '../../../x'
+    and an absolute path of the machine cannot write or read outside it.
+    Before 2026-10-10 the name was joined to the folder unchecked, and
+    both did.
+
+EXAMPLES
+    dump WRAM 0 2000 wram.bin
+    dump WRAM 0 2000 /tmp/wram.bin

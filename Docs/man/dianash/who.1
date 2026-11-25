@@ -1,14 +1,20 @@
 NAME
-    who - list every session and which account it's running as
+    who - list sessions and their active accounts
 
 SYNOPSIS
     who
 
 DESCRIPTION
-    A different axis from 'ps': 'ps' lists killable THINGS (breakpoints/
-    watches/sessions); this lists WHO is running each session, if a session
-    manager is registered for this host (see 'tmux'). With none registered,
-    just reports this one shell's own account instead of failing.
+    Prints each active tmux(1) session alongside the account it is
+    running as, marking the current session with '(current)'. When the
+    host does not enable session management, prints the single shell's
+    account as '(this shell)'.
 
 EXAMPLES
     who
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    whoami(1), su(1), tmux(1), ps(1)

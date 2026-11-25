@@ -1,0 +1,19 @@
+NAME
+    resume - resume emulation after an interactive halt
+
+SYNOPSIS
+    resume
+    continue
+    c
+
+DESCRIPTION
+    Resumes emulation after a halt (an interactive debug prompt, a
+    breakpoint, a single-step) - 'continue' and 'c' are recognized as plain
+    aliases, not separate commands. EmuSen.Mistress registers its own
+    pause/resume-aware 'resume' instead (its console window runs on a
+    separate thread from emulation, unlike EmuSen.Hotaru's console, which
+    shares the emulation thread and needs no pause/resume signal at all).
+
+EXAMPLES
+    resume
+    c

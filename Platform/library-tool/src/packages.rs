@@ -215,10 +215,8 @@ pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &d
     claims::set(&mut doc, "dump", obj(dump));
     claims::set(&mut doc, "companions", Value::Array(companion_entries));
     claims::set(&mut doc, "container", container);
-    match package::write(&manifest, &doc) {
-        Ok(Ok(())) => {}
-        Ok(Err(words)) => return Outcome::said("failed", words),
-        Err(refusal) => return Outcome::said("failed", refusal.words().to_string()),
+    if let Err(words) = write_manifest(&manifest, &doc) {
+        return Outcome::said("failed", words);
     }
     if let Some(p) = claims::package_of(&roots, &folder, &doc) {
         index.folders.push(folder.clone());
@@ -425,11 +423,7 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
     claims::set(doc, "companions", Value::Array(moved_in));
     claims::set(doc, "sources", Value::Array(sources));
     let manifest = Path::new(folder).join(package::FILE_NAME).to_string_lossy().into_owned();
-    match package::write(&manifest, doc) {
-        Ok(Ok(())) => Ok(names),
-        Ok(Err(words)) => Err(words),
-        Err(refusal) => Err(refusal.words().to_string()),
-    }
+    write_manifest(&manifest, doc).map(|()| names)
 }
 
 /// The packages each path names, relative to `Packages` or full, a folder holding packages naming each of them, in
@@ -520,10 +514,9 @@ pub fn identity(folder: &str, want: &str) -> Outcome {
         return head(&doc, Outcome::new("already"));
     }
     claims::set(&mut doc, "identity", text(want));
-    match package::write(&manifest, &doc) {
-        Ok(Ok(())) => head(&doc, Outcome::new("set")),
-        Ok(Err(words)) => head(&doc, Outcome::said("failed", words)),
-        Err(refusal) => head(&doc, Outcome::said("failed", refusal.words().to_string())),
+    match write_manifest(&manifest, &doc) {
+        Ok(()) => head(&doc, Outcome::new("set")),
+        Err(words) => head(&doc, Outcome::said("failed", words)),
     }
 }
 
@@ -539,6 +532,14 @@ pub fn of_console(ctx: &Context, console: &str) -> Vec<String> {
             top.eq_ignore_ascii_case(&console) || system.eq_ignore_ascii_case(&console) || s.is_some_and(|s| s.id.eq_ignore_ascii_case(&console) || s.console.eq_ignore_ascii_case(&console))
         })
         .collect()
+}
+
+fn write_manifest(manifest: &str, doc: &Value) -> Result<(), String> {
+    match package::write(manifest, doc) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(words)) => Err(words),
+        Err(refusal) => Err(refusal.words().to_string()),
+    }
 }
 
 pub(crate) fn read(folder: &str) -> Result<Value, String> {
@@ -703,7 +704,9 @@ pub fn check(ctx: &Context, folder: &str, stop: &dyn Fn() -> bool) -> Outcome {
         match found {
             Some(at) => {
                 claims::moved(&roots, &mut doc, &at);
-                let _ = package::write(&manifest, &doc);
+                if let Err(err) = write_manifest(&manifest, &doc) {
+                    return head(&doc, Outcome::said("failed", format!("found at {}, but the manifest could not be written: {err}", shown(&roots, &at))));
+                }
                 words = Some(format!("found at {}, and the package now names it", shown(&roots, &at)));
                 state = "moved";
                 game = at;
@@ -763,7 +766,9 @@ pub fn check(ctx: &Context, folder: &str, stop: &dyn Fn() -> bool) -> Outcome {
         if let Some(g) = doc.get_mut("game") {
             claims::set(g, "seen", obj(vec![("size", Value::from(now.0)), ("mtime", text(&now.1))]));
         }
-        let _ = package::write(&manifest, &doc);
+        if let Err(err) = write_manifest(&manifest, &doc) {
+            return head(&doc, Outcome::said("failed", format!("its time changed and it is still the dump, but the manifest could not be written: {err}")));
+        }
         words = words.or(Some("its time changed and it is still the dump; the time is recorded".into()));
     }
     let outcome = match words {

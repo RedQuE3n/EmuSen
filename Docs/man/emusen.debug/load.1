@@ -1,23 +1,26 @@
 NAME
-    load - write a raw file's bytes into memory
+    load - write a raw file's bytes into a memory space
 
 SYNOPSIS
     load <space> <addr> <file>
 
 DESCRIPTION
-    Reads home/Logs/<CoreName>/<file> (typically
-    one 'dump' produced, or hand-edited afterward) and pokes its raw bytes
-    into <space> starting at
-    <addr>. Refuses if <space> isn't writable.
+    Reads raw bytes from <file> (for example, a file produced by dump(1))
+    and writes them into memory space <space> starting at hex <addr>.
+    Refuses read-only memory spaces (see spaces(1)).
 
-    The file name is taken from home/Logs/<CoreName>/: a bare name or one
-    with '../' in it is resolved from there, one with a leading '/' from
-    this shell's root, as every other command reads a path (see 'man
-    hier'). A name that lands above the root is refused, so '../../../x'
-    and an absolute path of the machine cannot write or read outside it.
-    Before 2026-10-10 the name was joined to the folder unchecked, and
-    both did.
+    Relative <file> paths resolve under /Logs/<CoreName>/; paths starting
+    with '/' resolve from the shell sandbox root (see hier(7)). Paths that
+    escape the sandbox root are refused.
 
 EXAMPLES
     load WRAM 0 wram.bin
-    load WRAM 0 /tmp/wram.bin
+    load WRAM 0 /Logs/wram.bin
+
+EXIT STATUS
+    0   Bytes loaded (or usage/refusal/not-found message printed).
+    1   Path outside sandbox, no target attached, invalid hex argument,
+        or I/O or session service fault.
+
+SEE ALSO
+    dump(1), write(1), mem(1), spaces(1), hier(7)

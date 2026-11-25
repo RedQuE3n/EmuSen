@@ -1,15 +1,25 @@
 NAME
-    diff - compare a snapshot against current memory
+    diff - compare a saved memory snapshot against current memory
 
 SYNOPSIS
     diff <name> [<count>]
 
 DESCRIPTION
-    Compares a snapshot saved with 'snapshot' against that same space's
-    CURRENT contents and lists every byte address that's different now
-    (default 20 shown). Doesn't touch or replace the saved snapshot, so the
-    same baseline can be diffed again later against a further state.
+    Compares a memory space snapshot previously captured with snapshot(1)
+    under <name> against the current contents of that same memory space,
+    listing addresses whose byte values changed (at most <count> entries,
+    default 20, parsed as hex).
+
+    The stored snapshot is not modified, so the same baseline can be
+    compared repeatedly as execution advances.
 
 EXAMPLES
     diff before
     diff before 50
+
+EXIT STATUS
+    0   Comparison printed (or usage/not-found message printed).
+    1   No target attached, invalid argument, or session service fault.
+
+SEE ALSO
+    snapshot(1), search(1), mem(1), spaces(1)

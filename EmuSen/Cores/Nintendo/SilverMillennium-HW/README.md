@@ -1,10 +1,8 @@
-# SilverMillennium Hardware (the shared hardware of the Nintendo cores)
+# SilverMillennium Hardware
 
-Not a console: one Rust crate per chip that more than one Nintendo core can use, so that each can be used alone.
+Shared chip-level Rust crates used across Nintendo cores and `Platform/systems`. Not a console core: each chip lives in its own standalone crate.
 
-- `silvermillennium-sm83` — the SM83's instructions as text, the Game Boy's processor as MercuryRT's debugger and the
-  Game Boy's pack disassemble it, with no execution. It was `Cores/Shared/emusen-sm83` until 2026-10-23.
+- `silvermillennium-sm83` — `#![no_std]` SM83 instruction table and disassembler (no execution), shared by `MercuryRT`'s `DEBUG_DISASSEMBLE` and `Platform/systems`'s Game Boy disassembler.
 
-Named for the Silver Millennium, the Moon Kingdom of the Sailor Guardians, as Beryl Hardware and BlackMoon Hardware are
-named for the Sega and Sony cores' factions (decided 2026-10-23, `EmuSen_Core_Naming_Scheme.md` §2). The index is
-`Man pages/Hardware/Nintendo/SilverMillennium-HW/README.md`.
+Named for the Silver Millennium (the Moon Kingdom of the Sailor Guardians), alongside Beryl Hardware (Sega) and BlackMoon Hardware (Sony) — see [`Overview_and_Architecture.md#core-and-component-naming-scheme`](../../../../Docs/EmuSen%20Manual/Overview_and_Architecture.md#core-and-component-naming-scheme).
+For full crate contracts and placement rules, see [`Docs/Man pages/Hardware/Nintendo/SilverMillennium-HW/README.md`](../../../../Docs/Man%20pages/Hardware/Nintendo/SilverMillennium-HW/README.md).

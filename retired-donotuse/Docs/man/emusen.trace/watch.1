@@ -1,0 +1,35 @@
+NAME
+    watch - track reads/writes to a memory range
+
+SYNOPSIS
+    watch add <space> <addr> <len> [write|read|both]
+    watch list
+    watch log <id> [<count>]
+    watch summary <id>
+    watch clear <id>
+    watch remove <id>
+
+DESCRIPTION
+    'add' registers a watch over <addr>..<addr>+<len>-1 in <space> (default
+    kind: write) and starts recording matching accesses as they happen -
+    this is a LIVE, triggered mechanism (see 'framelog' for the sampled-
+    every-frame alternative, and 'callers'/'writers'/'readers' for static
+    analysis that doesn't require the access to actually happen first).
+    'log' shows a watch's recorded (sequence, kind, address, value, context)
+    events, newest last. 'summary' groups those events by access site
+    instead of listing every one - the dynamic, addressing-mode-agnostic
+    equivalent of 'readers'/'writers'. 'clear' empties a watch's recorded
+    events without removing the watch itself; 'remove' deletes it entirely.
+
+    On a core of the core ABI, a read or both watch sees loads only where
+    the core claims DEBUG_READS, and only in the spaces it reports loads
+    for (on the PlayStation: R3000BUS, RAM and SCRATCH); elsewhere a read
+    watch records nothing and a both watch records the stores. Each
+    event's context is the loading instruction's address - see
+    EmuSen_CoreAPI.md section 6.14.1.
+
+EXAMPLES
+    watch add WRAM 13c6 1
+    watch add RAM 20000 4 read
+    watch log 1
+    watch summary 1

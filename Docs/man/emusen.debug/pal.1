@@ -1,13 +1,20 @@
 NAME
-    pal - dump a color palette
+    pal - dump color palettes from the attached core
 
 SYNOPSIS
     pal [<index>]
 
 DESCRIPTION
-    Prints every palette's colors as hex RRGGBB triples, or just <index>'s
-    palette if given.
+    Prints every color palette reported by the attached core as hex RRGGBB
+    color triples, or prints only palette <index> when given.
 
 EXAMPLES
     pal
     pal 3
+
+EXIT STATUS
+    0   Palette output printed (or refusal if core exposes no palettes).
+    1   No target attached, invalid index, or session service fault.
+
+SEE ALSO
+    tile(1), tilemap(1), sprites(1), regs(1)

@@ -1,0 +1,24 @@
+NAME
+    su - switch this shell's active account
+
+SYNOPSIS
+    su [name]
+
+DESCRIPTION
+    Switches THIS shell (this tmux session, if any - see 'tmux') to <name>,
+    or back to 'root' with no argument, matching real su's own default
+    target. <name> must already exist (see 'useradd'). Does NOT check
+    'passwd's stored password hash - nothing in this shell enforces
+    anything based on which account is active yet, so su succeeds
+    unconditionally for any existing account. That enforcement (e.g. a
+    restricted account that can't run mutating commands) is real future
+    work, not yet built - this pass is the identity/account plumbing it
+    will eventually sit on top of, nothing more.
+
+    A new session created with 'tmux new' inherits whoever created it
+    (not always 'root') and a ROM swap preserves each session's own current
+    account across the rebuild - see 'tmux'/'core'.
+
+EXAMPLES
+    su
+    su parent

@@ -1,15 +1,27 @@
 NAME
-    sort - sort lines
+    sort - sort lines of text
 
 SYNOPSIS
-    sort [-n] [-r]
+    sort [-n] [-r] [text...]
 
 DESCRIPTION
-    Sorts piped stdin (or trailing literal text) by line - ordinal string
-    comparison by default, numeric with -n, reversed with -r. No -u (that's
-    'uniq's job - pair them, 'sort | uniq', the way real shell usage does
-    before reaching for 'sort -u' as a shortcut), no field/key selection, no
-    locale-aware collation.
+    Sorts lines from piped standard input (or trailing literal [text...]
+    joined by spaces). By default, lines are ordered by UTF-8 code-point
+    (ordinal) comparison. Combine with uniq(1) ('sort | uniq') to remove
+    duplicates.
+
+OPTIONS
+    -n  Parse each trimmed line as a 64-bit floating-point number (f64)
+        and sort numerically; lines that do not parse as numbers sort as
+        0.0.
+    -r  Reverse the sort order.
 
 EXAMPLES
     watch list | sort -n
+    cat /Logs/names.txt | sort -r | uniq
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    uniq(1), grep(1), awk(1)

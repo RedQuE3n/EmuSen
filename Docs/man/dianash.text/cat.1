@@ -1,16 +1,26 @@
 NAME
-    cat - print a file's contents
+    cat - concatenate and print files or standard input
 
 SYNOPSIS
-    cat <path>...
+    cat [path...]
 
 DESCRIPTION
-    Prints one or more real files' contents, concatenated in the order
-    given, walled to the project's own directory tree (see 'cd'). With no
-    <path> at all, passes piped stdin straight through unchanged instead -
-    the classic 'cat' idiom for previewing a pipeline mid-stage - rather
-    than erroring for a missing argument.
+    Reads one or more files inside the shell sandbox and prints their
+    contents concatenated in order, stripping trailing newlines at the
+    end of the combined output.
+
+    With no path arguments, cat passes piped standard input through
+    unchanged. If no paths are given and no standard input is piped,
+    cat fails with a usage message.
 
 EXAMPLES
-    cat notes.txt
+    cat /Logs/notes.txt
     watch log 1 | cat
+
+EXIT STATUS
+    0   All files or standard input printed.
+    1   No paths and no piped stdin, path outside sandbox, file not
+        found, or read error.
+
+SEE ALSO
+    head(1), tail(1), xxd(1), nano(1)

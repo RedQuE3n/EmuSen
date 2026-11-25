@@ -1,13 +1,27 @@
 NAME
-    head - print the first lines of a file or stdin
+    head - output the first lines of input or a file
 
 SYNOPSIS
     head [-n N] [path]
 
 DESCRIPTION
-    Prints the first N lines (default 10) of piped stdin, or a real file if
-    <path> is given (walled to the project's own directory tree - see 'cd').
+    Prints the first N lines (default 10) of piped standard input, or of
+    [path] inside the shell sandbox when no standard input is piped.
+
+OPTIONS
+    -n N
+        Number of leading lines to print (non-negative integer, default
+        10).
 
 EXAMPLES
     history | head -n 5
-    head notes.txt
+    head /Logs/run.log
+    head -n 20 /Logs/notes.txt
+
+EXIT STATUS
+    0   Lines printed.
+    1   Invalid -n value, missing input and path, path outside sandbox,
+        or file not found.
+
+SEE ALSO
+    tail(1), cat(1), wc(1)

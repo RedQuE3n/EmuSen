@@ -1,30 +1,46 @@
 NAME
-    queue - the runner's slots, and a slot for a heavy job
+    queue - inspect runner resource slots and acquire a slot prefix
 
 SYNOPSIS
     queue
-    queue ask CLASS [--gb N] [--as WHO]
+    queue ask CLASS [--gb N] [--min N] [--as WHO]
 
 DESCRIPTION
-    A command of the emusen.testing module. The desktop's slots per class
-    (two cpu, one gpu, from ~/.config/EmuSen/testing/runners.json) are
-    lock files under ~/.cache/emusen/testing/queue/, held with flock(2).
-    trial takes a cpu slot for each step and waits for one otherwise.
+    Command of the emusen.testing module. Manages per-class execution
+    slots configured in ~/.config/EmuSen/testing/runners.json (default
+    desktop configuration: two 'cpu' slots and one 'gpu' slot). Slots
+    are backed by flock(2) lock files under
+    ~/.cache/emusen/testing/queue/. trial(1) automatically acquires cpu
+    slots for its concurrent steps.
 
-    queue lists every slot, tab-separated: class, slot, held or free, and
-    who holds it and since when, as the holder wrote it.
+    With no arguments, prints one tab-separated row per slot: class,
+    slot path, state ('held' or 'free'), holder name, and timestamp.
 
-    queue ask waits until a slot of CLASS is free and prints a command
-    prefix: flock on that slot, then systemd-run --user --scope with
-    CPUWeight=20, MemoryMax=N G (default 10) and MemorySwapMax=2G. The
-    command run after it holds the slot for as long as it runs; if another
-    job took the slot in between, flock waits. Each ask is a row of the
-    store's queue table.
+    'queue ask CLASS' blocks until a slot of CLASS is available (or
+    until interrupted), logs the request to the store's queue table, and
+    prints a command prefix invoking flock(1) on that slot followed by
+    'systemd-run --user --scope' with CPUWeight=20, MemoryMax=<gb>G, and
+    MemorySwapMax=2G. Running a command after that prefix holds the slot
+    for the duration of the command.
 
-    When the household's lease service arrives, the one function that
-    takes a slot calls it instead of the lock files. See EmuSen_Testing.md
-    §3.8.
+OPTIONS
+    --gb N
+        MemoryMax limit in GiB passed to systemd-run (default: 10).
+    --min N
+        Accepted by the option parser for compatibility; currently
+        ignored.
+    --as WHO
+        Requester name recorded in the slot lock and queue table
+        (default: $USER).
 
 EXAMPLES
     queue
-    $(dianash -c 'queue ask cpu --gb 8 --as studio-p1') cargo build --release
+    $(dianash -c 'queue ask cpu --gb 8 --as studio') cargo build --release
+
+EXIT STATUS
+    0   Slot table printed or slot prefix acquired.
+    2   Unknown subcommand, unknown slot class, invalid option value, or
+        interrupted while waiting.
+
+SEE ALSO
+    trial(1), results(1)

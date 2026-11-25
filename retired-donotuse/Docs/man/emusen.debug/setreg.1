@@ -1,0 +1,54 @@
+NAME
+    setreg - write a CPU register
+
+SYNOPSIS
+    setreg <register> <value>
+    setreg <cpu> <register> <value>
+
+DESCRIPTION
+    Sets one of a processor's registers to a value. Until this existed the
+    debugger could read every register and change none of them, which meant
+    a hypothesis could only ever be tested by editing memory and waiting to
+    see whether the machine happened to reload the register from it.
+
+    What it is actually for is counterfactuals. Halt on the compare that
+    gates a routine, flip the register it compares, resume, and watch what
+    the game does down the branch it did not take. That answers 'is this
+    check the reason my sprite never appears' in one step, where coverage
+    and breakpoints can only establish that the branch was not taken.
+
+    It also skips a hang: forcing PC past a spin loop lets a boot sequence
+    continue far enough to show what the NEXT problem is, which is often
+    worth more than the one you are stopped on.
+
+    Values are hex, and are REFUSED rather than truncated if they do not fit
+    the register's width - a silently masked value would be a wrong answer
+    reported as a success. An unknown register name lists the ones that chip
+    actually has.
+
+    Kept separate from 'regs' on purpose. 'regs' is read-only, which is what
+    lets an always-live shell answer it instantly off the emulation thread;
+    folding a write into it would drag every register dump onto the
+    emulation thread's next frame, and writing a register from another
+    thread would be a race besides.
+
+OTHER PROCESSORS
+    A scope word writes another chip's registers - 'cpus' lists which ones
+    support it at all. Not every chip does: the GSU and the NEC DSP report
+    their registers through debug accessors with no write path behind them,
+    so they refuse rather than pretending. 'cpus' prints 'setreg' in a
+    chip's supported list only when it really is writable.
+
+    Take care with a halted coprocessor: only one chip halts at a time, so
+    writing a register on a chip that is still running races its own
+    execution.
+
+EXAMPLES
+    setreg a 0007
+    setreg pc 8123
+    setreg p 34
+    setreg spc a 00
+    setreg sa1 x 0010
+
+SEE ALSO
+    regs, cpus, bp, step, eval

@@ -1,22 +1,39 @@
 NAME
-    sed - stream substitution
+    sed - perform stream text substitution
 
 SYNOPSIS
-    sed s/pattern/replacement/[gi]
-    sed <expr> <text...>
+    sed s/pattern/replacement/[gi] [text...]
 
 DESCRIPTION
-    A basic sed-style filter supporting only the s/// substitution command
-    (no line addressing, no d/p/hold-space/etc). The delimiter can be any
-    character, matching real sed's own 's#/bin#/usr/bin#' convention, with
-    '\<delim>' escaping a literal delimiter inside the pattern/replacement.
-    Pattern is a .NET regex. Without 'g', only the first match on EACH LINE
-    is replaced (not just the first match in the whole piped blob) - most
-    output this runs against (regs, watch log, ...) is multi-line, so this
-    matters. Replacement supports '&' (whole match) and \1-\9 (capture
-    groups), same as real sed. Real use is as a pipeline stage; standalone
-    'sed <expr> <text...>' works too when there's nothing to pipe from.
+    Substitutes matches of <pattern> with <replacement> on each line of
+    piped standard input, or on trailing literal [text...] when no
+    standard input is piped. Only the s/// substitution command is
+    supported.
+
+    Any character may serve as the delimiter (for example
+    's#/old#/new#'); prefixing the delimiter with '\' matches it
+    literally inside the pattern or replacement.
+
+    Patterns use Rust's regex engine (non-quantifier '{' and '}' are
+    treated as literals; look-around assertions and back-references are
+    not supported). In replacements, '&' expands to the full match and
+    '\1' through '\9' expand to capture groups (a group index not
+    present in the pattern expands to literal '$N').
+
+OPTIONS
+    g   Replace every match on each line (without g, only the first
+        match per line is replaced).
+    i   Match <pattern> case-insensitively.
 
 EXAMPLES
     regs | sed s/PC=/pc=/
-    echo hello | sed s/hello/hi/
+    echo hello world | sed s/o/0/g
+    echo foo/bar | sed 's#/#-#g'
+
+EXIT STATUS
+    0   Substitution completed (or usage printed with no expression).
+    1   Missing input, unsupported command, malformed expression, or
+        invalid regular expression.
+
+SEE ALSO
+    grep(1), awk(1), echo(1)

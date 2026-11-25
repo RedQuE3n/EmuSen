@@ -1,23 +1,28 @@
 NAME
-    while, until - loop while/until a condition holds
+    while, until - execute a loop while or until a condition holds
 
 SYNOPSIS
     while LIST; do LIST; done
     until LIST; do LIST; done
 
 DESCRIPTION
-    'while' repeats its body as long as the condition's last pipeline exits
-    0; 'until' repeats as long as it does NOT (i.e. until it succeeds). Same
-    'break'/'continue' as 'for'. A shared 10-second wall-clock budget (also
-    counted against by any nested $(...) command substitution, so it can't
-    be bypassed that way) aborts a typo'd infinite loop with a clear error
-    instead of hanging the console - a real 'while true; do echo x; done'
-    prints for about 10 seconds, then cleanly reports the timeout.
+    'while' repeatedly executes its body as long as the condition LIST
+    exits 0. 'until' repeatedly executes its body as long as the
+    condition LIST exits non-zero.
 
-    An interrupt (Ctrl-C at a terminal, or the host's cancel) ends the loop
-    at the next iteration, between the commands of a list and the stages of
-    a pipeline: the line prints '^C' and $? is 130.
+    break(1) exits the loop immediately; continue(1) jumps to the next
+    condition check. A shared 10-second wall-clock safety timeout (also
+    enforced across nested $(...) substitutions) aborts runaway loops
+    with an error. An interrupt (Ctrl-C or host cancel) terminates the
+    loop at the next check, prints '^C', and sets $? to 130.
 
 EXAMPLES
     while false; do echo never; done
-    until [ -f ready.txt ]; do echo waiting; done
+    until [ -f /Logs/ready.txt ]; do echo waiting; done
+
+EXIT STATUS
+    0   Body never ran, or the last executed body command exited 0.
+    N   Exit status of the last body command, or 130 if interrupted.
+
+SEE ALSO
+    for(1), if(1), break(1), continue(1), test(1)

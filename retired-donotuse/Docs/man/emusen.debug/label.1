@@ -1,0 +1,56 @@
+NAME
+    label - name addresses, so an investigation's findings survive it
+
+SYNOPSIS
+    label add <addr> <name> [<comment...>]
+    label list [<filter>]
+    label at <addr>
+    label remove <name|addr>
+    label clear
+    label load <path>
+    label save <path>
+
+DESCRIPTION
+    Attaches a name (and optionally a comment) to an address. Once named,
+    that address reads as '$00A3B2 <NmiHandler>' everywhere it appears -
+    'disasm', 'bt', 'bp list', 'counters top', 'profile top' - and the name
+    becomes usable as a symbol in any expression, so 'bp add NmiHandler'
+    and 'eval [PlayerX]' work.
+
+    This is the piece that makes a long investigation compound instead of
+    restarting. Without it, every session re-derives what $7E13C6 was, from
+    notes kept somewhere outside the tool. 'label save' writes the set out
+    and 'label load' merges one back in, so the naming survives a restart
+    and can be committed alongside whatever else an investigation produced.
+
+    'disasm' prints a label on its own line above the instruction it names,
+    the way a disassembly listing does, and annotates any operand whose
+    statically-resolvable target is itself labelled.
+
+    'label at <addr>' answers the reverse question - given an address in the
+    middle of a routine, which routine is it in? An exact hit prints the
+    name; otherwise it reports the nearest label at or below the address
+    with the offset ('MainLoop+12').
+
+    The map is one-to-one in both directions: renaming an address drops its
+    old name, and pointing an existing name at a new address moves it
+    rather than leaving two entries.
+
+FILE FORMAT
+    One entry per line, '<hex address> <name> [comment...]'. Blank lines and
+    lines starting with '#' are ignored. '$' and '0x' prefixes on the
+    address are accepted. Deliberately its own trivial format rather than
+    any one assembler's symbol file, since nothing here knows which
+    assembler a given ROM was built with; a real .sym/.mlb file converts
+    with one 'awk' line. Paths resolve inside this shell's sandbox - see
+    'man hier'.
+
+EXAMPLES
+    label add 00A3B2 NmiHandler main vblank entry
+    label add 7E13C6 CoinCount
+    label at 00A3C0
+    label list Nmi
+    label save /Usr/Home/Documents/smw.labels
+
+SEE ALSO
+    disasm, bt, bp, eval, callers

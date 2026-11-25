@@ -5,17 +5,20 @@ SYNOPSIS
     clear
 
 DESCRIPTION
-    Wipes whatever's currently on screen (a real Console.Clear(), not just
-    printing blank lines) so the next prompt starts at the top instead of at
-    the bottom of a long scrollback. Only does anything against a real
-    interactive console; a redirected/nonexistent one (a piped script, a
-    'source'd file, a headless test) is silently a no-op rather than an
-    error, since there was never a real screen to clear in the first place.
+    Clears the terminal screen and scrollback buffer by writing the ANSI
+    escape sequence ESC[H ESC[2J ESC[3J when standard output is attached
+    to an interactive terminal. When standard output is not a terminal
+    (such as a pipe, redirection, sourced script, or non-interactive
+    console), clear does nothing and succeeds.
 
-    In EmuSen.Mistress's own console window (a TextBox, not a real
-    terminal), 'clear' is replaced with a windowed equivalent instead: it
-    empties that window's own output text rather than touching a system
-    console that doesn't exist there.
+    A host frontend may override clear with its own implementation to
+    clear an embedded console view.
 
 EXAMPLES
     clear
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    dianash(1), echo(1)

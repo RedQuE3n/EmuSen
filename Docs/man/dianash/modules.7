@@ -1,38 +1,41 @@
 NAME
-    modules - what a command module may ask of the shell, and the
-    settings service it may be handed
+    modules - DianaSh command modules and the settings service
+
+SYNOPSIS
+    man modules
 
 DESCRIPTION
-    A command module is a library of commands the shell links or loads.
-    Its manifest names its commands, the job prefixes it claims, and the
-    services it asks for; the shell hands each call only the services
-    its host provides. Since version 1.1 of the module ABI a manifest
-    may also name settings, and the shell guards one service for it.
+    A command module is a library of commands linked into or loaded by
+    DianaSh. Its JSON manifest declares its module id, version, commands,
+    aliases, claimed job prefixes (for ps(1) and kill(1)), requested
+    services, permitted setting keys, and whether it may manage core
+    approvals. The shell provides each module only the services offered
+    by the host.
 
 THE SETTINGS SERVICE
-    emusen.settings, version 1, is the program's runtime: a console's
-    setting or a game's own, read and written with the runtime's own
-    checks, and a core library approved or its approval revoked. A
-    program that has a runtime provides it, as Mistress's shell does;
-    the shell alone does not, and a command that needs it says so.
+    The emusen.settings service (version 1) exposes console and per-game
+    runtime settings, as well as core approval and revocation. Hosts
+    that embed an EmuSen runtime provide this service; the standalone
+    dianash(1) executable does not, and commands requiring it report
+    that it is unavailable.
 
-    A module never reaches it directly. Its manifest names the keys it
-    may read and write ("settings", such as Engine for the cores
-    command) and whether it may approve and revoke ("approvals"). The
-    shell hands the module a table of its own over the program's that
-    lets through only those keys; a module that names none is handed no
-    settings service at all.
+    Modules never access runtime settings directly. Each module manifest
+    declares the exact setting keys it may read or write ("settings",
+    such as Engine for cores(1)) and whether it may approve or revoke
+    cores ("approvals"). The shell wraps the service in a per-module
+    guard that permits only those declared keys; a module declaring none
+    receives no settings service.
 
-    An approval is a decision, so it is taken only from a command typed
-    at the prompt: one run by a script given to source, inside $(...),
-    or fed by a pipe is refused, as trust refuses one. Revoking an
-    approval is allowed anywhere, since it only takes trust away.
+    Core approval is interactive-only: approval commands are accepted
+    only when typed directly at the prompt, and are refused inside
+    source(1) scripts, command substitutions $(...), or pipelines (the
+    same restriction as trust(1)). Revoking an approval is permitted
+    anywhere.
 
 EXAMPLES
     cores default "PlayStation 2" Sapphire
-    cores default --game /home/Games/ps2/jak.chd -
-    cores approve pcsx2
+    cores default --game /Games/ps2/jak.chd -
+    cores approve pcee2
 
 SEE ALSO
-    cores(1), trust(1), EmuSen_DianaSh.md (section 9.10: the settings
-    service and the shell's guard)
+    cores(1), trust(1), dianash(1), hier(7)

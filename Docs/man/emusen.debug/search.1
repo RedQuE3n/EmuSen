@@ -1,5 +1,5 @@
 NAME
-    search - classic 'first scan, then narrow' memory search
+    search - iterative memory value search
 
 SYNOPSIS
     search <space> <value> [<width>]
@@ -9,18 +9,46 @@ SYNOPSIS
     search reset
 
 DESCRIPTION
-    Finds where a game stores something without already knowing the address
-    (a score, lives, a flag). Start with 'search <space> <value>' to find
-    every address currently equal to <value> (width 1/2/4 bytes, default 1,
-    little-endian); then narrow with 'refine' (equal to a new value) or
-    changed/unchanged/increased/decreased (relative to the last scan/refine)
-    until only the real address remains. One search session at a time -
-    starting a new 'search <space> ...' replaces whatever was active.
-    Refuses to scan a live-hardware-routed space (e.g. CpuBus) outright,
-    since bulk-reading it can have real side effects (RDNMI clearing the
-    pending-NMI flag, etc.) - use a plain space like WRAM instead.
+    Finds unknown memory addresses (such as scores, lives, or flags) by
+    scanning a memory space for an initial value and narrowing candidates
+    as gameplay progresses.
+
+    One search session is active per shell; starting a new
+    'search <space> <value>' replaces any existing candidates. Values and
+    counts are parsed as hexadecimal. Refuses spaces backed by live
+    hardware registers with read side effects (such as CpuBus); use a
+    plain memory space such as WRAM.
+
+OPTIONS
+    <space> <value> [<width>]
+        Start a new search in <space> for little-endian <value> of byte
+        width <width> (1, 2, or 4; default 1).
+
+    refine <value>
+        Keep only candidate addresses currently equal to <value>.
+
+    changed | unchanged | increased | decreased
+        Keep only candidates whose current value changed, stayed equal,
+        increased, or decreased relative to the previous scan or refine.
+
+    list [<count>]
+        Print up to <count> current candidates and their live values
+        (default 20, parsed as hex).
+
+    reset
+        Discard the active search session.
 
 EXAMPLES
     search WRAM 64
     search refine 65
-    search list
+    search decreased
+    search list 10
+    search reset
+
+EXIT STATUS
+    0   Search step completed (or usage/refusal message printed).
+    1   No target attached, unknown space, invalid argument, or session
+        service fault.
+
+SEE ALSO
+    memfind(1), snapshot(1), diff(1), cheat(1), mem(1), spaces(1)

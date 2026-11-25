@@ -1,44 +1,62 @@
 NAME
-    units - the catalogue of test units, one per line
+    units - list test units and compute input cache keys
 
 SYNOPSIS
-    units [--kind cargo|dotnet] [--tier T] [--crates] [--rev REV] [--repo DIR]
+    units [--kind cargo|dotnet] [--tier T] [--crates] [--rev REV]
+          [--repo DIR]
     units --key UNIT [--profile P] [--rev REV] [--repo DIR]
 
 DESCRIPTION
-    A command of the emusen.testing module, the testing studio. A unit is
-    the smallest thing the studio runs and records as a whole. It is
-    derived from the revision's files, never from a hand-kept list:
+    Command of the emusen.testing module. Derives the catalogue of
+    runnable test units directly from repository files at --rev (read
+    from git objects, so --rev need not be checked out):
 
-        cargo    a Cargo root: a crate outside any workspace, or a
-                 workspace, counted once (Platform); --crates adds a
-                 workspace's member crates as 'crate' lines
-        dotnet   a test class of a test project (a project that
-                 references xunit), found in its sources: a class with
-                 [Fact] or [Theory] tests of its own, merged across
-                 partial files, or one inheriting an abstract class's
-                 tests; and 'lunap', the sibling toolkit's suite
+        cargo    Each Cargo root (standalone crate or workspace); with
+                 --crates, also emits 'crate' lines for workspace member
+                 crates.
+        dotnet   Each xunit test class (with [Fact] or [Theory] tests,
+                 merged across partial files or inherited from abstract
+                 bases), plus 'lunap' for the sibling toolkit suite.
 
-    Each line is tab-separated: kind, unit, tier tag, needs. The tier tag
-    is 'nightly' for a class carrying [Trait("Category", "nightly")] and
-    'land' otherwise.
+    Each output line is tab-separated: kind, unit, tier tag ('nightly'
+    for classes with [Trait("Category", "nightly")], else 'land'), and
+    needs.
 
-    --key prints a unit's key and what it is made of: the git object name
-    of every input folder (the unit's own, the crates and projects it is
-    built from, its workspace's manifest and lock, the declared extras of
-    Testing/inputs.json), the toolchain (rustc -V or dotnet --version),
-    the profile, ~/.cargo/config.toml for a cargo unit and the LunaP
-    checkout's commit for a dotnet one. The key is git's hash of those
-    lines. When an input has uncommitted changes the answer is 'none' and
-    the status 1: git's objects would not describe what runs, so nothing
-    may be reused for it.
+    With --key UNIT, computes the cache key used by trial(1) reuse from
+    the git object IDs of all input directories (unit, dependencies,
+    workspace manifest/lock, and declared Testing/inputs.json extras),
+    toolchain version (rustc -V or dotnet --version), profile,
+    ~/.cargo/config.toml (for cargo), or sibling LunaP commit (for
+    dotnet). If any input has uncommitted changes at HEAD, prints 'none'
+    and exits 1.
 
-    The repository is --repo, else EMUSEN_REPO, else the one holding the
-    working folder. Revisions are read from git objects, so a branch need
-    not be checked out. See EmuSen_Testing.md §3.1.
+OPTIONS
+    --kind cargo|dotnet
+        Restrict output to cargo or dotnet units.
+    --tier T
+        Restrict output to units tagged for tier T.
+    --crates
+        Include workspace member crates as 'crate' rows.
+    --key UNIT
+        Print the content hash key and input breakdown for UNIT.
+    --profile P
+        Cargo profile included in --key computation (default:
+        test-fast).
+    --rev REV
+        Git revision to inspect (default: HEAD).
+    --repo DIR
+        Git repository root (overrides EMUSEN_REPO).
 
 EXAMPLES
     units --kind cargo | wc -l
     units --tier nightly
     units --crates | grep '^crate' | grep Platform/
     units --key "cargo:EmuSen/Cores/Sony/Sapphire - PlayStation 2"
+
+EXIT STATUS
+    0   Catalogue or key printed.
+    1   With --key, an input has uncommitted changes (no key computed).
+    2   Invalid options, unknown unit, or git error.
+
+SEE ALSO
+    impact(1), trial(1), coverage(1), results(1)

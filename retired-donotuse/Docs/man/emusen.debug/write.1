@@ -1,0 +1,14 @@
+NAME
+    write - write one byte to memory
+
+SYNOPSIS
+    write <space> <addr> <value>
+
+DESCRIPTION
+    Writes a single byte to <space> at <addr>. Refuses outright if <space>
+    isn't writable (see 'spaces'). No pause/synchronization with the
+    emulation thread beyond whatever the current frontend provides (see the
+    'pause'/'resume' commands in EmuSen.Mistress's console window).
+
+EXAMPLES
+    write WRAM 10 ff

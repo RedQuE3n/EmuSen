@@ -1,16 +1,27 @@
 NAME
-    callers - find static call/jump references to an address
+    callers - find static call and jump references to an address
 
 SYNOPSIS
     callers <addr> [<scanstart> <scanlen>]
 
 DESCRIPTION
-    Scans CpuBus (default: <addr>'s own bank, $8000-$FFFF) for instructions
-    statically calling/jumping to <addr> - a static-analysis alternative to
-    setting a breakpoint and waiting for it to hit: finds every place that
-    COULD jump there, whether or not it was ever actually reached during a
-    given play session. See 'writers'/'readers' for the memory-access
-    equivalents.
+    Scans CpuBus for instructions that statically call or jump to hex
+    address <addr>. By default the scan covers <addr>'s own bank from
+    $8000 to $FFFF; supply hex <scanstart> and <scanlen> to scan a
+    different range.
+
+    Because the scan is static, it finds every direct call or jump site in
+    code regardless of whether that path executed during the current
+    session. Indirect jumps and computed jump tables are not visible to
+    static analysis; use bt(1) or bp(1) for runtime transfers.
 
 EXAMPLES
     callers 8000
+    callers 808000 808000 8000
+
+EXIT STATUS
+    0   Scan completed (or usage message printed).
+    1   No target attached, invalid hex argument, or session service fault.
+
+SEE ALSO
+    writers(1), readers(1), disasm(1), bt(1), bp(1)

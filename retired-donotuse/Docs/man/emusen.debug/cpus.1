@@ -1,0 +1,92 @@
+NAME
+    cpus - list the processors a debug command can be aimed at
+
+SYNOPSIS
+    cpus
+
+DESCRIPTION
+    A console is rarely one processor. An SNES is always at least two - the
+    65816 main CPU and the SPC700 driving sound - and a cartridge can add a
+    third: an SA-1, a SuperFX GSU, a NEC DSP. Each runs its own code, in its
+    own address space, from its own program counter. An SA-1 game's $00:82D7
+    is simply not the same instruction as the main CPU's $00:82D7.
+
+    'cpus' lists the ones this core publishes, with what each supports, and
+    every scoped command takes one of those names as an optional first word:
+
+        bp sa1 add 82D7            breakpoint on the coprocessor's PC
+        cov gsu on                 coverage of the GSU's instruction stream
+        bt sa1                     the coprocessor's own call chain
+        step spc over              step the sound CPU over a call
+        eval gsu r14 > 100         evaluate against the GSU's registers
+        regs spc                   just that chip's registers
+        disasm gsu                 disassemble from where the GSU is now
+
+    With no scope word every command means the main CPU, so nothing that
+    worked before needs rewriting. 'cop' is still accepted as an alias for
+    whichever cartridge coprocessor is present, from before chips had names:
+    the first listed after the main processor that is not the SPC700.
+
+THE MAIN PROCESSOR
+    The main processor is the first one 'cpus' lists. The order is the
+    core's statement, not the shell's guess: IDebugTarget.DebugCpus is
+    documented as main CPU first, and a v1 core's machine info lists its
+    processors main processor first (EmuSen_CoreAPI.md §6.4). The word
+    'cpu' always names that processor, whatever the core calls it, so
+    'regs cpu' and 'disasm cpu' mean the same on every core; a core's own
+    name for it ('m68k' on the Genesis) works as well. Whether a scoped
+    command speaks of a coprocessor is decided by position too, not by the
+    name. Until 2026-10-10 both were decided by the name 'cpu', so on
+    Nephrite, whose 68000 is 'm68k', 'regs cpu' and 'disasm cpu' refused,
+    a 68000 breakpoint was reported as a coprocessor's, and 'cop' meant
+    the 68000.
+
+WHAT EACH CHIP SUPPORTS
+    Support is not uniform, because the hardware is not uniform, and 'cpus'
+    prints per chip what is actually wired rather than letting a command
+    fail obscurely later:
+
+        bp      the core can halt this chip mid-instruction
+        cov     its executed addresses can be recorded
+        bt      it has a call/return seam to infer a stack from
+        regs    it reports named registers
+        disasm  it has a code space and a disassembler for its ISA
+
+    One absence is worth knowing about. The GSU and the SPC700 have no
+    call stack: the GSU's LINK/subroutine convention is register-based
+    rather than a stack the way the 65816's JSR/RTS is, so there is no
+    honest seam to infer frames from, and 'bt gsu' says so instead of
+    inventing them.
+
+    The SA-1 gets everything, because it IS a 65816: the same call/return
+    and interrupt seams the main CPU uses apply to it unchanged, so
+    'bt sa1', 'step sa1 out' and 'profile sa1' all work.
+
+    The NEC DSP gets everything too, by a different route. Its firmware
+    runs from a mask ROM the cartridge never exposes, so there is no code
+    to read - but the chip is still stepped one instruction at a time by
+    this core, and that is all a breakpoint needs. Its addresses are word
+    indices, not bytes, because that is what the DSP's own PC is: 'bp dsp
+    add 100' means the 257th instruction, and 'disasm DSPPRG' indexes the
+    same way. Its CALL/RET pair drives a real call stack, so 'bt dsp' and
+    'cov dsp funcs' map firmware nobody has source for.
+
+HALTING, AND WHICH CHIP RESUMES
+    Only one chip halts at a time. Whichever one hit its breakpoint is the
+    one that skips a check on resume, so 'continue' leaves the breakpoint it
+    is sitting on instead of instantly re-halting - and, just as important,
+    the OTHER chips do not skip theirs. Arming the main CPU's resume flag
+    for a coprocessor halt would let the coprocessor re-break immediately
+    on the same PC, forever.
+
+    A halt mid-frame keeps the unspent clock budget of whichever chip was
+    running, so resuming continues the frame rather than restarting it.
+
+EXAMPLES
+    cpus
+    bp gsu add 008010
+    cov sa1 on
+    regs dsp
+
+SEE ALSO
+    bp, cov, bt, step, profile, eval, regs, disasm, copflow

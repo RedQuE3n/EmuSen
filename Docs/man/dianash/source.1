@@ -1,27 +1,34 @@
 NAME
-    source, . - run a script file in this shell's own scope
+    source, . - execute commands from a file in the current shell
 
 SYNOPSIS
     source <path>
     . <path>
 
 DESCRIPTION
-    Runs <path>'s lines one at a time, exactly as if each had been typed at
-    the prompt - including multi-line if/for/while blocks spanning several
-    physical lines in the file. Runs in THIS shell's own variable scope, not
-    an isolated subshell: a variable the script sets is still set once
-    'source' returns, matching real bash 'source' (and unlike $(...) command
-    substitution, which does run in an isolated subshell - see 'man' on
-    command substitution... there isn't one; see the shell reference doc).
-    Blank lines and lines starting with '#' are skipped. A script's own
-    lines are NOT recorded into 'history'/!N recall, and '!'/'!!' expansion
-    is disabled for them - only the 'source' invocation itself shows up in
-    history, matching real bash. Walled to the project's own directory tree
-    (the same sandbox 'cd'/'ls'/'mv' use) - a path outside it is rejected.
-    A script ending mid-block, or a self-referential/mutually-recursive
-    'source' chain (capped at 20 nested levels), reports a clean error
-    instead of hanging the console or crashing it.
+    Reads <path> inside the shell sandbox and executes its lines in the
+    current shell's variable scope. Assignments made by the script remain
+    visible after source returns (unlike $(...) command substitution,
+    which runs in an isolated subshell).
+
+    Blank lines and lines whose first non-whitespace character is '#' are
+    skipped. Multi-line control-flow blocks (if, for, while, until) may
+    span lines in the file. Script lines are not added to command history
+    and do not perform '!' history expansion; only the source invocation
+    itself is recorded.
+
+    Nesting is capped at 20 levels to prevent recursive script loops. An
+    unterminated block at end of file prints an error and clears pending
+    input.
 
 EXAMPLES
-    source setup.txt
-    . setup.txt
+    source /Logs/setup.sh
+    . setup.sh
+
+EXIT STATUS
+    0   Script ran to completion (or stopped on a host request).
+    1   Missing path, path outside sandbox, file not found, read error,
+        or nesting depth exceeded.
+
+SEE ALSO
+    export(1), history(1), trust(1), dianash(1)

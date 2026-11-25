@@ -1,8 +1,19 @@
 NAME
-    pwd - print the current directory
+    pwd - print the current working directory
 
 SYNOPSIS
     pwd
 
 DESCRIPTION
-    Prints the process's current working directory - see 'cd'.
+    Prints the absolute host path of the shell's current working
+    directory.
+
+EXAMPLES
+    pwd
+    cd /Logs && pwd
+
+EXIT STATUS
+    0   Always succeeds.
+
+SEE ALSO
+    cd(1), ls(1), hier(7)

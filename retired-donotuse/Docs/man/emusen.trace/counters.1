@@ -1,0 +1,57 @@
+NAME
+    counters - per-address read/write/execute tallies
+
+SYNOPSIS
+    counters on <space>
+    counters off
+    counters clear
+    counters <addr> [<len>]
+    counters top [r|w|x|u] [<n>]
+    counters cold <addr> <len>
+
+DESCRIPTION
+    Counts every read, write and execute per address in one memory space.
+    Where 'watch' records individual events with context and 'cov' records
+    only whether an address ever executed, this records how MANY times -
+    which is the question behind 'is this table live or dead', 'which byte
+    of this struct does the game actually touch', and 'which half of this
+    buffer is the one being updated'.
+
+    Armed against one space at a time, because the tallies cost four arrays
+    the size of that space - worth paying where a question is being asked,
+    not worth paying everywhere by default. 'counters off' stops counting
+    but leaves what was collected readable; 'counters clear' zeroes the
+    counts and stays armed.
+
+    A bare address (with an optional length) reports totals over that range,
+    including how many of its bytes were touched at all. 'counters top'
+    ranks the busiest addresses - 'r' reads (default), 'w' writes, 'x'
+    executes, 'u' uninitialized reads. 'counters cold' is the inverse:
+    addresses in a range that nothing ever touched, which is what proves a
+    table is unused rather than merely quiet.
+
+UNINITIALIZED READS
+    An address read before anything wrote it (since counting started) is
+    counted separately. On real hardware that read returns whatever the RAM
+    powered up holding, so a game doing it is either relying on
+    power-on state or has a genuine bug - and an emulator whose RAM fill
+    differs from hardware will diverge exactly there. 'counters top u' is
+    the fastest way to find those addresses.
+
+    'Since counting started' is doing real work in that sentence: arm before
+    the moment being studied, not after, or an address the game initialized
+    earlier will look uninitialized.
+
+    Execution is counted against whatever space the core reports its program
+    counter in (the CPU bus), so counting a RAM space leaves the execute
+    column at zero unless that RAM is genuinely executed from.
+
+EXAMPLES
+    counters on WRAM
+    counters 13c6 8
+    counters top w 10
+    counters top u
+    counters cold 1000 200
+
+SEE ALSO
+    watch, cov, search, memfind, profile

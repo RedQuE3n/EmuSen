@@ -1,10 +1,20 @@
 NAME
-    [ - alias for 'test'
+    [ - evaluate a conditional expression
 
 SYNOPSIS
     [ EXPR ]
 
 DESCRIPTION
-    See 'man test' - '[' is the same evaluator under a different name. The
-    trailing ']' is required, matching real bash's own '[' builtin (which
-    really is just a differently-named 'test').
+    Alias for test(1). Evaluates EXPR and sets the exit status to 0 when
+    true or 1 when false. A literal closing ']' argument is required.
+
+EXAMPLES
+    if [ -f /Logs/run.log ]; then echo found; fi
+    [ "$COUNT" -gt 0 ] && echo non-zero
+
+EXIT STATUS
+    0   EXPR evaluates to true.
+    1   EXPR evaluates to false, is empty, or is missing the closing ']'.
+
+SEE ALSO
+    test(1), if(1), while(1)

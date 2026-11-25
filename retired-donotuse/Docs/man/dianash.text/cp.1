@@ -1,0 +1,18 @@
+NAME
+    cp - copy a file or directory
+
+SYNOPSIS
+    cp <src> <dst>
+    cp -r <src> <dst>
+
+DESCRIPTION
+    Copies a real file. If <dst> is an existing directory, <src> lands
+    inside it ('cp foo.txt logs/' -> 'logs/foo.txt'), matching real cp; an
+    existing destination FILE is silently overwritten (no -i prompt anywhere
+    in this shell, same as 'mv'). A directory requires -r, which copies it
+    and everything inside it. Both <src> and <dst> must resolve inside the
+    project's own directory tree - see 'cd'.
+
+EXAMPLES
+    cp notes.txt notes.bak.txt
+    cp -r home/Logs/Run1 home/Logs/Run1Backup

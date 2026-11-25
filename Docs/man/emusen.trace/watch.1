@@ -1,5 +1,5 @@
 NAME
-    watch - track reads/writes to a memory range
+    watch - record reads and writes to a memory range without halting
 
 SYNOPSIS
     watch add <space> <addr> <len> [write|read|both]
@@ -10,26 +10,55 @@ SYNOPSIS
     watch remove <id>
 
 DESCRIPTION
-    'add' registers a watch over <addr>..<addr>+<len>-1 in <space> (default
-    kind: write) and starts recording matching accesses as they happen -
-    this is a LIVE, triggered mechanism (see 'framelog' for the sampled-
-    every-frame alternative, and 'callers'/'writers'/'readers' for static
-    analysis that doesn't require the access to actually happen first).
-    'log' shows a watch's recorded (sequence, kind, address, value, context)
-    events, newest last. 'summary' groups those events by access site
-    instead of listing every one - the dynamic, addressing-mode-agnostic
-    equivalent of 'readers'/'writers'. 'clear' empties a watch's recorded
-    events without removing the watch itself; 'remove' deletes it entirely.
+    Registers live memory watches over hex range <addr>..<addr>+<len>-1 in
+    memory space <space> and records matching accesses into a bounded
+    event buffer without halting execution. Active watches also appear in
+    ps(1) as 'watch<id>' and can be removed with kill(1).
 
-    On a core of the core ABI, a read or both watch sees loads only where
-    the core claims DEBUG_READS, and only in the spaces it reports loads
-    for (on the PlayStation: R3000BUS, RAM and SCRATCH); elsewhere a read
-    watch records nothing and a both watch records the stores. Each
-    event's context is the loading instruction's address - see
-    EmuSen_CoreAPI.md section 6.14.1.
+    Read and 'both' watches capture loads only on cores that report read
+    hooks and only for spaces where the core publishes load events (for
+    example, R3000BUS, RAM, and SCRATCH on PlayStation). On cores without
+    read-hook support, a 'read' watch records nothing and a 'both' watch
+    records writes only. Each recorded event carries the executing
+    instruction address as context.
+
+OPTIONS
+    add <space> <addr> <len> [write|read|both]
+        Add a watch over <len> hex bytes starting at hex <addr> in <space>
+        (default access kind: 'write').
+
+    list
+        List active watches with IDs, spaces, address ranges, and access
+        kinds.
+
+    log <id> [<count>]
+        Show the last <count> recorded (sequence, kind, address, value,
+        context) events for watch #<id> (default 20), newest last.
+
+    summary <id>
+        Group watch #<id>'s buffered events by access site (PC context)
+        with hit counts - the runtime, addressing-mode-agnostic complement
+        to readers(1) and writers(1).
+
+    clear <id>
+        Clear buffered events for watch #<id> without removing the watch.
+
+    remove <id>
+        Remove watch #<id>.
 
 EXAMPLES
     watch add WRAM 13c6 1
     watch add RAM 20000 4 read
+    watch list
     watch log 1
     watch summary 1
+    watch remove 1
+
+EXIT STATUS
+    0   Command completed (or usage/not-found message printed).
+    1   No target attached, unknown space, invalid argument, or session
+        service fault.
+
+SEE ALSO
+    bp(1), framelog(1), counters(1), readers(1), writers(1), spaces(1),
+    ps(1), kill(1)

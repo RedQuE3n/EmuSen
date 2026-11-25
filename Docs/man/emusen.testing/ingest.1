@@ -1,32 +1,52 @@
 NAME
-    ingest - read result files, or land.sh's old logs, into the store
+    ingest - import test result files or legacy logs into the store
 
 SYNOPSIS
     ingest FILE... --runner R --tree SHA [--trial N] [--tier T]
     ingest --backfill [DIR] [--repo DIR]
 
 DESCRIPTION
-    A command of the emusen.testing module. Each FILE is a TRX file
-    (dotnet test --logger trx) or a JUnit file (nextest's, with its
-    flakyFailure and rerunFailure records); its tests become rows under
-    their class or crate, in a new trial or the one --trial names. A file
-    already read is skipped: its path is the trial's source.
+    Command of the emusen.testing module. Reads TRX files (from
+    'dotnet test --logger trx') or JUnit XML files (from cargo-nextest,
+    including flakyFailure and rerunFailure records) and inserts test
+    rows into the testing store under their class or crate, either in a
+    new trial or appended to --trial N. Files already imported (matched
+    by source path) are skipped.
 
-    --backfill reads what land.sh left under DIR (default
-    ~/.cache/emusen/tmp): each land/<sha>/ folder as a trial (cargo test's
-    per-test lines and counts, dotnet's summary and failed tests, or its
-    TRX where one was written, times.txt's wall times, GREEN where a .ok
-    file exists); each land-<name>.log transcript, which names the branch
-    of the trial its verdict line names or becomes a trial when its folder
-    is gone; and the full-suite logs under wiseman-rust/. A folder written
-    in the last hour without a .ok file is a land still running and is
-    left for the next backfill. Running it again adds only what is new.
+    With --backfill, scans DIR (default: ~/.cache/emusen/tmp) for legacy
+    land/<sha>/ directories, land-<name>.log transcripts, and full-suite
+    logs under wiseman-rust/, importing any runs not yet recorded. A
+    land directory modified within the last hour without a .ok marker is
+    treated as active and skipped. Cargo logs whose crate folder no
+    longer exists at HEAD are recorded as 'cargo:?<name>'.
 
-    A cargo log is named as land.sh named it, with ' ' and '/' written as
-    '_'; it is matched to the crate folders of HEAD, and one no crate
-    matches is recorded as cargo:?<name>. See EmuSen_Testing.md §5.
+OPTIONS
+    --runner R
+        Runner identifier to attach to ingested results (required when
+        importing FILE...).
+    --tree SHA
+        Git tree or commit SHA for the ingested run (required when
+        importing FILE...).
+    --trial N
+        Append rows to existing trial number N instead of creating a new
+        trial.
+    --tier T
+        Tier label recorded for the trial (default: ingest).
+    --backfill [DIR]
+        Scan and import historical land.sh logs under DIR.
+    --repo DIR
+        Git repository root for resolving crate folders during
+        --backfill (overrides EMUSEN_REPO).
 
 EXAMPLES
     ingest --backfill
-    ingest results/wiseman-linux-x64.trx --runner ci --tree 3351e722d
+    ingest results/suite-linux-x64.trx --runner ci --tree 3351e722d
     ingest target/nextest/studio/junit.xml --runner laptop --tree $(git rev-parse HEAD)
+
+EXIT STATUS
+    0   Ingestion completed.
+    2   Missing required arguments, invalid flags, unreadable file, or
+        store error.
+
+SEE ALSO
+    trial(1), results(1), units(1)

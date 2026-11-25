@@ -1,0 +1,26 @@
+NAME
+    search - classic 'first scan, then narrow' memory search
+
+SYNOPSIS
+    search <space> <value> [<width>]
+    search refine <value>
+    search changed|unchanged|increased|decreased
+    search list [<count>]
+    search reset
+
+DESCRIPTION
+    Finds where a game stores something without already knowing the address
+    (a score, lives, a flag). Start with 'search <space> <value>' to find
+    every address currently equal to <value> (width 1/2/4 bytes, default 1,
+    little-endian); then narrow with 'refine' (equal to a new value) or
+    changed/unchanged/increased/decreased (relative to the last scan/refine)
+    until only the real address remains. One search session at a time -
+    starting a new 'search <space> ...' replaces whatever was active.
+    Refuses to scan a live-hardware-routed space (e.g. CpuBus) outright,
+    since bulk-reading it can have real side effects (RDNMI clearing the
+    pending-NMI flag, etc.) - use a plain space like WRAM instead.
+
+EXAMPLES
+    search WRAM 64
+    search refine 65
+    search list

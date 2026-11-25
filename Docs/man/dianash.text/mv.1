@@ -1,23 +1,27 @@
 NAME
-    mv - move or rename a file or directory
+    mv - move or rename files and directories (currently suspended)
 
 SYNOPSIS
     mv <src> <dst>
 
 SUSPENDED
-    This command currently refuses to do anything. A published build puts
-    its own binaries in '/lib/EmuSen', inside this root - see 'man hier' -
-    and nothing in this shell tells the install apart from your data, so
-    'mv' could quietly relocate the running application out from under
-    itself. Parked until the tree distinguishes the two. Everything below
-    describes what it does when re-enabled.
+    mv currently refuses all invocations and exits with status 1. It was
+    parked when the shell sandbox still encompassed install binaries;
+    although '/' is now rooted at EmuSen's home directory (see hier(7)),
+    the safeguard remains in place. The section below describes the
+    command's intended interface.
 
 DESCRIPTION
-    Moves/renames a real file or directory. If <dst> is an existing
-    directory, <src> lands inside it ('mv foo.txt logs/' -> 'logs/foo.txt'),
-    matching real mv. An existing destination FILE is silently overwritten
-    (no -i prompt anywhere in this shell, by design). Both <src> and <dst>
-    must resolve inside the project's own directory tree - see 'cd'.
+    Moves or renames a file or directory within the shell sandbox. If
+    <dst> is an existing directory, <src> is moved inside it under its
+    base name. An existing destination file is overwritten without
+    prompting.
 
 EXAMPLES
-    mv scratch.txt home/Logs/
+    mv /Logs/scratch.txt /Logs/archive/
+
+EXIT STATUS
+    1   Always fails while suspended.
+
+SEE ALSO
+    cp(1), rm(1), hier(7)

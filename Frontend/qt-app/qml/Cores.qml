@@ -98,7 +98,7 @@ Kit.NormalizedCanvas {
     CoresEclipse {
         id: eclipseView
         anchors.fill: parent
-        visible: screen.eclipseCoresActive
+        visible: screen.eclipseCoresActive && !screen.tool.cardOpen
         focus: screen.eclipseCoresActive && screen.inputs && !screen.tool.cardOpen
         tool: screen.tool
         padFamily: screen.padFamily
@@ -159,6 +159,18 @@ Kit.NormalizedCanvas {
                 labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
             }
         }
+    }
+    Kit.Backdrop {
+        objectName: "coresCardBackdrop"
+        anchors.fill: parent
+        visible: screen.eclipseCoresActive && screen.tool.cardOpen
+        ground: "#0A1024"
+        pixelScale: screen.unit
+        fields: [
+            Kit.BackdropField { x: 1060 * screen.boardUnit; y: -140 * screen.boardUnit; width: 900 * screen.boardUnit; height: 760 * screen.boardUnit; color: "#1FC9A8"; blur: 90 * screen.boardUnit; opacity: 0.85 },
+            Kit.BackdropField { x: 1380 * screen.boardUnit; y: 420 * screen.boardUnit; width: 760 * screen.boardUnit; height: 760 * screen.boardUnit; color: "#6A4CF0"; blur: 110 * screen.boardUnit; opacity: 0.9 },
+            Kit.BackdropField { x: 900 * screen.boardUnit; y: -260 * screen.boardUnit; width: 700 * screen.boardUnit; height: 520 * screen.boardUnit; color: "#1D6BF2"; blur: 100 * screen.boardUnit; opacity: 0.8 }
+        ]
     }
     // A row's page under X and the List card under Select, on the Card form over the screen (EmuSen_Interface.md §15.5).
     MenuCard {

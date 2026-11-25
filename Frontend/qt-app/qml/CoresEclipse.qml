@@ -108,7 +108,7 @@ FocusScope {
         objectName: "coresEclipseFrame"
         anchors.fill: parent
         focus: true
-        form: Kit.Forms.Card
+        form: Kit.Forms.BigScreen
         surfaceDrawn: false
         helpShown: false
         padFamily: root.padFamily
@@ -250,6 +250,7 @@ FocusScope {
     }
 
     Item {
+        id: coresTopStrip
         objectName: "coresTopStrip"
         x: 96 * root.unit
         y: 146 * root.unit
@@ -261,14 +262,24 @@ FocusScope {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 12 * root.unit
             Repeater {
+                id: filterRep
                 model: root.view.filters ?? []
                 Item {
                     id: filterPill
                     required property int index
                     required property var modelData
                     objectName: "filterPill." + filterPill.modelData.key
+                    TextMetrics {
+                        id: filterMetrics
+                        font.family: Kit.Tokens.faceText
+                        font.pixelSize: 21
+                        font.weight: filterPill.modelData.active ? Font.DemiBold : Font.Normal
+                        text: filterPill.modelData.label ?? ""
+                    }
+                    readonly property real naturalWidth: filterMetrics.advanceWidth * root.unit + 44 * root.unit
+                    readonly property real maxWidth: Math.max(120 * root.unit, (coresTopStrip.width - viewButton.width - 12 * root.unit - Math.max(0, filterRep.count - 1) * 12 * root.unit) / Math.max(1, filterRep.count))
                     height: 52 * root.unit
-                    width: filterWords.implicitWidth + 44 * root.unit
+                    width: Math.min(filterPill.naturalWidth, filterPill.maxWidth)
                     readonly property bool focused: root.focusZone === 0 && root.focusedTopIndex === filterPill.index
                     Kit.FocusRing {
                         visible: filterPill.focused
@@ -292,12 +303,17 @@ FocusScope {
                         id: filterWords
                         objectName: "filterWords." + filterPill.modelData.key
                         anchors.centerIn: parent
+                        width: Math.max(1, filterPill.width - 24 * root.unit)
                         unit: root.unit
                         boardLine: true
                         text: filterPill.modelData.label ?? ""
                         size: 21
                         weight: filterPill.modelData.active ? Font.DemiBold : Font.Normal
                         color: filterPill.modelData.active ? Kit.Tokens.overAccent : (filterPill.modelData.attention ? Kit.Tokens.textStrong : "#E3E6F0")
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        horizontalAlignment: Text.AlignHCenter
+                        lineHeight: 0.95
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -314,8 +330,16 @@ FocusScope {
             objectName: "coresViewButton"
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
+            TextMetrics {
+                id: viewMetrics
+                font.family: Kit.Tokens.faceText
+                font.pixelSize: 21
+                font.weight: viewButton.active ? Font.DemiBold : Font.Normal
+                text: root.view.viewLabel ?? ""
+            }
+            readonly property real maxLabelWidth: Math.max(120 * root.unit, 424 * root.unit - viewBadge.width - 42 * root.unit)
             height: 52 * root.unit
-            width: viewContent.implicitWidth + 32 * root.unit
+            width: viewBadge.width + viewLabel.width + 42 * root.unit
             readonly property bool focused: root.focusZone === 0 && root.focusedTopIndex === (root.view.filters?.length ?? 1)
             readonly property bool active: root.view.showingRemaining === true
             Kit.FocusRing {
@@ -342,6 +366,7 @@ FocusScope {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10 * root.unit
                 CardGlyph {
+                    id: viewBadge
                     objectName: "viewBadge"
                     anchors.verticalCenter: parent.verticalCenter
                     unit: root.unit
@@ -355,14 +380,20 @@ FocusScope {
                     ring: viewButton.active ? Kit.Tokens.overAccent : Kit.Tokens.muted
                 }
                 CardLine {
+                    id: viewLabel
                     objectName: "viewLabel"
                     anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(viewMetrics.advanceWidth * root.unit, viewButton.maxLabelWidth)
                     unit: root.unit
                     boardLine: true
                     text: root.view.viewLabel ?? ""
                     size: 21
                     weight: viewButton.active ? Font.DemiBold : Font.Normal
                     color: viewButton.active ? Kit.Tokens.overAccent : Kit.Tokens.textStrong
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    horizontalAlignment: Text.AlignHCenter
+                    lineHeight: 0.95
                 }
             }
             MouseArea {

@@ -256,6 +256,13 @@ fn hold_cores_board(scene: &mut Scene<'_>, differences: &mut Vec<String>) {
         if glyphs != want_glyphs {
             differences.push(format!("{at}: coresHelp glyphs read {glyphs:?} where the board draws {want_glyphs:?}"));
         }
+        if let (Some(fw), Some(vb)) = (tree.find_named("filterPill.firmware"), tree.find_named("coresViewButton")) {
+            let fw_node = &tree.nodes[fw as usize];
+            let vb_node = &tree.nodes[vb as usize];
+            if fw_node.x + fw_node.w >= vb_node.x {
+                differences.push(format!("{at}: filterPill.firmware right {} overlaps coresViewButton left {}", fw_node.x + fw_node.w, vb_node.x));
+            }
+        }
     }
     scene.resize(1280, 800);
     scene.wait(200);

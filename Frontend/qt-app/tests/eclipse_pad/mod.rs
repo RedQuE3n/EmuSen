@@ -22,13 +22,20 @@ pub fn press(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, control: PadCon
     let button = control.press().expect("a control the interface hears");
     let shown = scene.property("screens", "shown");
     let bindings = scene.property("settingsModel", "bindingsShown");
+    let shaders = scene.property("settingsModel", "shadersShown");
     let set = |down: bool| match sdl_button(control) {
         Some(b) => sdl.press(pad, b, down),
         None => sdl.axis(pad, if control == PadControl::LeftTrigger { LEFT_TRIGGER } else { RIGHT_TRIGGER }, if down { PULLED } else { 0 }),
     };
     for down in [true, false] {
         set(down);
-        let heard = |s: &mut Scene<'_>| s.pad_held(button) == down || (down && (s.property("screens", "shown") != shown || s.property("settingsModel", "bindingsShown") != bindings));
+        let heard = |s: &mut Scene<'_>| {
+            s.pad_held(button) == down
+                || (down
+                    && (s.property("screens", "shown") != shown
+                        || s.property("settingsModel", "bindingsShown") != bindings
+                        || s.property("settingsModel", "shadersShown") != shaders))
+        };
         let mut waited = 0;
         while !heard(scene) && waited < 2000 {
             scene.wait(8);

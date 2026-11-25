@@ -9,7 +9,6 @@ pub mod fifo_records;
 pub(in crate::genesis) mod fm;
 pub(crate) mod header;
 pub(crate) mod io;
-#[allow(dead_code)]
 mod lfo_tables;
 pub(crate) mod render;
 pub mod sound;

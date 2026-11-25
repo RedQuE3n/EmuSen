@@ -235,6 +235,7 @@ fn card_act(themed: bool, key: &str) -> Option<(Shown, Option<String>)> {
 pub fn tool_back(themed: bool, opened_over: Option<Shown>, shown: Shown, ask: &Ask) -> Option<Shown> {
     match (opened_over, shown, ask) {
         (Some(Shown::Settings), Shown::Cores | Shown::Tool, Ask::Back) => Some(Shown::Settings),
+        (Some(Shown::Page), Shown::Tool, Ask::Back) => Some(Shown::Page),
         (Some(Shown::HomeCard), Shown::Cores | Shown::Themes | Shown::Tool, Ask::Back) => Some(library_of(themed)),
         (_, Shown::Cores | Shown::Tool, Ask::Back) => Some(library_of(themed)),
         _ => None,
@@ -259,6 +260,7 @@ pub fn page_step(themed: bool, origin: Shown, ask: &Ask) -> Option<Shown> {
     match ask {
         Ask::Back => Some(origin),
         Ask::Act(key) if key == HOME => Some(library_of(themed)),
+        Ask::Act(key) if key == crate::home_card::CHEATS => Some(Shown::Tool),
         Ask::Play => Some(Shown::Game),
         // A theme's trail (Eclipse's game page, EclipseGame:30-32): a section that opens at no key, and a console's games.
         Ask::Section(key) => crate::sections::by_key(key).filter(|s| s.at.is_none() && s.page.is_none()).map(|s| s.screen),
@@ -612,7 +614,14 @@ impl qobject::Screens {
     fn apply(mut self: Pin<&mut Self>, ask: Ask) {
         let was = shown_of(self.shown);
         let stepped = match was {
-            Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| (s, if let Ask::Open(key) = &ask { Some(key.clone()) } else { None })),
+            Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| {
+                let key = match &ask {
+                    Ask::Open(key) => Some(key.clone()),
+                    Ask::Act(key) if s == Shown::Tool => Some(key.clone()),
+                    _ => None,
+                };
+                (s, key)
+            }),
             Shown::Settings if self.over_card && ask == Ask::Back => Some((Shown::Pause, None)),
             Shown::Settings if self.over_consoles && ask == Ask::Back => Some((Shown::Consoles, None)),
             _ => tool_back(self.themed, self.tool_origin, was, &ask).map(|s| (s, None)).or_else(|| step_in(self.themed, was, &ask)),
@@ -648,17 +657,25 @@ impl qobject::Screens {
             self.as_mut().rust_mut().over_card = over_card;
         }
         if shown == Shown::Page && was != Shown::Page {
-            self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);
-            // Opened at a part by a door, for the game it names; else the game in hand's page from its start.
-            let at = QString::from(key.as_deref().unwrap_or_default());
-            let game = if key.is_some() { self.last_played.clone() } else { QString::default() };
-            if self.page_at != at {
-                self.as_mut().rust_mut().page_at = at;
-                self.as_mut().page_at_changed();
-            }
-            if self.page_game != game {
-                self.as_mut().rust_mut().page_game = game;
-                self.as_mut().page_game_changed();
+            if was == Shown::Tool {
+                let at = QString::from(if self.tool.to_string() == crate::home_card::CHEATS { CHEATS } else { "" });
+                if self.page_at != at {
+                    self.as_mut().rust_mut().page_at = at;
+                    self.as_mut().page_at_changed();
+                }
+            } else {
+                self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);
+                // Opened at a part by a door, for the game it names; else the game in hand's page from its start.
+                let at = QString::from(key.as_deref().unwrap_or_default());
+                let game = if key.is_some() { self.last_played.clone() } else { QString::default() };
+                if self.page_at != at {
+                    self.as_mut().rust_mut().page_at = at;
+                    self.as_mut().page_at_changed();
+                }
+                if self.page_game != game {
+                    self.as_mut().rust_mut().page_game = game;
+                    self.as_mut().page_game_changed();
+                }
             }
         }
         if let (Shown::HomeCard, Some(page)) = (shown, &key) {

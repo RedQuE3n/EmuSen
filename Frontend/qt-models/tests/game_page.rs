@@ -6,7 +6,7 @@ use emusen_qt_models::cheats::Switch;
 use emusen_qt_models::display::Crop;
 use emusen_qt_models::game_page::*;
 use emusen_qt_models::help::Screen;
-use emusen_qt_models::screens::{page_origin, page_step, step, step_in, Ask, Shown, GAME_PAGE};
+use emusen_qt_models::screens::{page_origin, page_step, step, step_in, tool_back, Ask, Shown, GAME_PAGE};
 
 const NOW: i64 = 1_762_700_000;
 
@@ -868,4 +868,88 @@ fn qt_3_4_12_overview_details_and_options_board_rows_aside_and_defaults() {
     page.changed(&Change::Standard(Some("pal".into())));
     assert_eq!(page.to_default(3), Outcome::Changed(Change::Standard(None)));
     assert!(!page.defaultable(5), "Package has no console default");
+}
+
+#[test]
+fn qt_3_4_12_media_cheats_and_package_subpage_rows_aside_coverable_and_help() {
+    // Media: empty note vs 5 tiles, coverable eligibility, position count hidden on pills, and help bar.
+    let mut empty = GamePage::new(read(), NOW);
+    empty.choose_tab(2);
+    assert_eq!(empty.media_note(), NO_MEDIA);
+    assert_eq!(empty.board_aside(None, 0), (String::new(), String::new()));
+    assert_eq!(empty.board_help(None, 0), Some(Screen::GamePageResumeBoard));
+    let mut never = read();
+    never.states.clear();
+    let mut never_page = GamePage::new(never, NOW);
+    never_page.choose_tab(2);
+    assert_eq!(never_page.board_help(None, 0), Some(Screen::GamePageStart));
+
+    let mut r = covered();
+    r.media.push(Media { path: "/m/manual.pdf".into(), kind: MediaKind::Manual });
+    let mut page = GamePage::new(r, NOW);
+    page.choose_tab(2);
+    assert_eq!(page.media_note(), "");
+    assert_eq!(page.media_cover(0), None, "player's taken screenshot is ineligible");
+    assert_eq!(page.media_cover(1).as_deref(), Some("screenshot"));
+    assert_eq!(page.media_cover(2).as_deref(), Some("titlescreen"));
+    assert_eq!(page.media_cover(3), None, "clip is ineligible");
+    assert_eq!(page.media_cover(4), None, "manual is ineligible");
+    page.changed(&Change::Cover(Some("titlescreen".into())));
+    assert_eq!(page.media_cover(2), None, "already cover is ineligible");
+    assert_eq!(page.board_aside(None, 1), (String::new(), "2 of 5".into()));
+    assert_eq!(page.board_aside(Some(0), 1), (String::new(), String::new()), "count hidden on pills");
+    assert_eq!(page.board_help(None, 1), Some(Screen::GamePageMedia));
+
+    // Cheats: switch rows, aside sentence and count, On/Off help, and X All cheats -> Tool -> B -> Page.
+    page.choose_tab(5);
+    let cheats = page.board_rows();
+    assert_eq!(cheats.len(), 3);
+    assert!(cheats.iter().all(|c| c.is_switch && !c.steps && !c.opens && c.sentence == CHEATS_SENTENCE));
+    assert_eq!((cheats[0].switch_on, cheats[1].switch_on), (true, false));
+    assert_eq!(page.board_aside(None, 0), (CHEATS_SENTENCE.into(), "1 of 3 · 1 of 3 on".into()));
+    assert_eq!(page.board_help(None, 0), Some(Screen::GamePageCheatOn));
+    assert_eq!(page.board_help(None, 1), Some(Screen::GamePageCheatOff));
+    assert_eq!(page_step(false, Shown::Home, &Ask::Act(emusen_qt_models::home_card::CHEATS.into())), Some(Shown::Tool));
+    assert_eq!(tool_back(false, Some(Shown::Page), Shown::Tool, &Ask::Back), Some(Shown::Page));
+
+    // Package subpage: flag, drawn_by_subpages, 4-part trail, idle ellipsis stripped, live words kept, row 0 vs row 1 help.
+    let mut pr = read();
+    pr.console = "Super Nintendo".into();
+    pr.title = "Aurora Drift".into();
+    pr.package = Package::Linked;
+    pr.layers = 2;
+    pr.package_job = Some(PackageJob { key: CHECK, request: serde_json::json!({ "op": "pkg-check" }) });
+    let mut page = GamePage::new(pr, NOW);
+    let all_tabs = TABS.iter().fold(0, |acc, t| acc | t.flag());
+    assert_eq!(page.subpage(), Subpage::None);
+    assert_eq!(Subpage::Package.flag(), 1 << 1);
+    page.choose_tab(4);
+    page.packaging = true;
+    assert_eq!(page.subpage(), Subpage::Package);
+    assert!(!page.drawn_by_subpages(all_tabs, 0, false), "without Package subpage flag, program draws it");
+    assert!(page.drawn_by_subpages(all_tabs, Subpage::Package.flag(), false), "with Package flag, theme draws it");
+    assert!(!page.drawn_by_subpages(all_tabs, Subpage::Package.flag(), true), "questions remain the program's");
+    assert_eq!(page.trail(), ["Consoles", "Super Nintendo", "Aurora Drift", PACKAGE_TITLE]);
+    let rows = page.board_rows();
+    assert_eq!(rows.iter().map(|r| (r.label.as_str(), r.value.as_str())).collect::<Vec<_>>(), [("Package", "Linked · 2 layers"), ("Check Package", "")]);
+    assert_eq!(page.board_aside(None, 0), (String::new(), "1 of 2".into()));
+    assert_eq!(page.board_aside(None, 1), (String::new(), "2 of 2".into()));
+    assert_eq!(page.board_help(None, 0), Some(Screen::GamePagePackageInfo));
+    assert_eq!(page.board_help(None, 1), Some(Screen::GamePagePackageCheck));
+    let mut run = emusen_qt_models::tools::jobs::Run::default();
+    run.take(&serde_json::json!({ "event": "start", "op": "pkg-check", "packages": 1, "refused": [] }), &[]);
+    page.job = Some((CHECK, true, run));
+    assert_eq!(page.board_rows()[1].value, "0 of 1");
+    assert_eq!(page.board_help(None, 1), Some(Screen::GamePagePackageStop));
+    page.job = None;
+    page.read.package_job = Some(PackageJob { key: MAKE, request: serde_json::json!({ "op": "pkg-make" }) });
+    assert_eq!(page.board_help(None, 1), Some(Screen::GamePagePackageMake));
+    let words = |s: Screen| emusen_qt_models::help::entries(s).iter().map(|e| e.1).collect::<Vec<_>>();
+    assert_eq!(words(Screen::GamePageMedia), ["View", "Set as cover", "Back", "Home"]);
+    assert_eq!(words(Screen::GamePageCheatOn), ["Turn off", "All cheats", "Back", "Home"]);
+    assert_eq!(words(Screen::GamePageCheatOff), ["Turn on", "All cheats", "Back", "Home"]);
+    assert_eq!(words(Screen::GamePagePackageCheck), ["Check", "Options", "Home"]);
+    assert_eq!(words(Screen::GamePagePackageMake), ["Make", "Options", "Home"]);
+    assert_eq!(words(Screen::GamePagePackageStop), ["Stop", "Options", "Home"]);
+    assert_eq!(words(Screen::GamePagePackageInfo), ["Options", "Home"]);
 }

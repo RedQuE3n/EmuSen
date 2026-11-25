@@ -288,6 +288,10 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageOpen => HelpScreen::GamePageChoose,
         Screen::GamePageDetail => HelpScreen::GamePageChoose,
         Screen::GamePageOption => HelpScreen::GamePageChange,
+        Screen::GamePageMedia => HelpScreen::GamePageView,
+        Screen::GamePageCheatOn | Screen::GamePageCheatOff => HelpScreen::GamePageChange,
+        Screen::GamePagePackageCheck | Screen::GamePagePackageMake | Screen::GamePagePackageStop => HelpScreen::GamePageChoose,
+        Screen::GamePagePackageInfo => HelpScreen::GamePageNone,
     };
     shown.repr
 }

@@ -61,7 +61,15 @@ pub mod qobject {
         PageOpen,
         PageDetail,
         PageOption,
-        /// 1.18: Eclipse's Settings Hotkeys bar (board #55: A Change, X Clear, B Back, START Home).
+        /// 1.18: Eclipse's boards for Media, Cheats and Package.
+        PageMedia,
+        PageCheatOn,
+        PageCheatOff,
+        PagePackageCheck,
+        PagePackageMake,
+        PagePackageStop,
+        PagePackageInfo,
+        /// 1.19: Eclipse's Settings Hotkeys bar (board #55: A Change, X Clear, B Back, START Home).
         SettingsHotkeys,
     }
 
@@ -110,7 +118,7 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 31] = [
+pub const KINDS: [HelpKind; 38] = [
     HelpKind::Continue,
     HelpKind::Game,
     HelpKind::Console,
@@ -141,6 +149,13 @@ pub const KINDS: [HelpKind; 31] = [
     HelpKind::PageOpen,
     HelpKind::PageDetail,
     HelpKind::PageOption,
+    HelpKind::PageMedia,
+    HelpKind::PageCheatOn,
+    HelpKind::PageCheatOff,
+    HelpKind::PagePackageCheck,
+    HelpKind::PagePackageMake,
+    HelpKind::PagePackageStop,
+    HelpKind::PagePackageInfo,
     HelpKind::SettingsHotkeys,
 ];
 
@@ -177,6 +192,13 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::PageOpen => Screen::GamePageOpen,
         HelpKind::PageDetail => Screen::GamePageDetail,
         HelpKind::PageOption => Screen::GamePageOption,
+        HelpKind::PageMedia => Screen::GamePageMedia,
+        HelpKind::PageCheatOn => Screen::GamePageCheatOn,
+        HelpKind::PageCheatOff => Screen::GamePageCheatOff,
+        HelpKind::PagePackageCheck => Screen::GamePagePackageCheck,
+        HelpKind::PagePackageMake => Screen::GamePagePackageMake,
+        HelpKind::PagePackageStop => Screen::GamePagePackageStop,
+        HelpKind::PagePackageInfo => Screen::GamePagePackageInfo,
         _ => Screen::Home,
     }
 }
@@ -448,7 +470,7 @@ impl qobject::ThemeHelpEntries {
             0 => QVariant::from(&(button.index() as i32)),
             1 => QVariant::from(&QString::from(*label)),
             2 => QVariant::from(&help::pair_of(*button).map_or(-1, |b| b.index() as i32)),
-            3 => QVariant::from(&((self.accept || *button != UiButton::Accept) && (self.defaultable || *action != Some(help::DEFAULT)) && (self.filterable || *action != Some(help::CONSOLES_FILTER)))),
+            3 => QVariant::from(&((self.accept || *button != UiButton::Accept) && (self.defaultable || !matches!(*action, Some(help::DEFAULT | help::SET_COVER))) && (self.filterable || *action != Some(help::CONSOLES_FILTER)))),
             4 => QVariant::from(&QString::from(action.unwrap_or_default())),
             _ => QVariant::default(),
         }

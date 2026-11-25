@@ -290,6 +290,12 @@ Item {
         value: themed.gameScreen?.pageSections ?? 0
         when: themed.pageModel !== null
     }
+    Binding {
+        target: themed.pageModel
+        property: "themeSubpages"
+        value: themed.gameScreen?.pageSubpages ?? 0
+        when: themed.pageModel !== null
+    }
     Slot {
         id: splashSlot
         objectName: "splash." + themed.objectName

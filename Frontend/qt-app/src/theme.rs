@@ -17,7 +17,7 @@ use emusen_theme_qt::actions::{Action, ActionSink, ScreenAction};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::host;
-use emusen_theme_qt::page::{action_rows, board_row_rows, card_rows, content_rows, pill_rows, PageFacts};
+use emusen_theme_qt::page::{action_rows, board_row_rows, card_rows, content_rows, media_tile_rows, pill_rows, PageFacts};
 use emusen_theme_qt::session::SessionFacts;
 use emusen_theme_qt::view;
 use std::cell::Cell;
@@ -733,6 +733,12 @@ impl qobject::ThemeFeed {
             row_sentence,
             row_place,
             defaultable: page.defaultable(),
+            media_tiles: media_tile_rows(&page.media_cards()),
+            media_note: page.media_note().to_owned(),
+            coverable: page.coverable(),
+            subpage: page.subpage() as i32,
+            subpage_title: page.subpage_title().to_owned(),
+            subpage_subtitle: page.subpage_subtitle().to_owned(),
         };
         if let Some(view) = self.engine().and_then(host::page) {
             view.show(&facts);

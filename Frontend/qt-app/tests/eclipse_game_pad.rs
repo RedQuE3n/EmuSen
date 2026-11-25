@@ -76,15 +76,16 @@ fn qt_3_4_12_every_pill_tab_link_and_card_is_reached_and_acted_on_by_pad_and_poi
         game::until(&mut scene, "the heart drawn empty", 2000, |s| eclipse_board::read(&s.tree(), "pill.2", "on") == "false");
         scene.pad(UiButton::Accept);
         game::until(&mut scene, "Favourite turned on again", 2000, |_| favourite(&world));
-        // The shoulders step the tabs: RB to Media (program's), LB to Options (Eclipse's), LB to Details (Eclipse's), tap States, LB to Overview (Eclipse's), RB back to States.
+        // The shoulders step all six Eclipse tabs in board order: States -> Media -> Details -> Options -> Cheats, then back to Overview -> States.
         assert_eq!(shown(&mut scene), (1, true), "States, Eclipse's");
         scene.pad(UiButton::PageDown);
-        game::until(&mut scene, "RB opening Media, the board's next tab, the program's", 2000, |s| shown(s) == (2, false));
-        // The program's page steps its own sections' order (Overview, States, Options, Media, Details), so LB from Media opens Options (Eclipse's).
-        scene.pad(UiButton::PageUp);
-        game::until(&mut scene, "LB on the program's Media opening Options, Eclipse's", 2000, |s| shown(s) == (4, true));
-        scene.pad(UiButton::PageUp);
-        game::until(&mut scene, "LB from Options opening Details, Eclipse's", 2000, |s| shown(s) == (3, true));
+        game::until(&mut scene, "RB opening Media, Eclipse's", 2000, |s| shown(s) == (2, true));
+        scene.pad(UiButton::PageDown);
+        game::until(&mut scene, "RB opening Details, Eclipse's", 2000, |s| shown(s) == (3, true));
+        scene.pad(UiButton::PageDown);
+        game::until(&mut scene, "RB opening Options, Eclipse's", 2000, |s| shown(s) == (4, true));
+        scene.pad(UiButton::PageDown);
+        game::until(&mut scene, "RB opening Cheats, Eclipse's", 2000, |s| shown(s) == (5, true));
         tap(&mut scene, "tab.1");
         game::until(&mut scene, "tapping States back to States, Eclipse's", 2000, |s| shown(s) == (1, true));
         scene.pad(UiButton::PageUp);
@@ -138,9 +139,8 @@ fn qt_3_4_12_every_pill_tab_link_and_card_is_reached_and_acted_on_by_pad_and_poi
         tap(&mut scene, "pill.2");
         game::until(&mut scene, "Favourite tapped on", 2000, |_| favourite(&world));
         for tab in [0, 2, 3, 4, 5] {
-            let eclipse = matches!(tab, 0 | 1 | 3 | 4);
             tap(&mut scene, &format!("tab.{tab}"));
-            game::until(&mut scene, &format!("tab {tab} tapped"), 2000, |s| shown(s) == (tab, eclipse));
+            game::until(&mut scene, &format!("tab {tab} tapped"), 2000, |s| shown(s) == (tab, true));
             states_back(&mut scene);
         }
         tap(&mut scene, "tab.1");

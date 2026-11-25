@@ -75,8 +75,10 @@ pub mod qobject {
         #[qproperty(bool, eclipse)]
         /// The running game's console display name for Eclipse's PAUSED breadcrumb.
         #[qproperty(QString, console)]
-        /// Question sentence shown under the heading on Eclipse Pause Ask pages.
+        /// Question sentence shown under the heading on Eclipse Pause Ask and Display pages.
         #[qproperty(QString, subtitle, READ, NOTIFY)]
+        /// Bottom-right live preview pill text on Eclipse Pause Display.
+        #[qproperty(QString, badge, READ, NOTIFY)]
         /// Footer row position ("4 of 8") for Eclipse Pause Card.
         #[qproperty(QString, position_line, cxx_name = "positionLine", READ, NOTIFY)]
         type PauseModel = super::PauseModelRust;
@@ -270,6 +272,7 @@ pub struct PauseModelRust {
     eclipse: bool,
     console: QString,
     subtitle: QString,
+    badge: QString,
     position_line: QString,
     card: Card,
     /// The page and the count of the rows the view holds, so a value's change is a data change and a page's a reset.
@@ -295,6 +298,7 @@ impl Default for PauseModelRust {
             eclipse: false,
             console: QString::default(),
             subtitle: QString::default(),
+            badge: QString::default(),
             position_line: QString::from(card.position_line().as_str()),
             card,
             rows_of: None,
@@ -529,7 +533,8 @@ impl qobject::PauseModel {
         let console = self.console.to_string();
         let title = QString::from(self.card.title(&game).as_str());
         let breadcrumb = QString::from(self.card.breadcrumb_for(&game, &console).as_str());
-        let subtitle = QString::from(self.card.subtitle().as_str());
+        let subtitle = QString::from(self.card.subtitle_for(&console).as_str());
+        let badge = QString::from(self.card.badge(&game).as_str());
         if self.title != title {
             self.as_mut().rust_mut().title = title;
             self.as_mut().title_changed();
@@ -541,6 +546,10 @@ impl qobject::PauseModel {
         if self.subtitle != subtitle {
             self.as_mut().rust_mut().subtitle = subtitle;
             self.as_mut().subtitle_changed();
+        }
+        if self.badge != badge {
+            self.as_mut().rust_mut().badge = badge;
+            self.as_mut().badge_changed();
         }
         self.described();
     }

@@ -24,6 +24,7 @@ MenuCard {
     title: pause.title
     breadcrumb: pause.breadcrumb
     subtitle: pause.subtitle
+    badge: pause.badge
     positionLine: pause.positionLine
     current: pause.current
     paneDrawn: pane.model.shown

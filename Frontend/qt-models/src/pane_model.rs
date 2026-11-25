@@ -49,6 +49,11 @@ pub mod qobject {
         /// A disc's cover beside its name (`title`) and the sentence; a cover-less disc draws the generated card.
         #[qproperty(bool, cover, READ, NOTIFY)]
         #[qproperty(QString, title, READ, NOTIFY)]
+        /// Five-bar volume meter on Eclipse Pause Sound (`Volume`) and filled bar count (0..=5).
+        #[qproperty(bool, meter, READ, NOTIFY)]
+        #[qproperty(i32, bars, READ, NOTIFY)]
+        /// Visual memory card tiles on Eclipse Pause Memory Cards Drawer.
+        #[qproperty(bool, drawer, READ, NOTIFY)]
         type PaneModel = super::PaneModelRust;
     }
 
@@ -94,6 +99,9 @@ pub struct PaneModelRust {
     blank: QString,
     cover: bool,
     title: QString,
+    meter: bool,
+    bars: i32,
+    drawer: bool,
     tiles: Vec<[String; 3]>,
     ringed: Vec<bool>,
 }
@@ -149,6 +157,9 @@ impl qobject::PaneModel {
         let (shown, moment) = (!kind.is_empty() && kind != QString::from("none"), kind == QString::from("moment"));
         let slots = kind == QString::from("slots");
         let cover = kind == QString::from("cover");
+        let meter = kind == QString::from("meter");
+        let drawer = kind == QString::from("drawer");
+        let bars = v["bars"].as_i64().unwrap_or(0) as i32;
         if self.slots != slots {
             self.as_mut().rust_mut().slots = slots;
             self.as_mut().slots_changed();
@@ -190,7 +201,19 @@ impl qobject::PaneModel {
         let blank = QString::from(&words(&v["blank"]));
         if self.blank != blank {
             self.as_mut().rust_mut().blank = blank;
-            self.blank_changed();
+            self.as_mut().blank_changed();
+        }
+        if self.meter != meter {
+            self.as_mut().rust_mut().meter = meter;
+            self.as_mut().meter_changed();
+        }
+        if self.bars != bars {
+            self.as_mut().rust_mut().bars = bars;
+            self.as_mut().bars_changed();
+        }
+        if self.drawer != drawer {
+            self.as_mut().rust_mut().drawer = drawer;
+            self.drawer_changed();
         }
     }
 }

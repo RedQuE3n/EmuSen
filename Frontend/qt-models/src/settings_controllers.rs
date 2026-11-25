@@ -1217,14 +1217,16 @@ pub struct GameRow {
     pub steps: bool,
     pub opens: bool,
     pub dimmed: bool,
+    pub section_end: bool,
     pub sentence: String,
     pub muted: String,
+    pub muted_eclipse: String,
 }
 
 impl GameRow {
     pub fn to_json(&self) -> Value {
         json!({ "key": self.key, "label": self.label, "value": self.value, "steps": self.steps, "opens": self.opens,
-                "dimmed": self.dimmed, "sentence": self.sentence, "muted": self.muted })
+                "dimmed": self.dimmed, "sectionEnd": self.section_end, "sentence": self.sentence, "muted": self.muted, "mutedEclipse": self.muted_eclipse })
     }
 
     /// The rows as `SettingsModel.cardControllers` gives them.
@@ -1240,8 +1242,10 @@ impl GameRow {
                 steps: r["steps"] == true,
                 opens: r["opens"] == true,
                 dimmed: r["dimmed"] == true,
+                section_end: r["sectionEnd"] == true,
                 sentence: text(r, "sentence"),
                 muted: text(r, "muted"),
+                muted_eclipse: text(r, "mutedEclipse"),
             })
             .collect()
     }
@@ -1300,6 +1304,7 @@ impl SettingsView {
                 steps: true,
                 sentence,
                 muted: self.card_word("seat_muted"),
+                muted_eclipse: fill(&self.card_word("player_hint"), &[("n", &n)]),
                 ..GameRow::default()
             });
         }
@@ -1319,6 +1324,7 @@ impl SettingsView {
                 key: "gbindings".into(),
                 label: self.card_word("bindings_label"),
                 opens: true,
+                section_end: true,
                 sentence: fill(&self.card_word("bindings_line"), &names),
                 muted: self.card_word("bindings_muted"),
                 ..GameRow::default()

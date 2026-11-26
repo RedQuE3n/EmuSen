@@ -412,6 +412,93 @@ ThemeScreen {
                             delegate: PillSlot {}
                         }
                     }
+                    // Upper-right Cover & Facts Card (visible: !root.inSubpage, x: 1148, y: 150, w: 676).
+                    Rectangle {
+                        id: heroCard
+                        objectName: "gameHeroCard"
+                        visible: !root.inSubpage
+                        x: 1148 * root.px
+                        y: 150 * root.px
+                        width: 676 * root.px
+                        readonly property string coverSource: Page.cover.length > 0 ? Page.cover : Page.picture
+                        readonly property real sidePad: 24 * root.px
+                        readonly property real topPad: 22 * root.px
+                        height: Math.max((heroArtBox.visible ? 244 : 108) * root.px + 2 * heroCard.topPad, heroFacts.height + 2 * heroCard.topPad)
+                        radius: 22 * root.px
+                        color: Tokens.inputSurface
+                        border.width: 1 * root.px
+                        border.color: ink.plateEdge
+                        Item {
+                            id: heroArtBox
+                            objectName: "gameHeroCover"
+                            visible: heroCard.coverSource.length > 0
+                            x: heroCard.sidePad
+                            y: heroCard.topPad
+                            width: 196 * root.px
+                            height: 244 * root.px
+                            RoundPicture {
+                                id: heroArt
+                                objectName: "gameHeroPicture"
+                                anchors.fill: parent
+                                source: heroCard.coverSource
+                                radius: 16 * root.px
+                                crop: true
+                                pixelScale: canvas.unit
+                            }
+                        }
+                        Column {
+                            id: heroFacts
+                            objectName: "gameHeroFacts"
+                            x: heroArtBox.visible ? heroArtBox.x + heroArtBox.width + 22 * root.px : heroCard.sidePad
+                            y: (heroCard.height - height) / 2
+                            width: heroCard.width - x - heroCard.sidePad
+                            spacing: 8 * root.px
+                            Line {
+                                objectName: "gameHeroKicker"
+                                unit: root.px
+                                width: parent.width
+                                visible: Page.kicker.length > 0
+                                text: Page.kicker
+                                boardLine: true
+                                capitalization: Font.AllUppercase
+                                color: ink.rose
+                                size: 13
+                                weight: Font.DemiBold
+                                spacing: 0.16 * 13
+                                elide: Text.ElideRight
+                            }
+                            Line {
+                                objectName: "gameHeroTitle"
+                                unit: root.px
+                                width: parent.width
+                                visible: Page.title.length > 0
+                                text: Page.title
+                                color: Tokens.textStrong
+                                size: 28
+                                weight: Tokens.weightTitle
+                                maximumLineCount: 2
+                                wrapMode: Text.WordWrap
+                                lineHeightMode: Text.FixedHeight
+                                lineHeight: 32
+                                elide: Text.ElideRight
+                            }
+                            Line {
+                                objectName: "gameHeroMeta"
+                                unit: root.px
+                                width: parent.width
+                                visible: Page.facts.length > 0
+                                text: Page.facts
+                                color: Tokens.muted
+                                size: 18
+                                weight: Tokens.weightSentence
+                                maximumLineCount: 4
+                                wrapMode: Text.WordWrap
+                                lineHeightMode: Text.FixedHeight
+                                lineHeight: 25
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
                     Tabs {
                         visible: !root.inSubpage
                         unit: root.px
@@ -1030,11 +1117,13 @@ ThemeScreen {
                                 unit: root.px
                                 controller: frame.controller
                                 model: Help.entries(Help.PageSections)
-                                color: "transparent"
-                                pad: 0
-                                // No glass: the box is the shoulders' own, 34 high (EclipseGame:92-94).
-                                tall: 34
+                                color: ink.glass
+                                borderColor: "#38F6E7D8"
+                                borderWidth: 1
+                                pad: 18
+                                tall: 46
                                 wordsColor: ink.help
+                                placeWords: Page.rowPlace.length > 0 ? Page.rowPlace : (Page.tab === Page.States && cards.activeFocus && cards.count > 0 && Page.note.length === 0 ? Words.place(cards.currentIndex, cards.count) : "")
                             }
                             Line {
                                 id: packagePlace
@@ -1092,14 +1181,20 @@ ThemeScreen {
                     pixelScale: canvas.unit
                     button: slot.button
                     label: slot.label
-                    filled: true
-                    glows: false
+                    filled: lead.activeFocus
+                    glows: true
+                    playMark: !lead.activeFocus
+                    fill: Tokens.surfaceRaised
+                    borderWidth: 1.5 * root.px
+                    outline: "#8CF6E7D8"
+                    leadGlyph: lead.activeFocus
+                    labelWeight: Font.DemiBold
                     glyphSide: 46
                     leadLetterSize: 22
                     labelSize: 26
-                    lead: 14
-                    trail: 34
-                    gap: 16
+                    lead: lead.activeFocus ? 14 : 26
+                    trail: lead.activeFocus ? 34 : 28
+                    gap: lead.activeFocus ? 16 : 12
                     // Resume chooses the resume point's card; the others are their actions (R-20261123-35).
                     onActivated: slot.row >= 0 ? Actions.pageChoose(slot.row) : Actions.pageAct(slot.act)
                     onActiveFocusChanged: if (lead.activeFocus) Actions.pageFocus(slot.act, 0)

@@ -44,9 +44,15 @@ tabWords.4	60	"Options", muted	the tab's name	Line	in:tab.4:0	top:tab.4:0	-	-	-	
 tab.5	61	"Cheats", the game having cheats	Actions.pageTab(5)	Item	after:tab.4:40	top:tabs:0	-	43	-	-	-	built	-
 tabWords.5	61	"Cheats", muted	the tab's name	Line	in:tab.5:0	top:tab.5:0	-	-	-	Tokens.muted	24	built	400 0 none
 gameLine	45	"Never played · 1 to 2 players"	Page.line, game_page::NEVER_PLAYED (qt-models/src/game_page.rs line)	Line	96	below:gameTitleLine:22	-	-	-	Tokens.muted	24	built	300 0 none
-pill.0	47	Start, filled, 14 px before the glyph and 34 after the words	Page.pills where the game has no resume point (R-20261123-36)	Pill	96	below:gameLine:32	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built	-
+pill.0	47	Start, filled and glowing while focused	Page.pills where the game has no resume point (R-20261123-36)	Pill	96	below:gameLine:32	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built	-
+buttonHalo.0	47	the filled button's halo, 6 px out	the kit's Glow	Glow	in:pill.0:0	foot:pill.0	fit:pill.0:0	72	36	#2EF6E7D8	-	built	glow 0 6 0 0
+buttonGlow.0	47	the filled button's glow, 46 px blur 6 px out	the kit's Glow	Glow	in:pill.0:0	foot:pill.0	fit:pill.0:0	72	36	#73F0B4C4	-	built	glow 46 6 0 0
 buttonGlyph.0	47	the A disc, 46 px	Eclipse's Glyph: the kit's letter for Device.family in the face	Glyph	in:pill.0:14	mid:pill.0	46	46	-	-	-	built	glyph 22 600
 buttonLabel.0	47	"Start"	the pill's label	Text	after:buttonGlyph.0:16	mid:pill.0	-	-	-	Tokens.overAccent	26	built	600 0 none
+gameHeroCard	42	upper-right cover and facts card	Page.kicker, Page.title, Page.facts	Rectangle	1148	150	676	-	22	Tokens.inputSurface	-	built	line 1 #FF262A3A
+gameHeroKicker	42	the game's kicker	Page.kicker	Line	in:gameHeroCard:24	-	inright:gameHeroCard:24	-	-	#FFF3C9D2	13	built	600 0.16 upper
+gameHeroTitle	42	the game's title	Page.title	Text	in:gameHeroCard:24	below:gameHeroKicker:8	inright:gameHeroCard:24	-	-	Tokens.textStrong	28	built	600 0 none
+gameHeroMeta	42	the game's facts	Page.facts	Text	in:gameHeroCard:24	below:gameHeroTitle:8	inright:gameHeroCard:24	-	-	Tokens.muted	18	built	300 0 none
 pill.1	48	"Favourite", outlined, not a favourite, 22 px before the heart and 28 after the words	Page.pills, the second, its heart Read.favourite	WordPill	after:pill.0:16	foot:pill.0	fit:pillLabel.1:30	72	-	-	-	built	-
 pillLine.1	48	its 2 px line	none: the board's own colour (Ink.pillLine)	Rectangle	in:pill.1:0	foot:pill.1	fit:pill.1:0	72	36	-	-	built	line 2 #FF5A6076
 pillHeart.1	49	the heart, 26 px, its outline in the words' colour	the board's path	Shape	in:pill.1:24	mid:pill.1	26	26	-	Tokens.text	-	built	-
@@ -61,7 +67,7 @@ ownGlyph-Start	75	the help line's A, a filled disc of 34	Eclipse's Glyph, lead	-
 ownGlyph-Favourite	76	Y, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Back	77	B, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Home	78	Start in a 2 px capsule, 30 inside, corner 8, padding 10	Eclipse's Glyph, named: the kit's name for Start in the pad's family	-	-	mid:help	-	34	-	-	-	built	word 15 400 8 10
-helpSections	80	the shoulders' Section at the right, no glass	Help.PageSections (qt-models/src/help.rs GamePageSections), Eclipse's SectionsHelp part	SectionsHelp	-	mid:help	right:96	34	-	-	-	built	-
-ownGlyph-Section	81	LB in a 2 px box, 30 px inside, corner 8, padding 10	the kit's named glyph through Eclipse's Glyph part	-	in:helpSections:0	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
+helpSections	80	the shoulders' Section pill at the right	Help.PageSections (qt-models/src/help.rs GamePageSections), Eclipse's SectionsHelp part	SectionsHelp	-	mid:help	right:96	46	23	#C707080F	-	built	line 1 #38F6E7D8
+ownGlyph-Section	81	LB in a 2 px box, 30 px inside, corner 8, padding 10	the kit's named glyph through Eclipse's Glyph part	-	in:helpSections:18	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
 ownGlyph2-Section	82	RB, the pair's second	the kit's HelpBar's pair	-	after:ownGlyph-Section:10	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
-helpSectionsWords	83	"Section"	the entry's label, help.rs PAGE_SECTION	Text	after:ownGlyph2-Section:10	mid:helpSections	inright:helpSections:0	-	-	#FFD8DBE6	21	built	400 0 none
+helpSectionsWords	83	"Section"	the entry's label, help.rs PAGE_SECTION	Text	after:ownGlyph2-Section:10	mid:helpSections	inright:helpSections:18	-	-	#FFD8DBE6	21	built	400 0 none

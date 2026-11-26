@@ -29,9 +29,14 @@ gameKicker	43	"SUPER NINTENDO · 1994 · ACTION"	Page.kicker	Line	96	190	-	-	-	#
 gameTitleLine	44	the title's line box, 106.08 px	the title's line height	Item	96	below:gameKicker:22	900	106.08	-	-	-	built	-
 gameTitle	44	"Aurora Drift"	Page.title	Text	96	mid:gameTitleLine	-	-	-	Tokens.textStrong	104	built	600 -0.02 none
 gameLine	45	"Last played yesterday · 3 h 20 min played · 1 to 2 players"	Page.line	Line	96	below:gameTitleLine:22	-	-	-	Tokens.muted	24	built	300 0 none
-pill.0	47	Resume, filled	Page.pills, the first	Pill	96	below:gameLine:32	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built	-
-buttonGlyph.0	47	the A disc, 46 px	Eclipse's Glyph	Glyph	in:pill.0:14	mid:pill.0	46	46	-	-	-	built	glyph 22 600
-buttonLabel.0	47	"Resume"	the pill's label	Text	after:buttonGlyph.0:16	mid:pill.0	-	-	-	Tokens.overAccent	26	built	600 0 none
+pill.0	47	Resume, quiet outlined dark pill while Cheats holds focus	Page.pills, the first	Pill	96	below:gameLine:32	fit:buttonLabel.0:29.5	72	36	#8CF6E7D8	-	built	-
+pillLine.0	47	its dark raised fill and 1.5 px cream hairline at rest	Tokens.surfaceRaised	Rectangle	in:pill.0:0	foot:pill.0	fit:pill.0:0	72	36	Tokens.surfaceRaised	-	built	line 1.5 #8CF6E7D8
+buttonPlayMark.0	47	the quiet play mark	Eclipse's Pill	Shape	in:pill.0:27.5	mid:pill.0	12	14	-	-	-	built	-
+buttonLabel.0	47	"Resume"	the pill's label	Text	after:buttonPlayMark.0:12	mid:pill.0	-	-	-	Tokens.text	26	built	600 0 none
+gameHeroCard	42	upper-right cover and facts card	Page.kicker, Page.title, Page.facts	Rectangle	1148	150	676	-	22	Tokens.inputSurface	-	built	line 1 #FF262A3A
+gameHeroKicker	42	the game's kicker	Page.kicker	Line	in:gameHeroCard:24	-	inright:gameHeroCard:24	-	-	#FFF3C9D2	13	built	600 0.16 upper
+gameHeroTitle	42	the game's title	Page.title	Text	in:gameHeroCard:24	below:gameHeroKicker:8	inright:gameHeroCard:24	-	-	Tokens.textStrong	28	built	600 0 none
+gameHeroMeta	42	the game's facts	Page.facts	Text	in:gameHeroCard:24	below:gameHeroTitle:8	inright:gameHeroCard:24	-	-	Tokens.muted	18	built	300 0 none
 pill.1	48	"Start from the beginning", outlined	Page.pills, the second	WordPill	after:pill.0:16	foot:pill.0	fit:pillLabel.1:32	72	-	-	-	built	-
 pillLine.1	48	its 2 px line	Ink.pillLine	Rectangle	in:pill.1:0	foot:pill.1	fit:pill.1:0	72	36	-	-	built	line 2 #FF5A6076
 pillLabel.1	48	"Start from the beginning"	the pill's label	Text	in:pill.1:32	mid:pill.1	-	-	-	Tokens.text	24	built	400 0 none
@@ -93,7 +98,9 @@ ownGlyph-Turn off	85	the help line's A, a filled disc of 34	Eclipse's Glyph, lea
 ownGlyph-All cheats	86	X, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Back	87	B, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Home	88	Start in a 2 px box, 30 inside, corner 8, padding 10	Eclipse's Glyph, named	-	-	mid:help	-	34	-	-	-	built	word 15 400 8 10
-helpSections	90	the shoulders' Section at the right, no glass	Help.PageSections	SectionsHelp	-	mid:help	right:96	34	-	-	-	built	-
-ownGlyph-Section	91	LB in a 2 px box, 30 inside, corner 8, padding 10	Eclipse's Glyph	-	in:helpSections:0	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
+helpSections	90	the shoulders' Section pill at the right	Help.PageSections	SectionsHelp	-	mid:help	right:96	46	23	#C707080F	-	built	line 1 #38F6E7D8
+ownGlyph-Section	91	LB in a 2 px box, 30 inside, corner 8, padding 10	Eclipse's Glyph	-	in:helpSections:18	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
 ownGlyph2-Section	92	RB, the pair's second	the kit's HelpBar's pair	-	after:ownGlyph-Section:10	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
-helpSectionsWords	93	"Section"	help.rs PAGE_SECTION	Text	after:ownGlyph2-Section:10	mid:helpSections	inright:helpSections:0	-	-	#FFD8DBE6	21	built	400 0 none
+helpSectionsWords	93	"Section"	help.rs PAGE_SECTION	Text	after:ownGlyph2-Section:10	mid:helpSections	-	-	-	#FFD8DBE6	21	built	400 0 none
+helpSectionsDivider	94	"·"	Words.between	Text	after:helpSectionsWords:10	mid:helpSections	-	-	-	Tokens.muted	21	built	400 0 none
+helpSectionsPlace	95	"2 of 12 · 3 of 12 on"	Page.rowPlace	Text	after:helpSectionsDivider:10	mid:helpSections	inright:helpSections:18	-	-	Tokens.muted	21	built	400 0 none

@@ -366,20 +366,15 @@ pub fn sys2(backend: &str) {
     }
 
     click_named(&mut scene, "toolCard.4");
-    wait_for(&mut scene, "screens", "shown", "Themes", 3000);
+    wait_for(&mut scene, "screens", "shown", "Settings", 3000);
+    wait_for(&mut scene, "settingsHeading", "text", "Themes", 3000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Tools", 3000);
 
     click_named(&mut scene, "toolCard.5");
     wait_for(&mut scene, "screens", "shown", "Settings", 3000);
     scene.wait(200);
-    for _ in 0..4 {
-        if scene.property("screens", "shown") == "Tools" {
-            break;
-        }
-        scene.pad(UiButton::Back);
-        scene.wait(150);
-    }
+    scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Tools", 3000);
 
     assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));

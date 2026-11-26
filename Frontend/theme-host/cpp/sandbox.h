@@ -12,7 +12,10 @@
 #include <QtQuick/QQuickItem>
 #include <memory>
 
+#include "rust/cxx.h"
+
 struct Policy;
+struct ThumbHandle;
 
 // Lines from the engine's threads, the type loader's and the picture readers', taken by the host on its own.
 class SandboxLog {
@@ -49,7 +52,7 @@ private:
 // One theme's engine; the screens it made go first, then the engine, then the shells it was given.
 class Sandbox {
 public:
-    explicit Sandbox(const Policy& policy);
+    Sandbox(const Policy& policy, rust::Box<ThumbHandle> thumbs);
     ~Sandbox();
     bool place(const QString& url, QQuickItem* slot);
     SandboxLog log;
@@ -64,7 +67,7 @@ struct Watch {
     QPointer<QObject> object;
 };
 
-std::unique_ptr<Sandbox> sandbox_new(const Policy& policy);
+std::unique_ptr<Sandbox> sandbox_new(const Policy& policy, rust::Box<ThumbHandle> thumbs);
 bool sandbox_place(Sandbox& sandbox, const QString& url, QQuickItem* slot);
 QString sandbox_take_log(Sandbox& sandbox);
 QObject* sandbox_engine(const Sandbox& sandbox);

@@ -30,7 +30,7 @@ ThemeScreen {
             property Item firstTile: null
             // The first button, read again whenever its Repeater's count moves.
             readonly property Item firstButton: buttons.count > 0 ? buttons.itemAt(0) : null
-            readonly property Item currentTile: tiles.count > 0 ? tiles.itemAt(Math.min(root.current, tiles.count - 1)) : null
+            readonly property Item currentTile: tiles.count > 0 ? tiles.itemAtIndex(Math.min(root.current, tiles.count - 1)) : null
             readonly property bool resuming: Session.hasGame && root.currentTile !== null && root.currentTile.key === Session.key
             readonly property int helpKind: root.resuming ? Help.Continue : Help.Game
             Board {
@@ -413,88 +413,105 @@ ThemeScreen {
                             y: recentHeading.y + recentHeading.height + 22 * design.unit
                             width: parent.width - x
                             height: 196 * design.unit
-                            Repeater {
+                            ListView {
                                 id: tiles
+                                anchors.fill: parent
+                                orientation: ListView.Horizontal
+                                spacing: 24 * design.unit
+                                interactive: false
+                                keyNavigationEnabled: false
+                                highlightFollowsCurrentItem: false
+                                cacheBuffer: 0
+                                focus: tiles.count > 0
                                 // Every game played, the suspended one first among them as the board puts it.
                                 model: Library.recent
-                                onItemAdded: (index, item) => root.firstTile = index === 0 ? item : root.firstTile
-                                Walkable {
-                                    id: tile
+                                delegate: FocusScope {
+                                    id: slot
                                     required property int index
                                     required property string key
                                     required property string title
                                     required property string hero
                                     required property string consoleName
                                     required property real consoleHue
-                                    readonly property bool big: tile.index === root.current
-                                    readonly property real radius: 18 * design.unit
-                                    controller: frame.controller
-                                    objectName: "tile." + tile.index
-                                    focus: tile.index === 0
-                                    Accessible.name: tile.title
-                                    // The board's tiles, 264 by 165 and the shown one 312 by 196, 24 apart, their feet on the row's foot.
-                                    x: tile.index * (264 + 24) * design.unit + (tile.index > root.current ? (312 - 264) * design.unit : 0)
-                                    width: (tile.big ? 312 : 264) * design.unit
-                                    height: (tile.big ? 196 : 165) * design.unit
-                                    y: row.height - height
-                                    visible: tile.x + tile.width <= row.width
-                                    onActivated: Actions.play(tile.key)
-                                    onActiveFocusChanged: {
-                                        if (!tile.activeFocus)
-                                            return
-                                        root.current = tile.index
-                                        Actions.focus(tile.key)
+                                    readonly property bool big: slot.index === root.current
+                                    width: (slot.big ? 312 : 264) * design.unit
+                                    height: row.height
+                                    visible: slot.x + slot.width <= row.width
+                                    focus: slot.index === 0
+                                    Binding {
+                                        target: root
+                                        property: "firstTile"
+                                        value: slot
+                                        when: slot.index === 0
                                     }
-                                    KeyNavigation.left: tile.index > 0 ? tiles.itemAt(tile.index - 1) : null
-                                    KeyNavigation.right: tiles.count > tile.index + 1 ? tiles.itemAt(tile.index + 1) : null
-                                    KeyNavigation.up: root.firstButton ?? status.search
-                                    // A resting tile's shadow (Main:83): 0 10 px 30 px rgba(0, 0, 0, 0.45); the focused one has its ring instead.
-                                    Glow {
-                                        objectName: "tileShadow." + tile.index
-                                        anchors.fill: parent
-                                        visible: !tile.activeFocus
-                                        radius: tile.radius
-                                        color: "#73000000"
-                                        blur: 30 * design.unit
-                                        offsetY: 10 * design.unit
-                                        pixelScale: canvas.unit
-                                    }
-                                    RoundPicture {
-                                        objectName: "tileArt." + tile.index
-                                        anchors.fill: parent
-                                        source: tile.hero
-                                        radius: tile.radius
-                                        crop: true
-                                        pixelScale: canvas.unit
-                                    }
-                                    TileWords {
-                                        unit: design.unit
-                                        place: tile.index
-                                        // The tile's corners, which clip the shade on the board (Main:83).
-                                        radius: 18
-                                        title: tile.title
-                                        // The console alone, as the board's tile line draws {{t.system}} (Main:86).
-                                        facts: tile.consoleName
-                                        titleInk: ink.tileTitle
-                                        factsInk: ink.tileFacts
-                                        shadeInk: ink.shade
-                                        shadeClear: ink.shadeClear
-                                    }
-                                    // The board's ring for a tile: 4 px of the ground's dark, 3 px of the accent, and 40 px of glow 10 px out at
-                                    // rgba(240, 180, 196, 0.5) (Main:113), measures of the design.
-                                    FocusRing {
-                                        objectName: "tileRing"
-                                        anchors.fill: parent
-                                        radius: tile.radius
-                                        gap: 4 * design.unit
-                                        thickness: 3 * design.unit
-                                        glowColor: ink.ringGlow
-                                        glowBlur: 40 * design.unit
-                                        glowSpread: 10 * design.unit
-                                        bandRadius: tile.radius + 7 * design.unit
-                                        pixelScale: canvas.unit
-                                        visible: tile.activeFocus
-                                        opacity: encore.handed
+                                    Walkable {
+                                        id: tile
+                                        readonly property real radius: 18 * design.unit
+                                        controller: frame.controller
+                                        objectName: "tile." + slot.index
+                                        focus: true
+                                        Accessible.name: slot.title
+                                        // The board's tiles, 264 by 165 and the shown one 312 by 196, 24 apart, their feet on the row's foot.
+                                        width: slot.width
+                                        height: (slot.big ? 196 : 165) * design.unit
+                                        y: row.height - tile.height
+                                        onActivated: Actions.play(slot.key)
+                                        onActiveFocusChanged: {
+                                            if (!tile.activeFocus)
+                                                return
+                                            root.current = slot.index
+                                            Actions.focus(slot.key)
+                                        }
+                                        KeyNavigation.left: slot.index > 0 ? tiles.itemAtIndex(slot.index - 1) : null
+                                        KeyNavigation.right: tiles.count > slot.index + 1 ? tiles.itemAtIndex(slot.index + 1) : null
+                                        KeyNavigation.up: root.firstButton ?? status.search
+                                        // A resting tile's shadow (Main:83): 0 10 px 30 px rgba(0, 0, 0, 0.45); the focused one has its ring instead.
+                                        Glow {
+                                            objectName: "tileShadow." + slot.index
+                                            anchors.fill: parent
+                                            visible: !tile.activeFocus
+                                            radius: tile.radius
+                                            color: "#73000000"
+                                            blur: 30 * design.unit
+                                            offsetY: 10 * design.unit
+                                            pixelScale: canvas.unit
+                                        }
+                                        RoundPicture {
+                                            objectName: "tileArt." + slot.index
+                                            anchors.fill: parent
+                                            source: slot.hero
+                                            radius: tile.radius
+                                            crop: true
+                                            pixelScale: canvas.unit
+                                        }
+                                        TileWords {
+                                            unit: design.unit
+                                            place: slot.index
+                                            // The tile's corners, which clip the shade on the board (Main:83).
+                                            radius: 18
+                                            title: slot.title
+                                            // The console alone, as the board's tile line draws {{t.system}} (Main:86).
+                                            facts: slot.consoleName
+                                            titleInk: ink.tileTitle
+                                            factsInk: ink.tileFacts
+                                            shadeInk: ink.shade
+                                            shadeClear: ink.shadeClear
+                                        }
+                                        // Tile focus ring: 4 px gap, 3 px accent, 40 px glow 10 px out at rgba(240, 180, 196, 0.5) (Main:113).
+                                        FocusRing {
+                                            objectName: "tileRing"
+                                            anchors.fill: parent
+                                            radius: tile.radius
+                                            gap: 4 * design.unit
+                                            thickness: 3 * design.unit
+                                            glowColor: ink.ringGlow
+                                            glowBlur: 40 * design.unit
+                                            glowSpread: 10 * design.unit
+                                            bandRadius: tile.radius + 7 * design.unit
+                                            pixelScale: canvas.unit
+                                            visible: tile.activeFocus
+                                            opacity: encore.handed
+                                        }
                                     }
                                 }
                             }

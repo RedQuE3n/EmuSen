@@ -16,6 +16,9 @@ use crate::words::BETWEEN;
 use crate::display::Crop;
 use crate::tools::jobs::Run;
 
+/// Action id passed for Eclipse's Resume pill so activating or focusing it on any tab loads the resume point.
+pub const RESUME_ACTION: i32 = -2;
+
 /// What the page reads of one game and asks of the back end; the client crates or a test's fake answer.
 pub trait GamePageSource: Send + Sync {
     /// Everything the page shows of the game, as the scan found its file, read afresh.
@@ -740,6 +743,22 @@ impl GamePage {
             Some(FAVOURITE) => Outcome::Changed(Change::Favourite),
             _ => Outcome::Nothing,
         }
+    }
+
+    /// Activates an Eclipse pill by its placed action index, routing `RESUME_ACTION` directly to the resume point.
+    pub fn act_pill(&self, index: i32) -> Outcome {
+        if index == RESUME_ACTION {
+            return Outcome::Play(self.resume_point().map(|s| s.path.clone()));
+        }
+        self.act(index.max(0) as usize)
+    }
+
+    /// Maps an Eclipse pill focus index (including `RESUME_ACTION`) back to `actions()` index.
+    pub fn action_index_of(&self, action: i32) -> Option<usize> {
+        if action == RESUME_ACTION {
+            return self.actions().iter().position(|a| a.key == RESUME);
+        }
+        usize::try_from(action).ok()
     }
 
     /// Left or Right on an action: Resume steps its state while it can, and says whether it did; past either end the
@@ -1740,17 +1759,18 @@ impl GamePage {
         out
     }
 
-    /// The board's buttons, each with the place among `actions` of the action it is, which a theme's `pageAct` takes, and for
-    /// Resume the resume point's tile it chooses (R-20261123-35), else -1.
+    /// The board's buttons with each action index (`RESUME_ACTION` for Resume so all tabs activate the resume point).
     pub fn placed_pills(&self) -> Vec<(Action, i32, i32)> {
         let actions = self.actions();
-        let point = self.resume_point_row().map_or(-1, |r| r as i32);
         self.pills()
             .into_iter()
             .map(|p| {
-                let at = actions.iter().position(|a| a.key == p.key).map_or(-1, |i| i as i32);
-                let row = if p.key == RESUME { point } else { -1 };
-                (p, at, row)
+                let at = if p.key == RESUME {
+                    RESUME_ACTION
+                } else {
+                    actions.iter().position(|a| a.key == p.key).map_or(-1, |i| i as i32)
+                };
+                (p, at, -1)
             })
             .collect()
     }

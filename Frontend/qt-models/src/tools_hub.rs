@@ -22,13 +22,55 @@ fn summary_str<'a>(tools: &'a Value, key: &str, field: &str) -> Option<&'a str> 
     tools.get(key).and_then(|v| v.get(field)).and_then(Value::as_str).filter(|s| !s.is_empty())
 }
 
-fn find_settings_row(settings: &crate::settings_model::qobject::SettingsModel, target_key: &str) -> Option<i32> {
+pub(crate) fn find_settings_row(settings: &crate::settings_model::qobject::SettingsModel, target_key: &str) -> Option<i32> {
     let count = settings.row_count(&QModelIndex::default());
     for row in 0..count {
         let idx = settings.index(row, 0, &QModelIndex::default());
         if settings.data(&idx, 6).value::<QString>().is_some_and(|k| k.to_string() == target_key) {
             return Some(row);
         }
+    }
+    None
+}
+
+/// Opens the Eclipse Settings page targeted by a Tools card after Settings navigation settles.
+pub(crate) fn open_tools_settings(tool: &str, mut settings: Pin<&mut crate::settings_model::qobject::SettingsModel>) -> Option<usize> {
+    if !*settings.ready() {
+        return None;
+    }
+    if tool == crate::home_card::THEMES {
+        let lib_sec = settings.view().section_of("library") as i32;
+        settings.as_mut().set_section(lib_sec);
+        if let Some(row) = find_settings_row(&settings, "themes") {
+            settings.as_mut().choose(row);
+        }
+        let depth = settings.view().trail().len();
+        return (depth >= 2).then_some(depth);
+    }
+    if tool == "cards" {
+        let chosen_sys = {
+            let consoles = &settings.view().read.consoles.consoles;
+            consoles
+                .iter()
+                .find(|c| c.runs() && c.media.iter().any(|m| !m.cards.is_empty()))
+                .or_else(|| consoles.iter().find(|c| c.runs() && !c.media.is_empty()))
+                .map(|c| c.systems.first().cloned().unwrap_or_else(|| c.console.clone()))
+        };
+        if let Some(sys) = chosen_sys {
+            if settings.as_mut().open_console(&QString::from(sys.as_str())) {
+                if let Some(row) = find_settings_row(&settings, "cards") {
+                    settings.as_mut().choose(row);
+                }
+            }
+        } else {
+            let emusen_sec = settings.view().section_of("emusen") as i32;
+            settings.as_mut().set_section(emusen_sec);
+            if let Some(row) = find_settings_row(&settings, "saves") {
+                settings.as_mut().choose(row);
+            }
+        }
+        let depth = settings.view().trail().len();
+        return (depth >= 2).then_some(depth);
     }
     None
 }
@@ -131,35 +173,7 @@ impl qobject::ToolsHubModel {
             return;
         }
         let screens = unsafe { Pin::new_unchecked(&mut *self.screens) };
-        if key != "cards" {
-            screens.act(&QString::from(key));
-            return;
-        }
-        if !self.settings.is_null() {
-            let mut settings = unsafe { Pin::new_unchecked(&mut *self.settings) };
-            let chosen_sys = {
-                let consoles = &settings.view().read.consoles.consoles;
-                consoles
-                    .iter()
-                    .find(|c| c.runs() && c.media.iter().any(|m| !m.cards.is_empty()))
-                    .or_else(|| consoles.iter().find(|c| c.runs() && !c.media.is_empty()))
-                    .map(|c| c.systems.first().cloned().unwrap_or_else(|| c.console.clone()))
-            };
-            if let Some(sys) = chosen_sys {
-                if settings.as_mut().open_console(&QString::from(sys.as_str())) {
-                    if let Some(row) = find_settings_row(&settings, "cards") {
-                        settings.as_mut().choose(row);
-                    }
-                }
-            } else {
-                let lib_sec = settings.view().sections().iter().position(|s| s.eq_ignore_ascii_case("library")).unwrap_or(0) as i32;
-                settings.as_mut().set_section(lib_sec);
-                if let Some(row) = find_settings_row(&settings, "saves") {
-                    settings.as_mut().choose(row);
-                }
-            }
-        }
-        screens.act(&QString::from(crate::home_card::SETTINGS));
+        screens.act(&QString::from(key));
     }
 
     pub fn handle_action(self: Pin<&mut Self>, key: &QString) {

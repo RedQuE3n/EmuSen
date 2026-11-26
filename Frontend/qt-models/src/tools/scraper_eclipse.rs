@@ -271,7 +271,7 @@ impl EclipseScraper {
                 Some(v) => {
                     let path = v.get("path").and_then(Value::as_str).unwrap_or_default();
                     let src = v.get("source").and_then(Value::as_str).unwrap_or_default();
-                    let url = if kind != "video" && !path.is_empty() { format!("file://{path}") } else { String::new() };
+                    let url = if kind != "video" && !path.is_empty() { crate::game_model::cover_url(path) } else { String::new() };
                     (true, url, source_words(src).to_owned())
                 }
                 None => (false, String::new(), String::new()),

@@ -70,6 +70,7 @@ Item {
             choices: root.choices
             backIndex: root.backIndex
             padFamily: root.padFamily
+            showing: root.showing
             onChosen: (index) => root.chosen(index)
             Binding {
                 eclipseQuestion.visible: root.showing

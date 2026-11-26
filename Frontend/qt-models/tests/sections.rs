@@ -52,3 +52,13 @@ fn qt_3_4_8_the_help_entry_is_the_shoulders_with_no_action() {
     assert_eq!(help::pair_of(help::SECTIONS.0), Some(emusen_kit_core::input::UiButton::PageDown), "drawn as LB RB");
     assert_eq!(SECTIONS.len(), sections::all().len());
 }
+
+#[test]
+fn qt_3_4_8_top_level_library_at_all_maps_to_library_and_drilldown_stays_none() {
+    assert_eq!(sections::current_at(Shown::Grid, library::ALL).map(|s| s.key), Some("library"));
+    assert_eq!(sections::current_at(Shown::Grid, "snes"), None);
+    assert_eq!(sections::opened_at(Shown::Grid, library::ALL, "home").map(|s| s.screen), Some(Shown::Home));
+    assert_eq!(sections::opened_at(Shown::Grid, library::ALL, "consoles").map(|s| s.screen), Some(Shown::Consoles));
+    assert_eq!(sections::opened_at(Shown::Grid, library::ALL, "library"), None);
+    assert_eq!(sections::opened_at(Shown::Grid, "snes", "home"), None);
+}

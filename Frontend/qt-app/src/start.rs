@@ -114,6 +114,12 @@ pub fn cover_stores_from(media: Option<&Path>, settings: &Value) -> Vec<String> 
     media.map(|m| m.to_string_lossy().into_owned()).into_iter().chain(set("ArtworkDirectory")).chain(set("EsdeMediaDirectory")).collect()
 }
 
+/// Configured `ArtworkDirectory` and `EsdeMediaDirectory` cover stores read from `appsettings.json` on save.
+pub fn setting_cover_stores(library: &Path) -> Vec<String> {
+    let settings = Platform::load(library).ok().and_then(|p| emusen_qt_models::clients::app_settings(&p).ok()).unwrap_or(Value::Null);
+    cover_stores_from(None, &settings)
+}
+
 /// The start read through the platform library at `library`; its settings unread (the defaults) when it cannot load.
 pub fn read(library: &Path) -> Start {
     let platform = Platform::load(library).ok();

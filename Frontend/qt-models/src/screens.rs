@@ -62,6 +62,12 @@ pub enum Ask {
     Act(String),
     /// A game chosen on Home's shelf or the grid, Continue chosen, or the Pause Card resuming: the game is shown.
     Play,
+    /// Resuming an already running session from Continue or Home card; treated as started play.
+    ResumePlay,
+    /// Playback began after launch/resume prompts cleared.
+    Started,
+    /// Launching or opening the game failed.
+    Failed,
     /// The menu chord over the game: the Pause Card, as Mistress's `OpenPadMenu` opens it over a game.
     Menu,
     /// The Pause Card's Back to Library: Home, the game suspended behind it.
@@ -171,8 +177,13 @@ pub const CARD_BINDINGS: &str = crate::settings_controllers::CARD_BINDINGS;
 /// The screen shown after an ask, and the grid's row (the page a card opens at, for a card); `None` leaves both as they
 /// were.
 pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
+    step_at(shown, "", ask)
+}
+
+/// As `step`, with the shown screen's current key `at` so top-level Library maps to `"library"`.
+pub fn step_at(shown: Shown, at: &str, ask: &Ask) -> Option<(Shown, Option<String>)> {
     match (shown, ask) {
-        (_, Ask::Section(key)) => crate::sections::opened(shown, key).map(|s| (s.screen, s.at.map(str::to_owned))),
+        (_, Ask::Section(key)) => crate::sections::opened_at(shown, at, key).map(|s| (s.screen, s.at.map(str::to_owned))),
         (Shown::Home, Ask::Place(0)) => Some((Shown::Consoles, None)),
         (Shown::Home, Ask::Place(SETTINGS_PLACE)) => Some((Shown::Settings, None)),
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
@@ -294,12 +305,48 @@ pub fn library_of(themed: bool) -> Shown {
 /// As `step`, under the library's look: with an ES-DE theme the theme's view stands where Home, Choose a console and
 /// the grid stood, and the cards, the game and the Pause Card come back to it (EmuSen_Qt.md §4.6).
 pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
+    step_in_at(themed, "", shown, ask)
+}
+
+/// Records whether playback already started and which screen should regain focus if opening fails or is cancelled.
+fn record_play_origin(themed: bool, was: Shown, ask: &Ask) -> (bool, Option<Shown>) {
+    if *ask == Ask::ResumePlay {
+        return (true, None);
+    }
+    let origin = match was {
+        Shown::List | Shown::HomeCard => library_of(themed),
+        other => other,
+    };
+    (false, Some(origin))
+}
+
+/// Returns the screen `B` returns to from `Shown::Grid` based on how it was entered.
+fn grid_origin_for(was: Shown, ask: &Ask) -> Shown {
+    match was {
+        Shown::Consoles => Shown::Consoles,
+        Shown::Collections if !matches!(ask, Ask::Section(_)) => Shown::Collections,
+        Shown::Home | Shown::HomeCard | Shown::Tools => Shown::Home,
+        _ if matches!(ask, Ask::Section(_)) => Shown::Home,
+        _ => Shown::Consoles,
+    }
+}
+
+/// Returns the destination screen for a failure or unstarted close from Game/Pause.
+fn close_origin(themed: bool, play_origin: Option<Shown>, play_started: bool, ask: &Ask) -> Option<Shown> {
+    if *ask == Ask::Failed || (*ask == Ask::Closed && !play_started) {
+        Some(play_origin.unwrap_or_else(|| library_of(themed)))
+    } else {
+        None
+    }
+}
+
+fn step_in_at(themed: bool, at: &str, shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
     let own = matches!(shown, Shown::Home | Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid | Shown::Collections | Shown::Tools);
     match (themed, shown, ask) {
         (true, _, Ask::Restyled) if own => Some((Shown::Esde, None)),
         (false, Shown::Esde, Ask::Restyled) => Some((Shown::Home, None)),
         (_, _, Ask::Restyled) => None,
-        (false, ..) => step(shown, ask),
+        (false, ..) => step_at(shown, at, ask),
         // Start opens the Home card at its first page, as ES-DE's Start opens its menu; B at the theme's view is the
         // view's own, going back from a gamelist, and does nothing more here (decided 2026-11-08).
         (true, Shown::Esde, Ask::Act(key)) if key == HOME => Some((Shown::HomeCard, Some(crate::home_card::FIRST.to_owned()))),
@@ -325,9 +372,10 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
     }
 }
 
-fn eclipse_section(shown: Shown) -> Option<&'static str> {
+fn eclipse_section_at(shown: Shown, key: &str) -> Option<&'static str> {
     match shown {
         Shown::Home => Some(HOME),
+        Shown::Grid if key == crate::library::ALL => Some("library"),
         Shown::Consoles => Some(CONSOLES_KEY),
         Shown::Collections => Some("collections"),
         Shown::Tools => Some("tools"),
@@ -337,15 +385,20 @@ fn eclipse_section(shown: Shown) -> Option<&'static str> {
 
 /// Eclipse-aware screen step, routing Collections and Tools hubs when `eclipse` is active.
 pub fn step_in_look(eclipse: bool, themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
+    step_in_look_at(eclipse, themed, shown, "", ask)
+}
+
+/// As `step_in_look`, carrying Grid's `at` key so top-level Library maps to `"library"`.
+pub fn step_in_look_at(eclipse: bool, themed: bool, shown: Shown, at: &str, ask: &Ask) -> Option<(Shown, Option<String>)> {
     if matches!(ask, Ask::GamePage(_)) && matches!(shown, Shown::SearchGrid | Shown::Grid | Shown::Home | Shown::HomeCard) {
         return Some((Shown::Page, None));
     }
     if !eclipse || themed {
-        return step_in(themed, shown, ask);
+        return step_in_at(themed, at, shown, ask);
     }
     match (shown, ask) {
         (_, Ask::Section(key)) => {
-            let current = eclipse_section(shown)?;
+            let current = eclipse_section_at(shown, at)?;
             if current == key.as_str() {
                 return None;
             }
@@ -358,19 +411,36 @@ pub fn step_in_look(eclipse: bool, themed: bool, shown: Shown, ask: &Ask) -> Opt
                 _ => None,
             }
         }
+        (Shown::Grid, Ask::Act(key)) if at == crate::library::ALL && key == PREVIOUS => Some((Shown::Home, None)),
+        (Shown::Grid, Ask::Act(key)) if at == crate::library::ALL && key == NEXT => Some((Shown::Consoles, None)),
         (Shown::Collections, Ask::Open(key)) => Some((Shown::Grid, Some(key.clone()))),
         (Shown::Collections | Shown::Tools, Ask::Back) => Some((Shown::Home, None)),
         (Shown::Collections | Shown::Tools, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
-        (Shown::Tools, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),
+        (Shown::Tools, Ask::Act(key)) if key == THEMES || key == "cards" => Some((Shown::Settings, None)),
         (Shown::Tools, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
         (Shown::Tools, Ask::Act(key)) if console_options(key).is_some() => Some((Shown::Settings, None)),
         (Shown::Tools, Ask::Act(key)) => open_tool(key),
-    _ => step_in(false, shown, ask),
+        _ => step_in_at(false, at, shown, ask),
     }
+}
+
+/// Returns the adjacent shelf key from `rows` around `current` when stepping by `delta`.
+pub fn neighbour_shelf(rows: &[crate::library::LibraryRow], current: &str, delta: i32) -> Option<String> {
+    if rows.len() < 2 {
+        return None;
+    }
+    let at = rows.iter().position(|r| r.key == current)?;
+    let next = (at as isize + delta as isize).rem_euclid(rows.len() as isize) as usize;
+    Some(rows[next].key.clone())
 }
 
 /// Face-aware screen step allowing Desktop launches and Game Page transitions from any non-running Desktop view.
 pub fn step_for_face(big_screen: bool, eclipse: bool, themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
+    step_for_face_at(big_screen, eclipse, themed, shown, "", ask)
+}
+
+/// As `step_for_face`, carrying Grid's active shelf key `at`.
+pub fn step_for_face_at(big_screen: bool, eclipse: bool, themed: bool, shown: Shown, at: &str, ask: &Ask) -> Option<(Shown, Option<String>)> {
     if let Ask::DesktopDoor(key) = ask {
         return settings_door(key);
     }
@@ -402,7 +472,7 @@ pub fn step_for_face(big_screen: bool, eclipse: bool, themed: bool, shown: Shown
             _ => {}
         }
     }
-    step_in_look(eclipse, themed, shown, ask)
+    step_in_look_at(eclipse, themed, shown, at, ask)
 }
 
 #[cxx_qt::bridge]
@@ -410,6 +480,10 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("emusen-qt-models/src/library_model.cxxqt.h");
+        type LibraryModel = crate::library_model::qobject::LibraryModel;
+        include!("emusen-qt-models/src/settings_model.cxxqt.h");
+        type SettingsModel = crate::settings_model::qobject::SettingsModel;
     }
 
     /// The program's screens.
@@ -460,6 +534,8 @@ pub mod qobject {
         #[qproperty(QString, page_at, cxx_name = "pageAt", READ, NOTIFY)]
         /// The console whose page Settings opens at, asked for from Choose a console; empty where Settings opens at its start.
         #[qproperty(QString, settings_at, cxx_name = "settingsAt", READ, NOTIFY)]
+        /// Settings target opened from Tools (`"themes"` or `"cards"`), cleared when leaving Settings.
+        #[qproperty(QString, settings_tool, cxx_name = "settingsTool", READ, NOTIFY)]
         /// The page the List card opens at, a section's (crate::sections), empty for its first.
         #[qproperty(QString, list_page, cxx_name = "listPage", READ, NOTIFY)]
         /// The key of the program's section the shown screen is (crate::sections), empty for a screen that is none.
@@ -470,6 +546,10 @@ pub mod qobject {
         #[qproperty(QString, pause_game, cxx_name = "pauseGame")]
         /// The game path passed to the Cheats tool; empty opens the library overview.
         #[qproperty(QString, cheats_game, cxx_name = "cheatsGame", READ, NOTIFY)]
+        /// Library model used to step adjacent game shelves on Grid screens.
+        #[qproperty(*mut LibraryModel, library_model, cxx_name = "libraryModel")]
+        /// Settings model targeted by Tools -> Themes / Memory cards navigation.
+        #[qproperty(*mut SettingsModel, settings_model, cxx_name = "settingsModel")]
         type Screens = super::ScreensRust;
     }
 
@@ -511,9 +591,21 @@ pub mod qobject {
         /// Select at the ES-DE theme's view, its options: the List card.
         #[qinvokable]
         fn list(self: Pin<&mut Screens>);
-        /// The game failed to open or stopped on a failure: the library's screen, as when it closes.
+        /// The game failed to open or stopped on a failure: returns to the screen that launched it.
         #[qinvokable]
         fn failed(self: Pin<&mut Screens>);
+        /// Marks the active game session as genuinely started after prompt resolution.
+        #[qinvokable]
+        #[cxx_name = "markPlaying"]
+        fn mark_playing(self: Pin<&mut Screens>);
+        /// Applies pending Tools -> Settings target (`themes` or `cards`) once Settings is ready.
+        #[qinvokable]
+        #[cxx_name = "applySettingsTool"]
+        fn apply_settings_tool(self: Pin<&mut Screens>);
+        /// Closes Tools-opened Settings when Back pops above its entry page.
+        #[qinvokable]
+        #[cxx_name = "checkToolsSettingsTrail"]
+        fn check_tools_settings_trail(self: Pin<&mut Screens>);
         /// The search's focus taken by its keys or its covers.
         #[qinvokable]
         #[cxx_name = "keysFocused"]
@@ -580,6 +672,8 @@ pub struct ScreensRust {
     /// Settings opened from Tools, whose B returns to it.
     over_tools: bool,
     settings_at: QString,
+    settings_tool: QString,
+    tool_trail_depth: usize,
     list_page: QString,
     /// Settings opened at a console's page from Choose a console, whose B returns to it.
     over_consoles: bool,
@@ -587,9 +681,15 @@ pub struct ScreensRust {
     grid_origin: Option<Shown>,
     /// Screen Search was opened over.
     search_origin: Option<Shown>,
+    /// Screen that launched the current game session, restored on cancel/failure.
+    play_origin: Option<Shown>,
+    /// Whether the active launch actually started playing beyond launch/resume prompts.
+    play_started: bool,
     in_hand: QString,
     pause_game: QString,
     cheats_game: QString,
+    library_model: *mut qobject::LibraryModel,
+    settings_model: *mut qobject::SettingsModel,
 }
 
 impl Default for ScreensRust {
@@ -613,13 +713,19 @@ impl Default for ScreensRust {
             over_card: false,
             over_tools: false,
             settings_at: QString::default(),
+            settings_tool: QString::default(),
+            tool_trail_depth: 0,
             list_page: QString::default(),
             over_consoles: false,
             grid_origin: None,
             search_origin: None,
+            play_origin: None,
+            play_started: false,
             in_hand: QString::default(),
             pause_game: QString::default(),
             cheats_game: QString::default(),
+            library_model: std::ptr::null_mut(),
+            settings_model: std::ptr::null_mut(),
         }
     }
 }
@@ -728,7 +834,7 @@ impl qobject::Screens {
 
     pub fn resume(mut self: Pin<&mut Self>) {
         self.as_mut().resumed();
-        self.ask(Ask::Play);
+        self.ask(Ask::ResumePlay);
     }
 
     pub fn menu(self: Pin<&mut Self>) {
@@ -752,7 +858,40 @@ impl qobject::Screens {
     }
 
     pub fn failed(self: Pin<&mut Self>) {
-        self.ask(Ask::Closed);
+        self.ask(Ask::Failed);
+    }
+
+    pub fn mark_playing(self: Pin<&mut Self>) {
+        self.ask(Ask::Started);
+    }
+
+    pub fn apply_settings_tool(mut self: Pin<&mut Self>) {
+        if self.tool_trail_depth > 0 || self.shown != Screen::Settings {
+            return;
+        }
+        let tool = self.settings_tool.to_string();
+        if tool.is_empty() {
+            return;
+        }
+        // Safety: settings_model is the window's SettingsModel when wired in Main.qml.
+        let Some(mut settings) = unsafe { self.settings_model.as_mut() }.map(|p| unsafe { Pin::new_unchecked(p) }) else { return };
+        if let Some(depth) = crate::tools_hub::open_tools_settings(&tool, settings.as_mut()) {
+            self.as_mut().rust_mut().tool_trail_depth = depth;
+        }
+    }
+
+    pub fn check_tools_settings_trail(mut self: Pin<&mut Self>) {
+        let depth = self.tool_trail_depth;
+        if depth == 0 || self.settings_tool.is_empty() || self.shown != Screen::Settings {
+            return;
+        }
+        // Safety: settings_model is the window's SettingsModel when wired in Main.qml.
+        let Some(mut settings) = unsafe { self.settings_model.as_mut() }.map(|p| unsafe { Pin::new_unchecked(p) }) else { return };
+        if settings.view().trail().len() < depth {
+            self.as_mut().rust_mut().tool_trail_depth = 0;
+            settings.as_mut().set_section(0);
+            self.as_mut().back();
+        }
     }
 
     pub fn keys_focused(self: Pin<&mut Self>, keys: bool) {
@@ -764,10 +903,17 @@ impl qobject::Screens {
     }
 
     pub fn step_section(self: Pin<&mut Self>, delta: i32) {
-        let Some(current) = eclipse_section(shown_of(self.shown)) else { return };
+        let key = self.key.to_string();
+        let Some(current) = eclipse_section_at(shown_of(self.shown), &key) else { return };
         let Some(at) = SECTIONS.iter().position(|s| s.key == current) else { return };
         let next = (at as isize + delta as isize).rem_euclid(SECTIONS.len() as isize) as usize;
         self.ask(Ask::Section(SECTIONS[next].key.to_owned()));
+    }
+
+    fn shelf_step(&self, current: &str, delta: i32) -> Option<String> {
+        // Safety: library_model is the window's LibraryModel, alive as long as Screens.
+        let library = unsafe { self.library_model.as_ref() }?;
+        neighbour_shelf(library.view().rows.rows(), current, delta)
     }
 
     pub fn open_game(self: Pin<&mut Self>, path: &QString) {
@@ -789,34 +935,84 @@ impl qobject::Screens {
     }
 
     fn apply(mut self: Pin<&mut Self>, ask: Ask) {
+        if ask == Ask::Started {
+            self.as_mut().rust_mut().play_started = true;
+            return;
+        }
         let was = shown_of(self.shown);
+        let current_key = self.key.to_string();
+        let step_ask = if ask == Ask::ResumePlay { Ask::Play } else { ask.clone() };
         let stepped = match was {
-            Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| {
-                let key = match &ask {
+            Shown::Page => page_step(self.themed, self.page_origin, &step_ask).map(|s| {
+                let key = match &step_ask {
                     Ask::Open(key) => Some(key.clone()),
                     Ask::Act(key) if s == Shown::Tool => Some(key.clone()),
                     _ => None,
                 };
                 (s, key)
             }),
-            Shown::Settings if self.over_card && ask == Ask::Back => Some((Shown::Pause, None)),
-            Shown::Settings if self.over_tools && ask == Ask::Back => Some((Shown::Tools, None)),
-            Shown::Settings if self.over_consoles && ask == Ask::Back => Some((Shown::Consoles, None)),
-            Shown::Grid if self.grid_origin == Some(Shown::Collections) && ask == Ask::Back => Some((Shown::Collections, None)),
-            Shown::Search | Shown::SearchGrid if self.eclipse && self.search_origin == Some(Shown::Home) && ask == Ask::Back => Some((Shown::Home, None)),
-            _ => tool_back(self.themed, self.tool_origin, was, &ask)
+            Shown::Settings if self.over_card && step_ask == Ask::Back => Some((Shown::Pause, None)),
+            Shown::Settings if self.over_tools && step_ask == Ask::Back => Some((Shown::Tools, None)),
+            Shown::Settings if self.over_consoles && step_ask == Ask::Back => Some((Shown::Consoles, None)),
+            Shown::Grid if step_ask == Ask::Back => self
+                .grid_origin
+                .map(|origin| (origin, None))
+                .or_else(|| step_for_face_at(self.big_screen, self.eclipse, self.themed, was, &current_key, &step_ask)),
+            Shown::Search | Shown::SearchGrid if self.eclipse && self.search_origin == Some(Shown::Home) && step_ask == Ask::Back => Some((Shown::Home, None)),
+            Shown::Game | Shown::Pause if close_origin(self.themed, self.play_origin, self.play_started, &step_ask).is_some() => {
+                close_origin(self.themed, self.play_origin, self.play_started, &step_ask).map(|s| (s, None))
+            }
+            _ => tool_back(self.themed, self.tool_origin, was, &step_ask)
                 .map(|s| (s, None))
-                .or_else(|| step_for_face(self.big_screen, self.eclipse, self.themed, was, &ask)),
+                .or_else(|| step_for_face_at(self.big_screen, self.eclipse, self.themed, was, &current_key, &step_ask))
+                .or_else(|| match (was, &step_ask) {
+                    (Shown::Grid, Ask::Act(k)) if k == PREVIOUS => self.shelf_step(&current_key, -1).map(|s| (Shown::Grid, Some(s))),
+                    (Shown::Grid, Ask::Act(k)) if k == NEXT => self.shelf_step(&current_key, 1).map(|s| (Shown::Grid, Some(s))),
+                    _ => None,
+                }),
         };
         let Some((shown, key)) = stepped else { return };
+        if shown == Shown::Game && !matches!(was, Shown::Game | Shown::Pause | Shown::Settings | Shown::Tool) {
+            let (started, origin) = record_play_origin(self.themed, was, &ask);
+            self.as_mut().rust_mut().play_started = started;
+            self.as_mut().rust_mut().play_origin = origin;
+        } else if !matches!(shown, Shown::Game | Shown::Pause) && !matches!((was, shown), (Shown::Pause, Shown::Settings | Shown::Tool)) {
+            self.as_mut().rust_mut().play_origin = None;
+            self.as_mut().rust_mut().play_started = false;
+        }
         if matches!(shown, Shown::Cores | Shown::Themes | Shown::Tool) && shown != was {
             self.as_mut().rust_mut().tool_origin = Some(was);
         }
         let over_tools = (was == Shown::Tools && shown == Shown::Settings) || (self.over_tools && shown == Shown::Settings);
         self.as_mut().rust_mut().over_tools = over_tools;
-        let grid_origin = if was == Shown::Collections && shown == Shown::Grid {
-            Some(Shown::Collections)
-        } else if shown == Shown::Grid {
+        let existing_tool = self.settings_tool.to_string();
+        let next_tool = if shown == Shown::Settings {
+            if was == Shown::Tools {
+                match &ask {
+                    Ask::Act(k) if k == THEMES => THEMES,
+                    Ask::Act(k) if k == "cards" => "cards",
+                    _ => "",
+                }
+                .to_owned()
+            } else if was == Shown::Settings {
+                existing_tool
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        let next_tool_q = QString::from(next_tool.as_str());
+        let tool_changed = self.settings_tool != next_tool_q;
+        if tool_changed || next_tool.is_empty() {
+            self.as_mut().rust_mut().tool_trail_depth = 0;
+        }
+        if tool_changed {
+            self.as_mut().rust_mut().settings_tool = next_tool_q;
+        }
+        let grid_origin = if shown == Shown::Grid && was != Shown::Grid {
+            Some(grid_origin_for(was, &ask))
+        } else if matches!(shown, Shown::Grid | Shown::List | Shown::Search | Shown::SearchGrid | Shown::Page) {
             self.grid_origin
         } else {
             None
@@ -883,6 +1079,7 @@ impl qobject::Screens {
                 }
             }
         }
+        let section_key = if shown == Shown::Grid { key.clone().unwrap_or_else(|| current_key.clone()) } else { String::new() };
         if let (Shown::HomeCard, Some(page)) = (shown, &key) {
             let page = QString::from(page.as_str());
             if self.page != page {
@@ -917,7 +1114,7 @@ impl qobject::Screens {
             self.as_mut().rust_mut().cheats_game = QString::default();
             self.as_mut().cheats_game_changed();
         }
-        let section = QString::from(eclipse_section(shown).unwrap_or_else(|| crate::sections::current(shown).map_or("", |s| s.key)));
+        let section = QString::from(eclipse_section_at(shown, &section_key).unwrap_or_else(|| crate::sections::current_at(shown, &section_key).map_or("", |s| s.key)));
         if self.section != section {
             self.as_mut().rust_mut().section = section;
             self.as_mut().section_changed();
@@ -926,6 +1123,12 @@ impl qobject::Screens {
         if self.shown != screen {
             self.as_mut().rust_mut().shown = screen;
             self.as_mut().shown_changed();
+        }
+        if tool_changed {
+            self.as_mut().settings_tool_changed();
+        }
+        if !next_tool.is_empty() {
+            self.as_mut().apply_settings_tool();
         }
     }
 }
@@ -964,5 +1167,47 @@ mod tests {
         assert_eq!(page_origin(false, Shown::HomeCard), Shown::Home);
         assert_eq!(library_of(false), Shown::Home);
         assert_eq!(library_of(true), Shown::Esde);
+    }
+
+    #[test]
+    fn eclipse_top_level_library_steps_between_home_and_consoles() {
+        assert_eq!(eclipse_section_at(Shown::Grid, crate::library::ALL), Some("library"));
+        assert_eq!(eclipse_section_at(Shown::Grid, "snes"), None);
+        assert_eq!(step_in_look_at(true, false, Shown::Grid, crate::library::ALL, &Ask::Act(PREVIOUS.into())), Some((Shown::Home, None)));
+        assert_eq!(step_in_look_at(true, false, Shown::Grid, crate::library::ALL, &Ask::Act(NEXT.into())), Some((Shown::Consoles, None)));
+        assert_eq!(step_in_look_at(true, false, Shown::Grid, crate::library::ALL, &Ask::Section("tools".into())), Some((Shown::Tools, None)));
+        assert_eq!(step_in_look_at(true, false, Shown::Grid, crate::library::ALL, &Ask::Section("library".into())), None);
+        assert_eq!(step_in_look_at(true, false, Shown::Grid, "snes", &Ask::Act(PREVIOUS.into())), None);
+    }
+
+    #[test]
+    fn eclipse_tools_route_themes_and_cards_to_settings_and_return_to_tools() {
+        assert_eq!(step_in_look_at(true, false, Shown::Tools, "", &Ask::Act(THEMES.into())), Some((Shown::Settings, None)));
+        assert_eq!(step_in_look_at(true, false, Shown::Tools, "", &Ask::Act("cards".into())), Some((Shown::Settings, None)));
+        assert_eq!(tool_back(false, Some(Shown::Tools), Shown::Tool, &Ask::Back), Some(Shown::Tools));
+        assert_eq!(tool_back(false, Some(Shown::Tools), Shown::Cores, &Ask::Back), Some(Shown::Tools));
+    }
+
+    #[test]
+    fn play_origin_restores_launch_screen_until_playback_starts() {
+        for origin in [Shown::Grid, Shown::Page, Shown::SearchGrid, Shown::Consoles] {
+            let (started, saved) = record_play_origin(false, origin, &Ask::Play);
+            assert!(!started);
+            assert_eq!(saved, Some(origin));
+            assert_eq!(close_origin(false, saved, false, &Ask::Failed), Some(origin));
+            assert_eq!(close_origin(false, saved, false, &Ask::Closed), Some(origin));
+            assert_eq!(close_origin(false, saved, true, &Ask::Closed), None);
+        }
+        assert_eq!(record_play_origin(false, Shown::List, &Ask::Act("console:snes".into())), (false, Some(Shown::Home)));
+        assert_eq!(record_play_origin(true, Shown::HomeCard, &Ask::Act("console:snes".into())), (false, Some(Shown::Esde)));
+        assert_eq!(record_play_origin(false, Shown::Home, &Ask::ResumePlay), (true, None));
+    }
+
+    #[test]
+    fn library_back_origin_tracks_home_consoles_and_collections() {
+        assert_eq!(grid_origin_for(Shown::Home, &Ask::Section("library".into())), Shown::Home);
+        assert_eq!(grid_origin_for(Shown::Consoles, &Ask::Section("library".into())), Shown::Consoles);
+        assert_eq!(grid_origin_for(Shown::Collections, &Ask::Open("favs".into())), Shown::Collections);
+        assert_eq!(grid_origin_for(Shown::Tools, &Ask::Section("library".into())), Shown::Home);
     }
 }

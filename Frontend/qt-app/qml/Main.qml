@@ -163,17 +163,24 @@ Window {
             platformLibrary: program.platformLibrary
             cores: library.cores
             onReady: (path) => {
-                library.started(path)
+                if (program.feed === 0)
+                    library.started(path)
                 // The game's screen asked for first, so an open that fails at once gives way to the library after it.
                 screens.play()
                 player.game = path
                 player.session.resume()
+            }
+            onDropped: {
+                player.session.startState = ""
+                program.settleFocus()
             }
             onNoticeChanged: program.said(launch.notice, launch.noticeAttention, true)
         }
         Screens {
             id: screens
             objectName: "screens"
+            libraryModel: library
+            settingsModel: settingsModel
             gameRunning: player.session.running
             lastPlayed: library.lastPlayed
             inHand: program.inHand
@@ -381,7 +388,7 @@ Window {
             objectName: "reference"
             anchors.fill: parent
             visible: program.bigScreen && !program.gameShown
-            folder: BuiltInThemes.reference
+            folder: (!program.esdeLook && !(chosenTheme.active && (!program.themeHost || (!program.themeHost.host.ready && !program.themeHost.failed) || ((program.themeHost.home ?? false) && (program.themeHost.consoles ?? false) && (program.themeHost.games ?? false))))) ? BuiltInThemes.reference : ""
             coverStores: program.coverStores
             screens: screens
             library: library
@@ -683,7 +690,7 @@ Window {
             cores: library.cores
             builtIns: BuiltInThemes.manifests
             themedSettings: Kit.Tokens.coronaRim > 0 && (program.bigScreen ? (program.themeHost?.settings ?? false) : (program.themeHost?.desktopSettings ?? false))
-            open: (program.bigScreen && (screens.shown === Screens.Settings || program.pauseShown)) || (!program.bigScreen && (desktopModel.view === 2 || program.gameShown || program.pauseShown))
+            open: (program.bigScreen && (screens.shown === Screens.Settings || (program.pauseShown && !settingsModel.ready))) || (!program.bigScreen && (desktopModel.view === 2 || program.gameShown || (program.pauseShown && !settingsModel.ready)))
             facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
             gamePads: pads.gamePads
             gameMode: program.gameMode
@@ -702,6 +709,8 @@ Window {
             onSaved: {
                 library.refresh()
                 player.session.readPicture()
+                if (program.platformLibrary.length > 0)
+                    program.coverStores = BuiltInThemes.refreshCoverStores(program.platformLibrary, program.coverStores)
             }
         }
         // The program's folder actions (EmuSen_Qt.md §7.7.E): one shown in the system's file manager, one chosen in the
@@ -888,64 +897,99 @@ Window {
             target: screens
             function onSettingsAtChanged() { settingsModel.openConsole(screens.settingsAt) }
         }
-        ThemesScreen {
-            objectName: "themes"
-            screens: screens
-            library: library
-            platformLibrary: program.platformLibrary
-            padFamily: program.padFamily
-            splashShown: program.splashShown
-            bigScreen: program.bigScreen
-            onUsed: (folder) => program.theme = folder
-            // The start's choice of an ES-DE theme is let go once another look is stored.
-            onRestyled: (esde) => program.esdeChosen = program.esdeChosen && esde
+        Connections {
+            target: screens
+            enabled: screens.settingsTool.length > 0
+            function onSettingsToolChanged() { screens.applySettingsTool() }
+        }
+        Connections {
+            target: settingsModel
+            enabled: screens.shown === Screens.Settings && screens.settingsTool.length > 0 && settingsModel.ready
+            function onReadyChanged() { screens.applySettingsTool() }
+            function onTrailChanged() { screens.checkToolsSettingsTrail() }
+        }
+        Loader {
+            anchors.fill: parent
+            active: program.bigScreen && screens.shown === Screens.Themes
+            focus: active
+            onLoaded: if (focus) forceActiveFocus()
+            sourceComponent: Item {
+                ThemesScreen {
+                    objectName: "themes"
+                    screens: screens
+                    library: library
+                    platformLibrary: program.platformLibrary
+                    padFamily: program.padFamily
+                    splashShown: program.splashShown
+                    bigScreen: program.bigScreen
+                    onUsed: (folder) => program.theme = folder
+                    // The start's choice of an ES-DE theme is let go once another look is stored.
+                    onRestyled: (esde) => program.esdeChosen = program.esdeChosen && esde
+                }
+            }
         }
         // Cores on the tool screen, from Home's place (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7).
-        ToolScreen {
-            objectName: "cores"
-            kind: ToolModel.Cores
-            shownAs: Screens.Cores
-            screens: screens
-            platformLibrary: program.platformLibrary
-            cores: library.cores
-            world: program.coresWorld
-            padFamily: program.padFamily
-            splashShown: program.splashShown
-            bigScreen: program.bigScreen
-            clock: clock
-            battery: machineBattery.level
-            consoleCounts: library.loading ? "" : library.settingsFacts("")
-            // Open Folder on a firmware page, through the program's one action for it (EmuSen_Qt.md §7.7.E).
-            onOpenFolder: (path) => folders.open(path)
-            onSaid: (words) => program.said(words, true, false)
+        Loader {
+            anchors.fill: parent
+            active: program.bigScreen && screens.shown === Screens.Cores
+            focus: active
+            onLoaded: if (focus) forceActiveFocus()
+            sourceComponent: Item {
+                ToolScreen {
+                    objectName: "cores"
+                    kind: ToolModel.Cores
+                    shownAs: Screens.Cores
+                    screens: screens
+                    platformLibrary: program.platformLibrary
+                    cores: library.cores
+                    world: program.coresWorld
+                    padFamily: program.padFamily
+                    splashShown: program.splashShown
+                    bigScreen: program.bigScreen
+                    clock: clock
+                    battery: machineBattery.level
+                    consoleCounts: library.loading ? "" : library.settingsFacts("")
+                    // Open Folder on a firmware page, through the program's one action for it (EmuSen_Qt.md §7.7.E).
+                    onOpenFolder: (path) => folders.open(path)
+                    onSaid: (words) => program.said(words, true, false)
+                }
+            }
         }
         // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, or the Scraper, as Screens names it (tools/jobs.rs, tools/scraper.rs).
-        ToolScreen {
-            objectName: "jobs"
-            kind: ToolModel.Jobs
-            shownAs: Screens.Tool
-            jobs: screens.tool
-            screens: screens
-            platformLibrary: program.platformLibrary
-            cores: library.cores
-            scraperTest: program.scraperTest
-            cheatsUrl: program.cheatsUrl
-            cheatsGame: screens.cheatsGame
-            sessionGame: player.session.running ? player.session.game : ""
-            masterCheats: player.session.masterCheats
-            clock: clock
-            battery: machineBattery.level
-            padFamily: program.padFamily
-            splashShown: program.splashShown
-            bigScreen: program.bigScreen
-            // The Scraper's run ended: the library shows what it fetched.
-            onLibraryChanged: library.refresh()
-            onCheatsChanged: (path) => {
-                if (player.session.running && player.session.game === path) player.session.reloadCheats()
+        Loader {
+            anchors.fill: parent
+            active: program.bigScreen && screens.shown === Screens.Tool
+            focus: active
+            onLoaded: if (focus) forceActiveFocus()
+            sourceComponent: Item {
+                ToolScreen {
+                    objectName: "jobs"
+                    kind: ToolModel.Jobs
+                    shownAs: Screens.Tool
+                    jobs: screens.tool
+                    screens: screens
+                    platformLibrary: program.platformLibrary
+                    cores: library.cores
+                    scraperTest: program.scraperTest
+                    cheatsUrl: program.cheatsUrl
+                    cheatsGame: screens.cheatsGame
+                    sessionGame: player.session.running ? player.session.game : ""
+                    masterCheats: player.session.masterCheats
+                    clock: clock
+                    battery: machineBattery.level
+                    padFamily: program.padFamily
+                    splashShown: program.splashShown
+                    bigScreen: program.bigScreen
+                    // The Scraper's run ended: the library shows what it fetched.
+                    onLibraryChanged: library.refresh()
+                    onCheatsChanged: (path) => {
+                        if (player.session.running && player.session.game === path) player.session.reloadCheats()
+                    }
+                    onCheatsMasterToggled: (on) => player.session.setMasterCheats(on)
+                    onOpenFolder: (path) => folders.open(path)
+                    onSaid: (words) => program.said(words, true, false)
+                }
             }
-            onCheatsMasterToggled: (on) => player.session.setMasterCheats(on)
-            onOpenFolder: (path) => folders.open(path)
-            onSaid: (words) => program.said(words, true, false)
         }
         Binding {
             target: screens
@@ -1046,6 +1090,11 @@ Window {
             function onGameAsked() { screens.resume() }
             // A game stopped: how long it ran is its play time, up to Play time counted up to.
             function onPlayed(path, seconds) { library.played(path, seconds, settingsModel.playHours) }
+            function onStartedPlaying(path) { library.started(path) }
+        }
+        Connections {
+            target: player.session
+            function onStartedPlaying() { screens.markPlaying() }
         }
         // What failed, from every model that can fail, said where the player is: a game that does not open (over the game),
         // the library unread, a setting, a game's page's change, or Cores; a cleared problem raises nothing (EmuSen_Qt.md §7.9).

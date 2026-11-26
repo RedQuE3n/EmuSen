@@ -39,6 +39,7 @@ Row {
     }
     Connections {
         target: root.controller
+        enabled: root.visible
         // The host opens another section's screen and declines the one shown (qt-models/src/sections.rs).
         function onSectionChosen(key) { Actions.openSection(key) }
     }

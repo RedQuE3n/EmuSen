@@ -3,9 +3,11 @@
 //! shelves' (emusen_library.h), the records from games.db, where Galaxia names it, and each game's cover and hero art from the media
 //! store through the scraper's sources-alone handle (emusen.scrape `media`, EmuSen_Backend.md §40.5).
 
-use crate::esde_shelves::{MediaIndex, Plays};
+use crate::esde_shelves::{MediaIndex, Metadata, Plays};
 use crate::gamelists::Collection;
-use crate::library::{without_port_mark, Engine, LibrarySource};
+use crate::library::{
+    favourites_from_records, hidden_from_edits, names_from_edits, played_from_records, plays_from_records, without_port_mark, Engine, LibrarySource,
+};
 use emusen_crystal_client::shapes::{CoreRow, SystemRow};
 use emusen_crystal_client::{Runtime, Scope};
 use emusen_platform_client::galaxia::consts::{DIR_COMPRESSED, DIR_MEDIA, DIR_PACKAGES, FILE_GAMES, FILE_SETTINGS, MODEL_APP_SETTINGS};
@@ -186,22 +188,24 @@ impl LibrarySource for ClientSource {
         Ok(self.library.games(None).map_err(words)?.games)
     }
 
+    fn records_table(&self) -> Result<Option<Value>, String> {
+        self.library.get(&json!({ "what": "records" })).map(Some).map_err(words)
+    }
+
+    fn edits_table(&self) -> Result<Option<Value>, String> {
+        self.library.get(&json!({ "what": "all_edits" })).map(Some).map_err(words)
+    }
+
     fn favourites(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
-        let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
-        let favourite = |g: &&GameFile| records.get(&g.path).and_then(|r| r.get("favourite")).and_then(Value::as_bool).unwrap_or(false);
-        Ok(games.iter().filter(favourite).map(|g| g.path.clone()).collect())
+        Ok(favourites_from_records(&self.library.get(&json!({ "what": "records" })).map_err(words)?, games))
     }
 
     fn hidden(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
-        let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
-        let hidden = |g: &&GameFile| edits.get(&g.path).is_some_and(|e| crate::edits::flag(e, crate::edits::HIDDEN));
-        Ok(games.iter().filter(hidden).map(|g| g.path.clone()).collect())
+        Ok(hidden_from_edits(&self.library.get(&json!({ "what": "all_edits" })).map_err(words)?, games))
     }
 
     fn names(&self, games: &[GameFile]) -> Result<Vec<(String, String)>, String> {
-        let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
-        let named = |g: &GameFile| edits.get(&g.path)?.get(crate::edits::NAME)?.as_str().filter(|n| !n.trim().is_empty()).map(|n| (g.path.clone(), n.to_owned()));
-        Ok(games.iter().filter_map(named).collect())
+        Ok(names_from_edits(&self.library.get(&json!({ "what": "all_edits" })).map_err(words)?, games))
     }
 
     fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
@@ -211,10 +215,28 @@ impl LibrarySource for ClientSource {
 
     fn media(&self, systems: &[SystemRow], games: &[GameFile], types: &[&str]) -> Result<Vec<(String, String)>, String> {
         let Some(scraper) = self.scraper() else { return Ok(Vec::new()) };
+        let mut present_by_sys: std::collections::HashMap<&str, std::collections::HashSet<String>> = std::collections::HashMap::new();
+        for sys in systems {
+            let sys_games: Vec<Value> = games
+                .iter()
+                .filter(|g| g.system.as_deref() == Some(sys.id.as_str()))
+                .map(|g| json!({ "path": g.path }))
+                .collect();
+            if sys_games.is_empty() {
+                continue;
+            }
+            let found = scraper.get(&json!({ "what": "present", "system": sys.esde_system, "games": sys_games })).map_err(words)?;
+            let set = found.as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_owned)).collect();
+            present_by_sys.insert(sys.id.as_str(), set);
+        }
         let mut out = Vec::new();
         for g in games {
             let Some(system) = systems.iter().find(|s| Some(&s.id) == g.system.as_ref()) else { continue };
+            let Some(present) = present_by_sys.get(system.id.as_str()) else { continue };
             for kind in types {
+                if !present.contains(*kind) {
+                    continue;
+                }
                 let found = scraper.get(&json!({ "what": "media", "path": g.path, "system": system.esde_system, "type": kind })).map_err(words)?;
                 if let Some(path) = found.get("path").and_then(Value::as_str) {
                     out.push((g.path.clone(), path.to_owned()));
@@ -226,9 +248,7 @@ impl LibrarySource for ClientSource {
     }
 
     fn played(&self, games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
-        let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
-        let at = |g: &GameFile| records.get(&g.path)?.get("last_played")?.as_str().and_then(crate::words::parse_utc);
-        Ok(games.iter().filter_map(|g| at(g).map(|t| (g.path.clone(), t))).collect())
+        Ok(played_from_records(&self.library.get(&json!({ "what": "records" })).map_err(words)?, games))
     }
 
     fn started(&self, path: &str) -> Result<(), String> {
@@ -248,14 +268,12 @@ impl LibrarySource for ClientSource {
         app_settings(&self.platform)
     }
 
-    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, crate::esde_shelves::Metadata)>, String> {
+    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, Metadata)>, String> {
         let Some(scraper) = self.scraper() else { return Ok(Vec::new()) };
         let names = app_settings(&self.platform)?.get("ScrapeGameNames").and_then(Value::as_bool).unwrap_or(false);
-        let one = |g: &GameFile| {
-            let answer = scraper.get(&json!({ "what": "metadata", "path": g.path, "scraped_names": names }));
-            answer.map(|m| (g.path.clone(), crate::esde_shelves::metadata_of(&m)))
-        };
-        games.iter().map(one).collect::<Result<_, _>>().map_err(words)
+        let found = scraper.get(&json!({ "what": "found" })).map_err(words)?;
+        let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
+        Ok(games.iter().map(|g| (g.path.clone(), resolve_game_metadata(&g.path, found.get(&g.path), edits.get(&g.path), names))).collect())
     }
 
     fn firmware(&self, system: &str) -> Result<Vec<emusen_crystal_client::shapes::FirmwareFile>, String> {
@@ -263,11 +281,7 @@ impl LibrarySource for ClientSource {
     }
 
     fn plays(&self, games: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
-        let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
-        // games.db keeps the seconds as a real (Platform/library/src/records.rs), so they are read as one.
-        let number = |r: &Value, key: &str| r.get(key).and_then(Value::as_f64).map_or(0, |n| n as i64);
-        let of = |g: &GameFile| records.get(&g.path).map(|r| (g.path.clone(), Plays { count: number(r, "play_count"), seconds: number(r, "play_seconds") }));
-        Ok(games.iter().filter_map(of).collect())
+        Ok(plays_from_records(&self.library.get(&json!({ "what": "records" })).map_err(words)?, games))
     }
 
     fn screens(&self) -> Result<Vec<(String, String)>, String> {
@@ -357,6 +371,43 @@ impl LibrarySource for ClientSource {
         }
         Ok(out)
     }
+}
+
+fn format_rating(rating: f32) -> String {
+    let v = rating.clamp(0.0, 1.0) as f64;
+    let seven: f64 = format!("{v:.6e}").parse().unwrap_or(v);
+    let text = format!("{seven:.3}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    if text.is_empty() || text == "-0" { "0".to_owned() } else { text.to_owned() }
+}
+
+fn resolve_game_metadata(rom: &str, found: Option<&Value>, edits: Option<&Value>, scraped_names: bool) -> Metadata {
+    const FLAGS: [&str; 7] = ["completed", "kidgame", "hidden", "broken", "nogamecount", "nomultiscrape", "hidemetadata"];
+    let mut out = Metadata::new();
+    let put = |out: &mut Metadata, key: &str, value: Option<String>| {
+        if let Some(v) = value.filter(|v| !v.is_empty()) {
+            out.insert(key.to_owned(), v);
+        }
+    };
+    let edited = |k: &str| edits.and_then(|e| e.get(k)).and_then(Value::as_str).map(str::to_owned);
+    let scraped = |k: &str| found.and_then(|f| f.get(k)).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned);
+    let name = edited("name")
+        .or_else(|| if scraped_names { scraped("name") } else { None })
+        .unwrap_or_else(|| std::path::Path::new(rom).file_stem().unwrap_or_default().to_string_lossy().into_owned());
+    put(&mut out, "name", Some(name));
+    for key in ["description", "developer", "publisher", "genre", "players"] {
+        put(&mut out, key, edited(key).or_else(|| scraped(key)));
+    }
+    let rating = edited("rating").or_else(|| found.and_then(|f| f.get("rating")).and_then(Value::as_f64).map(|r| format_rating(r as f32)));
+    put(&mut out, "rating", rating);
+    put(&mut out, "releasedate", edited("releasedate").or_else(|| scraped("release_date")));
+    for key in ["sortname", "collectionsortname", "controller", "altemulator"] {
+        put(&mut out, key, edited(key));
+    }
+    for key in FLAGS {
+        put(&mut out, key, edited(key).or_else(|| Some("0".to_owned())));
+    }
+    out
 }
 
 /// An engine by the name a choice stores, shown by its libretro corename or by its original name (`without_port_mark`).

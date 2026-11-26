@@ -103,15 +103,24 @@ pub struct ThemeLibraryRust {
     lines: Vec<(String, bool)>,
     declined: Vec<String>,
     art_hues_read: i32,
-    /// Each picture's hues as read, by its path, when its file last changed and how many were asked; a picture being read is
-    /// listed with none, and one written again, or written after it was first asked for, is read again.
-    hues: HashMap<Asked, Vec<f64>>,
-    /// The one thread that reads pictures, one after another, started at the first asked for; it ends with the library.
-    reader: Option<std::sync::mpsc::Sender<Asked>>,
+    scan_gen: u64,
+    /// Cached hues keyed by `(path, count)` with last scan generation and file mtime checked off the GUI thread.
+    hues: HashMap<(String, usize), CachedHues>,
+    reader: Option<std::sync::mpsc::Sender<AskHues>>,
 }
 
-/// A picture's hues asked for: its path, when its file last changed (none while there is no file), and how many.
-type Asked = (String, Option<std::time::SystemTime>, usize);
+struct CachedHues {
+    gen: u64,
+    modified: Option<std::time::SystemTime>,
+    hues: Vec<f64>,
+}
+
+struct AskHues {
+    path: String,
+    most: usize,
+    gen: u64,
+    prev_modified: Option<std::time::SystemTime>,
+}
 
 impl Default for ThemeLibraryRust {
     fn default() -> Self {
@@ -138,6 +147,7 @@ impl Default for ThemeLibraryRust {
             lines: Vec::new(),
             declined: Vec::new(),
             art_hues_read: 0,
+            scan_gen: 1,
             hues: HashMap::new(),
             reader: None,
         }
@@ -189,24 +199,41 @@ impl qobject::ThemeLibrary {
         if path.is_empty() || most <= 0 {
             return out;
         }
-        let changed = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-        let asked = (path, changed, most as usize);
-        if let Some(hues) = self.hues.get(&asked) {
-            hues.iter().for_each(|h| out.append(*h));
-            return out;
+        let most = most as usize;
+        let gen = self.scan_gen;
+        let cache_key = (path.clone(), most);
+        let prev_modified = if let Some(cached) = self.hues.get(&cache_key) {
+            cached.hues.iter().for_each(|h| out.append(*h));
+            if cached.gen == gen {
+                return out;
+            }
+            cached.modified
+        } else {
+            self.as_mut().rust_mut().hues.insert(cache_key.clone(), CachedHues { gen, modified: None, hues: Vec::new() });
+            None
+        };
+        if let Some(entry) = self.as_mut().rust_mut().hues.get_mut(&cache_key) {
+            entry.gen = gen;
         }
-        self.as_mut().rust_mut().hues.insert(asked.clone(), Vec::new());
         if self.reader.is_none() {
-            let (send, take) = std::sync::mpsc::channel::<Asked>();
+            let (send, take) = std::sync::mpsc::channel::<AskHues>();
             let qt = self.qt_thread();
             std::thread::spawn(move || {
                 for asked in take {
-                    let hues = emusen_qt_models::art_hues::hues_of_file(&asked.0, asked.2);
+                    let modified = std::fs::metadata(&asked.path).and_then(|m| m.modified()).ok();
+                    if asked.prev_modified.is_some() && modified == asked.prev_modified {
+                        continue;
+                    }
+                    let hues = emusen_qt_models::art_hues::hues_of_file(&asked.path, asked.most);
                     let sent = qt.queue(move |mut library| {
-                        library.as_mut().rust_mut().hues.insert(asked, hues);
-                        let read = library.art_hues_read.wrapping_add(1);
-                        library.as_mut().rust_mut().art_hues_read = read;
-                        library.as_mut().art_hues_read_changed();
+                        let key = (asked.path, asked.most);
+                        let changed = library.hues.get(&key).is_none_or(|c| c.hues != hues);
+                        library.as_mut().rust_mut().hues.insert(key, CachedHues { gen: asked.gen, modified, hues });
+                        if changed {
+                            let read = library.art_hues_read.wrapping_add(1);
+                            library.as_mut().rust_mut().art_hues_read = read;
+                            library.as_mut().art_hues_read_changed();
+                        }
                     });
                     // The library is gone: nothing is left to read for.
                     if sent.is_err() {
@@ -217,7 +244,7 @@ impl qobject::ThemeLibrary {
             self.as_mut().rust_mut().reader = Some(send);
         }
         if let Some(reader) = &self.reader {
-            let _ = reader.send(asked);
+            let _ = reader.send(AskHues { path, most, gen, prev_modified });
         }
         out
     }
@@ -263,7 +290,9 @@ impl qobject::ThemeLibrary {
         // The own look reads the rows, the systems and the catalog alone; the lists' texts and the ES-DE state are not copied (EmuSen_Qt.md §4.15).
         self.as_mut().rust_mut().view = LibraryView { rows: view.rows.clone(), cored: view.cored.clone(), systems: view.systems.clone(), catalog: view.catalog.clone(), ..LibraryView::default() };
         self.as_mut().rust_mut().lines = lines;
-        // The games' art may have changed with the view: a binding on `artHues` asks again.
+        // Bump generation and notify so art overwritten between refreshes is re-checked off the GUI thread.
+        let gen = self.scan_gen.wrapping_add(1).max(1);
+        self.as_mut().rust_mut().scan_gen = gen;
         let read = self.art_hues_read.wrapping_add(1);
         self.as_mut().rust_mut().art_hues_read = read;
         self.as_mut().art_hues_read_changed();

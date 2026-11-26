@@ -190,11 +190,11 @@ impl Resolved {
     }
 }
 
-/// A folder as a URL with `path` joined: `qrc:` and `file:` folders as given, a plain path as a `file:` URL.
+/// A folder as a URL with `path` joined: `qrc:` and `file:` folders as given, a plain path encoded via `QUrl`.
 fn url_in(folder: &str, path: &str) -> String {
     let folder = folder.trim_end_matches('/');
-    let folder = if folder.starts_with("qrc:") || folder.starts_with("file:") { folder.to_owned() } else { format!("file://{folder}") };
-    format!("{folder}/{path}")
+    let joined = format!("{folder}/{}", path.trim_start_matches('/'));
+    crate::game_model::cover_url(&joined)
 }
 
 /// A package's row from its `theme.json`; `folder` is where its previews are, as a path or a URL.

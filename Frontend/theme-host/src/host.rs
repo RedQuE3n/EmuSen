@@ -3,12 +3,13 @@
 
 use crate::package::{self, Package};
 use emusen_theme_manifest::{DesktopScreen, Screen};
-use crate::policy::Policy;
+use crate::policy::{percent_decode, Policy};
 use crate::sandbox::ffi::{sandbox_engine, sandbox_new, sandbox_place, sandbox_qt_qml, sandbox_read, sandbox_take_log, watch_alive, watch_new, Sandbox, Watch};
+use crate::sandbox::ThumbHandle;
 use core::pin::Pin;
 use cxx::UniquePtr;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QString, QStringList};
+use cxx_qt_lib::{QString, QStringList, QUrl};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -81,6 +82,7 @@ pub struct ThemeHostRust {
     live_engines: i32,
     sandbox: UniquePtr<Sandbox>,
     policy: Option<Box<Policy>>,
+    thumbs: ThumbHandle,
     package: Option<Package>,
     engines: Vec<UniquePtr<Watch>>,
 }
@@ -98,6 +100,7 @@ impl Default for ThemeHostRust {
             live_engines: 0,
             sandbox: UniquePtr::null(),
             policy: None,
+            thumbs: ThumbHandle::default(),
             package: None,
             engines: Vec::new(),
         }
@@ -125,13 +128,15 @@ fn face_screen(role: qobject::Role) -> Option<FaceScreen> {
     }
 }
 
-/// A folder as a URL: `file:` and `qrc:` as given, a plain path as a `file:` URL; no trailing `/`.
+/// A folder as a URL: `file:` and `qrc:` as given, a plain path encoded via `QUrl`; no trailing `/`.
 pub fn folder_url(folder: &str) -> String {
     let trimmed = folder.trim_end_matches('/');
     if trimmed.starts_with("file:") || trimmed.starts_with("qrc:") {
         trimmed.to_owned()
+    } else if trimmed.is_empty() {
+        "file://".to_owned()
     } else {
-        format!("file://{trimmed}")
+        QUrl::from_local_file(&QString::from(trimmed)).to_string()
     }
 }
 
@@ -205,7 +210,7 @@ impl qobject::ThemeHost {
         let package = package::read(&text.to_string())?;
         let covers: Vec<String> = self.cover_stores.iter().map(|s| s.to_string()).collect();
         let policy = Box::new(Policy::new(&folder, &covers, &sandbox_qt_qml().to_string()));
-        let sandbox = sandbox_new(&policy);
+        let sandbox = sandbox_new(&policy, Box::new(self.thumbs.clone()));
         let engine = sandbox_engine(&sandbox);
         let watch = unsafe { watch_new(engine) };
         let mut rust = self.as_mut().rust_mut();
@@ -269,6 +274,37 @@ impl qobject::ThemeHost {
             self.as_mut().failed_changed();
         }
         placed
+    }
+
+    /// Whether `url` passes the loaded sandbox policy without needing `image://thumb/`.
+    pub fn allows_url(&self, url: &str) -> bool {
+        self.policy.as_ref().is_some_and(|p| p.allows_local(url))
+    }
+
+    /// Registers an out-of-store regular image file or `file://` URL under `image://thumb/<id>`.
+    pub fn allow_thumb(&self, path_or_url: &str) -> String {
+        if path_or_url.is_empty() || path_or_url.starts_with("qrc:") || path_or_url.starts_with("image:") {
+            return String::new();
+        }
+        let local = if path_or_url.starts_with("file:") {
+            let qt = QUrl::from(&QString::from(path_or_url)).to_local_file().map(|s| s.to_string()).unwrap_or_default();
+            if qt.is_empty() {
+                path_or_url.strip_prefix("file://").map(percent_decode).unwrap_or_default()
+            } else {
+                qt
+            }
+        } else {
+            path_or_url.to_owned()
+        };
+        if local.is_empty() {
+            return String::new();
+        }
+        self.thumbs.allow(std::path::Path::new(&local)).unwrap_or_default()
+    }
+
+    /// Flushes sandbox runtime warnings and refusals into `warnings`.
+    pub fn sync_warnings(self: Pin<&mut Self>) {
+        self.take_log();
     }
 
     /// The engine's warnings and the sandbox's refusals, added to `warnings`.

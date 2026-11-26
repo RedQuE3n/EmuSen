@@ -348,9 +348,10 @@ pub fn add_options(world: &emusen_client_fixture::World) -> PathBuf {
         })
         .unwrap();
     if let Some(folder) = index["packages"].as_array().and_then(|a| a.first()).and_then(|p| p["folder"].as_str()) {
+        let save_key = emusen_qt_models::game_page_source::package_save_key(Path::new(folder));
         for (slot, at) in board_states() {
             let (kind, n) = if slot == RESUME { (SAVE_PACKAGE_RESUME_STATE, 0) } else { (SAVE_PACKAGE_STATE, slot) };
-            let file = platform.save_path(kind, folder, None, n).unwrap();
+            let file = platform.save_path(kind, folder, save_key.as_deref(), n).unwrap();
             std::fs::create_dir_all(file.parent().unwrap()).unwrap();
             std::fs::write(&file, b"state").unwrap();
             let f = std::fs::File::options().write(true).open(&file).unwrap();

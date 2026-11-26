@@ -12,7 +12,7 @@ use cxx_qt_lib::{DateFormat, QByteArray, QDateTime, QRectF, QString};
 use crate::input::GameInput;
 use crate::pause::{self, SlotFact};
 use crate::resume::{self, Answer, Start};
-use crate::pictures::{self, PictureSource, Shown};
+use crate::pictures::{self, PictureSource, Shown, Slots};
 use cxx_qt::casting::Upcast;
 use emusen_crystal_client::{Api, Config, Runtime};
 use crate::play::PlaySettings;
@@ -201,6 +201,11 @@ pub mod qobject {
         #[qsignal]
         fn played(self: Pin<&mut SessionModel>, path: QString, seconds: f64);
 
+        /// The game actually started running (after any Launch/Resume prompts resolved).
+        #[qsignal]
+        #[cxx_name = "startedPlaying"]
+        fn started_playing(self: Pin<&mut SessionModel>, path: QString);
+
         /// The game or console named did not open, or stopped on a failure: `problem` says why.
         #[qsignal]
         #[cxx_name = "openFailed"]
@@ -386,6 +391,8 @@ pub struct SessionModelRust {
     from_state: Option<String>,
     /// The session the card's pictures are read from, shared with the picture provider.
     shown: Shown,
+    /// State slot picture paths indexed by slot number, shared with the picture provider.
+    slot_pictures: Slots,
     /// Read again at each pause, so a picture's address names the pause it was read in.
     serial: u64,
     /// Whether the picture provider is served in this model's engine.
@@ -457,6 +464,7 @@ impl Default for SessionModelRust {
             holding: None,
             from_state: None,
             shown: Shown::default(),
+            slot_pictures: Slots::default(),
             serial: 0,
             served: false,
             jobs: 0,
@@ -521,17 +529,21 @@ impl qobject::SessionModel {
         if self.running == value {
             return;
         }
-        let game = self.game.clone();
-        let ran = if value {
-            self.as_mut().rust_mut().playing = Some((game, std::time::Instant::now())).filter(|(g, _)| !g.is_empty());
-            None
-        } else {
-            self.as_mut().rust_mut().playing.take()
-        };
+        let ran = if value { None } else { self.as_mut().rust_mut().playing.take() };
         self.as_mut().rust_mut().running = value;
         self.as_mut().running_changed();
         if let Some((path, since)) = ran {
             self.played(path, since.elapsed().as_secs_f64());
+        }
+    }
+
+    fn begin_play(mut self: Pin<&mut Self>) {
+        if self.playing.is_none() {
+            let game = self.game.clone();
+            if !game.is_empty() {
+                self.as_mut().rust_mut().playing = Some((game.clone(), std::time::Instant::now()));
+                self.started_playing(game);
+            }
         }
     }
 
@@ -693,6 +705,7 @@ impl qobject::SessionModel {
             if !self.paused {
                 self.as_mut().rust_mut().resume_waiting = true;
             }
+            self.as_mut().begin_play();
             return self.start_from(state);
         }
         let Some(setting) = self.as_mut().rust_mut().holding else { return };
@@ -708,6 +721,7 @@ impl qobject::SessionModel {
     fn let_go(mut self: Pin<&mut Self>, load: bool) {
         self.as_mut().rust_mut().holding = None;
         self.as_mut().set_resume_asked(false);
+        self.as_mut().begin_play();
         if !self.paused {
             self.as_mut().rust_mut().resume_waiting = true;
         }
@@ -983,21 +997,29 @@ impl qobject::SessionModel {
         facts.second_player = unsafe { GamePads::at(self.pads) }.is_some_and(|pads| pads.seated() & 0b10 != 0);
         facts.pictures = format!("image://{}/{serial}/", pictures::NAME);
         let platform = self.as_mut().platform().ok();
-        let picture_of = |path: &str| {
-            let picture = platform.as_ref()?.save_path(emusen_platform_client::galaxia::consts::SAVE_PICTURE, path, None, 0).ok()?;
-            picture.is_file().then(|| format!("{}file/{}", facts.pictures, picture.display()))
-        };
+        let mut slot_paths = Vec::new();
         let slots = runtime.state_slots(session).unwrap_or_default();
         facts.slots = slots
             .iter()
             .filter(|s| (1..=pause::SLOTS).contains(&s.slot))
-            .map(|s| SlotFact {
-                slot: s.slot,
-                exists: s.exists,
-                when: when_words(s.saved_at.as_deref()),
-                picture: if s.exists { picture_of(&s.path).unwrap_or_default() } else { String::new() },
+            .map(|s| {
+                let pic = if s.exists {
+                    platform
+                        .as_ref()
+                        .and_then(|p| p.save_path(emusen_platform_client::galaxia::consts::SAVE_PICTURE, &s.path, None, 0).ok())
+                        .filter(|p| p.is_file())
+                        .map(|p| {
+                            slot_paths.push((s.slot, p.to_string_lossy().into_owned()));
+                            format!("{}slot/{}", facts.pictures, s.slot)
+                        })
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
+                SlotFact { slot: s.slot, exists: s.exists, when: when_words(s.saved_at.as_deref()), picture: pic }
             })
             .collect();
+        *self.slot_pictures.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = slot_paths;
         facts.slot_when = slots
             .iter()
             .filter(|s| s.exists && (1..=pause::SLOTS).contains(&s.slot))
@@ -1300,7 +1322,7 @@ impl qobject::SessionModel {
                     *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((runtime, session));
                 }
                 if !self.served {
-                    let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone()));
+                    let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone(), self.slot_pictures.clone()));
                     self.as_mut().rust_mut().served = served;
                 }
                 self.as_mut().apply_speed();

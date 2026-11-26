@@ -151,10 +151,12 @@ pub mod qobject {
 
 use qobject::GameRole;
 
-/// A cover's file as the URL an Image reads; empty for none.
+/// A cover's file as the URL an Image reads; empty for none, and existing URL schemes pass through unchanged.
 pub fn cover_url(file: &str) -> String {
     if file.is_empty() {
         String::new()
+    } else if file.starts_with("file:") || file.starts_with("qrc:") || file.starts_with("image:") {
+        file.to_owned()
     } else {
         cxx_qt_lib::QUrl::from_local_file(&QString::from(file)).to_string()
     }

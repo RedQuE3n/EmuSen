@@ -103,12 +103,20 @@ fn qt_3_4_8_the_shoulders_and_a_tap_open_eclipse_s_sections_from_home_and_consol
     back(&mut scene, "Home");
     assert_eq!(marked(&mut scene), ["home"], "back on Home, the nav marks Home");
 
-    // Home's RB: Library, the games view at every game; B from it is the grid's, to Choose a console.
+    // Home's RB: Library, the games view at every game; RB goes to Consoles, B returns to Home.
     shoulder(&mut scene, &sdl, &pad, RB.0, RB.1);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+    settle(&mut scene);
     assert_eq!(at(&mut scene)[..2], [all("Grid"), all(games::ALL)], "RB on Home opens Library: every game");
-    back(&mut scene, "Consoles");
-    wait_for(&mut scene, "theme", "consoles", "true", 3000);
+    assert_eq!(scene.property("screens", "section"), "library");
+    assert_eq!(marked(&mut scene), ["library"], "Library's nav marks Library");
+    back(&mut scene, "Home");
+    assert_eq!(marked(&mut scene), ["home"], "B from top-level Library goes Home");
+    shoulder(&mut scene, &sdl, &pad, RB.0, RB.1);
+    wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+    settle(&mut scene);
+    shoulder(&mut scene, &sdl, &pad, RB.0, RB.1);
+    wait_for(&mut scene, "screens", "shown", "Consoles", 3000);
     settle(&mut scene);
     assert_eq!(scene.property("screens", "section"), "consoles");
     assert_eq!(marked(&mut scene), ["consoles"], "Choose a console's nav marks Consoles");
@@ -122,11 +130,14 @@ fn qt_3_4_8_the_shoulders_and_a_tap_open_eclipse_s_sections_from_home_and_consol
     wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
     settle(&mut scene);
 
-    // Choose a console's LB: Library; B back.
+    // Choose a console's LB: Library; RB back to Consoles.
     shoulder(&mut scene, &sdl, &pad, LB.0, LB.1);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+    settle(&mut scene);
     assert_eq!(at(&mut scene)[..2], [all("Grid"), all(games::ALL)], "LB on Consoles opens Library");
-    back(&mut scene, "Consoles");
+    assert_eq!(marked(&mut scene), ["library"], "LB from Consoles marks Library");
+    shoulder(&mut scene, &sdl, &pad, RB.0, RB.1);
+    wait_for(&mut scene, "screens", "shown", "Consoles", 3000);
     settle(&mut scene);
 
     // A tap: Tools from Choose a console, Home on Back, Collections tapped, and Consoles from Home.

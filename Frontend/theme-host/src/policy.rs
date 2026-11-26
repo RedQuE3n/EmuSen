@@ -115,11 +115,36 @@ pub fn refused_script_imports(file: &str, text: &str) -> Vec<String> {
         .collect()
 }
 
+/// Decodes `%XX` byte sequences from a `file://` URL component back into an OS path string.
+pub fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = |b: u8| match b {
+                b'0'..=b'9' => Some(b - b'0'),
+                b'a'..=b'f' => Some(b - b'a' + 10),
+                b'A'..=b'F' => Some(b - b'A' + 10),
+                _ => None,
+            };
+            if let (Some(hi), Some(lo)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push((hi << 4) | lo);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 impl Policy {
     /// `folder` is the theme's folder as a URL (`file:` or `qrc:`); `covers` the cover stores on disk; `qt_qml` Qt's QML folder.
     pub fn new(folder: &str, covers: &[String], qt_qml: &str) -> Policy {
         let folder = format!("{}/", folder.trim_end_matches('/'));
-        let folder_path = folder.strip_prefix("file://").map(|p| real(Path::new(p)));
+        let folder_path = folder.strip_prefix("file://").map(|p| real(Path::new(&percent_decode(p))));
         let covers = covers.iter().filter(|c| !c.is_empty()).map(|c| real(Path::new(c))).collect();
         Policy { folder, folder_path, covers, qt_qml: real(Path::new(qt_qml)) }
     }
@@ -137,6 +162,7 @@ impl Policy {
     fn in_folder(&self, url: &str, local: &str) -> bool {
         match (&self.folder_path, local.is_empty()) {
             (Some(root), false) => real(Path::new(local)).starts_with(root),
+            (Some(root), true) => url.strip_prefix("file://").is_some_and(|p| real(Path::new(&percent_decode(p))).starts_with(root)),
             (None, true) => url.strip_prefix("qrc:").map(|p| format!("qrc:/{}", p.trim_start_matches('/'))).is_some_and(|u| u.starts_with(&self.folder)),
             _ => false,
         }
@@ -166,8 +192,20 @@ impl Policy {
         }
     }
 
+    /// Returns true if a local URL passes this policy as an image/asset URL without needing thumbnail proxying.
+    pub fn allows_local(&self, url: &str) -> bool {
+        self.judge(url, "", Kind::Url, "").is_empty()
+    }
+
     fn judge_file(&self, url: &str, local: &str, kind: Kind) -> String {
-        let path = real(Path::new(local));
+        let decoded;
+        let raw = if local.is_empty() {
+            decoded = url.strip_prefix("file://").map(percent_decode).unwrap_or_default();
+            decoded.as_str()
+        } else {
+            local
+        };
+        let path = real(Path::new(raw));
         if let Ok(rest) = path.strip_prefix(&self.qt_qml) {
             return match module_of(&rest.to_string_lossy()).filter(|_| kind == Kind::Qmldir) {
                 Some(module) if never_resolved(&module) => format!("{module} is a module no theme may use"),

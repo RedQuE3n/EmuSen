@@ -75,11 +75,20 @@ fn qt_3_4_12_the_states_no_board_draws_are_as_the_tester_ruled() {
     // (1) Only a resume point, saved today: its card with the badge, then the empty slot; Resume leads (R-20261123-36).
     let resumed = (RESUME, words_now() - 60);
     let world = world("qt-app-eclipse-game-states", &[resumed], true, true);
+    let resume_pic = emusen_platform_client::Platform::load(emusen_client_fixture::library())
+        .unwrap()
+        .save_path(emusen_platform_client::galaxia::consts::SAVE_PICTURE, &state_file(&world, RESUME).to_string_lossy(), None, 0)
+        .unwrap();
+    common::draw_covers(&mut harness, &world.root, &[(resume_pic, (440, 276), 1, String::new())], |_| {});
     {
         let mut scene = program(&mut harness);
         open_page(&mut scene, &world);
         states_tab(&mut scene);
         assert_eq!(cards(&mut scene), (vec!["Resume point".to_owned(), "Empty slot".to_owned()], vec!["Resumes here".to_owned()]));
+        let thumb_src = eclipse_board::read(&scene.tree(), "cardPicture.0", "source");
+        assert!(thumb_src.starts_with("image://thumb/"), "state thumbnail loads via approved thumb provider: {thumb_src}");
+        game::until(&mut scene, "state thumbnail Ready", 3000, |s| eclipse_board::read(&s.tree(), "cardPicture.0", "status") == "Ready");
+        assert_eq!(scene.property("host.theme", "warnings"), "", "thumb load leaves zero sandbox warnings");
         assert_eq!(eclipse_board::read(&scene.tree(), "cardWhen.0", "text"), when_words(resumed.1), "today's form (R-20261123-34)");
         assert!(when_words(resumed.1).starts_with("Today, "));
         assert_eq!(pills(&mut scene), ["Resume", "Start from the beginning", "Favourite"]);

@@ -151,6 +151,11 @@ pub mod qobject {
         #[qinvokable]
         fn resume(self: Pin<&mut SessionModel>);
 
+        /// Refreshes `cardFacts` for the active session without changing pause state.
+        #[qinvokable]
+        #[cxx_name = "refreshFacts"]
+        fn refresh_facts(self: Pin<&mut SessionModel>);
+
         /// Paused if running, else resumed: emusen-qt-play's own window's answer to the menu chord, which has no Pause Card.
         #[qinvokable]
         #[cxx_name = "togglePause"]
@@ -311,6 +316,11 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "fullScreenAsked"]
         fn full_screen_asked(self: Pin<&mut SessionModel>);
+
+        /// The ToggleBigPicture hotkey, whose face switch is the window's.
+        #[qsignal]
+        #[cxx_name = "bigScreenAsked"]
+        fn big_screen_asked(self: Pin<&mut SessionModel>);
     }
 
     impl cxx_qt::Threading for SessionModel {}
@@ -946,6 +956,10 @@ impl qobject::SessionModel {
         }
     }
 
+    pub fn refresh_facts(mut self: Pin<&mut Self>) {
+        self.as_mut().read_card_facts();
+    }
+
     fn pause(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().resume_waiting = false;
         if let Some(session) = &self.session {
@@ -1167,7 +1181,8 @@ impl qobject::SessionModel {
     fn away_hotkey(mut self: Pin<&mut Self>, hotkey: Hotkey, library: bool) {
         let open = self.opened.is_some();
         match hotkey {
-            Hotkey::FastForward | Hotkey::Rewind | Hotkey::TogglePause | Hotkey::FrameAdvance | Hotkey::ToggleBigPicture => {}
+            Hotkey::FastForward | Hotkey::Rewind | Hotkey::TogglePause | Hotkey::FrameAdvance => {}
+            Hotkey::ToggleBigPicture => self.big_screen_asked(),
             Hotkey::SaveState if !open => self.say(pause::NO_GAME_SAVE.to_string(), false),
             Hotkey::LoadState if !open => self.say(pause::NO_GAME_LOAD.to_string(), false),
             Hotkey::SaveState => {
@@ -1220,8 +1235,7 @@ impl qobject::SessionModel {
             Hotkey::Screenshot => self.screenshot(),
             Hotkey::ExitToLibrary => self.exit_asked(),
             Hotkey::ToggleFullscreen => self.full_screen_asked(),
-            // The program has no desktop view to leave to (EmuSen_Qt.md §7.7.H6).
-            Hotkey::ToggleBigPicture => {}
+            Hotkey::ToggleBigPicture => self.big_screen_asked(),
         }
     }
 

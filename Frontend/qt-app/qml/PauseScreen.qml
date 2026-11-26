@@ -14,10 +14,11 @@ Kit.NormalizedCanvas {
     required property int padFamily
     required property bool pauseShown
     required property bool gameShown
+    property bool bigScreen: true
     property Clock clock: null
     property int battery: -1
     readonly property alias slide: card.slide
-    visible: card.open || card.leaving
+    visible: cardCanvas.bigScreen && (card.open || card.leaving)
     PauseCard {
         id: card
         anchors.fill: parent
@@ -28,8 +29,8 @@ Kit.NormalizedCanvas {
         pixelScale: cardCanvas.unit
         battery: cardCanvas.battery
         clockText: cardCanvas.clock ? cardCanvas.clock.shortTime : ""
-        open: cardCanvas.pauseShown
-        focus: cardCanvas.pauseShown
+        open: cardCanvas.bigScreen && cardCanvas.pauseShown
+        focus: cardCanvas.bigScreen && cardCanvas.pauseShown
         onResumed: cardCanvas.screens.play()
         onBackToLibrary: cardCanvas.screens.library()
         onCheatsToolAsked: cardCanvas.screens.openCheats()

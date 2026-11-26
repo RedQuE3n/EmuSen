@@ -13,6 +13,7 @@ GamePage {
     // The game in hand, whose page is shown.
     required property string inHand
     required property bool splashShown
+    property bool bigScreen: true
     // The chosen theme draws the page: this one keeps its model and its answers to the model, and is neither drawn nor reached.
     property bool themed: false
     // The recorded ScreenScraper a test names for the scraper; empty for ScreenScraper itself.
@@ -22,7 +23,7 @@ GamePage {
     signal playFrom(string path, string state)
     signal openFolder(string path)
     signal said(string words)
-    visible: pageScreen.screens.shown === Screens.Page && !pageScreen.themed
+    visible: pageScreen.bigScreen && pageScreen.screens.shown === Screens.Page && !pageScreen.themed
     page: pageModel
     inputs: visible && !pageScreen.splashShown
     onBacked: pageScreen.screens.back()

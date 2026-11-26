@@ -15,6 +15,7 @@ Kit.NormalizedCanvas {
     required property int battery
     required property int padFamily
     required property bool splashShown
+    property bool bigScreen: true
 
     readonly property real boardHeight: 1200
     readonly property real boardUnit: Kit.CanvasUnits.designHeight / canvas.boardHeight
@@ -28,7 +29,7 @@ Kit.NormalizedCanvas {
         if (!canvas.sheetOpen && !collectionsModel.dialogOpen && !collectionsModel.typingOpen && canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
     }
 
-    visible: canvas.screens.shown === Screens.Collections
+    visible: canvas.bigScreen && canvas.screens.shown === Screens.Collections
     focus: !canvas.splashShown && canvas.visible
     onVisibleChanged: {
         if (canvas.visible && canvas.library) canvas.library.ensureMetadata()

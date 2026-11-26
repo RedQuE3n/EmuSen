@@ -43,6 +43,8 @@ pub struct Start {
     pub navigation_sounds: bool,
     /// The window shown full screen, else in a window (`FULL_SCREEN`).
     pub full_screen: bool,
+    /// Whether the window opens on the Big Picture (`true`) or Desktop (`false`) face.
+    pub big_screen: bool,
     /// The window's size out of full screen, and whether the player may resize it: graphics.json's (`play::Windowed`), none
     /// where it was not read whole.
     pub windowed: Option<Windowed>,
@@ -90,6 +92,15 @@ pub fn theme(args: &[String], env: Option<String>) -> String {
     named.or(env).unwrap_or_default()
 }
 
+/// Big Picture on startup (`true`) unless `--desktop` or `EMUSEN_DESKTOP=1` asks for Desktop, with `--big-picture` overriding.
+pub fn big_screen(args: &[String], desktop_env: Option<String>) -> bool {
+    match args.iter().rev().find(|a| *a == "--big-picture" || *a == "--desktop").map(String::as_str) {
+        Some("--big-picture") => true,
+        Some("--desktop") => false,
+        _ => desktop_env.as_deref() != Some("1"),
+    }
+}
+
 /// The theme the settings choose, by its id, as the host's folder and the words when the reference stands in for it.
 pub fn chosen_theme(settings: &Value, store: Option<&Path>) -> (String, String) {
     let id = themes::chosen_of(settings);
@@ -122,10 +133,12 @@ pub fn read(library: &Path) -> Start {
     let (theme, theme_words) = if named.is_empty() { chosen_theme(&settings, store.as_deref()) } else { (named, String::new()) };
     let windowed = platform.clone().and_then(|p| Windowed::read(&ClientSettings::on(p)).ok().flatten());
     let game_mode = game_mode_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(), std::env::var("SteamDeck").ok().as_deref());
+    let big_screen = big_screen(&args, std::env::var("EMUSEN_DESKTOP").ok());
     Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings),
         game_mode, guide_chords: guide_chords_from(&settings, game_mode),
         theme, theme_words, cover_stores,
         esde: esde_shelves::settings_of(&settings).themed, navigation_sounds: navigation_sounds_from(&settings), full_screen: FULL_SCREEN,
+        big_screen,
         windowed,
     }
 }
@@ -144,6 +157,7 @@ pub fn initial(start: &Start) -> QMap<QMapPair_QString_QVariant> {
     initial.insert(QString::from("esdeChosen"), QVariant::from(&start.esde));
     initial.insert(QString::from("navigationSounds"), QVariant::from(&start.navigation_sounds));
     initial.insert(QString::from("fullScreenAsked"), QVariant::from(&start.full_screen));
+    initial.insert(QString::from("bigScreen"), QVariant::from(&start.big_screen));
     if let Some(windowed) = &start.windowed {
         windowed.insert_into(&mut initial);
     }

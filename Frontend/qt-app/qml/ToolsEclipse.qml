@@ -16,6 +16,7 @@ Kit.NormalizedCanvas {
     required property int battery
     required property int padFamily
     required property bool splashShown
+    property bool bigScreen: true
 
     readonly property real boardHeight: 1200
     readonly property real boardUnit: Kit.CanvasUnits.designHeight / canvas.boardHeight
@@ -23,7 +24,7 @@ Kit.NormalizedCanvas {
     readonly property real gridWidth: canvas.width - 192 * canvas.boardUnit
     readonly property real cardWidth: (canvas.gridWidth - 2 * 28 * canvas.boardUnit) / 3
 
-    visible: canvas.screens.shown === Screens.Tools
+    visible: canvas.bigScreen && canvas.screens.shown === Screens.Tools
     focus: !canvas.splashShown && canvas.visible
     onVisibleChanged: {
         if (canvas.visible && canvas.library) canvas.library.ensureMetadata()

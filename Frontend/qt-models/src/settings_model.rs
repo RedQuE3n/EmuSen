@@ -1956,11 +1956,24 @@ impl qobject::SettingsModel {
         }
     }
 
-    fn open_shaders_board(mut self: Pin<&mut Self>, return_row: usize) {
+    pub(crate) fn open_shaders_board(mut self: Pin<&mut Self>, return_row: usize) {
         let library = self.platform_library.to_string();
         let board = crate::settings_shaders::ShadersBoard::open(&self.view, &library, return_row);
         self.as_mut().rust_mut().shaders_state = Some(board);
         self.as_mut().sync_shaders_view();
+    }
+
+    /// Rewinds any subpage, moves to `section`, and returns the index of `row_id` if present.
+    pub(crate) fn focus_section_row(mut self: Pin<&mut Self>, section: i32, row_id: &str) -> Option<usize> {
+        while !self.trail().is_empty() && self.as_mut().back() {}
+        self.as_mut().set_section(section);
+        self.shown_rows().iter().position(|r| r.id == row_id)
+    }
+
+    /// Opens the Eclipse #20 Shaders board directly from Desktop Settings regardless of `themed_settings`.
+    pub(crate) fn open_shaders_door(mut self: Pin<&mut Self>) {
+        let return_row = self.as_mut().focus_section_row(1, "shaders").unwrap_or(0);
+        self.open_shaders_board(return_row);
     }
 
     fn close_shaders_state(mut self: Pin<&mut Self>) {

@@ -1405,23 +1405,30 @@ impl ShadersBoard {
                 })
             })
             .collect();
+        let counter = if visible.is_empty() {
+            "0 of 0".to_owned()
+        } else {
+            format!("{} of {}", crate::words::grouped(self.focused_preset + 1), crate::words::grouped(visible.len()))
+        };
         let footer_help = vec![
-            json!({ "button": emusen_kit_core::input::UiButton::Accept.index() as i32, "label": "Use this", "pair": -1 }),
-            json!({ "button": emusen_kit_core::input::UiButton::Screensaver.index() as i32, "label": "Hold to see it off", "pair": -1 }),
+            json!({ "button": emusen_kit_core::input::UiButton::Accept.index() as i32, "label": "Use shader", "pair": -1 }),
+            json!({ "button": emusen_kit_core::input::UiButton::Screensaver.index() as i32, "label": "Hold to see off", "pair": -1 }),
             json!({ "button": emusen_kit_core::input::UiButton::Search.index() as i32, "label": "Favourite", "pair": -1 }),
-            json!({ "button": emusen_kit_core::input::UiButton::PageUp.index() as i32, "label": "Move the line", "pair": emusen_kit_core::input::UiButton::PageDown.index() as i32 }),
+            json!({ "button": emusen_kit_core::input::UiButton::Random.index() as i32, "label": "Scrub split", "pair": -1 }),
+            json!({ "button": emusen_kit_core::input::UiButton::PageUp.index() as i32, "label": "Step split", "pair": emusen_kit_core::input::UiButton::PageDown.index() as i32 }),
             json!({ "button": emusen_kit_core::input::UiButton::Back.index() as i32, "label": "Back", "pair": -1 }),
         ];
         json!({
             "focusZone": self.focus_zone,
             "labels": {
-                "settings": "Settings",
+                "settings": "Tools",
                 "slash": "/",
-                "picture": "Picture",
-                "filter": "Screen filter",
+                "picture": "",
+                "filter": "Shaders",
                 "packTitle": "libretro's shader pack",
                 "removePack": "Remove the pack",
                 "noFilter": "No filter",
+                "rsGlyph": "RS",
                 "confirmTitle": "Remove libretro's shader pack?",
                 "confirmMessage": "Removes the pack files in your Shaders folder. Built-in EmuSen filters stay.",
                 "confirmCancel": "Cancel",
@@ -1489,14 +1496,16 @@ impl ShadersBoard {
                 "afterLabel": if comparing || is_none || visible.is_empty() { "No filter".to_owned() } else { display_name.clone() },
                 "heading": display_name,
                 "subtitle": subtitle,
+                "splitHint": "RS or LB / RB moves split",
                 "hasFiltered": !comparing && !is_none && !visible.is_empty(),
             },
             "sliders": sliders_json,
             "allSettings": {
                 "visible": total_settings > 0 && !visible.is_empty(),
-                "text": format!("All {} settings", crate::words::grouped(total_settings)),
+                "text": format!("All {} parameters \u{203A}", crate::words::grouped(total_settings)),
                 "focused": self.focus_zone == 7,
             },
+            "counter": counter,
             "confirmOpen": self.confirm_remove,
             "footerHelp": footer_help,
         })

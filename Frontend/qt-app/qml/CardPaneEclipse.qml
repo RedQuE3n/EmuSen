@@ -13,6 +13,8 @@ Item {
     readonly property real pad: 36 * root.unit
     readonly property real contentWidth: 688 * root.unit
     readonly property real contentHeight: root.paneModel.cover ? Math.max(coverFrame.height, coverTextCol.implicitHeight) : bodyCol.implicitHeight
+    readonly property var paneData: root.paneModel.pane.length > 0 ? JSON.parse(root.paneModel.pane) : ({})
+    readonly property bool hasSlotHeader: !root.paneModel.moment && !root.paneModel.drawer && (root.paneData.slotHeader ?? "").length > 0
     Item {
         id: coverRow
         objectName: "PaneCoverRow"
@@ -127,7 +129,39 @@ Item {
         x: root.pad
         y: root.pad
         width: root.contentWidth
-        spacing: 22 * root.unit
+        spacing: root.hasSlotHeader ? 18 * root.unit : 22 * root.unit
+        Item {
+            objectName: "PaneSlotHeaderRow"
+            visible: root.hasSlotHeader && !root.paneModel.drawer && slotRepeater.count > 0
+            width: root.contentWidth
+            height: 18 * root.unit
+            CardLine {
+                objectName: "PaneSlotHeader"
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                unit: root.unit
+                boardLine: true
+                boardLineHeight: 18
+                text: root.paneData.slotHeader ?? ""
+                color: ThemeInk.dim
+                size: 13
+                weight: Font.DemiBold
+                spacing: 2.08
+                capitalization: Font.AllUppercase
+            }
+            CardLine {
+                objectName: "PaneSlotHint"
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                unit: root.unit
+                boardLine: true
+                boardLineHeight: 18
+                text: root.paneData.slotHint ?? ""
+                color: Kit.Tokens.muted
+                size: 15
+                weight: Font.Normal
+            }
+        }
         Rectangle {
             objectName: "PaneMoment"
             visible: root.paneModel.moment
@@ -172,7 +206,7 @@ Item {
                             objectName: "PaneSlotBox" + (tile.index + 1)
                             anchors.fill: parent
                             radius: tile.tileRadius
-                            color: Kit.Tokens.inputSurface
+                            color: tile.picture.length > 0 || !root.hasSlotHeader ? Kit.Tokens.inputSurface : Kit.Tokens.surface
                             Kit.RoundPicture {
                                 objectName: "PaneSlotPicture" + (tile.index + 1)
                                 anchors.fill: parent
@@ -182,22 +216,46 @@ Item {
                                 crop: true
                                 pixelScale: root.pixelScale
                             }
+                            Rectangle {
+                                objectName: "PaneSlotSelected" + (tile.index + 1)
+                                visible: !root.paneModel.moment && tile.ringed && (root.paneData.selectedLabel ?? "").length > 0
+                                anchors.top: parent.top
+                                anchors.right: parent.right
+                                anchors.margins: 10 * root.unit
+                                height: 24 * root.unit
+                                width: selectedBadgeText.width + 18 * root.unit
+                                radius: 12 * root.unit
+                                color: Kit.Tokens.accent
+                                CardLine {
+                                    id: selectedBadgeText
+                                    objectName: "PaneSlotSelectedLabel" + (tile.index + 1)
+                                    anchors.centerIn: parent
+                                    unit: root.unit
+                                    boardLine: true
+                                    boardLineHeight: 24
+                                    text: root.paneData.selectedLabel ?? ""
+                                    color: Kit.Tokens.overAccent
+                                    size: 11
+                                    weight: Font.Bold
+                                    family: Kit.Tokens.faceCode
+                                }
+                            }
                         }
                         Rectangle {
                             objectName: "PaneSlotBorder" + (tile.index + 1)
-                            visible: !tile.ringed
+                            visible: root.paneModel.moment ? !tile.ringed : true
                             x: -2 * root.unit
                             y: -2 * root.unit
                             width: parent.width + 4 * root.unit
                             height: parent.height + 4 * root.unit
                             radius: tile.tileRadius + 2 * root.unit
                             color: "transparent"
-                            border.width: 2 * root.unit
-                            border.color: Kit.Tokens.rule
+                            border.width: (!root.paneModel.moment && !tile.ringed) ? 1.5 * root.unit : 2 * root.unit
+                            border.color: root.paneModel.moment ? Kit.Tokens.rule : (tile.ringed ? Kit.Tokens.accent : (tile.picture.length > 0 ? ThemeInk.hairline : ThemeInk.pillBorder))
                         }
                         Kit.FocusRing {
                             objectName: "PaneSlotRing" + (tile.index + 1)
-                            visible: tile.ringed
+                            visible: root.paneModel.moment && tile.ringed
                             anchors.fill: parent
                             radius: tile.tileRadius
                             gap: 3 * root.unit
@@ -215,7 +273,7 @@ Item {
                         boardLine: true
                         width: parent.width
                         text: tile.name
-                        color: tile.ringed || !root.paneModel.moment ? Kit.Tokens.textStrong : Kit.Tokens.muted
+                        color: tile.ringed || (!root.paneModel.moment && (tile.picture.length > 0 || !root.hasSlotHeader)) ? Kit.Tokens.textStrong : Kit.Tokens.muted
                         size: root.paneModel.moment ? 16 : 20
                         weight: Font.DemiBold
                         elide: Text.ElideRight
@@ -303,20 +361,42 @@ Item {
                 }
             }
         }
+        Rectangle {
+            objectName: "PaneSlotFootRule"
+            visible: root.hasSlotHeader && !root.paneModel.drawer && slotRepeater.count > 0
+            width: root.contentWidth
+            height: 1 * root.unit
+            color: ThemeInk.hairline
+        }
         CardLine {
+            id: paneSentence
             objectName: "PaneSentence"
             visible: text.length > 0
             unit: root.unit
             boardLine: true
-            boardLineHeight: 34.8
-            width: root.contentWidth
+            boardLineHeight: root.hasSlotHeader ? 26 : 34.8
+            width: root.hasSlotHeader ? root.contentWidth - paneSlotOccupied.width - 16 * root.unit : root.contentWidth
             text: root.paneModel.sentence
             color: Kit.Tokens.textStrong
-            size: 24
+            size: root.hasSlotHeader ? 18 : 24
             weight: Font.Normal
             wrapMode: Text.WordWrap
-            lineHeight: 34.8
+            lineHeight: root.hasSlotHeader ? 26 : 34.8
             lineHeightMode: Text.FixedHeight
+            CardLine {
+                id: paneSlotOccupied
+                objectName: "PaneSlotOccupied"
+                visible: root.hasSlotHeader && text.length > 0
+                x: root.contentWidth - width
+                y: (paneSentence.height - height) / 2
+                unit: root.unit
+                boardLine: true
+                text: root.paneData.slotOccupied ?? ""
+                color: Kit.Tokens.muted
+                size: 14
+                weight: Font.Normal
+                family: Kit.Tokens.faceCode
+            }
         }
         CardLine {
             objectName: "PaneMuted"

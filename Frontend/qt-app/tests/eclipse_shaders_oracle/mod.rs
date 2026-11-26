@@ -186,23 +186,24 @@ pub fn oracle_software() {
             let at_size = format!("{width}x{height}");
             held(&tree, &table, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
             let help_words = words_under(&tree, "help");
-            if help_words != ["Use this", "Hold to see it off", "Favourite", "Move the line", "Back"] {
+            if help_words != ["Use shader", "Hold to see off", "Favourite", "Scrub split", "Step split", "Back"] {
                 differences.push(format!("{at_size}: help words {help_words:?}"));
             }
             let glyphs = glyphs_in(&tree, "help");
-            if glyphs != ["A", "X", "Y", "LB", "B"] {
+            if glyphs != ["A", "X", "Y", "RS", "LB", "B"] {
                 differences.push(format!("{at_size}: help glyphs {glyphs:?}"));
             }
             for (name, want) in [
-                ("crumbSettings", "Settings"),
-                ("crumbPicture", "Picture"),
-                ("crumbScreenFilter", "Screen filter"),
+                ("crumbSettings", "Tools"),
+                ("crumbScreenFilter", "Shaders"),
                 ("battery", "82%"),
                 ("clock", "9:41 PM"),
                 ("previewBeforeWords", "No filter"),
                 ("previewAfterWords", "crt-royale"),
+                ("previewScrubWords", "RS or LB / RB moves split"),
                 ("presetHeading", "crt-royale"),
-                ("allSettingsWords", "All 4 settings"),
+                ("allSettingsWords", "All 4 parameters ›"),
+                ("shadersCounter", "1 of 2"),
             ] {
                 let got = read(&tree, name, "text");
                 if got != want {
@@ -314,8 +315,8 @@ pub fn oracle_gpu() {
         let right_pt = (1650.0, 328.0);
         let cols = scene.colours_at(&[left_pt, right_pt]);
         let (left, right) = (cols[0].expect("left pixel"), cols[1].expect("right pixel"));
-        assert!(left.b > left.r + 30, "unfiltered sky blue on left: {left:?}");
-        assert!(right.r > left.r + 40 && right.r > right.g + 30, "filtered tint shifted toward magenta on right: left={left:?} right={right:?}");
+        assert!(i16::from(left.b) > i16::from(left.r) + 30, "unfiltered sky blue on left: {left:?}");
+        assert!(i16::from(right.r) > i16::from(left.r) + 40 && i16::from(right.r) > i16::from(right.g) + 30, "filtered tint shifted toward magenta on right: left={left:?} right={right:?}");
 
         // Move split line left via LB so mid_pt flips from unfiltered to tinted.
         let mid_before = scene.colours_at(&[mid_pt])[0].expect("mid before");
@@ -324,13 +325,13 @@ pub fn oracle_gpu() {
         }
         scene.wait(250);
         let mid_after = scene.colours_at(&[mid_pt])[0].expect("mid after");
-        assert!(mid_after.r > mid_before.r + 40, "LB moved split boundary past mid_pt: before={mid_before:?} after={mid_after:?}");
+        assert!(i16::from(mid_after.r) > i16::from(mid_before.r) + 40, "LB moved split boundary past mid_pt: before={mid_before:?} after={mid_after:?}");
 
         // Smooth right-stick tilt right scrubs divider back past mid_pt while leaving right_pt tinted.
         sdl.axis(pad, 2, 16000);
         until(scene, "RS right scrubs divider past mid_pt", |s| {
             let col = s.colours_at(&[mid_pt])[0].expect("mid restored");
-            col.b > col.r + 30 && col.r < mid_after.r - 40
+            i16::from(col.b) > i16::from(col.r) + 30 && i16::from(col.r) < i16::from(mid_after.r) - 40
         });
         sdl.axis(pad, 2, 0);
         scene.wait(100);
@@ -343,7 +344,7 @@ pub fn oracle_gpu() {
         sdl.press(pad, west, true);
         scene.wait(200);
         let held_right = scene.colours_at(&[right_pt])[0].expect("right while X held");
-        assert!(held_right.b > held_right.r + 30 && held_right.r < right.r - 40, "X hold shows unfiltered: held={held_right:?} vs filtered={right:?}");
+        assert!(i16::from(held_right.b) > i16::from(held_right.r) + 30 && i16::from(held_right.r) < i16::from(right.r) - 40, "X hold shows unfiltered: held={held_right:?} vs filtered={right:?}");
         sdl.press(pad, west, false);
         scene.wait(200);
     });

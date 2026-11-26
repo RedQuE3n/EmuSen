@@ -1,13 +1,14 @@
 //! Eclipse Library Manager (#68) state, real rom-check/rom-dups/games.db findings, and board projection.
 
 use super::{
-    eclipse_aside_line, eclipse_columns, eclipse_console_lookup, eclipse_filter, eclipse_format_size, eclipse_move_row,
-    eclipse_row, eclipse_step_filter, eclipse_step_row_up, eclipse_table_help, eclipse_trail, Effect,
+    eclipse_aside_line, eclipse_columns, eclipse_console_lookup, eclipse_format_size, eclipse_help_entry,
+    eclipse_move_row, eclipse_row, eclipse_step_filter, eclipse_step_row_up, eclipse_trail, Effect,
 };
 use crate::card::{Pane as CardPane, Row as CardRow};
 use crate::clients::ClientSource;
-use crate::library::LibrarySource;
+use crate::library::{console_name, LibrarySource};
 use crate::question::{confirm, Question};
+use crate::settings_shown::planet_of;
 use crate::words::{grouped, now, utc};
 use emusen_kit_core::input::UiButton;
 use serde_json::{json, Value};
@@ -99,6 +100,7 @@ pub(crate) struct EclipseLibrary {
     pub client: Option<Arc<ClientSource>>,
     pub library_root: Option<String>,
     pub consoles: HashMap<String, String>,
+    pub console_orbs: HashMap<String, (i32, String)>,
     pub claimants: HashMap<String, String>,
     pub hidden_paths: BTreeSet<String>,
     pub dump_groups: Vec<Vec<DumpMember>>,
@@ -159,6 +161,41 @@ fn full_in(root: Option<&str>, source: &str) -> String {
     }
 }
 
+fn display_path(full_path: &str, library_root: Option<&str>, source: &str) -> String {
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.is_empty() && full_path.starts_with(&home) {
+            let tail = full_path[home.len()..].trim_start_matches('/');
+            return norm_slash(&format!("~/{tail}"));
+        }
+    }
+    if let Some(root) = library_root {
+        let base = Path::new(root).file_name().and_then(|s| s.to_str()).unwrap_or("Library");
+        return norm_slash(&format!("~/{base}/{source}"));
+    }
+    norm_slash(full_path)
+}
+
+fn native_engine_orb(engine: &str) -> Option<(i32, String)> {
+    match engine.to_ascii_lowercase().as_str() {
+        "moon" | "venus" | "mars" | "mercury" | "endou" | "nephrite" | "diamond" | "sapphire" => {
+            Some((planet_of(engine, false, true), engine.to_owned()))
+        }
+        _ => None,
+    }
+}
+
+fn compact_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.0} KB", bytes as f64 / 1024.0)
+    } else if bytes < 1024 * 1024 * 1024 {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    } else {
+        format!("{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+    }
+}
+
 impl EclipseLibrary {
     pub fn attach(&mut self, platform_library: &str, cores: &str) {
         if self.client.is_some() || platform_library.is_empty() {
@@ -180,6 +217,12 @@ impl EclipseLibrary {
         }
         let Some(client) = self.client.as_ref() else { return };
         self.consoles = eclipse_console_lookup(client);
+        self.console_orbs.clear();
+        for sys in client.systems().unwrap_or_default() {
+            if let Some(orb) = sys.engines.first().and_then(|e| native_engine_orb(e)) {
+                self.console_orbs.insert(console_name(&sys), orb);
+            }
+        }
         let games = client.games().unwrap_or_default();
         if self.total_files == 0 {
             self.total_files = games.len();
@@ -693,10 +736,12 @@ impl EclipseLibrary {
     pub fn projection(&self, running: bool) -> Value {
         let vis = self.visible_rows();
         let focused_idx = self.focused_row_key.as_ref().and_then(|k| vis.iter().position(|r| &r.row_key == k)).unwrap_or(0);
+        let n_all = self.rows.iter().filter(|r| r.kind != FindingKind::HiddenOnly).count();
         let n_dump = self.rows.iter().filter(|r| r.kind == FindingKind::SameDump).count();
         let n_game = self.rows.iter().filter(|r| r.kind == FindingKind::SameGame).count();
         let n_broken = self.rows.iter().filter(|r| r.kind == FindingKind::Broken).count();
         let n_unrec = self.rows.iter().filter(|r| r.kind == FindingKind::Unrecognised).count();
+        let n_hidden = self.rows.iter().filter(|r| r.hidden).count();
         let n_dup = n_dump + n_game;
         let checked_words = if running { "checking…" } else if self.checked_once { "checked today" } else { "not checked yet" };
         let subtitle = format!(
@@ -709,7 +754,22 @@ impl EclipseLibrary {
             if n_dup == 1 { "duplicate" } else { "duplicates" },
             grouped(self.hidden_paths.len()),
         );
-        let filters: Vec<Value> = FILTERS.iter().map(|(k, label)| eclipse_filter(k, label, self.active_filter == *k)).collect();
+        let counts = [n_all, n_dump, n_game, n_broken, n_unrec, n_hidden];
+        let filters: Vec<Value> = FILTERS
+            .iter()
+            .zip(counts)
+            .map(|((k, label), count)| {
+                json!({
+                    "key": k,
+                    "label": label,
+                    "countText": grouped(count),
+                    "active": self.active_filter == *k,
+                    "objectName": format!("filterPill.{k}"),
+                    "labelObjectName": format!("filterWords.{k}"),
+                    "countObjectName": format!("filterCount.{k}"),
+                })
+            })
+            .collect();
         let (columns, col_widths) = eclipse_columns(&[("Game", 0.0, 1.3), ("Console", 0.0, 0.8), ("Finding", 0.0, 1.9), ("Group", 0.0, 0.5), ("Size", 0.0, 0.45), ("State", 0.0, 0.45)]);
         let rows: Vec<Value> = vis
             .iter()
@@ -721,37 +781,111 @@ impl EclipseLibrary {
                     None if r.hidden => "hidden",
                     None => "",
                 };
+                let (chip_text, chip_tone) = match self.marked.get(&r.full_path) {
+                    Some((_, true)) => ("To hide", 1),
+                    Some((_, false)) => ("To show", 2),
+                    None if r.hidden => ("Hidden", 0),
+                    None => match r.kind {
+                        FindingKind::Broken => ("Suspect", 1),
+                        FindingKind::SameDump => ("Duplicate", 2),
+                        FindingKind::SameGame => ("Region", 2),
+                        FindingKind::Unrecognised | FindingKind::HiddenOnly => ("", 0),
+                    },
+                };
+                let (main_finding, sub_finding) = match r.kind {
+                    FindingKind::Unrecognised => ("Not recognised by ScreenScraper".to_owned(), "Informational hint · plays normally".to_owned()),
+                    FindingKind::Broken => (r.finding_text.clone(), "Integrity check failed".to_owned()),
+                    FindingKind::SameDump => (
+                        r.finding_text.clone(),
+                        if r.others.is_empty() { String::new() } else { format!("Matches {}", r.others.join(", ")) },
+                    ),
+                    FindingKind::SameGame => (
+                        r.finding_text.clone(),
+                        if r.others.is_empty() { String::new() } else { format!("Also {}", r.others.join(", ")) },
+                    ),
+                    FindingKind::HiddenOnly => (r.finding_text.clone(), "Tracked in games.db only".to_owned()),
+                };
+                let group_cell = if r.group_text.is_empty() { "—".to_owned() } else { r.group_text.clone() };
                 let is_focused = self.focus_zone == 1 && i == focused_idx;
-                eclipse_row(
+                let mut val = eclipse_row(
                     i,
                     &r.row_key,
                     is_focused,
-                    vec![r.filename.clone(), r.console.clone(), r.finding_text.clone(), r.group_text.clone(), eclipse_format_size(r.size), state.to_owned()],
-                )
+                    vec![r.filename.clone(), r.console.clone(), main_finding, group_cell, compact_size(r.size), state.to_owned()],
+                );
+                val["cellMono"] = json!([true, false, false, true, true, false]);
+                val["cellSubs"] = json!(["", "", sub_finding, "", "", ""]);
+                val["statusChip"] = json!({ "text": chip_text, "toneCode": chip_tone });
+                val
             })
             .collect();
 
         let aside = if let Some(r) = vis.get(focused_idx).copied() {
-            let mut lines = vec![
-                eclipse_aside_line(0, &r.finding_text, false),
-                eclipse_aside_line(1, &format!("System: {}", r.console), false),
+            let rel_display = display_path(&r.full_path, self.library_root.as_deref(), &r.source);
+            let (eyebrow, eyebrow_tone, diag) = match r.kind {
+                FindingKind::Broken => (
+                    "Broken or Suspect · Dump Check",
+                    1,
+                    format!("{}. Verify the source archive or re-convert from the original dump.", r.finding_text),
+                ),
+                FindingKind::SameDump => (
+                    "Duplicate Dump · Exact Match",
+                    2,
+                    format!("{}. Byte-identical content detected against another file in the library.", r.finding_text),
+                ),
+                FindingKind::SameGame => (
+                    "Duplicate Game · Alternate Build",
+                    2,
+                    format!("{}. Matched the same game identifier across multiple dumps.", r.finding_text),
+                ),
+                FindingKind::Unrecognised => (
+                    "Unrecognised · Metadata Hint",
+                    0,
+                    "No ScreenScraper record matched this file's signature. Plays normally without issue.".to_owned(),
+                ),
+                FindingKind::HiddenOnly => (
+                    "Hidden · games.db State",
+                    0,
+                    "Hidden from the library views in games.db only. File remains untouched on disk.".to_owned(),
+                ),
+            };
+            let (planet_idx, console_display) = match self.console_orbs.get(&r.console) {
+                Some((p, eng)) => (*p, format!("{} ({eng})", r.console)),
+                None => (-3, r.console.clone()),
+            };
+            let mut facts = vec![
+                json!({ "label": "Console", "value": console_display, "planet": planet_idx, "mono": false }),
+                json!({ "label": "File size", "value": format!("{} ({} B)", compact_size(r.size), grouped(r.size as usize)), "planet": -3, "mono": true }),
             ];
             if !r.others.is_empty() {
-                let idx = lines.len();
-                lines.push(eclipse_aside_line(idx, &format!("Also: {}", r.others.join(", ")), true));
+                facts.push(json!({ "label": "Related", "value": r.others.join(", "), "planet": -3, "mono": true }));
             }
-            let idx = lines.len();
-            lines.push(eclipse_aside_line(idx, "Only games.db changes: no file in the library is written, moved or removed.", true));
+            facts.push(json!({
+                "label": "Visibility",
+                "value": if r.hidden { "Hidden in library (games.db)" } else { "Shown in library (games.db)" },
+                "planet": -3,
+                "mono": false,
+            }));
+            let lines = vec![eclipse_aside_line(0, &diag, false)];
             json!({
+                "structured": true,
+                "eyebrow": eyebrow,
+                "eyebrowToneCode": eyebrow_tone,
                 "title": r.filename,
-                "subtitle": r.source,
-                "subtitleMuted": true,
+                "subtitle": rel_display,
+                "subtitleMuted": false,
+                "diagObjectName": "asideLine.0",
+                "diagnostic": diag,
+                "facts": facts,
+                "contractHeading": "Read-only library guarantee",
+                "contractBody": "Hiding an entry updates games.db only. No file in your library folder is ever written, moved, or deleted by Library Manager.",
                 "tiles": [],
                 "lines": lines,
             })
         } else {
             let msg = if running { "Checking files in the library…" } else { "No findings under this filter." };
             json!({
+                "structured": false,
                 "title": "Library Manager",
                 "subtitle": msg,
                 "subtitleMuted": true,
@@ -776,7 +910,13 @@ impl EclipseLibrary {
         };
 
         let a_label = if vis.get(focused_idx).is_some_and(|r| r.hidden) { "Show…" } else { "Hide…" };
-        let help = eclipse_table_help(a_label, "Finding");
+        let mut help = Vec::new();
+        eclipse_help_entry(&mut help, UiButton::Accept, None, a_label);
+        eclipse_help_entry(&mut help, UiButton::Screensaver, None, "Mark");
+        eclipse_help_entry(&mut help, UiButton::PageUp, Some(UiButton::PageDown), "Filter");
+        eclipse_help_entry(&mut help, UiButton::Options, None, "Sort & jobs");
+        eclipse_help_entry(&mut help, UiButton::Menu, None, "Apply marked…");
+        eclipse_help_entry(&mut help, UiButton::Back, None, "Back");
         let counter = if vis.is_empty() { "0 of 0".to_owned() } else { format!("{} of {}", grouped(focused_idx + 1), grouped(vis.len())) };
         json!({
             "mode": "library",

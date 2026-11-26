@@ -430,6 +430,23 @@ impl Cores {
                 let key = aside_keys[aside_idx].clone();
                 return self.eclipse_action("primary", Some(&key));
             }
+            (_, "prevFilter") | (_, "nextFilter") if !top_keys.is_empty() => {
+                let delta = if dir == "prevFilter" { -1 } else { 1 };
+                let at = if self.eclipse.showing_remaining {
+                    0
+                } else {
+                    top_keys.iter().position(|k| Filter::from_key(k) == self.eclipse.filter).unwrap_or(0)
+                };
+                let next = (at as isize + delta).rem_euclid(top_keys.len() as isize) as usize;
+                self.eclipse.showing_remaining = false;
+                self.eclipse.filter = Filter::from_key(top_keys[next]);
+                self.eclipse.focused_top_index = next;
+                self.eclipse.focused_console = None;
+                self.eclipse.focused_core = None;
+                if self.eclipse.focus_zone == "aside" {
+                    self.eclipse.focus_zone = "grid".to_owned();
+                }
+            }
             _ => {}
         }
         Effect::Done
@@ -684,8 +701,9 @@ impl Cores {
                     } else {
                         ("", false)
                     };
-                    let you_have = r.build.as_deref().and_then(|b| words::short_day_in(b, current_year)).or_else(|| r.build.clone()).unwrap_or_default();
-                    let newer = r.offered.as_deref().and_then(|o| words::short_day_in(o, current_year)).or_else(|| r.offered.clone()).unwrap_or_default();
+                    let you_have = r.build.as_deref().and_then(|b| words::short_month_day_in(b, current_year)).or_else(|| r.build.clone()).unwrap_or_default();
+                    let newer = r.offered.as_deref().and_then(|o| words::short_month_day_in(o, current_year)).or_else(|| r.offered.clone()).unwrap_or_default();
+                    let newer_size = r.size.filter(|&n| n > 0).map(|n| format!(" · {}", words::size(n))).unwrap_or_default();
                     let can_default = r.engine.is_some() && !approves && !is_def && !r.consoles.is_empty();
                     let can_remove = r.is_libretro();
                     let can_approve = approves && self.hash_of(r).is_some();
@@ -699,6 +717,7 @@ impl Cores {
                         "hasUpdate": has_update,
                         "youHaveDate": you_have,
                         "newerDate": newer,
+                        "newerSize": newer_size,
                         "canApprove": can_approve,
                         "canUpdate": has_update && r.is_libretro(),
                         "canDefault": can_default,
@@ -722,28 +741,28 @@ impl Cores {
             let mut keys: Vec<String> = installed.iter().map(|r| r.key.clone()).collect();
             keys.extend(available.iter().map(|r| r.key.clone()));
             let cname = self.consoles.name(c);
-            let inst_part = counted(installed.len(), "core here", "cores here");
-            let summary = if available.is_empty() {
-                format!("{cname} · {inst_part}")
-            } else {
-                format!("{cname} · {inst_part}, {} more to get", available.len())
-            };
-            let avail_heading = if available.is_empty() {
-                String::new()
-            } else {
-                format!("More from libretro · {} for this console", available.len())
-            };
-            let note = if available.is_empty() && !installed.iter().any(|r| r.is_libretro()) {
-                String::new()
-            } else {
-                "A core you get is downloaded from libretro, kept apart in a process of its own, and asks for your say-so before its first game.".to_owned()
-            };
             let selected_idx = self
                 .eclipse
                 .focused_core
                 .as_deref()
                 .and_then(|fk| keys.iter().position(|k| k == fk))
                 .unwrap_or(0);
+            let summary = if keys.is_empty() {
+                cname.clone()
+            } else {
+                format!("{cname} · {} of {}", selected_idx + 1, keys.len())
+            };
+            let inst_heading = format!("On this machine · {}", installed.len());
+            let avail_heading = if available.is_empty() {
+                String::new()
+            } else {
+                format!("More from libretro · {} available", available.len())
+            };
+            let note = if available.is_empty() && !installed.iter().any(|r| r.is_libretro()) {
+                String::new()
+            } else {
+                "Hosted cores run in an isolated broker process and ask for your approval before their first game.".to_owned()
+            };
             let meta = if selected_idx < installed.len() {
                 let r = installed[selected_idx];
                 Some((
@@ -763,6 +782,7 @@ impl Cores {
                     "console": c,
                     "eyebrow": eyebrow,
                     "heading": cname,
+                    "installedHeading": inst_heading,
                     "installed": installed_json,
                     "availableHeading": avail_heading,
                     "available": available_json,
@@ -801,40 +821,43 @@ impl Cores {
         };
 
         let mut footer_help: Vec<Value> = Vec::new();
-        let push_help = |list: &mut Vec<Value>, btn: UiButton, label: &str| {
-            list.push(json!({ "button": btn.index() as i32, "label": label, "pair": -1 }));
+        let push_help = |list: &mut Vec<Value>, btn: UiButton, pair: Option<UiButton>, label: &str| {
+            list.push(json!({ "button": btn.index() as i32, "label": label, "pair": pair.map_or(-1, |p| p.index() as i32) }));
         };
         match (self.eclipse.focus_zone.as_str(), focused_item_meta) {
             ("aside", Some((is_avail, can_approve, can_update, can_default, can_remove))) => {
                 if is_avail {
-                    push_help(&mut footer_help, UiButton::Accept, "Install");
+                    push_help(&mut footer_help, UiButton::Accept, None, "Install…");
                 } else if can_approve {
-                    push_help(&mut footer_help, UiButton::Accept, "Approve");
+                    push_help(&mut footer_help, UiButton::Accept, None, "Approve…");
                 } else if can_update {
-                    push_help(&mut footer_help, UiButton::Accept, "Update");
+                    push_help(&mut footer_help, UiButton::Accept, None, "Update…");
                 } else {
-                    push_help(&mut footer_help, UiButton::Accept, "Core page");
+                    push_help(&mut footer_help, UiButton::Accept, None, "Core page");
                 }
                 if can_default {
-                    push_help(&mut footer_help, UiButton::Screensaver, "Use for this console");
+                    push_help(&mut footer_help, UiButton::Screensaver, None, "Use for console");
                 }
                 if can_remove {
-                    push_help(&mut footer_help, UiButton::Search, "Remove");
+                    push_help(&mut footer_help, UiButton::Search, None, "Remove…");
                 }
             }
             ("top", _) => {
-                push_help(&mut footer_help, UiButton::Accept, "Select");
-                push_help(&mut footer_help, UiButton::Options, if self.eclipse.showing_remaining { "Ready consoles" } else { "More consoles" });
+                push_help(&mut footer_help, UiButton::Accept, None, "Select");
+                push_help(&mut footer_help, UiButton::Options, None, if self.eclipse.showing_remaining { "Ready consoles" } else { "More consoles" });
             }
             _ => {
-                push_help(&mut footer_help, UiButton::Accept, "Open console");
-                push_help(&mut footer_help, UiButton::Options, if self.eclipse.showing_remaining { "Ready consoles" } else { "More consoles" });
+                push_help(&mut footer_help, UiButton::Accept, None, "Open console");
+                push_help(&mut footer_help, UiButton::Options, None, if self.eclipse.showing_remaining { "Ready consoles" } else { "More consoles" });
             }
         }
-        if updates_count > 0 {
-            push_help(&mut footer_help, UiButton::Menu, &format!("Update all · {updates_count}"));
+        if filters.len() > 1 {
+            push_help(&mut footer_help, UiButton::PageUp, Some(UiButton::PageDown), "Filter");
         }
-        push_help(&mut footer_help, UiButton::Back, "Back");
+        if updates_count > 0 {
+            push_help(&mut footer_help, UiButton::Menu, None, &format!("Update all · {updates_count}"));
+        }
+        push_help(&mut footer_help, UiButton::Back, None, "Back");
 
         let view_label = if self.eclipse.showing_remaining {
             format!("Show {}", counted(ready_count, "ready console", "ready consoles"))
@@ -866,19 +889,19 @@ impl Cores {
             "updateAllCount": updates_count,
             "footerHelp": footer_help,
             "statusPill": self.status_pill(),
-            "actionLines": "toggleView Options\nupdateAll Menu\nuseDefault Screensaver\nremoveCore Search\ncorePage Random\n",
+            "actionLines": "toggleView Options\nupdateAll Menu\nuseDefault Screensaver\nremoveCore Search\ncorePage Random\nprevFilter PageUp\nnextFilter PageDown\n",
             "labels": {
                 "tools": "Tools",
                 "slash": "/",
                 "cores": "Cores",
                 "installedHeading": "On this machine",
                 "emptyInstalled": "No core installed for this console yet.",
-                "youHavePrefix": "You have ",
+                "youHavePrefix": "Installed ",
                 "newerPrefix": "Newer ",
-                "updatePill": "Update",
-                "defaultPill": "Use for this console",
-                "removePill": "Remove",
-                "pagePill": "Core page",
+                "updatePill": "Update…",
+                "defaultPill": "Use for console",
+                "removePill": "Remove…",
+                "pagePill": "Core page ›",
             },
         })
     }
@@ -893,6 +916,8 @@ impl Cores {
             "useDefault" => self.eclipse_action(DEFAULT, None),
             "removeCore" => self.eclipse_action(ECLIPSE_REMOVE, None),
             "corePage" => self.eclipse_action(ECLIPSE_PAGE, None),
+            "prevFilter" => self.eclipse_navigate("prevFilter"),
+            "nextFilter" => self.eclipse_navigate("nextFilter"),
             _ => Effect::Done,
         }
     }

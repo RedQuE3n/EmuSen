@@ -518,11 +518,27 @@ pub struct Pane {
     pub muted: String,
     /// Filled bar count (0..=5) on Eclipse Pause Sound (Volume).
     pub bars: u8,
+    pub slot_header: String,
+    pub slot_hint: String,
+    pub selected_label: String,
+    pub slot_occupied: String,
 }
 
 impl Pane {
     fn none() -> Pane {
-        Pane { kind: PaneKind::None, big: String::new(), tiles: Vec::new(), sentence: String::new(), title: String::new(), muted: String::new(), bars: 0 }
+        Pane {
+            kind: PaneKind::None,
+            big: String::new(),
+            tiles: Vec::new(),
+            sentence: String::new(),
+            title: String::new(),
+            muted: String::new(),
+            bars: 0,
+            slot_header: String::new(),
+            slot_hint: String::new(),
+            selected_label: String::new(),
+            slot_occupied: String::new(),
+        }
     }
 
     /// The pane as plain data, the way it crosses from `PauseModel` to `PaneModel`.
@@ -532,7 +548,21 @@ impl Pane {
             .iter()
             .map(|t| json!({ "picture": t.picture, "name": t.name, "when": t.when, "ringed": t.ringed }))
             .collect();
-        json!({ "kind": self.kind.name(), "big": self.big, "tiles": tiles, "sentence": self.sentence, "title": self.title, "muted": self.muted, "bars": self.bars, "blank": EMPTY }).to_string()
+        json!({
+            "kind": self.kind.name(),
+            "big": self.big,
+            "tiles": tiles,
+            "sentence": self.sentence,
+            "title": self.title,
+            "muted": self.muted,
+            "bars": self.bars,
+            "blank": EMPTY,
+            "slotHeader": self.slot_header,
+            "slotHint": self.slot_hint,
+            "selectedLabel": self.selected_label,
+            "slotOccupied": self.slot_occupied,
+        })
+        .to_string()
     }
 }
 
@@ -1149,14 +1179,35 @@ impl Card {
                 }
             })
             .collect();
+        let last = first + 2;
+        let occupied = (1..=SLOTS).filter(|slot| facts.slot_fact(*slot).is_some_and(|f| f.exists)).count();
         let saved = facts.saved();
-        let sentence = match (load, saved) {
-            (true, true) => format!("A loads Slot {current}."),
-            (true, false) => format!("Slot {current} is empty."),
-            (false, true) => format!("A saves to Slot {current}, replacing it."),
-            (false, false) => format!("A saves to Slot {current}."),
+        let sentence = if self.eclipse {
+            match (load, saved) {
+                (true, true) => format!("Press A to load Slot {current} immediately."),
+                (true, false) => format!("Slot {current} is empty."),
+                (false, true) => format!("Press A to save to Slot {current}, replacing it."),
+                (false, false) => format!("Press A to save to Slot {current} immediately."),
+            }
+        } else {
+            match (load, saved) {
+                (true, true) => format!("A loads Slot {current}."),
+                (true, false) => format!("Slot {current} is empty."),
+                (false, true) => format!("A saves to Slot {current}, replacing it."),
+                (false, false) => format!("A saves to Slot {current}."),
+            }
         };
-        Pane { kind: PaneKind::Slots, tiles, sentence, ..Pane::none() }
+        let (slot_header, slot_hint, selected_label, slot_occupied) = if self.eclipse {
+            (
+                format!("{} · SLOTS {first}\u{2013}{last} OF {SLOTS}", if load { "LOAD STATE PREVIEW" } else { "SAVE STATE PREVIEW" }),
+                format!("{} steps slot", crate::words::KEY_PAIR),
+                "SELECTED".to_owned(),
+                format!("{occupied} of {SLOTS} slots occupied"),
+            )
+        } else {
+            (String::new(), String::new(), String::new(), String::new())
+        };
+        Pane { kind: PaneKind::Slots, tiles, sentence, slot_header, slot_hint, selected_label, slot_occupied, ..Pane::none() }
     }
 
     /// The game's title: its file name without the extension, as the library titles it; a console started with nothing

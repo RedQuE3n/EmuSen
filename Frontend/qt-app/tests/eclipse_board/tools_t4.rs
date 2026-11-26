@@ -275,11 +275,15 @@ pub fn tools_t4(backend: &str) {
     confirm_question(&mut scene);
     wait_for(&mut scene, "jobsModel", "eclipseScreen", "3", 3000);
 
-    // Wait until at least 3 results appear while run is still active, then check #67 board.
+    // Wait until at least 3 results appear while run is still active, verify Pause/Resume while active, then check #67 board.
     until(&mut scene, "3 recent results on #67", 30000, |s| {
         let v = view_json(s);
         v["recentLines"].as_array().is_some_and(|r| r.len() >= 3) && v["actions"][0]["enabled"] == true
     });
+    scene.pad(UiButton::Accept);
+    until(&mut scene, "Pause -> Resume", 4000, |s| read(&s.tree(), "statusActionWords.0", "text") == "Resume");
+    scene.pad(UiButton::Accept);
+    until(&mut scene, "Resume -> Pause", 4000, |s| read(&s.tree(), "statusActionWords.0", "text") == "Pause");
     freeze_header(&mut scene);
     hold_board(
         &mut scene,
@@ -302,11 +306,7 @@ pub fn tools_t4(backend: &str) {
     );
     picture(&mut scene, &format!("scrape_status-1920x1200-{backend}.png"));
 
-    // Pause, Resume, Move to Hide, return to #66, let scrape finish so media.db has SameGame entries too.
-    scene.pad(UiButton::Accept);
-    until(&mut scene, "Pause -> Resume", 4000, |s| read(&s.tree(), "statusActionWords.0", "text") == "Resume");
-    scene.pad(UiButton::Accept);
-    until(&mut scene, "Resume -> Pause", 4000, |s| read(&s.tree(), "statusActionWords.0", "text") == "Pause");
+    // Move to Hide, return to #66, let scrape finish so media.db has SameGame entries too.
     scene.pad(UiButton::Right);
     scene.wait(120);
     scene.pad(UiButton::Right);
@@ -343,10 +343,11 @@ pub fn tools_t4(backend: &str) {
             ("toolTitle", "Library Manager", false),
             ("filterWords.all", "All", false),
             ("filterWords.same_dump", "Same Dump", false),
+            ("asideContractHeading", "Read-only library guarantee", false),
         ],
-        &["A", "B", "LB", "X", "VIEW", "MENU"],
+        &["A", "X", "LB", "VIEW", "MENU", "B"],
         "libraryHelp",
-        &["Hide…", "Back", "Finding", "More", "List", "Apply…"],
+        &["Hide…", "Mark", "Filter", "Sort & jobs", "Apply marked…", "Back"],
         &mut differences,
     );
     picture(&mut scene, &format!("library_manager-1920x1200-{backend}.png"));

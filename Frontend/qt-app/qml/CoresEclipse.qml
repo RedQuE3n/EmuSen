@@ -28,46 +28,97 @@ FocusScope {
     objectName: "coresEclipse"
     property bool backdrop: root.tool.cardOpen || root.tool.asking
 
-    component CheckerMark: Item {
+    component LibretroMark: Item {
         id: mark
         required property real side
-        required property real corner
         required property color light
         required property color dark
         width: mark.side * root.unit
         height: mark.side * root.unit
-        Rectangle {
-            anchors.fill: parent
-            radius: mark.corner * root.unit
-            color: mark.dark
-        }
         Shape {
-            width: mark.side
-            height: mark.side
-            scale: root.unit
+            width: 11
+            height: 11
+            scale: (mark.side * root.unit) / 11
             transformOrigin: Item.TopLeft
             preferredRendererType: Shape.CurveRenderer
             ShapePath {
                 fillColor: mark.light
-                strokeWidth: -1
-                startX: mark.corner
-                startY: 0
-                PathLine { x: mark.side / 2; y: 0 }
-                PathLine { x: mark.side / 2; y: mark.side / 2 }
-                PathLine { x: 0; y: mark.side / 2 }
-                PathLine { x: 0; y: mark.corner }
-                PathArc { x: mark.corner; y: 0; radiusX: mark.corner; radiusY: mark.corner }
+                strokeColor: "transparent"
+                PathSvg { path: Marks.badge }
             }
             ShapePath {
-                fillColor: mark.light
-                strokeWidth: -1
-                startX: mark.side / 2
-                startY: mark.side / 2
-                PathLine { x: mark.side; y: mark.side / 2 }
-                PathLine { x: mark.side; y: mark.side - mark.corner }
-                PathArc { x: mark.side - mark.corner; y: mark.side; radiusX: mark.corner; radiusY: mark.corner }
-                PathLine { x: mark.side / 2; y: mark.side }
-                PathLine { x: mark.side / 2; y: mark.side / 2 }
+                fillColor: mark.dark
+                strokeColor: "transparent"
+                PathSvg { path: Marks.alien }
+            }
+        }
+    }
+
+    component CoreHelpGlyph: Item {
+        id: cg
+        property int button: Kit.Pad.Accept
+        property int family: root.padFamily
+        property bool lead: false
+        property int pair: -1
+        readonly property bool drawsPair: cg.button === Kit.Pad.Left || cg.button === Kit.Pad.PageUp
+        readonly property bool pairedShoulders: cg.button === Kit.Pad.PageUp && cg.pair >= 0
+        readonly property bool named: primaryGlyph.named
+        readonly property string word: primaryGlyph.word
+        readonly property string letter: primaryGlyph.letter
+        readonly property bool filled: primaryGlyph.filled
+        readonly property real wordSize: primaryGlyph.wordSize
+        readonly property real letterSize: primaryGlyph.letterSize
+        readonly property real leadLetterSize: primaryGlyph.leadLetterSize
+        readonly property int leadWeight: primaryGlyph.leadWeight
+        readonly property real corner: primaryGlyph.corner
+        readonly property real inset: primaryGlyph.inset
+        implicitWidth: pairRow.implicitWidth
+        implicitHeight: pairRow.implicitHeight
+        width: implicitWidth
+        height: implicitHeight
+        Row {
+            id: pairRow
+            spacing: 5 * root.unit
+            CardGlyph {
+                id: primaryGlyph
+                anchors.verticalCenter: parent.verticalCenter
+                unit: root.unit
+                button: cg.button
+                family: cg.family
+                lead: cg.lead
+                pair: cg.button === Kit.Pad.Left ? cg.pair : -1
+                side: 34
+                boxSide: 30
+                boxRadius: 9
+                boxPadding: 10
+                wordSize: 14
+                letterSize: 16
+                leadLetterSize: 17
+                leadWeight: Font.Bold
+                padding: 10
+                boxMenu: true
+                boxOptions: true
+                ink: ThemeInk.body
+                ring: Kit.Tokens.muted
+            }
+            CardGlyph {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: cg.pairedShoulders
+                unit: root.unit
+                button: cg.pair >= 0 ? cg.pair : Kit.Pad.PageDown
+                family: cg.family
+                lead: false
+                side: 34
+                boxSide: 30
+                boxRadius: 9
+                boxPadding: 10
+                wordSize: 14
+                letterSize: 16
+                padding: 10
+                boxMenu: true
+                boxOptions: true
+                ink: ThemeInk.body
+                ring: Kit.Tokens.muted
             }
         }
     }
@@ -374,9 +425,13 @@ FocusScope {
                     family: root.padFamily
                     button: Kit.Pad.Options
                     side: 28
+                    boxSide: 28
+                    boxRadius: 8
+                    boxPadding: 8
                     wordSize: 13
                     padding: 10
                     boxMenu: false
+                    boxOptions: true
                     ink: viewButton.active ? Kit.Tokens.overAccent : Kit.Tokens.textStrong
                     ring: viewButton.active ? Kit.Tokens.overAccent : Kit.Tokens.muted
                 }
@@ -458,9 +513,9 @@ FocusScope {
                     objectName: "consoleBg." + cardCell.index
                     anchors.fill: parent
                     radius: 22 * root.unit
-                    color: Kit.Tokens.inputSurface
-                    border.width: (cardCell.cardSelected ? 2 : 1) * root.unit
-                    border.color: cardCell.cardSelected ? ThemeInk.pillBorder : ThemeInk.hairline
+                    color: cardCell.cardSelected ? Kit.Tokens.surfaceRaised : Kit.Tokens.inputSurface
+                    border.width: (cardCell.cardSelected ? 1.5 : 1) * root.unit
+                    border.color: cardCell.cardSelected ? ThemeInk.accentSoft : ThemeInk.hairline
                 }
                 Item {
                     anchors.fill: parent
@@ -538,14 +593,13 @@ FocusScope {
                             y: (parent.height - height) / 2
                             width: parent.width
                             spacing: 10 * root.unit
-                            CheckerMark {
+                            LibretroMark {
                                 objectName: "consoleOtherMark." + cardCell.index
                                 y: (parent.height - height) / 2
                                 visible: cardCell.modelData.otherCheckerboard === true
-                                side: 20
-                                corner: 5
-                                light: Kit.Tokens.accent
-                                dark: ThemeInk.checkerDark
+                                side: 18
+                                light: Kit.Tokens.muted
+                                dark: Kit.Tokens.surface
                             }
                             CardLine {
                                 id: otherLineText
@@ -554,7 +608,7 @@ FocusScope {
                                 unit: root.unit
                                 boardLine: true
                                 boardLineHeight: 20
-                                width: parent.width - (cardCell.modelData.otherCheckerboard ? 30 * root.unit : 0)
+                                width: parent.width - (cardCell.modelData.otherCheckerboard ? 28 * root.unit : 0)
                                 text: cardCell.modelData.otherLine ?? ""
                                 size: 16
                                 weight: Font.Normal
@@ -589,13 +643,12 @@ FocusScope {
                                     glowAlpha: 0.533
                                     pixelScale: root.pixelScale
                                 }
-                                CheckerMark {
+                                LibretroMark {
                                     anchors.fill: parent
                                     visible: cardCell.modelData.planet === -1
                                     side: 54
-                                    corner: 12
                                     light: Kit.Tokens.accent
-                                    dark: ThemeInk.checkerDark
+                                    dark: Kit.Tokens.overAccent
                                 }
                                 Rectangle {
                                     anchors.fill: parent
@@ -697,20 +750,23 @@ FocusScope {
             contentWidth: 544 * root.unit
             contentHeight: asideCol.implicitHeight
             clip: asideCol.implicitHeight > height - 48 * root.unit
+            interactive: asideCol.implicitHeight > height - 48 * root.unit
             boundsBehavior: Flickable.StopAtBounds
             Column {
                 id: asideCol
                 width: 544 * root.unit
-                spacing: 18 * root.unit
+                spacing: 16 * root.unit
                 CardLine {
                     objectName: "asideInstalledHeading"
                     unit: root.unit
                     boardLine: true
                     width: parent.width
-                    text: root.labels.installedHeading ?? ""
-                    size: 20
+                    text: root.aside.installedHeading ?? root.labels.installedHeading ?? ""
+                    size: 14
                     weight: Font.DemiBold
-                    color: ThemeInk.body
+                    spacing: 2.1
+                    capitalization: Font.AllUppercase
+                    color: ThemeInk.dim
                 }
                 CardLine {
                     unit: root.unit
@@ -783,13 +839,12 @@ FocusScope {
                                             glowAlpha: 0.533
                                             pixelScale: root.pixelScale
                                         }
-                                        CheckerMark {
+                                        LibretroMark {
                                             anchors.fill: parent
                                             visible: instCard.modelData.planet === -1
                                             side: 40
-                                            corner: 9
                                             light: Kit.Tokens.accent
-                                            dark: ThemeInk.checkerDark
+                                            dark: Kit.Tokens.overAccent
                                         }
                                         Rectangle {
                                             anchors.fill: parent
@@ -866,224 +921,233 @@ FocusScope {
                                 visible: instCard.modelData.hasUpdate === true
                                 width: parent.width
                                 spacing: 12 * root.unit
-                                Row {
+                                Rectangle {
+                                    objectName: "asideTimelineBox." + instCard.index
                                     width: parent.width
-                                    spacing: 12 * root.unit
-                                    Row {
-                                        id: haveDateRow
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        CardLine {
-                                            unit: root.unit
-                                            boardLine: true
-                                            text: root.labels.youHavePrefix ?? ""
-                                            size: 17
-                                            color: Kit.Tokens.muted
+                                    height: 40 * root.unit
+                                    radius: 12 * root.unit
+                                    color: Kit.Tokens.surface
+                                    border.width: 1 * root.unit
+                                    border.color: ThemeInk.hairline
+                                    Item {
+                                        x: 14 * root.unit
+                                        width: parent.width - 28 * root.unit
+                                        height: parent.height
+                                        Row {
+                                            id: haveDateRow
+                                            anchors.left: parent.left
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            CardLine {
+                                                unit: root.unit
+                                                boardLine: true
+                                                text: root.labels.youHavePrefix ?? ""
+                                                size: 14.5
+                                                color: Kit.Tokens.muted
+                                            }
+                                            CardLine {
+                                                objectName: "asideYouHave." + instCard.index
+                                                unit: root.unit
+                                                boardLine: true
+                                                text: instCard.modelData.youHaveDate ?? ""
+                                                size: 14.5
+                                                family: Kit.Tokens.faceCode
+                                                color: Kit.Tokens.textStrong
+                                            }
                                         }
-                                        CardLine {
-                                            objectName: "asideYouHave." + instCard.index
-                                            unit: root.unit
-                                            boardLine: true
-                                            text: instCard.modelData.youHaveDate ?? ""
-                                            size: 17
-                                            color: Kit.Tokens.textStrong
+                                        Rectangle {
+                                            objectName: "asideTimelineRule." + instCard.index
+                                            x: haveDateRow.width + 12 * root.unit
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: Math.max(12 * root.unit, parent.width - haveDateRow.width - newerDateRow.width - 24 * root.unit)
+                                            height: 2 * root.unit
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: ThemeInk.pillBorder }
+                                                GradientStop { position: 1.0; color: ThemeInk.rose }
+                                            }
                                         }
-                                    }
-                                    Rectangle {
-                                        objectName: "asideTimelineRule." + instCard.index
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: Math.max(12 * root.unit, parent.width - haveDateRow.width - newerDateRow.width - 24 * root.unit)
-                                        height: 2 * root.unit
-                                        gradient: Gradient {
-                                            orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: ThemeInk.pillBorder }
-                                            GradientStop { position: 1.0; color: ThemeInk.rose }
-                                        }
-                                    }
-                                    Row {
-                                        id: newerDateRow
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        CardLine {
-                                            unit: root.unit
-                                            boardLine: true
-                                            text: root.labels.newerPrefix ?? ""
-                                            size: 17
-                                            color: ThemeInk.rose
-                                        }
-                                        CardLine {
-                                            objectName: "asideNewer." + instCard.index
-                                            unit: root.unit
-                                            boardLine: true
-                                            text: instCard.modelData.newerDate ?? ""
-                                            size: 17
-                                            color: Kit.Tokens.textStrong
+                                        Row {
+                                            id: newerDateRow
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            CardLine {
+                                                unit: root.unit
+                                                boardLine: true
+                                                text: root.labels.newerPrefix ?? ""
+                                                size: 14.5
+                                                weight: Font.DemiBold
+                                                color: ThemeInk.rose
+                                            }
+                                            CardLine {
+                                                objectName: "asideNewer." + instCard.index
+                                                unit: root.unit
+                                                boardLine: true
+                                                text: (instCard.modelData.newerDate ?? "") + (instCard.modelData.newerSize ?? "")
+                                                size: 14.5
+                                                family: Kit.Tokens.faceCode
+                                                color: Kit.Tokens.textStrong
+                                            }
                                         }
                                     }
                                 }
-                                Flow {
+                                Item {
                                     width: parent.width
-                                    spacing: 10 * root.unit
-                                    Item {
-                                        objectName: "asidePillUpdate." + instCard.index
-                                        visible: instCard.modelData.canUpdate === true
-                                        height: 44 * root.unit
-                                        width: updRow.implicitWidth + 22 * root.unit
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: 22 * root.unit
-                                            color: Kit.Tokens.accent
-                                        }
-                                        Row {
-                                            id: updRow
-                                            x: 6 * root.unit
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            spacing: 8 * root.unit
-                                            CardGlyph {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                unit: root.unit
-                                                family: root.padFamily
-                                                button: Kit.Pad.Accept
-                                                lead: true
-                                                leads: true
-                                                side: 32
-                                                leadLetterSize: 15
-                                                leadWeight: Font.DemiBold
-                                                leadFill: Kit.Tokens.overAccent
-                                                leadInk: Kit.Tokens.accent
+                                    height: 36 * root.unit
+                                    Row {
+                                        anchors.left: parent.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 8 * root.unit
+                                        Item {
+                                            objectName: "asidePillUpdate." + instCard.index
+                                            visible: instCard.modelData.canUpdate === true
+                                            height: 36 * root.unit
+                                            width: updRow.implicitWidth + 18 * root.unit
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 18 * root.unit
+                                                color: Kit.Tokens.accent
                                             }
-                                            CardLine {
+                                            Row {
+                                                id: updRow
+                                                x: 6 * root.unit
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                unit: root.unit
-                                                boardLine: true
-                                                text: root.labels.updatePill ?? ""
-                                                size: 17
-                                                weight: Font.DemiBold
-                                                color: Kit.Tokens.overAccent
+                                                spacing: 6 * root.unit
+                                                CardGlyph {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    unit: root.unit
+                                                    family: root.padFamily
+                                                    button: Kit.Pad.Accept
+                                                    lead: true
+                                                    leads: true
+                                                    side: 24
+                                                    leadLetterSize: 12.5
+                                                    leadWeight: Font.Bold
+                                                    leadFill: Kit.Tokens.overAccent
+                                                    leadInk: Kit.Tokens.accent
+                                                }
+                                                CardLine {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    unit: root.unit
+                                                    boardLine: true
+                                                    text: root.labels.updatePill ?? ""
+                                                    size: 14
+                                                    weight: Font.DemiBold
+                                                    color: Kit.Tokens.overAccent
+                                                }
                                             }
-                                        }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            onClicked: root.tool.eclipseActCode(1, instCard.modelData.key)
-                                        }
-                                    }
-                                    Item {
-                                        objectName: "asidePillDefault." + instCard.index
-                                        visible: instCard.modelData.canDefault === true
-                                        height: 44 * root.unit
-                                        width: defRow.implicitWidth + 22 * root.unit
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: 22 * root.unit
-                                            color: "transparent"
-                                            border.width: 2 * root.unit
-                                            border.color: ThemeInk.pillBorder
-                                        }
-                                        Row {
-                                            id: defRow
-                                            x: 6 * root.unit
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            spacing: 8 * root.unit
-                                            CardGlyph {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                unit: root.unit
-                                                family: root.padFamily
-                                                button: Kit.Pad.Screensaver
-                                                side: 28
-                                                letterSize: 14
-                                                ring: Kit.Tokens.muted
-                                                ink: Kit.Tokens.textStrong
-                                            }
-                                            CardLine {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                unit: root.unit
-                                                boardLine: true
-                                                text: root.labels.defaultPill ?? ""
-                                                size: 17
-                                                weight: Font.Normal
-                                                color: Kit.Tokens.textStrong
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: root.tool.eclipseActCode(1, instCard.modelData.key)
                                             }
                                         }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            onClicked: root.tool.eclipseActCode(2, instCard.modelData.key)
-                                        }
-                                    }
-                                    Item {
-                                        objectName: "asidePillRemove." + instCard.index
-                                        visible: instCard.modelData.canRemove === true
-                                        height: 44 * root.unit
-                                        width: remRow.implicitWidth + 22 * root.unit
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: 22 * root.unit
-                                            color: "transparent"
-                                            border.width: 2 * root.unit
-                                            border.color: ThemeInk.pillBorder
-                                        }
-                                        Row {
-                                            id: remRow
-                                            x: 6 * root.unit
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            spacing: 8 * root.unit
-                                            CardGlyph {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                unit: root.unit
-                                                family: root.padFamily
-                                                button: Kit.Pad.Search
-                                                side: 28
-                                                letterSize: 14
-                                                ring: Kit.Tokens.muted
-                                                ink: Kit.Tokens.textStrong
+                                        Item {
+                                            objectName: "asidePillDefault." + instCard.index
+                                            visible: instCard.modelData.canDefault === true
+                                            height: 36 * root.unit
+                                            width: defRow.implicitWidth + 18 * root.unit
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 18 * root.unit
+                                                color: Kit.Tokens.surface
+                                                border.width: 1 * root.unit
+                                                border.color: ThemeInk.pillBorder
                                             }
-                                            CardLine {
+                                            Row {
+                                                id: defRow
+                                                x: 6 * root.unit
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                unit: root.unit
-                                                boardLine: true
-                                                text: root.labels.removePill ?? ""
-                                                size: 17
-                                                weight: Font.Normal
-                                                color: Kit.Tokens.textStrong
+                                                spacing: 6 * root.unit
+                                                CardGlyph {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    unit: root.unit
+                                                    family: root.padFamily
+                                                    button: Kit.Pad.Screensaver
+                                                    side: 22
+                                                    letterSize: 11.5
+                                                    ring: Kit.Tokens.muted
+                                                    ink: Kit.Tokens.muted
+                                                }
+                                                CardLine {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    unit: root.unit
+                                                    boardLine: true
+                                                    text: root.labels.defaultPill ?? ""
+                                                    size: 14
+                                                    weight: Font.Normal
+                                                    color: Kit.Tokens.textStrong
+                                                }
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: root.tool.eclipseActCode(2, instCard.modelData.key)
                                             }
                                         }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            onClicked: root.tool.eclipseActCode(3, instCard.modelData.key)
+                                        Item {
+                                            objectName: "asidePillRemove." + instCard.index
+                                            visible: instCard.modelData.canRemove === true
+                                            height: 36 * root.unit
+                                            width: remRow.implicitWidth + 18 * root.unit
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 18 * root.unit
+                                                color: Kit.Tokens.surface
+                                                border.width: 1 * root.unit
+                                                border.color: ThemeInk.pillBorder
+                                            }
+                                            Row {
+                                                id: remRow
+                                                x: 6 * root.unit
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                spacing: 6 * root.unit
+                                                CardGlyph {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    unit: root.unit
+                                                    family: root.padFamily
+                                                    button: Kit.Pad.Search
+                                                    side: 22
+                                                    letterSize: 11.5
+                                                    ring: Kit.Tokens.muted
+                                                    ink: Kit.Tokens.muted
+                                                }
+                                                CardLine {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    unit: root.unit
+                                                    boardLine: true
+                                                    text: root.labels.removePill ?? ""
+                                                    size: 14
+                                                    weight: Font.Normal
+                                                    color: Kit.Tokens.textStrong
+                                                }
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: root.tool.eclipseActCode(3, instCard.modelData.key)
+                                            }
                                         }
                                     }
                                     Item {
                                         objectName: "asidePillPage." + instCard.index
                                         visible: instCard.modelData.canUpdate === true
-                                        height: 44 * root.unit
-                                        width: pageRow.implicitWidth + 22 * root.unit
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        height: 36 * root.unit
+                                        width: pagePillLine.width + 24 * root.unit
                                         Rectangle {
                                             anchors.fill: parent
-                                            radius: 22 * root.unit
-                                            color: "transparent"
-                                            border.width: 2 * root.unit
+                                            radius: 18 * root.unit
+                                            color: Kit.Tokens.surface
+                                            border.width: 1 * root.unit
                                             border.color: ThemeInk.pillBorder
                                         }
-                                        Row {
-                                            id: pageRow
-                                            x: 6 * root.unit
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            spacing: 8 * root.unit
-                                            CardGlyph {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                unit: root.unit
-                                                family: root.padFamily
-                                                button: Kit.Pad.Random
-                                                side: 28
-                                                ring: Kit.Tokens.muted
-                                                ink: Kit.Tokens.textStrong
-                                            }
-                                            CardLine {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                unit: root.unit
-                                                boardLine: true
-                                                text: root.labels.pagePill ?? ""
-                                                size: 17
-                                                weight: Font.Normal
-                                                color: Kit.Tokens.textStrong
-                                            }
+                                        CardLine {
+                                            id: pagePillLine
+                                            anchors.centerIn: parent
+                                            unit: root.unit
+                                            boardLine: true
+                                            text: root.labels.pagePill ?? ""
+                                            size: 14
+                                            weight: Font.Normal
+                                            color: Kit.Tokens.textStrong
                                         }
                                         MouseArea {
                                             anchors.fill: parent
@@ -1107,9 +1171,11 @@ FocusScope {
                         boardLine: true
                         width: parent.width
                         text: root.aside.availableHeading ?? ""
-                        size: 20
+                        size: 14
                         weight: Font.DemiBold
-                        color: ThemeInk.body
+                        spacing: 2.1
+                        capitalization: Font.AllUppercase
+                        color: ThemeInk.dim
                     }
                 }
                 Repeater {
@@ -1149,13 +1215,12 @@ FocusScope {
                             anchors.leftMargin: 20 * root.unit
                             anchors.rightMargin: 20 * root.unit
                             spacing: 14 * root.unit
-                            CheckerMark {
+                            LibretroMark {
                                 objectName: "asideAvailMark." + availCard.index
                                 anchors.verticalCenter: parent.verticalCenter
                                 side: 34
-                                corner: 8
-                                light: ThemeInk.dim
-                                dark: ThemeInk.checkerDark
+                                light: ThemeInk.hairline
+                                dark: Kit.Tokens.muted
                             }
                             Column {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -1274,8 +1339,8 @@ FocusScope {
             iconColor: Kit.Tokens.muted
             leadStyle: Kit.GlyphStyles.Filled
             leadColor: Kit.Tokens.accent
-            entrySpacing: 34 * root.unit
-            glyphGap: 10 * root.unit
+            entrySpacing: 24 * root.unit
+            glyphGap: 9 * root.unit
             glyphSize: 34 * root.unit
             snapped: false
             model: RowsModel {
@@ -1286,31 +1351,37 @@ FocusScope {
                     objectName: "helpWords-" + text
                     unit: root.unit
                     boardLine: true
-                    size: 21
+                    size: 19
                 }
             }
             glyph: Component {
-                CardGlyph {
-                    unit: root.unit
-                    side: button === Kit.Pad.Menu || button === Kit.Pad.Options ? 30 : 34
-                    wordSize: 14
-                    padding: 10
-                    boxMenu: false
-                    ink: ThemeInk.body
-                    ring: Kit.Tokens.muted
-                }
+                CoreHelpGlyph {}
             }
         }
-        CardLine {
-            objectName: "coresSummary"
+        Rectangle {
+            objectName: "coresSummaryPill"
+            visible: summaryLine.text.length > 0
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            unit: root.unit
-            boardLine: true
-            text: root.aside.footerSummary ?? ""
-            size: 21
-            weight: Font.Normal
-            color: ThemeInk.body
+            height: 38 * root.unit
+            width: summaryLine.width + 32 * root.unit
+            radius: 19 * root.unit
+            color: ThemeInk.glassPill
+            border.width: 1 * root.unit
+            border.color: ThemeInk.hairline
+            CardLine {
+                id: summaryLine
+                objectName: "coresSummary"
+                anchors.centerIn: parent
+                unit: root.unit
+                boardLine: true
+                boardLineHeight: 20
+                text: root.aside.footerSummary ?? ""
+                size: 16
+                weight: Font.Normal
+                family: Kit.Tokens.faceCode
+                color: Kit.Tokens.muted
+            }
         }
     }
 }

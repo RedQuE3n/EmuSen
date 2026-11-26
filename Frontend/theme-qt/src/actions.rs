@@ -82,6 +82,10 @@ pub mod qobject {
         /// Whether the host would take `act(key)` now, without acting: a declined action's item and help entry look disabled.
         #[qinvokable]
         fn enabled(self: &ThemeActions, key: &QString) -> bool;
+        /// Requests a face switch between Big Picture (`true`) and Desktop (`false`) modes (1.22).
+        #[qinvokable]
+        #[cxx_name = "setBigScreen"]
+        fn set_big_screen(self: Pin<&mut ThemeActions>, big_screen: bool) -> bool;
 
         /// Settings' calls, each the program's own (EmuSen_Qt.md §3.2, `Settings`).
         #[qinvokable]
@@ -207,6 +211,10 @@ pub trait ActionSink {
     fn act(&mut self, action: &Action) -> bool;
     /// A screen's call; a host that draws neither screen for a theme declines them all.
     fn screen(&mut self, _action: &ScreenAction) -> bool {
+        false
+    }
+    /// Switches between Big Picture and Desktop faces; a host that does not toggle faces declines it.
+    fn set_big_screen(&mut self, _big_screen: bool) -> bool {
         false
     }
     /// Whether `act` would take the action, asked without acting; a host that declines nothing need not say.
@@ -392,5 +400,9 @@ impl qobject::ThemeActions {
 
     pub fn enabled(&self, key: &QString) -> bool {
         self.sink.as_ref().is_some_and(|sink| sink.would(&Action::Act(key.to_string())))
+    }
+
+    pub fn set_big_screen(mut self: Pin<&mut Self>, big_screen: bool) -> bool {
+        self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.set_big_screen(big_screen))
     }
 }

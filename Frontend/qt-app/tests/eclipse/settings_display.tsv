@@ -6,9 +6,9 @@
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 backdropGround	88	the ground, #07080F	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
 backdropField.0	90	the page's glow: a 900 px disc of the section's colour, blurred 150 px at 0.4, its left 620 px short of the board's right edge	the kit's BackdropField, its colour SettingsInk.pageGlows by Settings.page	-	right:-280	60	900	900	-	opacity:0.4	blur:150	built	field 0 -1 #3B4AA8 0
-backdropField.1	91	the limb's glow: 0 0 40px 6px rgba(246, 214, 200, 0.35), the ellipse grown by 6 and blurred by half of 40	the kit's BackdropField, SettingsInk.limbGlow	-	-1566	-706	2012	2612	-	opacity:0.35	blur:20	built	field 0 -1 #F6D6C8 0
-limbRim	91	the limb's 2 px rim, rgba(246, 231, 216, 0.75): the ellipse grown by 2	Eclipse's Limb, SettingsInk.limbRim	Limb	-1562	-702	2004	2604	-	#BFF6E7D8	-	built	-
-limb	91	the limb, a 2000 by 2600 ellipse of #0B0D16	Eclipse's Limb, SettingsInk.limb	Limb	-1560	-700	2000	2600	-	#FF0B0D16	-	built	-
+backdropField.1	91	the limb's glow: 0 0 40px 6px rgba(246, 214, 200, 0.35), the ellipse grown by 6 and blurred by half of 40	the kit's BackdropField, SettingsInk.limbGlow	-	-1626	-706	2012	2612	-	opacity:0.35	blur:20	built	field 0 -1 #F6D6C8 0
+limbRim	91	the limb's 2 px rim, rgba(246, 231, 216, 0.75): the ellipse grown by 2	Eclipse's Limb, SettingsInk.limbRim	Limb	-1622	-702	2004	2604	-	#BFF6E7D8	-	built	-
+limb	91	the limb, a 2000 by 2600 ellipse of #0B0D16	Eclipse's Limb, SettingsInk.limb	Limb	-1620	-700	2000	2600	-	#FF0B0D16	-	built	-
 mark	95	the crescent mark, 34	Marks.crescent, Eclipse's Brand part unnamed	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
 settingsTitle	96	"Settings", 20 px after the mark	Library.places' name for the settings place (qt-models/src/words.rs HOME_PLACES)	Text	after:mark:20	mid:80	-	-	-	Tokens.text	34	built	600 0 none
 battery	98	"82%"	Device.battery as Words.percent gives it, Eclipse's Status part	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
@@ -58,13 +58,13 @@ rowDoor.2	44	›, 22 px, muted, 14 px after the empty value	Chevron	Chevron	-	mi
 row.3	27	row 3, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.2:10	820	84	20	-	-	built	-
 rowFill.3	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.3:0	top:row.3:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
 rowName.3	29	its name; its line box and baseline in settings_display_lines.tsv	the row's label	Text	in:row.3:24	-	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.3	30	its short line, cut at the value; its line box and baseline in settings_display_lines.tsv	the row's about (qt-models/data/settings_screen.json)	Text	in:row.3:24	-	before:rowValue.3:24	-	-	Tokens.muted	17	built	400 0 none
+rowAbout.3	30	its short line; its line box and baseline in settings_display_lines.tsv	the row's about (qt-models/data/settings_screen.json)	Text	in:row.3:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.3	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.3	inright:row.3:24	-	-	-	-	built	-
 rowDoor.3	44	›, 22 px, muted, 14 px after the empty value	Chevron	Chevron	-	mid:row.3	inright:rowValue.3:0	22	-	Tokens.muted	-	built	-
 row.4	27	row 4, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.3:10	820	84	20	-	-	built	-
 rowFill.4	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.4:0	top:row.4:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
 rowName.4	29	its name; its line box and baseline in settings_display_lines.tsv	the row's label	Text	in:row.4:24	-	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.4	30	its short line, cut at the value; its line box and baseline in settings_display_lines.tsv	the row's about (qt-models/data/settings_screen.json)	Text	in:row.4:24	-	before:rowValue.4:24	-	-	Tokens.muted	17	built	400 0 none
+rowAbout.4	30	its short line; its line box and baseline in settings_display_lines.tsv	the row's about (qt-models/data/settings_screen.json)	Text	in:row.4:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.4	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.4	inright:row.4:24	-	-	-	-	built	-
 rowLess.4	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.4:0	mid:row.4	22	22	-	Tokens.accent	-	built	-
 rowWords.4	36	the value, 14 px after it; its line box and baseline in settings_display_lines.tsv	the row's value	Text	after:rowLess.4:14	-	-	-	-	Tokens.text	22	built	400 0 none
@@ -72,7 +72,7 @@ rowMore.4	38	▶, 14 px after the value	Chevron	Chevron	after:rowWords.4:14	mid:
 row.5	27	row 5, 84 high at least	Settings.rows, SettingsRow	SettingsRow	in:settingsRows:0	below:row.4:10	820	84	20	-	-	built	-
 rowFill.5	27	its fill and its 1 px inset line #22263A	Tokens.surfaceRaised focused, else SettingsInk.row	Rectangle	in:row.5:0	top:row.5:0	820	84	20	#FF0F111A	-	built	line 1 #FF22263A
 rowName.5	29	its name; its line box and baseline in settings_display_lines.tsv	the row's label	Text	in:row.5:24	-	-	-	-	Tokens.text	24	built	600 0 none
-rowAbout.5	30	its short line, cut at the value; its line box and baseline in settings_display_lines.tsv	the row's about (qt-models/data/settings_screen.json)	Text	in:row.5:24	-	before:rowValue.5:24	-	-	Tokens.muted	17	built	400 0 none
+rowAbout.5	30	its short line; its line box and baseline in settings_display_lines.tsv	the row's about (qt-models/data/settings_screen.json)	Text	in:row.5:24	-	-	-	-	Tokens.muted	17	built	400 0 none
 rowValue.5	32	its value, 24 px in from the right	the row's value form	Row	-	mid:row.5	inright:row.5:24	-	-	-	-	built	-
 rowLess.5	34	◀, 22 px, stroked in the accent	Chevron	Chevron	in:rowValue.5:0	mid:row.5	22	22	-	Tokens.accent	-	built	-
 rowWords.5	36	the value, 14 px after it; its line box and baseline in settings_display_lines.tsv	the row's value	Text	after:rowLess.5:14	-	-	-	-	Tokens.text	22	built	400 0 none

@@ -81,9 +81,9 @@
          "muted": ["For every console that had a television. A console can choose its own in Consoles."]}},
         {"id": "levers", "label": "Shader levers", "hint": "The CRT's own levers for one console: the mask, the bloom, the scanlines and the glass.",
          "door": "levers", "pane": {"preview": "picture", "caption": "{running} · live preview", "muted": ["A opens its levers; each one redraws the picture."]}},
-        {"id": "shaders", "label": "Shaders", "hint": "The shader each console draws with: the built-in filters, the recent ones and the slang pack's presets.", "door": "shaders"},
-        {"id": "crop", "row": "GraphicsConfig.Consoles Overscan", "consoles": "televisions", "about": "What is hidden at the picture's edges on a console that had a television."},
-        {"id": "textsize", "row": "AppSettings TextSize", "about": "Every word on the big screen, and the desktop's, through the interface's type scale.",
+        {"id": "shaders", "label": "Shaders", "hint": "Built-in filters, recent choices, and libretro slang presets.", "door": "shaders"},
+        {"id": "crop", "row": "GraphicsConfig.Consoles Overscan", "consoles": "televisions", "about": "What is hidden at the frame's edges on television consoles."},
+        {"id": "textsize", "row": "AppSettings TextSize", "about": "Scales every screen and card through the interface type scale.",
          "pane": {"preview": "sizes", "sentence": "Text size scales every word on the big screen; nothing is cut off at any size."}},
         {"id": "art", "row": "AppSettings HomeArt", "about": "The focused game's art behind Home, dimmed and blurred."},
         {"id": "motion", "row": "AppSettings ReducedMotion", "about": "No movement, shorter fades. System follows the desktop's own setting.", "pane": {"by_value": {

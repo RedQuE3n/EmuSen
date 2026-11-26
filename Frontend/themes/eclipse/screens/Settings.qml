@@ -46,13 +46,13 @@ ThemeScreen {
                 pixelScale: canvas.unit
                 fields: [
                     BackdropField { x: (root.wide - 620) * design.unit; y: 60 * design.unit; width: 900 * design.unit; height: 900 * design.unit; color: own.pageGlow; blur: 150 * design.unit; opacity: 0.4 },
-                    BackdropField { x: (-1560 - 6) * design.unit; y: (-700 - 6) * design.unit; width: (2000 + 12) * design.unit; height: (2600 + 12) * design.unit; color: own.limbGlow; blur: 20 * design.unit; opacity: own.limbGlowOpacity }
+                    BackdropField { x: (-1620 - 6) * design.unit; y: (-700 - 6) * design.unit; width: (2000 + 12) * design.unit; height: (2600 + 12) * design.unit; color: own.limbGlow; blur: 20 * design.unit; opacity: own.limbGlowOpacity }
                 ]
             }
             // The limb: its 2 px rim, then the dark ellipse (G:91).
             Limb {
                 objectName: "limbRim"
-                x: (-1560 - 2) * design.unit
+                x: (-1620 - 2) * design.unit
                 y: (-700 - 2) * design.unit
                 width: (2000 + 4) * design.unit
                 height: (2600 + 4) * design.unit
@@ -60,7 +60,7 @@ ThemeScreen {
             }
             Limb {
                 objectName: "limb"
-                x: -1560 * design.unit
+                x: -1620 * design.unit
                 y: -700 * design.unit
                 width: 2000 * design.unit
                 height: 2600 * design.unit

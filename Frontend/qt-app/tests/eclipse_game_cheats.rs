@@ -7,7 +7,7 @@ mod game;
 
 use common::wait_for;
 use emusen_kit_core::input::UiButton;
-use game::{add_cheats, board_states, focused, open_page, open_tab, page_tab, program, until, words_under, world, BOARD_CHEATS};
+use game::{add_cheats, add_media, board_states, focused, open_page, open_tab, page_tab, program_with_media, until, words_under, world, BOARD_CHEATS};
 
 const TABLE: &str = include_str!("eclipse/game_cheats.tsv");
 
@@ -17,7 +17,8 @@ fn qt_3_4_12_eclipse_s_game_cheats_is_its_board_toggles_scrolls_opens_tool_and_b
     let states = board_states();
     let w = world("qt-app-eclipse-game-cheats", &states, true, true);
     add_cheats(&w, &BOARD_CHEATS);
-    let mut scene = program(&mut harness);
+    let media = add_media(&mut harness, &w, &["covers"]);
+    let mut scene = program_with_media(&mut harness, Some(&media));
     open_page(&mut scene, &w);
     open_tab(&mut scene, 5);
     until(&mut scene, "focus starts on pageRow.0", 2000, |s| focused(s) == "pageRow.0");

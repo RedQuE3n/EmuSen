@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import EmuSen.Theme
 
 // A pill button: a pad button's glyph and its label, filled in the accent or outlined in the line colour, round at both ends; every measure in board pixels (Main:61-71, EclipseLibrary:51, EclipseEmpty:46; EmuSen_Qt.md §3.4.8).
@@ -9,6 +10,11 @@ Walkable {
     required property int button
     required property string label
     property bool filled: false
+    property color fill: "transparent"
+    property real borderWidth: Tokens.hoverBorder
+    property bool leadGlyph: root.filled
+    property bool playMark: false
+    property int labelWeight: root.filled ? Font.DemiBold : Font.Normal
     // Whether a filled pill draws the boards' halo and glow (Main:61); Consoles' Open draws neither (EclipseConsoles:90).
     property bool glows: true
     // Scene pixels to a canvas unit, so the glows' blur runs at the pixels drawn (EmuSen_Kit.md §7.119).
@@ -32,7 +38,7 @@ Walkable {
     // The pill's one colour: its fill when filled, else its outline.
     readonly property color paint: root.filled ? Tokens.accent : root.outline
     // The outline's width, inside the pill's box; lead and trail are measured inside it, as CSS pads inside a border.
-    readonly property real line: root.filled ? 0 : Tokens.hoverBorder
+    readonly property real line: root.filled ? 0 : root.borderWidth
     // Round at both ends, as every pill on the boards is.
     readonly property real radius: root.height / 2
     readonly property Item glyph: glyphItem
@@ -42,9 +48,10 @@ Walkable {
     opacity: root.live ? 1 : 0.38
     Accessible.name: root.label
     Rectangle {
+        objectName: "pillLine." + root.place
         anchors.fill: parent
         radius: root.radius
-        color: root.filled ? root.paint : "transparent"
+        color: root.filled ? root.paint : root.fill
         border.color: root.filled ? "transparent" : root.paint
         border.width: root.line
     }
@@ -78,29 +85,48 @@ Walkable {
     Glyph {
         id: glyphItem
         objectName: "buttonGlyph." + root.place
+        visible: !root.playMark
         unit: root.unit
         x: root.line + root.lead * root.unit
         y: (root.height - height) / 2
         button: root.button
         side: root.glyphSide
-        lead: root.filled
-        // The filled pill's glyph a disc in the ground's dark, its letter the pill's colour (Main:63); the others' letters 20 px in the pill's words' colour (Main:66).
+        lead: root.leadGlyph
+        // The filled pill's glyph a disc in the ground's dark, its letter the pill's colour (Main:63); at rest with a cream badge, dark letter on accent.
         letterSize: root.letterSize
         leadLetterSize: root.leadLetterSize
         leadWeight: Font.DemiBold
         ink: Tokens.text
-        leadFill: Tokens.overAccent
-        leadInk: Tokens.accent
+        leadFill: root.filled ? Tokens.overAccent : Tokens.accent
+        leadInk: root.filled ? Tokens.accent : Tokens.overAccent
+    }
+    Shape {
+        id: playIcon
+        objectName: "buttonPlayMark." + root.place
+        visible: root.playMark
+        preferredRendererType: Shape.CurveRenderer
+        width: 12 * root.unit
+        height: 14 * root.unit
+        x: root.line + root.lead * root.unit
+        y: (root.height - height) / 2
+        ShapePath {
+            strokeColor: "transparent"
+            fillColor: Tokens.accent
+            PathMove { x: 1.5 * root.unit; y: 1 * root.unit }
+            PathLine { x: 11 * root.unit; y: 7 * root.unit }
+            PathLine { x: 1.5 * root.unit; y: 13 * root.unit }
+            PathLine { x: 1.5 * root.unit; y: 1 * root.unit }
+        }
     }
     Line {
         id: wordsItem
         objectName: "buttonLabel." + root.place
         unit: root.unit
-        x: glyphItem.x + glyphItem.width + root.gap * root.unit
+        x: (root.playMark ? playIcon.x + playIcon.width : glyphItem.x + glyphItem.width) + root.gap * root.unit
         y: (root.height - height) / 2
         text: root.label
         color: root.filled ? Tokens.overAccent : Tokens.text
         size: root.labelSize
-        weight: root.filled ? Font.DemiBold : Font.Normal
+        weight: root.labelWeight
     }
 }

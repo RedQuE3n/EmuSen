@@ -8,7 +8,7 @@ mod eclipse_board;
 mod game;
 
 use emusen_kit_core::input::UiButton;
-use game::{board_states, focused, open_page, program, states_tab, when_words, world};
+use game::{add_media, board_states, focused, open_page, program_with_media, states_tab, when_words, world};
 
 const TABLE: &str = include_str!("eclipse/game.tsv");
 
@@ -17,7 +17,8 @@ fn qt_3_4_12_eclipse_s_game_page_is_its_board_at_every_size() {
     let mut harness = emusen_qt_test::Harness::new();
     let states = board_states();
     let world = world("qt-app-eclipse-game", &states, true, true);
-    let mut scene = program(&mut harness);
+    let media = add_media(&mut harness, &world, &["covers"]);
+    let mut scene = program_with_media(&mut harness, Some(&media));
     open_page(&mut scene, &world);
     assert_eq!(scene.property("theme", "pageDrawn"), "true", "Overview is Eclipse's");
     states_tab(&mut scene);

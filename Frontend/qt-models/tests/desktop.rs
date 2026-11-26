@@ -130,11 +130,13 @@ fn desktop_projections_filter_sort_and_project_real_library_and_inspector_data()
         card_facts: String::new(),
     };
 
-    let proj = project_desktop(&view, &extra_meta, &state, &session, None, "Eclipse", 1);
+    let state_counts = BTreeMap::from([("/roms/snes/Brass Lantern.sfc".to_owned(), 2usize)]);
+    let proj = project_desktop(&view, &extra_meta, &state, &session, &state_counts, None, "Eclipse", 1);
     let games: Value = serde_json::from_str(&proj.games_json).unwrap();
     let consoles: Value = serde_json::from_str(&proj.consoles_json).unwrap();
     let inspector: Value = serde_json::from_str(&proj.inspector_json).unwrap();
     assert_eq!(games["count"], 3);
+    assert_eq!(games["filterCounts"]["resume"], 2, "running Aurora Drift + saved Brass Lantern");
     assert_eq!(consoles["activeHeading"], "All Games");
     assert_eq!(consoles["consoles"].as_array().unwrap().len(), 2, "active scope shows consoles with games");
     assert_eq!(consoles["places"][0]["key"], "continue", "running game inserts Continue entry");
@@ -144,13 +146,13 @@ fn desktop_projections_filter_sort_and_project_real_library_and_inspector_data()
     assert_eq!(inspector["coreLine"], "Venus (EmuSen native)");
 
     state.filter_key = "favourites".into();
-    let fav_proj = project_desktop(&view, &extra_meta, &state, &session, None, "Eclipse", 1);
+    let fav_proj = project_desktop(&view, &extra_meta, &state, &session, &state_counts, None, "Eclipse", 1);
     let fav_games: Value = serde_json::from_str(&fav_proj.games_json).unwrap();
     assert_eq!(fav_games["count"], 1);
     assert_eq!(fav_games["rows"][0]["title"], "Aurora Drift");
 
     state.filter_key = "unplayed".into();
-    let unplayed_proj = project_desktop(&view, &extra_meta, &state, &session, None, "Eclipse", 1);
+    let unplayed_proj = project_desktop(&view, &extra_meta, &state, &session, &state_counts, None, "Eclipse", 1);
     let unplayed_games: Value = serde_json::from_str(&unplayed_proj.games_json).unwrap();
     assert_eq!(unplayed_games["count"], 2);
 
@@ -162,14 +164,21 @@ fn desktop_projections_filter_sort_and_project_real_library_and_inspector_data()
         facts: GameFacts { path: "/roms/snes/Brass Lantern.sfc".into(), states: 2, players: "1 player".into(), ..GameFacts::default() },
         size_bytes: Some(524_288),
         cheats_count: 3,
+        states: vec![emusen_qt_models::game_page::State {
+            path: "/saves/Brass Lantern.state".into(),
+            slot: emusen_qt_models::game_page::Slot::Auto,
+            picture: String::new(),
+            when: 1_700_000_000,
+        }],
     };
-    let search_proj = project_desktop(&view, &extra_meta, &state, &session, Some(&cached), "Dawn", 0);
+    let search_proj = project_desktop(&view, &extra_meta, &state, &session, &state_counts, Some(&cached), "Dawn", 0);
     let search_games: Value = serde_json::from_str(&search_proj.games_json).unwrap();
     let search_inspector: Value = serde_json::from_str(&search_proj.inspector_json).unwrap();
     assert_eq!(search_games["count"], 1);
     assert_eq!(search_games["rows"][0]["title"], "Brass Lantern");
     assert_eq!(search_inspector["sizeWords"], "512 KB");
     assert_eq!(search_inspector["cheatsWords"], "3 codes");
+    assert_eq!(search_inspector["states"][0]["label"], "Resume (Auto)");
     assert_eq!(search_proj.mode_badge, "DAWN");
 
     let chrome: Value = serde_json::from_str(&chrome_json()).unwrap();

@@ -77,7 +77,13 @@ Item {
                         font.pixelSize: Math.max(11, Math.round(12 * root.px))
                         text: root.model.settingsFilter
                         background: Item {}
+                        signal syncModelText()
+                        onSyncModelText: if (text !== root.model.settingsFilter) text = root.model.settingsFilter
                         onTextChanged: if (text !== root.model.settingsFilter) root.model.settingsFilter = text
+                        Connections {
+                            target: root.model
+                            function onSettingsFilterChanged() { filterField.syncModelText() }
+                        }
                     }
                 }
 

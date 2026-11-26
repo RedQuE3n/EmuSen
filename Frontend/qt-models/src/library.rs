@@ -105,6 +105,10 @@ pub trait LibrarySource: Send + Sync {
     fn state_count(&self, _game: &GameFile) -> Result<usize, String> {
         Ok(0)
     }
+    /// Saved state entries of `game`, newest first; empty when no saves exist.
+    fn states(&self, _game: &GameFile) -> Result<Vec<crate::game_page::State>, String> {
+        Ok(Vec::new())
+    }
 }
 
 /// The facts a games view draws beside its focused game (EmuSen_Qt.md §3.4.10), each empty or 0 where the program holds none.

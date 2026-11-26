@@ -126,11 +126,19 @@ Window {
                 shell.forceActiveFocus()
         } else if (player.focus) {
             player.forceActiveFocus()
+        } else if (settingsEclipseBindings.focus) {
+            settingsEclipseBindings.forceActiveFocus()
+        } else if (settingsEclipseShaders.focus) {
+            settingsEclipseShaders.forceActiveFocus()
         } else if (chosenTheme.active && chosenTheme.focus) {
             chosenTheme.forceActiveFocus()
         } else if (esdeLoader.focus) {
             esdeLoader.forceActiveFocus()
-        } else if (!referenceHost.holdsFocus) {
+        } else if (settingsSlot.focus) {
+            settingsSlot.forceActiveFocus()
+        } else if (referenceHost.takesFocus) {
+            referenceHost.focusActiveSlot()
+        } else if (!shell.activeFocus && (!program.activeFocusItem || program.activeFocusItem === program.contentItem)) {
             shell.forceActiveFocus()
         }
     }
@@ -146,8 +154,8 @@ Window {
         id: shell
         objectName: "shell"
         anchors.fill: parent
-        Keys.onPressed: (event) => event.accepted = !program.gameShown && player.session.awayKey(event.key, event.modifiers, true, event.isAutoRepeat, !program.pauseShown)
-        Keys.onReleased: (event) => event.accepted = !program.gameShown && player.session.awayKey(event.key, event.modifiers, false, event.isAutoRepeat, !program.pauseShown)
+        Keys.onPressed: (event) => event.accepted = (!program.gameShown || (!program.bigScreen && !player.activeFocus)) && player.session.awayKey(event.key, event.modifiers, true, event.isAutoRepeat, !program.pauseShown && !desktopModel.gameShown)
+        Keys.onReleased: (event) => event.accepted = (!program.gameShown || (!program.bigScreen && !player.activeFocus)) && player.session.awayKey(event.key, event.modifiers, false, event.isAutoRepeat, !program.pauseShown && !desktopModel.gameShown)
 
         LaunchModel {
             id: launch
@@ -172,6 +180,7 @@ Window {
             pauseGame: player.session.game
             found: games.count > 0
             themed: program.esdeLook
+            bigScreen: program.bigScreen
             onQuit: power.finishQuit(player.session.saveForPower(true))
             onPowerAsked: (key) => power.trigger(key, player.session.running)
             // The suspended game resumes as its screen comes back: the Home card's Continue, or resume() (a library's Continue, Exit to Library over the library).
@@ -215,7 +224,7 @@ Window {
             objectName: "library"
             platformLibrary: program.platformLibrary
             // The grid's Year and Rating sort by the scraper's facts, read for the own look only while one of them is chosen.
-            byFacts: games.byFacts
+            byFacts: games.byFacts || (!program.bigScreen && desktopShell.active)
         }
         PadReader {
             id: pads
@@ -315,21 +324,26 @@ Window {
             id: player
             objectName: "game"
             anchors.fill: parent
-            visible: program.gameShown || (program.bigScreen && (program.pauseShown || (screens.shown === Screens.Home && player.session.running)))
+            visible: program.gameShown || program.pauseShown || (program.bigScreen && screens.shown === Screens.Home && player.session.running)
             inFront: program.gameShown && !player.session.resumeAsked
             // As the start read them until the settings are read, then as they say, changed on the screen or not.
             guideChords: settingsModel.ready ? settingsModel.guideChords : program.guideChords
             showStatusText: settingsModel.showStatusText
             showFps: settingsModel.showFps
             showStatusBar: settingsModel.showStatusBar
-            focus: program.gameShown && !player.session.resumeAsked && (program.bigScreen || !desktopModel.drawerOpen)
+            focus: (program.gameShown || (!program.bigScreen && program.pauseShown)) && !player.session.resumeAsked && (program.bigScreen || !desktopModel.drawerOpen)
             feed: program.feed
             platformLibrary: program.platformLibrary
             cores: library.cores
             pads: pads.gamePads
             onMenu: {
-                player.session.pause()
-                screens.menu()
+                if (program.bigScreen) {
+                    player.session.pause()
+                    screens.menu()
+                } else {
+                    player.session.pause()
+                    desktopModel.drawerOpen = !desktopModel.drawerOpen
+                }
             }
             // The window's hotkeys: Exit to Library suspends the game to the library as the card's Back to Library does,
             // Fullscreen turns the window's full screen, as Mistress's `ToggleFullScreen`.
@@ -424,6 +438,10 @@ Window {
                 screens.openGame(path)
                 program.bigScreen = true
             }
+            onDoorRequested: (name) => {
+                screens.openDesktopDoor(name)
+                program.bigScreen = true
+            }
         }
         Connections {
             target: program
@@ -433,6 +451,7 @@ Window {
             target: library
             function onLoadingChanged() { desktopModel.refresh() }
             function onHomeLinesChanged() { desktopModel.refresh() }
+            function onMetadataChanged() { desktopModel.refresh() }
         }
         Connections {
             target: settingsModel
@@ -458,7 +477,7 @@ Window {
             anchors.fill: parent
             active: !program.bigScreen && !program.splashShown
             visible: active
-            focus: active && !(program.themeHost?.takesFocus ?? false) && !(program.gameShown && !desktopModel.drawerOpen) && !settingsModel.bindingsShown && !settingsModel.shadersShown
+            focus: active && !(program.themeHost?.takesFocus ?? false) && !(desktopModel.gameShown && !desktopModel.drawerOpen) && !settingsModel.bindingsShown && !settingsModel.shadersShown
             onFocusChanged: program.settleFocus()
             onLoaded: program.settleFocus()
             onActiveChanged: if (!active) program.settleFocus()
@@ -499,10 +518,11 @@ Window {
             onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: ThemeHost {
                 objectName: "theme"
-                visible: !program.gameShown || (!program.bigScreen && (program.themeHost?.desktopPlaying ?? false))
+                visible: (!program.gameShown && !( !program.bigScreen && program.pauseShown )) || (!program.bigScreen && (program.themeHost?.desktopPlaying ?? false))
                 bigScreen: program.bigScreen
                 desktopView: desktopModel.view
                 desktopGameShown: program.gameShown || program.pauseShown
+                desktopPlayingInputs: !program.bigScreen && desktopModel.drawerOpen
                 onBigScreenRequested: (big) => program.bigScreen = big
                 // Loaded once the host is whole, so its connections hear the new engine and feed it the models as they stand.
                 folder: chosenTheme.status === Loader.Ready ? program.theme : ""
@@ -727,7 +747,7 @@ Window {
             anchors.fill: parent
             active: !program.splashShown && settingsModel.bindingsShown && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : desktopModel.view === 2)
             focus: active
-            onActiveChanged: if (!active && screens.shown === Screens.Settings && chosenTheme.focus) chosenTheme.forceActiveFocus()
+            onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: ControllersEclipse {
                 settings: settingsModel
                 padFamily: program.padFamily
@@ -745,7 +765,7 @@ Window {
             focus: active && !settingsModel.typing
             onFocusChanged: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
             onLoaded: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
-            onActiveChanged: if (!active && screens.shown === Screens.Settings && chosenTheme.focus) chosenTheme.forceActiveFocus()
+            onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: ShadersEclipse {
                 settings: settingsModel
                 session: player.session
@@ -771,9 +791,9 @@ Window {
         Loader {
             id: settingsThemeTypingScope
             anchors.fill: parent
-            active: !program.splashShown && settingsModel.typing && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : ((program.themeHost?.desktopSettings ?? false) && desktopModel.view === 2))
+            active: !program.splashShown && settingsModel.typing && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : (desktopModel.view === 2 && !desktopModel.gameShown))
             focus: active
-            onActiveChanged: if (!active && chosenTheme.focus) chosenTheme.forceActiveFocus()
+            onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: Kit.NormalizedCanvas {
                 id: settingsThemeTypingCanvas
                 anchors.fill: parent
@@ -838,7 +858,7 @@ Window {
         FocusScope {
             id: settingsThemeListener
             objectName: "settingsThemeListener"
-            focus: !program.splashShown && !settingsModel.bindingsShown && settingsModel.listening && !settingsModel.listeningPad && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : ((program.themeHost?.desktopSettings ?? false) && desktopModel.view === 2))
+            focus: !program.splashShown && !settingsModel.bindingsShown && settingsModel.listening && !settingsModel.listeningPad && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : (desktopModel.view === 2 && !desktopModel.gameShown))
             Keys.onPressed: (event) => event.accepted = settingsModel.heardKey(event.key, event.modifiers)
             Connections {
                 target: Kit.PadRouter

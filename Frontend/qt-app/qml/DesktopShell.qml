@@ -33,7 +33,7 @@ Item {
     readonly property var inspector: JSON.parse(shellRoot.model.inspectorJson)
     readonly property var playing: JSON.parse(shellRoot.model.playingJson)
     readonly property var settingsData: JSON.parse(shellRoot.model.settingsJson)
-    readonly property real px: Math.max(0.64, Math.min(1.30, Math.min(shellRoot.width / 1920, shellRoot.height / 1200)))
+    readonly property real px: Math.max(0.64, Math.min(1.30, shellRoot.height / Kit.CanvasUnits.designHeight))
 
     // Workspace backdrop in the active theme palette (hidden when a custom Schema 2 Desktop slot or game is foregrounded).
     Rectangle {
@@ -244,11 +244,17 @@ Item {
                             font.pixelSize: Math.max(11, Math.round(12 * shellRoot.px))
                             text: shellRoot.model.searchQuery
                             background: Item {}
+                            signal syncModelText()
+                            onSyncModelText: if (text !== shellRoot.model.searchQuery) text = shellRoot.model.searchQuery
                             onTextChanged: {
                                 if (text !== shellRoot.model.searchQuery) {
                                     shellRoot.model.searchQuery = text
                                     if (text.length > 0 && shellRoot.model.view === 2) shellRoot.model.view = 0
                                 }
+                            }
+                            Connections {
+                                target: shellRoot.model
+                                function onSearchQueryChanged() { globalSearchInput.syncModelText() }
                             }
                         }
                     }
@@ -473,6 +479,7 @@ Item {
         }
         onFullScreenRequested: shellRoot.fullScreenRequested()
         onBigPictureRequested: shellRoot.bigPictureRequested()
+        onResumeRequested: shellRoot.model.resumeRequested()
         onDisplaySettingsRequested: {
             shellRoot.session.pause()
             shellRoot.model.openSettingsTool(1)

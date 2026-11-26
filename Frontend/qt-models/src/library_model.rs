@@ -688,6 +688,29 @@ impl qobject::LibraryModel {
         });
     }
 
+    /// Toggles favourites for a batch of game paths on a single worker thread and refreshes once.
+    pub fn batch_favourite(self: Pin<&mut Self>, paths: Vec<String>, on: bool) {
+        if paths.is_empty() {
+            return;
+        }
+        let Some(source) = self.source.clone() else { return };
+        let games = self.view.catalog.games.clone();
+        let (qt, gamelists, by_facts) = (self.qt_thread(), self.view.gamelists.clone(), self.by_facts);
+        std::thread::spawn(move || {
+            let refreshed = source.favourites(&games).and_then(|favs| {
+                let fav_set: HashSet<String> = favs.into_iter().collect();
+                for path in paths {
+                    if fav_set.contains(&path) != on {
+                        source.toggle_favourite(&path)?;
+                    }
+                }
+                refresh_with(source.as_ref(), &gamelists, by_facts)
+            });
+            let texts = texts_of(&refreshed);
+            let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
+        });
+    }
+
     pub fn games_of(&self, key: &QString) -> QString {
         let key = key.to_string();
         if let Some(id) = key.strip_prefix("collection:").and_then(|s| s.parse::<i64>().ok()) {

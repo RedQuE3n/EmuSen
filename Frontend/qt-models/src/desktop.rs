@@ -243,6 +243,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "pageRequested"]
         fn page_requested(self: Pin<&mut DesktopModel>, path: QString);
+
+        #[qsignal]
+        #[cxx_name = "doorRequested"]
+        fn door_requested(self: Pin<&mut DesktopModel>, name: QString);
     }
 
     impl cxx_qt::Initialize for DesktopModel {}
@@ -360,6 +364,7 @@ pub struct CachedInspector {
     pub facts: GameFacts,
     pub size_bytes: Option<u64>,
     pub cheats_count: usize,
+    pub states: Vec<crate::game_page::State>,
 }
 
 /// Output bundle of `project_desktop`.
@@ -627,12 +632,13 @@ fn row_matches_search(g: &GameRow, core: &str, genre: &str, query: &str) -> bool
         || g.year.to_lowercase().contains(&q)
 }
 
-/// Computes all Desktop Mode JSON projections from the real library, session, and cached inspector state.
+/// Computes all Desktop Mode JSON projections from the real library, session, saved states, and cached inspector state.
 pub fn project_desktop(
     view: &LibraryView,
     extra_meta: &[(String, BTreeMap<String, String>)],
     state: &DesktopState,
     session: &SessionSnapshot,
+    state_counts: &BTreeMap<String, usize>,
     cached: Option<&CachedInspector>,
     theme_name: &str,
     controllers: i32,
@@ -731,7 +737,13 @@ pub fn project_desktop(
         system => games_of_at(system, &view.systems, &view.catalog, now),
     };
 
-    let state_count_of = |path: &str| -> usize { cached.filter(|c| c.path == path).map_or(0, |c| c.facts.states) };
+    let state_count_of = |path: &str| -> usize {
+        state_counts
+            .get(path)
+            .copied()
+            .or_else(|| cached.filter(|c| c.path == path).map(|c| c.facts.states))
+            .unwrap_or(0)
+    };
     let f_all = base_list.len();
     let f_fav = base_list.iter().filter(|g| g.favourite).count();
     let f_res = base_list.iter().filter(|g| (has_running && session.game == g.path) || state_count_of(&g.path) > 0).count();
@@ -911,6 +923,24 @@ pub fn project_desktop(
         };
         let package_name = view.catalog.games.iter().find(|g| g.path == item.row.path).and_then(|g| g.package.as_deref()).unwrap_or_default();
         let cheats_count = c_facts.map_or(0, |c| c.cheats_count);
+        let states_json: Vec<Value> = c_facts
+            .map(|c| c.states.as_slice())
+            .unwrap_or(&[])
+            .iter()
+            .map(|s| {
+                let label = match s.slot {
+                    crate::game_page::Slot::Auto => "Resume (Auto)".to_owned(),
+                    crate::game_page::Slot::Number(n) => format!("Slot {n}"),
+                };
+                json!({
+                    "path": s.path,
+                    "label": label,
+                    "whenWords": words::ago(s.when, now),
+                    "pictureUrl": cover_url(&s.picture),
+                    "isAuto": matches!(s.slot, crate::game_page::Slot::Auto),
+                })
+            })
+            .collect();
         json!({
             "hasGame": true,
             "path": item.row.path,
@@ -936,6 +966,7 @@ pub fn project_desktop(
             "swatch": swatch,
             "statesCount": item.states_count,
             "statesHeading": if item.states_count > 0 { format!("SAVE STATES · {}", item.states_count) } else { "SAVE STATES".to_owned() },
+            "states": states_json,
             "packageWords": if package_name.is_empty() { "Read in place".to_owned() } else { package_name.to_owned() },
             "cheatsWords": if cheats_count > 0 { words::counted(cheats_count, "code", "codes") } else { "None".to_owned() },
         })
@@ -1025,7 +1056,15 @@ fn build_playing_json(view: &LibraryView, session: &SessionSnapshot, facts: Opti
             f.cards
                 .schema
                 .iter()
-                .map(|r| json!({ "key": r.key, "label": r.label, "value": f.cards.value(&r.key), "options": r.choice_labels.as_ref().or(r.choices.as_ref()).cloned().unwrap_or_default() }))
+                .map(|r| {
+                    json!({
+                        "key": r.key,
+                        "label": r.label,
+                        "value": f.cards.value(&r.key),
+                        "choices": r.choices.clone().unwrap_or_default(),
+                        "choiceLabels": r.choice_labels.clone().unwrap_or_default(),
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -1184,6 +1223,8 @@ pub struct DesktopModelRust {
     status_summary: QString,
     state: DesktopState,
     visible_paths: Vec<String>,
+    state_counts: BTreeMap<String, usize>,
+    counts_sig: Option<(usize, bool, String, bool)>,
     cached: Option<CachedInspector>,
     asking_path: String,
 }
@@ -1191,7 +1232,8 @@ pub struct DesktopModelRust {
 impl Default for DesktopModelRust {
     fn default() -> Self {
         let state = DesktopState::default();
-        let proj = project_desktop(&LibraryView::empty(), &[], &state, &SessionSnapshot::default(), None, "EmuSen", 0);
+        let empty_counts = BTreeMap::new();
+        let proj = project_desktop(&LibraryView::empty(), &[], &state, &SessionSnapshot::default(), &empty_counts, None, "EmuSen", 0);
         DesktopModelRust {
             library: std::ptr::null_mut(),
             session: std::ptr::null_mut(),
@@ -1234,6 +1276,8 @@ impl Default for DesktopModelRust {
             status_summary: QString::from(proj.status_summary.as_str()),
             state,
             visible_paths: proj.visible_paths,
+            state_counts: empty_counts,
+            counts_sig: None,
             cached: None,
             asking_path: String::new(),
         }
@@ -1518,6 +1562,14 @@ impl qobject::DesktopModel {
         }
     }
 
+    fn effective_selected_path(&self) -> String {
+        let selected = self.selected_key.to_string();
+        if !selected.is_empty() && self.visible_paths.iter().any(|p| p == &selected) {
+            return selected;
+        }
+        self.visible_paths.first().cloned().unwrap_or_default()
+    }
+
     pub fn batch_favourite(self: Pin<&mut Self>, on: bool) {
         let Some(lib) = (unsafe { self.library.as_mut() }) else { return };
         let favs: HashSet<String> = lib.view().catalog.favourites.iter().cloned().collect();
@@ -1528,18 +1580,11 @@ impl qobject::DesktopModel {
             .filter(|p| favs.contains(*p) != on)
             .cloned()
             .collect();
-        let mut pinned = unsafe { Pin::new_unchecked(lib) };
-        for path in targets {
-            pinned.as_mut().toggle_favourite(&QString::from(path.as_str()));
-        }
+        unsafe { Pin::new_unchecked(lib) }.batch_favourite(targets, on);
     }
 
     pub fn toggle_selected_favourite(self: Pin<&mut Self>) {
-        let target = if !self.selected_key.is_empty() {
-            self.selected_key.to_string()
-        } else {
-            self.visible_paths.first().cloned().unwrap_or_default()
-        };
+        let target = self.effective_selected_path();
         if target.is_empty() {
             return;
         }
@@ -1549,14 +1594,18 @@ impl qobject::DesktopModel {
     }
 
     pub fn open_selected_folder(self: Pin<&mut Self>) {
-        let target = if !self.selected_key.is_empty() {
-            self.selected_key.to_string()
-        } else {
-            self.visible_paths.first().cloned().unwrap_or_default()
-        };
+        let target = self.effective_selected_path();
         let folder = path_folder(&target);
         if !folder.is_empty() {
             self.open_folder_requested(QString::from(folder.as_str()));
+        }
+    }
+
+    fn rewind_settings_trail(mut s: Pin<&mut SettingsModel>) {
+        for _ in 0..8 {
+            if s.trail().is_empty() || !s.as_mut().back() {
+                break;
+            }
         }
     }
 
@@ -1564,11 +1613,7 @@ impl qobject::DesktopModel {
         let console_id = key.to_string();
         if let Some(settings) = unsafe { self.settings.as_mut() } {
             let mut s = unsafe { Pin::new_unchecked(settings) };
-            for _ in 0..8 {
-                if s.trail().is_empty() || !s.as_mut().back() {
-                    break;
-                }
-            }
+            Self::rewind_settings_trail(s.as_mut());
             if !console_id.is_empty() && console_id != ALL && console_id != crate::library::FAVOURITES && console_id != crate::library::RECENT {
                 s.as_mut().open_console(&QString::from(console_id.as_str()));
             } else {
@@ -1591,11 +1636,7 @@ impl qobject::DesktopModel {
         self.as_mut().set_settings_tool(-1);
         if let Some(settings) = unsafe { self.settings.as_mut() } {
             let mut s = unsafe { Pin::new_unchecked(settings) };
-            for _ in 0..8 {
-                if s.trail().is_empty() || !s.as_mut().back() {
-                    break;
-                }
-            }
+            Self::rewind_settings_trail(s.as_mut());
             s.as_mut().set_section(index);
         }
         self.refresh();
@@ -1613,11 +1654,7 @@ impl qobject::DesktopModel {
         self.as_mut().set_settings_tool(-1);
         if let Some(settings) = unsafe { self.settings.as_mut() } {
             let mut s = unsafe { Pin::new_unchecked(settings) };
-            for _ in 0..8 {
-                if s.trail().is_empty() || !s.as_mut().back() {
-                    break;
-                }
-            }
+            Self::rewind_settings_trail(s.as_mut());
             match key {
                 "cores" => s.as_mut().set_section(3),
                 "shaders" => s.as_mut().set_section(1),
@@ -1674,9 +1711,43 @@ impl qobject::DesktopModel {
     }
 
     pub fn handle_settings_door(mut self: Pin<&mut Self>, name: &QString) {
-        if name.to_string() == "themes" {
-            self.as_mut().set_settings_tool(5);
-            self.refresh();
+        let key = name.to_string();
+        match key.as_str() {
+            "themes" => {
+                self.as_mut().set_settings_tool(5);
+                self.refresh();
+            }
+            "shaders" => {
+                self.as_mut().set_settings_tool(-1);
+                if let Some(settings) = unsafe { self.settings.as_mut() } {
+                    unsafe { Pin::new_unchecked(settings) }.open_shaders_door();
+                }
+                self.refresh();
+            }
+            "bindings" | "keyboard" => {
+                self.as_mut().set_settings_tool(-1);
+                if let Some(settings) = unsafe { self.settings.as_mut() } {
+                    let mut s = unsafe { Pin::new_unchecked(settings) };
+                    if let Some(row) = s.as_mut().focus_section_row(0, &key) {
+                        s.as_mut().choose(row as i32);
+                    }
+                }
+                self.refresh();
+            }
+            "levers" => {
+                self.as_mut().set_settings_tool(-1);
+                if let Some(settings) = unsafe { self.settings.as_mut() } {
+                    let mut s = unsafe { Pin::new_unchecked(settings) };
+                    if let Some(row) = s.as_mut().focus_section_row(1, "levers") {
+                        s.as_mut().choose(row as i32);
+                    }
+                }
+                self.refresh();
+            }
+            "cores" => self.as_mut().select_settings_section(3),
+            "library" | "packages" => self.as_mut().select_settings_section(4),
+            "scraper" | "compressed" | "cheats" => self.as_mut().door_requested(name.clone()),
+            _ => {}
         }
     }
 
@@ -1702,13 +1773,14 @@ impl qobject::DesktopModel {
     pub fn refresh(mut self: Pin<&mut Self>) {
         let lib = unsafe { self.library.as_ref() };
         let empty = LibraryView::empty();
-        let (view, meta) = match lib {
-            Some(l) => (l.view(), l.effective_metadata()),
-            None => (&empty, &[][..]),
+        let (view, meta, lib_ready) = match lib {
+            Some(l) => (l.view(), l.effective_metadata(), !*l.loading()),
+            None => (&empty, &[][..], false),
         };
+        let game_count = view.catalog.games.len();
         let session = self.session_snapshot();
         let theme_name = self.theme_name.to_string();
-        let proj = project_desktop(view, meta, &self.state, &session, self.cached.as_ref(), &theme_name, self.controllers);
+        let proj = project_desktop(view, meta, &self.state, &session, &self.state_counts, self.cached.as_ref(), &theme_name, self.controllers);
         let effective = proj.effective_selected.clone();
 
         {
@@ -1735,9 +1807,36 @@ impl qobject::DesktopModel {
         self.as_mut().status_summary_changed();
         self.as_mut().all_marked_changed();
 
+        let sig = (game_count, session.running, session.game.clone(), session.paused);
+        if lib_ready && self.counts_sig.as_ref() != Some(&sig) {
+            self.as_mut().rust_mut().counts_sig = Some(sig.clone());
+            self.as_mut().ask_state_counts(sig);
+        }
         if !effective.is_empty() && self.asking_path != effective && self.cached.as_ref().is_none_or(|c| c.path != effective) {
             self.ask_inspector_facts(&effective);
         }
+    }
+
+    fn ask_state_counts(self: Pin<&mut Self>, sig: (usize, bool, String, bool)) {
+        let Some(lib) = (unsafe { self.library.as_ref() }) else { return };
+        let Some(source) = lib.source() else { return };
+        let games = lib.view().catalog.games.clone();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let mut counts = BTreeMap::new();
+            for game in &games {
+                let count = source.state_count(game).unwrap_or(0);
+                if count > 0 {
+                    counts.insert(game.path.clone(), count);
+                }
+            }
+            let _ = qt.queue(move |mut model| {
+                if model.counts_sig.as_ref() == Some(&sig) && model.state_counts != counts {
+                    model.as_mut().rust_mut().state_counts = counts;
+                    model.refresh();
+                }
+            });
+        });
     }
 
     fn ask_inspector_facts(mut self: Pin<&mut Self>, path: &str) {
@@ -1753,11 +1852,11 @@ impl qobject::DesktopModel {
             let facts = crate::library::facts_of(source.as_ref(), &game, seconds).unwrap_or_else(|_| GameFacts { path: game.path.clone(), ..Default::default() });
             let size_bytes = std::fs::metadata(&game.path).ok().map(|m| m.len());
             let cheats_count = if console.is_empty() { 0 } else { source.cheats(&console, &game.path).unwrap_or(0) };
-            let cached = CachedInspector { path: game.path, facts, size_bytes, cheats_count };
+            let states = source.states(&game).unwrap_or_default();
+            let cached = CachedInspector { path: game.path, facts, size_bytes, cheats_count, states };
             let _ = qt.queue(move |mut model| {
-                let matches = model.asking_path == cached.path;
-                model.as_mut().rust_mut().cached = Some(cached);
-                if matches {
+                if model.asking_path == cached.path {
+                    model.as_mut().rust_mut().cached = Some(cached);
                     model.refresh();
                 }
             });

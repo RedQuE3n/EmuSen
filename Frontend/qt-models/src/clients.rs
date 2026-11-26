@@ -301,6 +301,10 @@ impl LibrarySource for ClientSource {
         Ok(self.states(game, &app_settings(&self.platform)?)?.len())
     }
 
+    fn states(&self, game: &GameFile) -> Result<Vec<crate::game_page::State>, String> {
+        self.states(game, &app_settings(&self.platform)?)
+    }
+
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
         let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
         let link = |(folder, e): (&String, &Value)| {

@@ -202,7 +202,13 @@ Item {
                         font.pixelSize: Math.max(11, Math.round(12 * root.px))
                         text: root.model.consoleFilter
                         background: Item {}
+                        signal syncModelText()
+                        onSyncModelText: if (text !== root.model.consoleFilter) text = root.model.consoleFilter
                         onTextChanged: if (text !== root.model.consoleFilter) root.model.consoleFilter = text
+                        Connections {
+                            target: root.model
+                            function onConsoleFilterChanged() { consoleFilterInput.syncModelText() }
+                        }
                     }
                 }
 
@@ -924,6 +930,73 @@ Item {
                         color: ThemeInk.dim
                         font.family: Kit.Tokens.faceInterface
                         font.pixelSize: Math.max(11, Math.round(12 * root.px))
+                    }
+
+                    ColumnLayout {
+                        visible: (root.inspector.statesCount ?? 0) > 0
+                        Layout.fillWidth: true
+                        spacing: Math.round(6 * root.px)
+
+                        Repeater {
+                            model: root.inspector.states ?? []
+                            delegate: Rectangle {
+                                id: stRow
+                                required property var modelData
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.round(40 * root.px)
+                                radius: Math.round(7 * root.px)
+                                color: stHover.hovered ? ThemeInk.glowWeak : ThemeInk.surfaceRaised
+                                border.width: 1
+                                border.color: (stRow.modelData.isAuto ?? false) ? ThemeInk.accentSoft : ThemeInk.hairline
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Math.round(8 * root.px)
+                                    anchors.rightMargin: Math.round(10 * root.px)
+                                    spacing: Math.round(8 * root.px)
+
+                                    Rectangle {
+                                        visible: (stRow.modelData.pictureUrl ?? "").length > 0
+                                        Layout.preferredWidth: Math.round(36 * root.px)
+                                        Layout.preferredHeight: Math.round(24 * root.px)
+                                        radius: Math.round(4 * root.px)
+                                        clip: true
+                                        color: ThemeInk.glass
+                                        Image {
+                                            anchors.fill: parent
+                                            source: stRow.modelData.pictureUrl ?? ""
+                                            fillMode: Image.PreserveAspectCrop
+                                            asynchronous: true
+                                        }
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                        text: stRow.modelData.label ?? ""
+                                        color: ThemeInk.textStrong
+                                        font.family: Kit.Tokens.faceInterface
+                                        font.pixelSize: Math.max(11, Math.round(12 * root.px))
+                                        font.weight: (stRow.modelData.isAuto ?? false) ? Kit.Tokens.weightTitle : Kit.Tokens.weightSentence
+                                    }
+
+                                    Text {
+                                        text: stRow.modelData.whenWords ?? ""
+                                        color: ThemeInk.muted
+                                        font.family: Kit.Tokens.faceCode
+                                        font.pixelSize: Math.max(10, Math.round(10 * root.px))
+                                    }
+                                }
+
+                                HoverHandler {
+                                    id: stHover
+                                }
+
+                                TapHandler {
+                                    onTapped: root.model.launchFromRequested(root.inspector.path ?? "", stRow.modelData.path ?? "")
+                                }
+                            }
+                        }
                     }
 
                     Rectangle {

@@ -76,6 +76,8 @@ pub enum Ask {
     Restyled,
     /// One of the program's sections chosen on a nav, by its key (crate::sections).
     Section(String),
+    /// A Settings door opened from Desktop Mode (`scraper`, `compressed`, `cheats`).
+    DesktopDoor(String),
 }
 
 /// A top section of the program: its key, its name as a nav says it, the screen it opens, the key that screen is opened
@@ -363,8 +365,44 @@ pub fn step_in_look(eclipse: bool, themed: bool, shown: Shown, ask: &Ask) -> Opt
         (Shown::Tools, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
         (Shown::Tools, Ask::Act(key)) if console_options(key).is_some() => Some((Shown::Settings, None)),
         (Shown::Tools, Ask::Act(key)) => open_tool(key),
-        _ => step_in(false, shown, ask),
+    _ => step_in(false, shown, ask),
     }
+}
+
+/// Face-aware screen step allowing Desktop launches and Game Page transitions from any non-running Desktop view.
+pub fn step_for_face(big_screen: bool, eclipse: bool, themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
+    if let Ask::DesktopDoor(key) = ask {
+        return settings_door(key);
+    }
+    if !big_screen {
+        match ask {
+            Ask::Play
+                if matches!(
+                    shown,
+                    Shown::Home
+                        | Shown::Consoles
+                        | Shown::Grid
+                        | Shown::Pause
+                        | Shown::List
+                        | Shown::Search
+                        | Shown::SearchGrid
+                        | Shown::Settings
+                        | Shown::Themes
+                        | Shown::Collections
+                        | Shown::Tools
+                        | Shown::Cores
+                        | Shown::Tool
+                        | Shown::Esde
+                        | Shown::Page
+                ) =>
+            {
+                return Some((Shown::Game, None));
+            }
+            Ask::GamePage(_) if shown != Shown::Game => return Some((Shown::Page, None)),
+            _ => {}
+        }
+    }
+    step_in_look(eclipse, themed, shown, ask)
 }
 
 #[cxx_qt::bridge]
@@ -408,6 +446,8 @@ pub mod qobject {
         #[qproperty(bool, found)]
         /// Whether an ES-DE theme is the library's look (LibraryModel.themed): its view stands for the library's screens.
         #[qproperty(bool, themed)]
+        /// Whether Big Picture face is active; false allows Desktop launch and Game Page transitions from any Desktop screen.
+        #[qproperty(bool, big_screen, cxx_name = "bigScreen")]
         /// Whether Eclipse chrome is active (Kit.Tokens.coronaRim > 0).
         #[qproperty(bool, eclipse)]
         /// The tool of jobs the tool screen shows, by its key.
@@ -490,6 +530,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openGame"]
         fn open_game(self: Pin<&mut Screens>, path: &QString);
+        /// Opens a Settings tool or game door triggered from Desktop Settings.
+        #[qinvokable]
+        #[cxx_name = "openDesktopDoor"]
+        fn open_desktop_door(self: Pin<&mut Screens>, key: &QString);
         /// Quit EmuSen answered Yes: the program ends.
         #[qsignal]
         fn quit(self: Pin<&mut Screens>);
@@ -520,6 +564,7 @@ pub struct ScreensRust {
     page: QString,
     found: bool,
     themed: bool,
+    big_screen: bool,
     eclipse: bool,
     tool: QString,
     last_played: QString,
@@ -556,6 +601,7 @@ impl Default for ScreensRust {
             page: QString::default(),
             found: false,
             themed: false,
+            big_screen: true,
             eclipse: false,
             tool: QString::default(),
             last_played: QString::default(),
@@ -731,6 +777,13 @@ impl qobject::Screens {
         }
     }
 
+    pub fn open_desktop_door(self: Pin<&mut Self>, key: &QString) {
+        let k = key.to_string();
+        if !k.is_empty() {
+            self.ask(Ask::DesktopDoor(k));
+        }
+    }
+
     fn ask(self: Pin<&mut Self>, ask: Ask) {
         let _ = self.qt_thread().queue(move |screens| screens.apply(ask));
     }
@@ -753,7 +806,7 @@ impl qobject::Screens {
             Shown::Search | Shown::SearchGrid if self.eclipse && self.search_origin == Some(Shown::Home) && ask == Ask::Back => Some((Shown::Home, None)),
             _ => tool_back(self.themed, self.tool_origin, was, &ask)
                 .map(|s| (s, None))
-                .or_else(|| step_in_look(self.eclipse, self.themed, was, &ask)),
+                .or_else(|| step_for_face(self.big_screen, self.eclipse, self.themed, was, &ask)),
         };
         let Some((shown, key)) = stepped else { return };
         if matches!(shown, Shown::Cores | Shown::Themes | Shown::Tool) && shown != was {
@@ -811,7 +864,7 @@ impl qobject::Screens {
                     self.as_mut().page_at_changed();
                 }
             } else {
-                self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);
+                self.as_mut().rust_mut().page_origin = if !self.big_screen { library_of(self.themed) } else { page_origin(self.themed, was) };
                 let (at, game) = match &ask {
                     Ask::GamePage(path) => (QString::default(), QString::from(path.as_str())),
                     _ => {
@@ -874,5 +927,42 @@ impl qobject::Screens {
             self.as_mut().rust_mut().shown = screen;
             self.as_mut().shown_changed();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn desktop_face_allows_play_and_game_page_from_any_non_running_screen() {
+        for screen in [
+            Shown::Home,
+            Shown::Consoles,
+            Shown::Grid,
+            Shown::Pause,
+            Shown::Settings,
+            Shown::Tools,
+            Shown::Tool,
+            Shown::Cores,
+            Shown::Themes,
+            Shown::Esde,
+        ] {
+            assert_eq!(step_for_face(false, true, false, screen, &Ask::Play), Some((Shown::Game, None)));
+            assert_eq!(
+                step_for_face(false, true, false, screen, &Ask::GamePage("/rom/Game.sfc".to_owned())),
+                Some((Shown::Page, None))
+            );
+        }
+        assert_eq!(step_for_face(false, true, false, Shown::Game, &Ask::GamePage("/rom/Game.sfc".to_owned())), None);
+        assert_eq!(step_for_face(true, true, false, Shown::Consoles, &Ask::Play), None);
+        assert_eq!(step_for_face(true, true, false, Shown::Settings, &Ask::GamePage("/rom/Game.sfc".to_owned())), None);
+    }
+
+    #[test]
+    fn desktop_game_page_returns_to_library_of_look() {
+        assert_eq!(page_origin(false, Shown::HomeCard), Shown::Home);
+        assert_eq!(library_of(false), Shown::Home);
+        assert_eq!(library_of(true), Shown::Esde);
     }
 }

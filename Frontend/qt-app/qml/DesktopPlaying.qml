@@ -20,6 +20,7 @@ Item {
     signal fullScreenRequested()
     signal bigPictureRequested()
     signal displaySettingsRequested()
+    signal resumeRequested()
 
     // Compact top control strip matching desktop playing studio layout.
     Rectangle {
@@ -154,7 +155,7 @@ Item {
                 }
 
                 TapHandler {
-                    onTapped: if (root.session.paused) root.session.resume(); else root.session.pause()
+                    onTapped: if (root.session.paused) root.resumeRequested(); else root.session.pause()
                 }
             }
 
@@ -764,9 +765,12 @@ Item {
                     delegate: Rectangle {
                         id: optRow
                         required property var modelData
-                        readonly property var choices: optRow.modelData.options ?? []
+                        readonly property var choices: optRow.modelData.choices ?? []
+                        readonly property var labels: optRow.modelData.choiceLabels ?? []
                         readonly property string curVal: optRow.modelData.value ?? ""
-                        readonly property int nextIdx: choices.length > 0 ? ((choices.indexOf(curVal) + 1) % choices.length) : 0
+                        readonly property int curIdx: choices.indexOf(curVal)
+                        readonly property int nextIdx: choices.length > 0 ? ((curIdx + 1) % choices.length) : 0
+                        readonly property string displayVal: curIdx >= 0 && curIdx < labels.length && (labels[curIdx] ?? "").length > 0 ? labels[curIdx] : curVal
                         width: ListView.view.width
                         height: Math.round(40 * root.px)
                         radius: Math.round(7 * root.px)
@@ -789,7 +793,7 @@ Item {
                             }
 
                             Text {
-                                text: optRow.curVal
+                                text: optRow.displayVal
                                 color: ThemeInk.textStrong
                                 font.family: Kit.Tokens.faceCode
                                 font.pixelSize: Math.max(10, Math.round(11 * root.px))

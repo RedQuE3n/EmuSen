@@ -41,6 +41,7 @@ Item {
     property bool desktopTableWanted: true
     property bool desktopPlayingWanted: true
     property bool desktopSettingsWanted: true
+    property bool desktopPlayingInputs: false
     property bool splashShown: false
     // Where the splash's slot is drawn: over Moonrise, which keeps the splash's clock, its skip and its fade (EmuSen_Interface.md §22).
     property Item splashLayer: themed
@@ -87,6 +88,18 @@ Item {
     signal focused(string game)
     signal favourite(string game)
     signal bigScreenRequested(bool bigScreen)
+    signal focusActiveSlot()
+    onFocusActiveSlot: {
+        if (desktopLibrarySlot.focus) desktopLibrarySlot.forceActiveFocus()
+        else if (desktopTableSlot.focus) desktopTableSlot.forceActiveFocus()
+        else if (desktopPlayingSlot.focus) desktopPlayingSlot.forceActiveFocus()
+        else if (desktopSettingsSlot.focus) desktopSettingsSlot.forceActiveFocus()
+        else if (homeSlot.focus) homeSlot.forceActiveFocus()
+        else if (consolesSlot.focus) consolesSlot.forceActiveFocus()
+        else if (gamesSlot.focus) gamesSlot.forceActiveFocus()
+        else if (settingsSlot.focus) settingsSlot.forceActiveFocus()
+        else if (gameSlot.focus) gameSlot.forceActiveFocus()
+    }
     // What a slot holds: the scope the theme's screen is made in, out of the window's items while not shown, so a forceActiveFocus
     // in it climbs no scope of the window's, the slot's included, and takes no focus from the screen shown (EmuSen_Qt.md §3.5.2).
     component Placing: Item {
@@ -368,7 +381,7 @@ Item {
         objectName: "desktopLibrary." + themed.objectName
         role: Host.ThemeHost.DesktopLibrary
         host: host
-        wanted: themed.desktopLibraryWanted
+        wanted: !themed.bigScreen && themed.desktopLibraryWanted
         inputs: themed.inputs
         shown: !themed.bigScreen && themed.desktopView === 0 && !themed.desktopGameShown
     }
@@ -377,7 +390,7 @@ Item {
         objectName: "desktopTable." + themed.objectName
         role: Host.ThemeHost.DesktopTable
         host: host
-        wanted: themed.desktopTableWanted
+        wanted: !themed.bigScreen && themed.desktopTableWanted
         inputs: themed.inputs
         shown: !themed.bigScreen && themed.desktopView === 1 && !themed.desktopGameShown
     }
@@ -386,8 +399,8 @@ Item {
         objectName: "desktopPlaying." + themed.objectName
         role: Host.ThemeHost.DesktopPlaying
         host: host
-        wanted: themed.desktopPlayingWanted
-        inputs: themed.inputs
+        wanted: !themed.bigScreen && themed.desktopPlayingWanted
+        inputs: themed.inputs && themed.desktopPlayingInputs
         shown: !themed.bigScreen && themed.desktopGameShown
     }
     Slot {
@@ -395,7 +408,7 @@ Item {
         objectName: "desktopSettings." + themed.objectName
         role: Host.ThemeHost.DesktopSettings
         host: host
-        wanted: themed.desktopSettingsWanted && themed.settingsModel !== null
+        wanted: !themed.bigScreen && themed.desktopSettingsWanted && themed.settingsModel !== null
         inputs: themed.inputs && !(themed.settingsModel?.listening ?? false) && !(themed.settingsModel?.typing ?? false) && !(themed.settingsModel?.bindingsShown ?? false) && !(themed.settingsModel?.shadersShown ?? false)
         shown: !themed.bigScreen && themed.desktopView === 2 && !themed.desktopGameShown && !(themed.settingsModel?.bindingsShown ?? false) && !(themed.settingsModel?.shadersShown ?? false)
     }

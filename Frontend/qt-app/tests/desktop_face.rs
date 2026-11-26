@@ -13,7 +13,9 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
 use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QVariant};
 use emusen_client_fixture::library;
+use emusen_kit_core::input::UiButton;
 use emusen_kit_core::tokens::Colour;
+use emusen_kit_qt::kinds::Form;
 use emusen_qt::start::{self, Start};
 use emusen_qt::MAIN_URL;
 use emusen_qt_test::Scene;
@@ -186,6 +188,13 @@ fn engine_tokens(scene: &mut Scene<'_>, host_name: &str) -> BTreeMap<String, Str
     Scene::constants(tokens.upcast_pin()).into_iter().collect()
 }
 
+fn program_tokens(scene: &mut Scene<'_>) -> (i32, BTreeMap<String, String>) {
+    let tokens = scene.kit_tokens().expect("program kit tokens");
+    let form = tokens.form().repr;
+    let map = Scene::constants(tokens.upcast_pin()).into_iter().collect();
+    (form, map)
+}
+
 fn node_text(scene: &mut Scene<'_>, name: &str) -> String {
     let tree = scene.tree();
     tree.nodes
@@ -303,6 +312,10 @@ fn desktop_face_covers_host_reference_and_schema2() {
     assert_eq!(desk_tokens.get("rowHeight").map(String::as_str), Some("38"));
     let desk_surface = Colour::parse(desk_tokens.get("surface").expect("surface")).unwrap();
     assert_eq!(desk_surface, Colour::parse("#FF101420").unwrap());
+    let (prog_desk_form, prog_desk_tokens) = program_tokens(&mut scene);
+    assert_eq!(prog_desk_form, Form::Desktop.repr, "Program Kit.Tokens.form is Desktop");
+    assert_eq!(prog_desk_tokens.get("rowHeight").map(String::as_str), Some("38"), "Program Kit.Tokens receives desktop rowHeight");
+    assert_eq!(scene.property("desktopLibrary.theme", "active"), "true");
 
     assert!(scene.set_property("desktopModel", "view", "2"));
     wait_for(&mut scene, "theme", "desktopSettings", "true", 2000);
@@ -314,19 +327,27 @@ fn desktop_face_covers_host_reference_and_schema2() {
     scene.click(640.0, 400.0);
     wait_for(&mut scene, "program", "bigScreen", "true", 2000);
     scene.wait(120);
+    assert_eq!(scene.property("desktopLibrary.theme", "active"), "false", "Desktop slot unloads lazily in Big Picture");
     let bp_tokens = engine_tokens(&mut scene, "host.theme");
     assert_eq!(bp_tokens.get("rowHeight").map(String::as_str), Some("56"), "Big Picture removes desktop token layer");
+    let (prog_bp_form, prog_bp_tokens) = program_tokens(&mut scene);
+    assert_eq!(prog_bp_form, Form::BigScreen.repr, "Program Kit.Tokens.form reverts to BigScreen");
+    assert_eq!(prog_bp_tokens.get("rowHeight").map(String::as_str), Some("56"), "Program Kit.Tokens reverts rowHeight");
     assert_eq!(node_text(&mut scene, "dualBpSummary"), "BIG:1:56", "Big Picture restores Device.bigScreen and form 1");
 
-    // Toggling back to Desktop re-applies desktop token overrides cleanly.
+    // Toggling back to Desktop re-applies desktop token overrides cleanly on both engines.
     assert!(scene.set_property("program", "bigScreen", "false"));
     wait_for(&mut scene, "theme", "desktopLibrary", "true", 2000);
     scene.wait(100);
+    assert_eq!(scene.property("desktopLibrary.theme", "active"), "true");
     let desk_tokens_again = engine_tokens(&mut scene, "host.theme");
     assert_eq!(desk_tokens_again.get("rowHeight").map(String::as_str), Some("38"));
+    let (prog_desk_form_again, prog_desk_tokens_again) = program_tokens(&mut scene);
+    assert_eq!(prog_desk_form_again, Form::Desktop.repr);
+    assert_eq!(prog_desk_tokens_again.get("rowHeight").map(String::as_str), Some("38"));
     assert_eq!(node_text(&mut scene, "dualDeskSummary"), "DESK:0:38");
 
-    // 5. F10 hotkey toggles Desktop <-> Big Picture while preserving Reference/theme state.
+    // 5. F10 hotkey toggles Desktop <-> Big Picture from Home, Consoles, and Settings.
     assert!(scene.set_property("program", "theme", ""));
     assert!(scene.set_property("program", "bigScreen", "true"));
     wait_for(&mut scene, "home", "visible", "true", 2000);
@@ -339,6 +360,36 @@ fn desktop_face_covers_host_reference_and_schema2() {
     scene.key_hold(KEY_F10, false);
     wait_for(&mut scene, "program", "bigScreen", "true", 2000);
     assert_eq!(scene.property("desktopShellLoader", "active"), "false");
+
+    // Navigate to Consoles in Big Picture, toggle F10 -> Desktop -> F10 -> Consoles, then Settings.
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
+    scene.key_hold(KEY_F10, true);
+    scene.key_hold(KEY_F10, false);
+    wait_for(&mut scene, "program", "bigScreen", "false", 2000);
+    wait_for(&mut scene, "desktopLibrary", "visible", "true", 2000);
+    scene.key_hold(KEY_F10, true);
+    scene.key_hold(KEY_F10, false);
+    wait_for(&mut scene, "program", "bigScreen", "true", 2000);
+    assert_eq!(scene.property("screens", "shown"), "Consoles", "Returning from Desktop preserves Consoles screen");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
+
+    for _ in 0..5 {
+        scene.pad(UiButton::Right);
+    }
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "screens", "shown", "Settings", 2000);
+    scene.key_hold(KEY_F10, true);
+    scene.key_hold(KEY_F10, false);
+    wait_for(&mut scene, "program", "bigScreen", "false", 2000);
+    wait_for(&mut scene, "desktopLibrary", "visible", "true", 2000);
+    scene.key_hold(KEY_F10, true);
+    scene.key_hold(KEY_F10, false);
+    wait_for(&mut scene, "program", "bigScreen", "true", 2000);
+    assert_eq!(scene.property("screens", "shown"), "Settings", "Returning from Desktop preserves Settings screen");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
 
     // 6. ES-DE preference stays preserved when switching to Desktop Mode and back.
     assert!(scene.set_property("program", "esdeChosen", "true"));

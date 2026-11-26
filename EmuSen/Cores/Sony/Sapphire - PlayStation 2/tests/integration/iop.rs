@@ -2,7 +2,7 @@
 //! scratchpad, the INTC, the DMAC and the timers, run on `blackmoon-r3000` with Sapphire's IOP bus inside the board and
 //! graded by the records the documents give; and what no program can show a referee, checked on the units directly.
 
-mod s21;
+use crate::s21;
 
 use sapphire::board::{Board, System};
 use sapphire::clock::{self, IOP};

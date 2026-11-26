@@ -3,10 +3,10 @@
 //! console texts reproduced on the VIF directly, in the shape their lines show; and what no program can show a
 //! referee (PATH2's stand-in, the reversed FIFO, the DMAC waiting on a full FIFO), checked on the units directly.
 
-mod d1103;
-mod s6;
-mod s11;
-mod s14;
+use crate::d1103;
+use crate::s6;
+use crate::s11;
+use crate::s14;
 
 use sapphire::board::{Board, System};
 use sapphire::clock;

@@ -3,12 +3,12 @@
 //! generated primitives under generated pixel-operation registers drawn by both, and the programs' assembly for the
 //! referees.
 
-mod s6;
-mod s11;
-mod s16;
-mod s17;
-mod s18;
-mod s19;
+use crate::s6;
+use crate::s11;
+use crate::s16;
+use crate::s17;
+use crate::s18;
+use crate::s19;
 
 use sapphire::board::Board;
 use sapphire::clock;

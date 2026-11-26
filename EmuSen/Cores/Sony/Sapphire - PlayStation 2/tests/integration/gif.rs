@@ -4,13 +4,13 @@
 //! now graded by driving the GS's host interface directly, run whole through PATH3 and VIF1; and what no program can
 //! show a referee (each packing conversion's output, the FIFO's depth against the DMAC, the paths' cost), on the units.
 
-mod s6;
-mod s11;
-mod s14;
-mod s15;
-mod s16;
-mod s17;
-mod s18;
+use crate::s6;
+use crate::s11;
+use crate::s14;
+use crate::s15;
+use crate::s16;
+use crate::s17;
+use crate::s18;
 
 use sapphire::board::System;
 

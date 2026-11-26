@@ -1,7 +1,7 @@
 //! The loader for IOP modules (Sapphire_Native.md §40): its call laid out as D-480 measured, and its program an EE
 //! program the media reader takes. It runs only on the player's BIOS, so its runs are §40's, not CI's.
 
-mod irx;
+use crate::irx;
 
 use sapphire::media::{Media, program};
 

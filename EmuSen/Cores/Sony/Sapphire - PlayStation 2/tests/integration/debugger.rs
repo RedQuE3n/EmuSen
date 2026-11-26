@@ -3,22 +3,22 @@
 //! every frame. The programs reach DMA chains, VU microprograms, VIF, the GIF's paths, GS drawing, the PCRTC, the
 //! SPU2's voices on the IOP and the IPU.
 
-mod s6;
-mod s9;
-mod s11;
-mod s12;
-mod s13;
-mod s14;
-mod s15;
-mod s16;
-mod s17;
-mod s20;
-mod s21;
-mod s22;
-mod s25;
-mod s26;
-mod s27;
-mod s33;
+use crate::s6;
+use crate::s9;
+use crate::s11;
+use crate::s12;
+use crate::s13;
+use crate::s14;
+use crate::s15;
+use crate::s16;
+use crate::s17;
+use crate::s20;
+use crate::s21;
+use crate::s22;
+use crate::s25;
+use crate::s26;
+use crate::s27;
+use crate::s33;
 
 use emusen_native::core::Core;
 use emusen_native::debug::{flag, range, run, stop};

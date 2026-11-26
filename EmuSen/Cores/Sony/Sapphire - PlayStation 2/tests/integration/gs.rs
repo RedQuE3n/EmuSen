@@ -2,9 +2,9 @@
 //! figures and §8.6's conversion tables, the project's programs driven through the GS's host interface and graded by
 //! the manual's model, the console texts of gs/label and gs/signal, and the GS on the board.
 
-mod s6;
-mod s11;
-mod s16;
+use crate::s6;
+use crate::s11;
+use crate::s16;
 
 use sapphire::board::Board;
 use sapphire::clock::{self, NTSC};

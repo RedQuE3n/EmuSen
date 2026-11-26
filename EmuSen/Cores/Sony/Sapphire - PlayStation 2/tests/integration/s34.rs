@@ -3,7 +3,7 @@
 //! and a state's words; and the project's programs that write code into IOP RAM by a store, by the IOP's DMAC and by
 //! the SIF's transfer, then run it from the cache and past it.
 
-mod s21;
+use crate::s21;
 
 use blackmoon_r3000::{Bus, Size};
 use emusen_native::{StateReader, StateWriter};

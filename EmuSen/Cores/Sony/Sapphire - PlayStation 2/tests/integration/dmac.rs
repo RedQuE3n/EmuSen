@@ -2,11 +2,11 @@
 //! interpreter with the board and graded by the records the EE User's Manual's rules give; and the timings and
 //! interfaces no program can show a referee, checked on the units directly.
 
-mod d700;
-mod d780;
-mod d800;
-mod s6;
-mod s11;
+use crate::d700;
+use crate::d780;
+use crate::d800;
+use crate::s6;
+use crate::s11;
 
 use sapphire::board::{Board, System};
 use sapphire::clock::{self, BUS, NTSC};

@@ -3,10 +3,10 @@
 //! as the EE waits) and graded against `s13::manual` and `s12::manual`; the console's `vu/lower/efu` text against the
 //! EFU; and the EE's side of micro mode, timed as §5.4.5 and §5.4.6 draw it.
 
-mod s6;
-mod s9;
-mod s12;
-mod s13;
+use crate::s6;
+use crate::s9;
+use crate::s12;
+use crate::s13;
 
 use sapphire::board::System;
 use sapphire::vu::pipe;

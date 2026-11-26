@@ -3,8 +3,8 @@
 //! sound, copied from the output areas into the record, by the record `tests/s26/gate.rs` makes; and the rules no
 //! program can show, checked on the unit directly.
 
-mod s21;
-mod s26;
+use crate::s21;
+use crate::s26;
 
 use s26::gate::{self, Gate};
 use sapphire::board::Board;

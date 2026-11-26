@@ -1,8 +1,8 @@
 //! Stage S27's gate (Sapphire_Native.md §34): the IPU.
 
-mod s11;
-mod s27;
-mod s6;
+use crate::s11;
+use crate::s27;
+use crate::s6;
 
 use s27::driver::{self, Options};
 use s27::{program, standard};

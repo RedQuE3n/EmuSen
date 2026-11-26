@@ -2,10 +2,10 @@
 //! graded by the manual's model (`s20::manual`), a register changed in the middle of a field, and the timing program
 //! run on the interpreter against the documents' fields.
 
-mod s6;
-mod s11;
-mod s16;
-mod s20;
+use crate::s6;
+use crate::s11;
+use crate::s16;
+use crate::s20;
 
 use sapphire::board::{Board, System};
 use sapphire::clock::NTSC;

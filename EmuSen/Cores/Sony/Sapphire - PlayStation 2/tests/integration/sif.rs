@@ -3,8 +3,8 @@
 //! and graded by the records the documents give; and the FIFOs' rules no program can show a referee, checked on the
 //! units directly.
 
-mod s21;
-mod s22;
+use crate::s21;
+use crate::s22;
 
 use sapphire::board::System;
 use sapphire::dmac;

@@ -2,8 +2,8 @@
 //! interpreter and graded against the EE Core Instruction Set Manual's chapter 3; the multimedia rows of the timing
 //! model pinned by sequences whose cycles follow from the EE Core User's Manual by hand.
 
-mod s6;
-mod s8;
+use crate::s6;
+use crate::s8;
 
 use sapphire::ee::{self, Ee, bus::Ram};
 

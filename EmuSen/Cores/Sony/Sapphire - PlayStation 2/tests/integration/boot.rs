@@ -1,9 +1,9 @@
 //! Stage S24's measurements on the board (Sapphire_Native.md §35): what the player's BIOS showed the board lacked,
 //! graded by the record PCSX2 gave the same program, since no document reaches it.
 
-mod s21;
-mod s22;
-mod s24;
+use crate::s21;
+use crate::s22;
+use crate::s24;
 
 use sapphire::board::System;
 

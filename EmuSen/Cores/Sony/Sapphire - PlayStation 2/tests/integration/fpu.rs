@@ -3,8 +3,8 @@
 //! transcribes it; the format's module against lines of ps2autotests' console texts that decide its readings; the
 //! floating-point rows of the timing model on sequences whose cycles follow from the EE Core User's Manual by hand.
 
-mod s6;
-mod s9;
+use crate::s6;
+use crate::s9;
 
 use sapphire::ee::{Ee, bus::Ram};
 use sapphire::float;

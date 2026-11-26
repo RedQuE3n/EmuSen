@@ -1,7 +1,7 @@
 //! The press script the game runner and the bench share (`examples/common/script.rs`, Sapphire_Speed.md §51): which
 //! buttons and stick values each frame holds.
 
-#[path = "../examples/common/script.rs"]
+#[path = "../../examples/common/script.rs"]
 mod script;
 
 use script::Script;

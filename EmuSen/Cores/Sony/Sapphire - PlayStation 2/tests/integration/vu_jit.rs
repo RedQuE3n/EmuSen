@@ -4,8 +4,8 @@
 //! the mechanism tests after every cycle. The random programs draw both pipelines' operations with registers, data
 //! memory, ACC and I holding every float class of S9's set; the mechanisms are taken one at a time.
 
-mod s6;
-mod s9;
+use crate::s6;
+use crate::s9;
 
 use std::cell::RefCell;
 use std::rc::Rc;

@@ -2,8 +2,8 @@
 //! DualShock 2, the memory card, SIO2's DMA channels and the multitap through SIO2's registers, run on
 //! `blackmoon-r3000` with Sapphire's IOP bus inside the board and graded by the records the documents give.
 
-mod s21;
-mod s25;
+use crate::s21;
+use crate::s25;
 
 use sapphire::board::Board;
 use sapphire::clock::{self, IOP};

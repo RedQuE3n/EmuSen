@@ -2,8 +2,8 @@
 //! counters, the breakpoints and the bus errors, run on the interpreter and graded by the records the manuals' rules
 //! give; and the rules no program can show a referee, checked on the interpreter directly.
 
-mod s6;
-mod s7;
+use crate::s6;
+use crate::s7;
 
 use sapphire::ee::cop0::{self, config};
 use sapphire::ee::map::{self, Map, Region};

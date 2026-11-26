@@ -3,9 +3,9 @@
 //! interlocks with VU0's micro mode on a scripted stand-in for S13's; the macro timing on sequences whose cycles follow
 //! from §5.4's figures; and the console lines and the manual's own examples that decide a reading.
 
-mod s6;
-mod s9;
-mod s12;
+use crate::s6;
+use crate::s9;
+use crate::s12;
 
 use sapphire::board::System;
 use sapphire::ee::Halt;

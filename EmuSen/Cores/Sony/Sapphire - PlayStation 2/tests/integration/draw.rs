@@ -2,10 +2,10 @@
 //! driven through the GS's host interface and graded by the manual's model (`tests/s17/manual.rs`), many generated
 //! primitives drawn by both, and the programs' assembly for the referees.
 
-mod s6;
-mod s11;
-mod s16;
-mod s17;
+use crate::s6;
+use crate::s11;
+use crate::s16;
+use crate::s17;
 
 use sapphire::board::Board;
 use sapphire::clock;

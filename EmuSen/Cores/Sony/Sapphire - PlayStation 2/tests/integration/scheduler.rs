@@ -3,7 +3,7 @@
 //! (WiseMan `f6c51d5b9`) running the same programs; the rests the step keeps are not state, so a machine loaded from a
 //! state every few steps, which keeps none, must run alike.
 
-mod s54;
+use crate::s54;
 
 use emusen_native::StateReader;
 use sapphire::blocks;

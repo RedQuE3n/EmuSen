@@ -1,7 +1,7 @@
 //! Stage S6's gate (Sapphire_Native.md §16.5): the project's programs over every integer encoding, run on the
 //! interpreter and graded against the manual's definitions; the timing model's table and its issue rules pinned.
 
-mod s6;
+use crate::s6;
 
 use sapphire::ee::timing::{self, Category, FLOAT, INTEGER, Issue, Pair, Pipe, Timing};
 use sapphire::ee::{self, Ee, Halt, bus::Ram, cop0};

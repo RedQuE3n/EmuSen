@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use emusen_native::{State, StateReader, StateWriter};
 use sapphire::gs::{Gs, HostInterface, privileged, reg};
 
-mod gsgen;
+use crate::gsgen;
 
 use gsgen::{Step, busdir, run, stream};
 

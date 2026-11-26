@@ -3,9 +3,9 @@
 //! integer instructions, branches, loads and stores and on the mechanisms one at a time. Every program here is the
 //! project's own, assembled for the purpose; none reads the time, so an event's place in the stream of instructions does not show.
 
-mod d780;
-mod s6;
-mod s7;
+use crate::d780;
+use crate::s6;
+use crate::s7;
 
 use sapphire::blocks::{self, Blocks, Verify};
 use sapphire::board::System;

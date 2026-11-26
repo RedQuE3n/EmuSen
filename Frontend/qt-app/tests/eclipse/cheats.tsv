@@ -30,5 +30,5 @@ dbBrowseButton	1108	Browse N in file	Item	Item	in:dbCard:24	-	-	46	-	-	-	built	-
 dbUpdateButton	1164	Update database	Item	Item	after:dbBrowseButton:10	-	-	46	-	-	-	built	-
 addCheatCard	1212	add cheat dashed card	Item	Item	1192	below:dbCard:16	right:88	-	-	-	-	built	-
 cheatsFooter	1312	footer container	Item	Item	88	1122	right:88	44	-	-	-	built	-
-cheatsHelp	1319	footer help bar	EclipseBoardHelpBar	HelpBar	in:cheatsFooter:0	mid:cheatsFooter	-	-	-	#FFD8DBE6	21	built	400 0 none
+cheatsHelp	1319	footer help bar	EclipseBoardHelpBar	HelpBar	in:cheatsFooter:0	mid:cheatsFooter	-	-	-	#FFD7D8DE	21	built	400 0 none
 cheatsPosCounter	1328	position counter	Rectangle	Rectangle	-	mid:cheatsFooter	inright:cheatsFooter:0	38	18	#D111131C	-	built	line 1 #FF262A3A

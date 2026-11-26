@@ -975,7 +975,11 @@ impl qobject::SettingsModel {
         }
     }
 
-    pub fn refresh(mut self: Pin<&mut Self>) {
+    pub fn refresh(self: Pin<&mut Self>) {
+        self.refresh_inner(true);
+    }
+
+    fn refresh_inner(mut self: Pin<&mut Self>, clear_said: bool) {
         let library = self.platform_library.to_string();
         if library.is_empty() {
             return;
@@ -984,7 +988,9 @@ impl qobject::SettingsModel {
         self.as_mut().rust_mut().asked = asked;
         self.as_mut().rust_mut().reading = true;
         // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
-        self.as_mut().said(String::new());
+        if clear_said {
+            self.as_mut().said(String::new());
+        }
         let thread = self.qt_thread();
         let clients = self.clients.clone();
         let (cores, world) = (self.cores.to_string(), self.world.to_string());
@@ -1044,7 +1050,9 @@ impl qobject::SettingsModel {
                             board.apply_open_data(data, &r.view);
                             r.shaders_state = Some(board);
                         }
-                        model.as_mut().said(String::new());
+                        if clear_said {
+                            model.as_mut().said(String::new());
+                        }
                     }
                     Err(words) => model.as_mut().said(format!("The settings could not be read: {words}")),
                 }
@@ -1191,13 +1199,12 @@ impl qobject::SettingsModel {
             Outcome::Nothing => {}
             Outcome::Saved(model, document) => {
                 let was_reading = self.reading;
-                let asked = {
-                    let mut r = self.as_mut().rust_mut();
-                    r.saved_since_open = true;
-                    if was_reading {
-                        r.asked = r.asked.wrapping_add(1);
-                    }
-                    r.asked
+                let asked = if was_reading {
+                    let next = self.asked.wrapping_add(1);
+                    self.as_mut().rust_mut().asked = next;
+                    next
+                } else {
+                    self.asked
                 };
                 self.as_mut().applied();
                 self.as_mut().shown(false);
@@ -1216,15 +1223,19 @@ impl qobject::SettingsModel {
                     });
                     let _ = qt.queue(move |mut model| match saved {
                         Ok(()) => {
+                            if model.open {
+                                model.as_mut().rust_mut().saved_since_open = true;
+                            } else {
+                                model.as_mut().rust_mut().saved_since_open = false;
+                                model.as_mut().saved();
+                            }
                             if was_reading && model.asked == asked {
                                 model.refresh();
                             }
                         }
                         Err(e) => {
-                            if was_reading && model.asked == asked {
-                                model.as_mut().rust_mut().reading = false;
-                            }
                             model.as_mut().said(format!("The settings could not be saved: {e}"));
+                            model.as_mut().refresh_inner(false);
                         }
                     });
                 });
@@ -2013,8 +2024,9 @@ impl qobject::SettingsModel {
     }
 
     /// Reads live ScreenScraper account, queue, run and quota state off the GUI thread (#62).
-    fn refresh_scrape(self: Pin<&mut Self>) {
+    fn refresh_scrape(mut self: Pin<&mut Self>) {
         let asked = self.scrape_asked.wrapping_add(1);
+        self.as_mut().rust_mut().scrape_asked = asked;
         let library = self.platform_library.to_string();
         let qt = self.qt_thread();
         std::thread::spawn(move || {

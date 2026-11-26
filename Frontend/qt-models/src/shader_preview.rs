@@ -362,6 +362,9 @@ fn resolve_preset_on(platform: Option<&Platform>, presets_dir: Option<&std::path
     };
     let uniforms: Vec<(String, f32)> = target.values.iter().map(|(k, v)| (k.clone(), *v)).collect();
     if let Some(pack_rel) = pack_preset(&target.stored) {
+        if !crate::settings_shaders::is_safe_pack_rel(pack_rel) {
+            return Err("Invalid shader preset path.".to_owned());
+        }
         let dir = platform.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).map_err(|e| e.to_string())?.ok_or("No shader pack folder.")?;
         let preset = serenity::preset_document(platform, &dir.join(pack_rel).to_string_lossy()).map_err(|e| e.to_string())?;
         return Ok((preset, uniforms));

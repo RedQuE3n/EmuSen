@@ -26,6 +26,15 @@ FocusScope {
     readonly property bool browseOpen: root.view?.browseOpen === true
     readonly property bool editorOpen: root.view?.editorOpen === true
     readonly property bool editorTyping: root.view?.editorTyping === true
+    onEditorOpenChanged: {
+        if (root.editorOpen && root.editorTyping) cheatKeyboard.forceActiveFocus()
+        else if (!root.editorOpen && !root.editorTyping && root.visible && !root.sheetOpen && !root.tool.cardOpen && !root.tool.asking) cheatsNavScope.forceActiveFocus()
+    }
+    onEditorTypingChanged: {
+        cheatTypist.setText(root.activeFieldText, root.activeFieldText.length)
+        if (root.editorOpen && root.editorTyping) cheatKeyboard.forceActiveFocus()
+        else if (!root.editorTyping && root.visible && !root.sheetOpen && !root.tool.cardOpen && !root.tool.asking) cheatsNavScope.forceActiveFocus()
+    }
     readonly property int editorField: root.view?.editorField ?? 0
     readonly property string activeFieldText: root.editorField === 1 ? (root.view?.editorCode ?? "") : (root.view?.editorDesc ?? "")
     readonly property int zoneCode: root.isCheats ? root.tool.eclipseFocusedZone : 2
@@ -34,7 +43,7 @@ FocusScope {
     readonly property int browseCursor: root.isCheats ? root.tool.eclipseAuxIndex : 0
     readonly property alias controller: frame.controller
     readonly property bool sheetOpen: frame.controller.sheetOpen
-    onSheetOpenChanged: if (!root.sheetOpen && !root.tool.cardOpen && !root.tool.asking && root.visible) frame.forceActiveFocus()
+    onSheetOpenChanged: if (!root.sheetOpen && !root.editorTyping && !root.tool.cardOpen && !root.tool.asking && root.visible) cheatsNavScope.forceActiveFocus()
 
     EclipseListModel {
         id: rowsModel
@@ -1555,11 +1564,6 @@ FocusScope {
         id: cheatTypist
         onTextChanged: root.tool.eclipseSetField(root.editorField, cheatTypist.text)
         onClosed: root.tool.eclipseActCode(11, "")
-    }
-
-    Connections {
-        target: root
-        function onEditorTypingChanged() { cheatTypist.setText(root.activeFieldText, root.activeFieldText.length) }
     }
 
     Item {

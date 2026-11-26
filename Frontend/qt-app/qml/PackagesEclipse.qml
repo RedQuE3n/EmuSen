@@ -757,13 +757,17 @@ FocusScope {
             clip: gamesList.contentHeight > gamesList.height
             interactive: gamesList.contentHeight > gamesList.height
             boundsBehavior: Flickable.StopAtBounds
-            currentIndex: root.tool && root.tool.eclipseScreen === 5 ? root.tool.eclipseFocusedIndex : -1
             highlightFollowsCurrentItem: true
             highlightMoveDuration: 0
             preferredHighlightBegin: 84 * root.unit
             preferredHighlightEnd: height - 84 * root.unit
             highlightRangeMode: ListView.ApplyRange
             model: rowsModel
+            Binding {
+                target: gamesList
+                property: "currentIndex"
+                value: root.tool && root.tool.eclipseScreen === 5 ? root.tool.eclipseFocusedIndex : -1
+            }
 
             delegate: Item {
                 id: gameRow

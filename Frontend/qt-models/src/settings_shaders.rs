@@ -697,10 +697,30 @@ pub struct ShadersParts {
 
 const PACK_SUBDIR: &str = "pack";
 
+/// True when a `DIR_SHADERS`-relative path has only normal segments and stays within `DIR_SHADERS`.
+pub fn is_safe_pack_rel(rel: &str) -> bool {
+    if rel.is_empty() || rel.starts_with(['/', '\\']) || rel.contains('\0') {
+        return false;
+    }
+    let mut saw_normal = false;
+    for comp in std::path::Path::new(rel).components() {
+        match comp {
+            std::path::Component::Normal(s) => {
+                if s.to_string_lossy().split('\\').any(|part| part == "..") {
+                    return false;
+                }
+                saw_normal = true;
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_) => return false,
+        }
+    }
+    saw_normal
+}
+
 /// True when a `DIR_SHADERS`-relative path belongs to the managed libretro pack folder.
 pub fn is_managed_pack_rel(rel: &str) -> bool {
-    let trimmed = rel.trim_start_matches(['/', '\\']);
-    trimmed.starts_with("pack/") || trimmed.starts_with("pack\\")
+    is_safe_pack_rel(rel) && (rel.starts_with("pack/") || rel.starts_with("pack\\"))
 }
 
 /// True when a stored filter reference points inside the managed libretro pack folder.
@@ -1494,10 +1514,15 @@ impl ShadersBoard {
         Some((lever.id.clone(), value as f32, Outcome::All(all)))
     }
 
-    /// Removes only the managed `DIR_SHADERS/pack/` subtree on a background worker thread.
+    /// Removes only the managed `DIR_SHADERS/pack/` subtree on a background worker thread without following symlinks.
     pub fn remove_pack_dir(dir: &std::path::Path) -> Result<(), String> {
-        if dir.is_dir() && dir.file_name().and_then(|n| n.to_str()) == Some(PACK_SUBDIR) {
-            std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
+        if dir.file_name().and_then(|n| n.to_str()) != Some(PACK_SUBDIR) {
+            return Ok(());
+        }
+        if let Ok(meta) = std::fs::symlink_metadata(dir) {
+            if !meta.file_type().is_symlink() && meta.file_type().is_dir() {
+                std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
+            }
         }
         Ok(())
     }
@@ -2005,12 +2030,18 @@ fn clear_managed_pack_graphics(graphics: &mut Value) -> bool {
 }
 
 fn read_pack_passes_on(p: &emusen_platform_client::Platform, pack_rel: &str) -> Option<usize> {
+    if !is_safe_pack_rel(pack_rel) {
+        return None;
+    }
     let root = p.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).ok().flatten()?;
     let preset = emusen_platform_client::serenity::preset_load(p, &root.join(pack_rel).to_string_lossy()).ok()?;
     preset["passes"].as_array().map(Vec::len)
 }
 
 fn read_pack_meta_on(p: &emusen_platform_client::Platform, pack_rel: &str) -> PresetMeta {
+    if !is_safe_pack_rel(pack_rel) {
+        return PresetMeta { error: Some("Could not read preset".to_owned()), ..Default::default() };
+    }
     let Ok(Some(root)) = p.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS) else {
         return PresetMeta::default();
     };
@@ -2084,10 +2115,17 @@ pub fn scan_pack_dir_on(p: &emusen_platform_client::Platform) -> (Option<std::pa
 fn walk_pack(dir: &std::path::Path, bytes: &mut u64, newest: &mut i64) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for entry in entries.filter_map(Result::ok) {
-        let Ok(meta) = entry.metadata() else { continue };
-        if meta.is_dir() {
+        let Ok(ft) = entry.file_type() else { continue };
+        if ft.is_symlink() {
+            continue;
+        }
+        if ft.is_dir() {
             walk_pack(&entry.path(), bytes, newest);
-        } else if meta.is_file() {
+        } else if ft.is_file() {
+            let Ok(meta) = std::fs::symlink_metadata(entry.path()) else { continue };
+            if !meta.file_type().is_file() {
+                continue;
+            }
             *bytes = bytes.saturating_add(meta.len());
             if let Ok(m) = meta.modified() {
                 let secs = m.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);

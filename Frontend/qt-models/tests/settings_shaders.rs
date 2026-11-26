@@ -290,3 +290,30 @@ fn qt_7_7_eclipse_shaders_board_state_favourites_pack_and_sliders() {
     assert!(v.read.graphics["ShaderParameters"]["SNES"].get("slang:pack/crt/test_glow.slangp").is_none());
     assert_eq!(v.read.graphics["ShaderParameters"]["SNES"]["slang:custom/user.slangp"]["glow"], "0.3");
 }
+
+#[test]
+fn qt_7_7_pack_path_traversal_and_symlink_guards() {
+    use emusen_qt_models::settings::SettingsSource;
+    use emusen_qt_models::settings_shaders::{is_managed_pack_rel, is_safe_pack_rel, ShadersBoard};
+
+    assert!(is_safe_pack_rel("pack/crt/a.slangp"));
+    assert!(is_safe_pack_rel("custom/user.slangp"));
+    for bad in ["", "/pack/a.slangp", "\\pack\\a.slangp", "pack/../user.slangp", "../etc/passwd", "pack\\..\\user.slangp"] {
+        assert!(!is_safe_pack_rel(bad), "expected unsafe: {bad:?}");
+        assert!(!is_managed_pack_rel(bad), "expected non-managed: {bad:?}");
+    }
+    assert!(is_managed_pack_rel("pack/crt/a.slangp"));
+    assert!(!is_managed_pack_rel("custom/user.slangp"));
+
+    let world = emusen_client_fixture::World::new("models-shader-traversal-guard");
+    let custom = world.dir("custom_target");
+    let kept_file = custom.join("kept.txt");
+    std::fs::write(&kept_file, b"keep").unwrap();
+    let link = world.root.join("pack");
+    std::os::unix::fs::symlink(&custom, &link).unwrap();
+    ShadersBoard::remove_pack_dir(&link).unwrap();
+    assert!(kept_file.exists(), "remove_pack_dir must never follow symlinks into target dirs");
+
+    let source = emusen_qt_models::settings_source::ClientSettings::open(&emusen_client_fixture::library().display().to_string()).unwrap();
+    assert!(source.preset_parameters("../outside.slangp").is_err(), "preset_parameters must reject parent traversal");
+}

@@ -98,12 +98,52 @@ impl cxx_qt::Initialize for qobject::EclipseListModel {
     }
 }
 
-fn kind_of(v: &Value) -> QVariant {
+fn kind_key(v: &Value) -> Result<i32, &str> {
     match v.get("kind") {
-        Some(Value::Number(n)) => QVariant::from(&(n.as_i64().unwrap_or(0) as i32)),
-        Some(Value::String(s)) => QVariant::from(&QString::from(s.as_str())),
-        _ => QVariant::from(&0i32),
+        Some(Value::Number(n)) => Ok(n.as_i64().unwrap_or(0) as i32),
+        Some(Value::String(s)) => Err(s.as_str()),
+        _ => Ok(0),
     }
+}
+
+fn kind_of(v: &Value) -> QVariant {
+    match kind_key(v) {
+        Ok(n) => QVariant::from(&n),
+        Err(s) => QVariant::from(&QString::from(s)),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum SyncPlan {
+    Same,
+    DataChanged { first: usize, last: usize },
+    Reset,
+}
+
+fn plan_sync(old: &[Value], next: &[Value]) -> SyncPlan {
+    if old == next {
+        return SyncPlan::Same;
+    }
+    if old.len() == next.len() && !next.is_empty() {
+        let mut first_diff = None;
+        let mut last_diff = 0usize;
+        for (i, next_val) in next.iter().enumerate() {
+            if old[i] != *next_val {
+                if kind_key(&old[i]) != kind_key(next_val) {
+                    return SyncPlan::Reset;
+                }
+                if first_diff.is_none() {
+                    first_diff = Some(i);
+                }
+                last_diff = i;
+            }
+        }
+        return match first_diff {
+            Some(first) => SyncPlan::DataChanged { first, last: last_diff },
+            None => SyncPlan::Same,
+        };
+    }
+    SyncPlan::Reset
 }
 
 fn value_to_variant(v: &Value) -> QVariant {
@@ -136,23 +176,11 @@ impl qobject::EclipseListModel {
             Ok(Value::Array(items)) => items,
             _ => Vec::new(),
         };
-        if parsed == self.raw {
-            return;
-        }
-        if parsed.len() == self.raw.len() && !parsed.is_empty() {
-            let mut first_diff = None;
-            let mut last_diff = 0usize;
-            for (i, next_val) in parsed.iter().enumerate() {
-                if self.raw[i] != *next_val {
-                    if first_diff.is_none() {
-                        first_diff = Some(i);
-                    }
-                    last_diff = i;
-                }
-            }
-            if let Some(first) = first_diff {
+        match plan_sync(&self.raw, &parsed) {
+            SyncPlan::Same => {}
+            SyncPlan::DataChanged { first, last } => {
                 let mut r = self.as_mut().rust_mut();
-                for i in first..=last_diff {
+                for i in first..=last {
                     if r.raw[i] != parsed[i] {
                         r.kinds[i] = kind_of(&parsed[i]);
                         r.items[i] = value_to_variant(&parsed[i]);
@@ -160,25 +188,45 @@ impl qobject::EclipseListModel {
                     }
                 }
                 let root = QModelIndex::default();
-                let (top_left, bottom_right) = (self.index(first as i32, 0, &root), self.index(last_diff as i32, 0, &root));
+                let (top_left, bottom_right) = (self.index(first as i32, 0, &root), self.index(last as i32, 0, &root));
                 self.as_mut().data_changed(&top_left, &bottom_right, &QVector::<i32>::default());
             }
-            return;
+            SyncPlan::Reset => {
+                let kinds: Vec<QVariant> = parsed.iter().map(kind_of).collect();
+                let items: Vec<QVariant> = parsed.iter().map(value_to_variant).collect();
+                self.as_mut().begin_reset_model();
+                {
+                    let mut r = self.as_mut().rust_mut();
+                    r.raw = parsed;
+                    r.kinds = kinds;
+                    r.items = items;
+                }
+                self.as_mut().end_reset_model();
+                let count = self.items.len() as i32;
+                if self.count != count {
+                    self.as_mut().rust_mut().count = count;
+                    self.count_changed();
+                }
+            }
         }
-        let kinds: Vec<QVariant> = parsed.iter().map(kind_of).collect();
-        let items: Vec<QVariant> = parsed.iter().map(value_to_variant).collect();
-        self.as_mut().begin_reset_model();
-        {
-            let mut r = self.as_mut().rust_mut();
-            r.raw = parsed;
-            r.kinds = kinds;
-            r.items = items;
-        }
-        self.as_mut().end_reset_model();
-        let count = self.items.len() as i32;
-        if self.count != count {
-            self.as_mut().rust_mut().count = count;
-            self.count_changed();
-        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn equal_length_kind_change_requires_reset_and_same_kind_uses_data_changed() {
+        let old = vec![json!({"kind": 0, "text": "a"}), json!({"kind": 1, "text": "b"})];
+        let same_kind = vec![json!({"kind": 0, "text": "a2"}), json!({"kind": 1, "text": "b"})];
+        assert_eq!(plan_sync(&old, &same_kind), SyncPlan::DataChanged { first: 0, last: 0 });
+
+        let changed_kind = vec![json!({"kind": 1, "text": "a"}), json!({"kind": 1, "text": "b"})];
+        assert_eq!(plan_sync(&old, &changed_kind), SyncPlan::Reset);
+
+        let str_to_num = vec![json!({"kind": "chip", "text": "a"}), json!({"kind": 1, "text": "b"})];
+        assert_eq!(plan_sync(&old, &str_to_num), SyncPlan::Reset);
     }
 }

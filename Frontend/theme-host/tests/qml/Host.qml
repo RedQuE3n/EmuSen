@@ -12,14 +12,27 @@ Window {
     height: 400
     color: "black"
     property bool placed: false
+    property bool desktopPlaced: false
+    readonly property bool desktopFace: host.ready && host.hasDesktopFace()
+    readonly property bool providesDesktopLibrary: host.ready && host.provides(ThemeHost.DesktopLibrary)
+    readonly property bool providesDesktopTable: host.ready && host.provides(ThemeHost.DesktopTable)
     ThemeHost {
         id: host
         objectName: "host"
         onGenerationChanged: scene.placed = host.ready && host.place(ThemeHost.Home, slot)
     }
+    Connections {
+        target: host
+        function onGenerationChanged() { scene.desktopPlaced = host.ready && host.place(ThemeHost.DesktopLibrary, desktopSlot) }
+    }
     Item {
         id: slot
         objectName: "slot"
+        anchors.fill: parent
+    }
+    Item {
+        id: desktopSlot
+        objectName: "desktopSlot"
         anchors.fill: parent
     }
 }

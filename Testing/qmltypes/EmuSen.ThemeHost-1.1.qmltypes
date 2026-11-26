@@ -25,7 +25,11 @@ Module {
                 "Games",
                 "Splash",
                 "Settings",
-                "Game"
+                "Game",
+                "DesktopLibrary",
+                "DesktopTable",
+                "DesktopPlaying",
+                "DesktopSettings"
             ]
         }
         Property {
@@ -100,27 +104,28 @@ Module {
             lineNumber: 100
             isReadonly: true
         }
-        Signal { name: "folderChanged"; lineNumber: 122 }
-        Signal { name: "coverStoresChanged"; lineNumber: 123 }
-        Signal { name: "nameChanged"; lineNumber: 124 }
-        Signal { name: "readyChanged"; lineNumber: 125 }
-        Signal { name: "failedChanged"; lineNumber: 126 }
-        Signal { name: "warningsChanged"; lineNumber: 127 }
-        Signal { name: "generationChanged"; lineNumber: 128 }
-        Signal { name: "liveEnginesChanged"; lineNumber: 129 }
+        Signal { name: "folderChanged"; lineNumber: 126 }
+        Signal { name: "coverStoresChanged"; lineNumber: 127 }
+        Signal { name: "nameChanged"; lineNumber: 128 }
+        Signal { name: "readyChanged"; lineNumber: 129 }
+        Signal { name: "failedChanged"; lineNumber: 130 }
+        Signal { name: "warningsChanged"; lineNumber: 131 }
+        Signal { name: "generationChanged"; lineNumber: 132 }
+        Signal { name: "liveEnginesChanged"; lineNumber: 133 }
         Method {
             name: "provides"
             type: "bool"
             isMethodConstant: true
-            lineNumber: 132
+            lineNumber: 136
             Parameter { name: "role"; type: "Role" }
         }
         Method {
             name: "place"
             type: "bool"
-            lineNumber: 133
+            lineNumber: 137
             Parameter { name: "role"; type: "Role" }
             Parameter { name: "slot"; type: "QQuickItem"; isPointer: true }
         }
+        Method { name: "hasDesktopFace"; type: "bool"; isMethodConstant: true; lineNumber: 138 }
     }
 }

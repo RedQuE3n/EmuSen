@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Eclipse Collections hub (#11): pink/purple corner glows, top nav, 4-column fanned cover cards, + New collection, #14 modals.
 Kit.NormalizedCanvas {
@@ -111,7 +112,7 @@ Kit.NormalizedCanvas {
 
             Rectangle {
                 anchors.fill: parent
-                color: "#07080F"
+                color: Kit.Tokens.surface
             }
 
             Kit.Backdrop {
@@ -124,7 +125,7 @@ Kit.NormalizedCanvas {
                         y: -300 * canvas.boardUnit
                         width: 1000 * canvas.boardUnit
                         height: Kit.CanvasUnits.designHeight * canvas.boardUnit
-                        color: "#B0487A"
+                        color: ThemeInk.rose
                         blur: 170 * canvas.boardUnit
                         opacity: 0.30
                     },
@@ -133,7 +134,7 @@ Kit.NormalizedCanvas {
                         y: 600 * canvas.boardUnit
                         width: 1000 * canvas.boardUnit
                         height: Kit.CanvasUnits.designHeight * canvas.boardUnit
-                        color: "#5B3FD6"
+                        color: ThemeInk.backdropHalo
                         blur: 170 * canvas.boardUnit
                         opacity: 0.30
                     }
@@ -197,7 +198,7 @@ Kit.NormalizedCanvas {
                                     radius: 26 * canvas.boardUnit
                                     gap: 4 * canvas.boardUnit
                                     thickness: 3 * canvas.boardUnit
-                                    glowColor: "#73F0B4C4"
+                                    glowColor: ThemeInk.glowMid
                                     glowBlur: 46 * canvas.boardUnit
                                     glowSpread: 10 * canvas.boardUnit
                                     pixelScale: canvas.unit
@@ -207,9 +208,9 @@ Kit.NormalizedCanvas {
                                     objectName: "collectionCardBg." + card.index
                                     anchors.fill: parent
                                     radius: 26 * canvas.boardUnit
-                                    color: "#11131C"
+                                    color: Kit.Tokens.inputSurface
                                     border.width: 1 * canvas.boardUnit
-                                    border.color: "#262A3A"
+                                    border.color: ThemeInk.hairline
                                 }
 
                                 Item {
@@ -228,9 +229,8 @@ Kit.NormalizedCanvas {
                                         unit: canvas.boardUnit
                                         pixelScale: canvas.unit
                                         cover: card.covers[2]?.cover ?? ""
-                                        bgColor: card.covers[2]?.bg ?? "#2C1A57"
-                                        dotColor: card.covers[2]?.dot ?? "#E3CCFF"
-                                        waveColor: card.covers[2]?.wave ?? "#6C3FB8"
+                                        slot: 2
+                                        swatch: card.covers[2]
                                     }
 
                                     EclipseArtPlate {
@@ -244,11 +244,10 @@ Kit.NormalizedCanvas {
                                         pixelScale: canvas.unit
                                         shadowBlur: 20
                                         shadowOffsetY: 8
-                                        shadowColor: "#73000000"
+                                        shadowColor: ThemeInk.shadowMid
                                         cover: card.covers[1]?.cover ?? ""
-                                        bgColor: card.covers[1]?.bg ?? "#5B1C1A"
-                                        dotColor: card.covers[1]?.dot ?? "#FFD1B0"
-                                        waveColor: card.covers[1]?.wave ?? "#B5432E"
+                                        slot: 1
+                                        swatch: card.covers[1]
                                     }
 
                                     EclipseArtPlate {
@@ -261,11 +260,10 @@ Kit.NormalizedCanvas {
                                         pixelScale: canvas.unit
                                         shadowBlur: 26
                                         shadowOffsetY: 10
-                                        shadowColor: "#8C000000"
+                                        shadowColor: ThemeInk.shadowStrong
                                         cover: card.covers[0]?.cover ?? ""
-                                        bgColor: card.covers[0]?.bg ?? "#12806F"
-                                        dotColor: card.covers[0]?.dot ?? "#B8FFE9"
-                                        waveColor: card.covers[0]?.wave ?? "#6A4CF0"
+                                        slot: 0
+                                        swatch: card.covers[0]
                                     }
                                 }
 
@@ -284,7 +282,7 @@ Kit.NormalizedCanvas {
                                         text: card.modelData.name ?? ""
                                         size: 30
                                         weight: Font.DemiBold
-                                        color: "#F4F1EC"
+                                        color: Kit.Tokens.text
                                         elide: Text.ElideRight
                                     }
 
@@ -296,7 +294,7 @@ Kit.NormalizedCanvas {
                                         text: card.modelData.meta ?? ""
                                         size: 19
                                         weight: Font.Normal
-                                        color: "#B9BED0"
+                                        color: Kit.Tokens.muted
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -323,7 +321,7 @@ Kit.NormalizedCanvas {
                                 radius: 26 * canvas.boardUnit
                                 gap: 4 * canvas.boardUnit
                                 thickness: 3 * canvas.boardUnit
-                                glowColor: "#73F0B4C4"
+                                glowColor: ThemeInk.glowMid
                                 glowBlur: 46 * canvas.boardUnit
                                 glowSpread: 10 * canvas.boardUnit
                                 pixelScale: canvas.unit
@@ -334,7 +332,7 @@ Kit.NormalizedCanvas {
                                 preferredRendererType: Shape.CurveRenderer
                                 ShapePath {
                                     fillColor: "transparent"
-                                    strokeColor: "#5A6076"
+                                    strokeColor: ThemeInk.pillBorder
                                     strokeWidth: 2 * canvas.boardUnit
                                     strokeStyle: ShapePath.DashLine
                                     dashPattern: Kit.Tokens.dashPattern
@@ -367,7 +365,7 @@ Kit.NormalizedCanvas {
                                         preferredRendererType: Shape.CurveRenderer
                                         ShapePath {
                                             fillColor: "transparent"
-                                            strokeColor: "#D8DBE6"
+                                            strokeColor: ThemeInk.body
                                             strokeWidth: 1.6
                                             capStyle: ShapePath.RoundCap
                                             PathSvg { path: canvas.view.plusIcon ?? "" }
@@ -383,7 +381,7 @@ Kit.NormalizedCanvas {
                                     text: canvas.view.newCardLabel ?? ""
                                     size: 26
                                     weight: Font.Normal
-                                    color: "#D8DBE6"
+                                    color: ThemeInk.body
                                 }
                             }
 
@@ -422,7 +420,7 @@ Kit.NormalizedCanvas {
                     text: canvas.view.footerRight ?? ""
                     size: 21
                     weight: Font.Normal
-                    color: "#D8DBE6"
+                    color: ThemeInk.body
                 }
             }
 
@@ -435,7 +433,7 @@ Kit.NormalizedCanvas {
 
                 Rectangle {
                     anchors.fill: parent
-                    color: "#D907080F"
+                    color: ThemeInk.glassStrong
                     MouseArea {
                         anchors.fill: parent
                     }
@@ -454,7 +452,7 @@ Kit.NormalizedCanvas {
                         text: collectionsModel.typingTitle
                         size: 40
                         weight: Font.DemiBold
-                        color: "#F4F1EC"
+                        color: Kit.Tokens.text
                     }
 
                     CardLine {
@@ -463,7 +461,7 @@ Kit.NormalizedCanvas {
                         text: collectionsModel.typingPrompt
                         size: 22
                         weight: Font.Normal
-                        color: "#B9BED0"
+                        color: Kit.Tokens.muted
                     }
 
                     Item {
@@ -475,7 +473,7 @@ Kit.NormalizedCanvas {
                             radius: 52 * canvas.boardUnit
                             gap: 3 * canvas.boardUnit
                             thickness: 3 * canvas.boardUnit
-                            glowColor: "#59F0B4C4"
+                            glowColor: ThemeInk.glowRing
                             glowBlur: 46 * canvas.boardUnit
                             glowSpread: 8 * canvas.boardUnit
                             pixelScale: canvas.unit
@@ -484,7 +482,7 @@ Kit.NormalizedCanvas {
                         Rectangle {
                             anchors.fill: parent
                             radius: 52 * canvas.boardUnit
-                            color: "#11131C"
+                            color: Kit.Tokens.inputSurface
                         }
 
                         CardLine {
@@ -497,7 +495,7 @@ Kit.NormalizedCanvas {
                             text: nameTypist.text
                             size: 40
                             weight: Font.DemiBold
-                            color: "#F4F1EC"
+                            color: Kit.Tokens.text
                             elide: Text.ElideRight
                         }
                     }

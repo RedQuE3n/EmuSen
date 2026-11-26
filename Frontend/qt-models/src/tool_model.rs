@@ -8,7 +8,7 @@ use crate::tools::cores::{Cores, Host};
 use crate::tools::{Source, Tool};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QList, QString, QStringList};
+use cxx_qt_lib::{QList, QString, QStringList, QUrl};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -19,6 +19,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
+        include!("cxx-qt-lib/qurl.h");
+        type QUrl = cxx_qt_lib::QUrl;
     }
 
     /// The tools a screen shows.
@@ -101,6 +103,13 @@ pub mod qobject {
         #[qproperty(QString, eclipse_cores, cxx_name = "eclipseCores", READ, NOTIFY)]
         #[qproperty(QString, eclipse_help, cxx_name = "eclipseHelp", READ, NOTIFY)]
         #[qproperty(i32, eclipse_screen, cxx_name = "eclipseScreen", READ, NOTIFY)]
+        #[qproperty(bool, file_catching, cxx_name = "fileCatching")]
+        #[qproperty(bool, file_waiting, cxx_name = "fileWaiting", READ, NOTIFY)]
+        #[qproperty(QString, file_asked, cxx_name = "fileAsked", READ, NOTIFY)]
+        #[qproperty(QString, file_answer, cxx_name = "fileAnswer")]
+        #[qproperty(QString, file_dialog_title, cxx_name = "fileDialogTitle", READ, NOTIFY)]
+        #[qproperty(QUrl, file_dialog_folder, cxx_name = "fileDialogFolder", READ, NOTIFY)]
+        #[qproperty(QStringList, file_dialog_filters, cxx_name = "fileDialogFilters", READ, NOTIFY)]
         /// The question over the screen: the plan, or one the tool asks.
         #[qproperty(bool, asking, READ, NOTIFY)]
         #[qproperty(QString, question_title, cxx_name = "questionTitle", READ, NOTIFY)]
@@ -193,6 +202,19 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "eclipseSetField"]
         fn eclipse_set_field(self: Pin<&mut ToolModel>, field: i32, text: &QString);
+        #[qinvokable]
+        #[cxx_name = "addPatchUrl"]
+        fn add_patch_url(self: Pin<&mut ToolModel>, url: &QUrl);
+        #[qinvokable]
+        #[cxx_name = "addPatchPath"]
+        fn add_patch_path(self: Pin<&mut ToolModel>, path: &QString);
+        #[qinvokable]
+        #[cxx_name = "cancelPatchFile"]
+        fn cancel_patch_file(self: Pin<&mut ToolModel>);
+        /// Native patch file dialog requested by Eclipse Packages.
+        #[qsignal]
+        #[cxx_name = "choosePatchFile"]
+        fn choose_patch_file(self: Pin<&mut ToolModel>);
         /// A card or the docked keyboard over the screen closed, so the list takes the keys back.
         #[qsignal]
         #[cxx_name = "listFocused"]
@@ -283,6 +305,13 @@ pub struct ToolModelRust {
     eclipse_cores: QString,
     eclipse_help: QString,
     eclipse_screen: i32,
+    file_catching: bool,
+    file_waiting: bool,
+    file_asked: QString,
+    file_answer: QString,
+    file_dialog_title: QString,
+    file_dialog_folder: QUrl,
+    file_dialog_filters: QStringList,
     asking: bool,
     question_title: QString,
     question_sentences: QStringList,
@@ -353,6 +382,13 @@ impl Default for ToolModelRust {
             eclipse_cores: QString::from("{}"),
             eclipse_help: QString::from("[]"),
             eclipse_screen: 0,
+            file_catching: false,
+            file_waiting: false,
+            file_asked: QString::default(),
+            file_answer: QString::default(),
+            file_dialog_title: QString::from("Choose a patch file"),
+            file_dialog_folder: QUrl::default(),
+            file_dialog_filters: list(&["Patches (*.ips *.bps *.ups)".to_owned(), "All files (*)".to_owned()]),
             asking: false,
             question_title: QString::default(),
             question_sentences: QStringList::default(),
@@ -371,6 +407,7 @@ impl cxx_qt::Initialize for qobject::ToolModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_open_changed(|model| model.opened()).release();
         self.as_mut().on_eclipse_changed(|model| model.sync_eclipse()).release();
+        self.as_mut().on_file_answer_changed(|model| model.take_file_answer()).release();
         self.as_mut().on_console_counts_changed(|model| model.sync_eclipse()).release();
         self.as_mut().on_cheats_game_changed(|model| model.sync_eclipse()).release();
         self.as_mut().on_session_game_changed(|model| model.sync_eclipse()).release();
@@ -423,7 +460,7 @@ fn jobs_source(platform_library: &str, cores: &str, world: &str, key: &str) -> R
         Box::new(move |request| scripted.start(request))
     };
     let mut jobs = crate::tools::jobs::Jobs::new(key, starter).ok_or_else(|| format!("{key} is no tool of jobs"))?;
-    if world.is_empty() && key == crate::tools::jobs::LIBRARY_TOOL {
+    if world.is_empty() && (key == crate::tools::jobs::LIBRARY_TOOL || key == crate::tools::jobs::PACKAGES_TOOL) {
         jobs.attach_client(platform_library, cores);
     }
     Ok(Box::new(jobs))
@@ -504,14 +541,19 @@ impl qobject::ToolModel {
     }
 
     fn change(mut self: Pin<&mut Self>, change: impl FnOnce(&mut Tool<Box<dyn Source>>) -> Option<String>) {
-        let (host, lib_dirty, cheats_dirty, master_dirty) = {
+        let (host, lib_dirty, patch_dialog, cheats_dirty, master_dirty) = {
             let mut rust = self.as_mut().rust_mut();
             let Some(tool) = rust.shown.as_mut() else { return };
             let host = change(tool);
             let lib_dirty = tool.source.take_library_changed();
+            let dlg = if host.as_deref() == Some(crate::tools::packages_eclipse::CHOOSE_PATCH_FILE) {
+                tool.eclipse_patch_dialog()
+            } else {
+                None
+            };
             let cheats_dirty = tool.source.take_cheats_changed();
             let master_dirty = tool.source.take_master_changed();
-            (host, lib_dirty, cheats_dirty, master_dirty)
+            (host, lib_dirty, dlg, cheats_dirty, master_dirty)
         };
         self.as_mut().fill();
         if lib_dirty {
@@ -524,6 +566,26 @@ impl qobject::ToolModel {
             self.as_mut().rust_mut().master_cheats = on;
             self.as_mut().master_cheats_changed();
             self.as_mut().cheats_master_toggled(on);
+        }
+        if host.as_deref() == Some(crate::tools::packages_eclipse::CHOOSE_PATCH_FILE) {
+            let (folder_str, filters) = patch_dialog.unwrap_or_default();
+            let qfolder = QString::from(folder_str.as_str());
+            let url = if folder_str.is_empty() {
+                QUrl::default()
+            } else {
+                QUrl::from(&crate::folders::ffi::url_of(&qfolder))
+            };
+            let qfilters = list(&filters);
+            put!(self, file_dialog_folder, url, file_dialog_folder_changed);
+            put!(self, file_dialog_filters, qfilters, file_dialog_filters_changed);
+            if self.file_catching {
+                put!(self, file_asked, qfolder, file_asked_changed);
+                put!(self, file_waiting, true, file_waiting_changed);
+                self.as_mut().take_file_answer();
+            } else {
+                self.as_mut().choose_patch_file();
+            }
+            return;
         }
         match host.as_deref().map(|k| (k, k.strip_prefix(crate::tools::cores::OPEN_FOLDER))) {
             Some((_, Some(path))) => self.as_mut().open_folder(QString::from(path)),
@@ -717,6 +779,46 @@ impl qobject::ToolModel {
         });
     }
 
+    pub fn add_patch_url(self: Pin<&mut Self>, url: &QUrl) {
+        let path = crate::folders::ffi::path_of_url(url).to_string();
+        if path.is_empty() {
+            self.cancel_patch_file();
+            return;
+        }
+        self.with(move |t| {
+            t.eclipse_patch_chosen(Some(&path));
+            None
+        });
+    }
+
+    pub fn add_patch_path(mut self: Pin<&mut Self>, path: &QString) {
+        let path = path.to_string();
+        put!(self, file_waiting, false, file_waiting_changed);
+        if path.is_empty() {
+            self.cancel_patch_file();
+            return;
+        }
+        self.with(move |t| {
+            t.eclipse_patch_chosen(Some(&path));
+            None
+        });
+    }
+
+    pub fn cancel_patch_file(mut self: Pin<&mut Self>) {
+        put!(self, file_waiting, false, file_waiting_changed);
+        self.with(move |t| {
+            t.eclipse_patch_chosen(None);
+            None
+        });
+    }
+
+    fn take_file_answer(mut self: Pin<&mut Self>) {
+        if self.file_catching && self.file_waiting && !self.file_answer.is_empty() {
+            let answer = self.file_answer.clone();
+            put!(self, file_answer, QString::default(), file_answer_changed);
+            self.as_mut().add_patch_path(&answer);
+        }
+    }
     /// Every property read again from the tool's description.
     fn fill(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().filling = true;

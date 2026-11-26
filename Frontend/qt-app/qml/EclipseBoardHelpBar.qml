@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Shared Eclipse footer help bar using Board glyph/line metrics across Search, Collections, and Tools.
 Kit.HelpBar {
@@ -14,8 +15,8 @@ Kit.HelpBar {
     ruled: false
     family: root.padFamily
     color: "transparent"
-    labelColor: "#D8DBE6"
-    iconColor: "#B9BED0"
+    labelColor: ThemeInk.body
+    iconColor: Kit.Tokens.muted
     leadStyle: Kit.GlyphStyles.Filled
     leadColor: Kit.Tokens.accent
     entrySpacing: 34 * root.unit
@@ -47,8 +48,8 @@ Kit.HelpBar {
             leadWeight: Font.Bold
             padding: 10
             boxMenu: false
-            ink: "#D8DBE6"
-            ring: "#B9BED0"
+            ink: ThemeInk.body
+            ring: Kit.Tokens.muted
         }
     }
 }

@@ -1,0 +1,32 @@
+# Eclipse Packages Library (#22) against 22-packages-library-improved.html (1920 by 1200).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+packagesLibraryScreen	1	Packages Library screen	PackagesEclipse	-	0	0	right:0	1200	-	-	-	built	-
+eclipseBackdrop	33	Backdrop surface	Kit.Backdrop	Backdrop	0	0	right:0	1200	-	-	-	built	-
+packagesTopBar	80	Top header row	Item	Item	88	38	right:88	56	-	-	-	built	-
+packagesCrescent	88	Crescent mark	Item	Item	in:packagesTopBar:0	50	32	32	-	-	-	built	-
+trailWords.0	108	"Tools" crumb	CardLine	CardLine	140	-	-	-	-	Tokens.muted	22	built	400 0 none
+trailWords.1	132	"Packages" crumb	CardLine	CardLine	after:trailSlash.0:12	-	-	-	-	Tokens.textStrong	22	built	600 0 none
+statusPill	142	Status pill	Rectangle	Rectangle	-	-	inright:packagesTopBar:0	48	24	-	-	built	-
+clock	204	"9:41 PM"	Device.shortTime	CardLine	-	-	-	-	-	Tokens.textStrong	19	built	600 0 none
+storageCard	216	Storage card	Rectangle	Rectangle	88	112	right:88	82	20	Tokens.inputSurface	-	built	-
+segPkg	232	Package segment	Rectangle	Rectangle	in:storageCard:27	-	-	11	5.5	Tokens.accent	-	built	-
+segRom	239	Library segment	Rectangle	Rectangle	-	-	-	11	5.5	-	-	built	-
+segFree	246	Free segment	Rectangle	Rectangle	-	-	-	11	5.5	-	-	built	-
+leftRail	328	Left filter rail	Item	Item	88	218	304	882	-	-	-	built	-
+filterRow.all	345	All games filter	Item	Item	in:leftRail:0	-	304	52	-	-	-	built	-
+consoleScopePill	410	Console scope pill	Rectangle	Rectangle	in:leftRail:0	-	304	50	25	Tokens.inputSurface	-	built	-
+batchCard	460	Batch queue card	Rectangle	Rectangle	in:leftRail:0	-	304	158	20	Tokens.surfaceRaised	-	built	-
+batchReviewButton	506	Review & run jobs	Rectangle	Rectangle	-	-	264	44	22	Tokens.inputSurface	-	built	-
+centerColumn	560	Center game list col	Item	Item	420	218	744	882	-	-	-	built	-
+centerEyebrow	568	Filter eyebrow	CardLine	CardLine	in:centerColumn:0	-	-	-	-	-	12	built	600 0.15 upper
+packagesRowsList	608	Center list view	ListView	ListView	in:centerColumn:0	252	744	848	-	-	-	built	-
+packageRow.0	622	First game row	Item	Item	in:centerColumn:0	252	744	84	-	-	-	built	-
+rightInspector	714	Right inspector col	Column	Column	1196	218	636	-	-	-	-	built	-
+inspectorCard	745	Inspector card	Rectangle	Rectangle	1196	218	636	-	22	Tokens.inputSurface	-	built	-
+inspectorTitle	782	Inspector title	CardLine	CardLine	-	-	584	-	-	Tokens.textStrong	36	built	600 0 none
+openPackagePageCta	848	Open package page CTA	Item	Item	-	-	584	56	-	-	-	built	-
+actionsCard	906	Local jobs card	Rectangle	Rectangle	1196	-	636	-	22	Tokens.inputSurface	-	built	-
+actionTile.convert	950	Convert tile	Item	Item	-	-	287	68	-	-	-	built	-
+packagesFooter	1020	Footer bar	Item	Item	88	1122	right:88	44	-	-	-	built	-
+positionCounterPill	1048	Position counter pill	Rectangle	Rectangle	-	-	inright:packagesFooter:0	38	18	-	-	built	-

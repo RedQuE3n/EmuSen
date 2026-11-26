@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Top-centered Eclipse notice banner with warning/ok icon, heading, body, and optional X action (board #14, EclipseDialog:23-30).
 Item {
@@ -31,7 +32,7 @@ Item {
         width: card.width
         height: card.height
         radius: card.radius
-        color: Qt.rgba(0, 0, 0, 0.6)
+        color: ThemeInk.shadowHeavy
         blur: 50 * root.unit
         spread: 0
         offsetX: 0
@@ -117,7 +118,7 @@ Item {
                 boardLineHeight: 27.55
                 width: textCol.width
                 text: root.presenter.body
-                color: "#D8DBE6"
+                color: ThemeInk.body
                 size: 19
                 weight: Font.Normal
                 wrapMode: Text.WordWrap
@@ -145,7 +146,7 @@ Item {
                 side: 32
                 letterSize: 15
                 ring: Kit.Tokens.muted
-                ink: "#D8DBE6"
+                ink: ThemeInk.body
             }
             CardLine {
                 id: actionText
@@ -155,7 +156,7 @@ Item {
                 x: actionGlyph.width + 10 * root.unit
                 y: (actionPill.height - height) / 2
                 text: root.presenter.actionLabel
-                color: "#D8DBE6"
+                color: ThemeInk.body
                 size: 18
                 weight: Font.Normal
             }

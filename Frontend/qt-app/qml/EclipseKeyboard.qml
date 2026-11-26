@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
+import EmuSen.App
 
 // Four-row Eclipse keyboard matching board #8 (10x3 keys plus 123 / Space / Erase / Done).
 FocusScope {
@@ -47,7 +48,7 @@ FocusScope {
                 radius: 20 * root.unit
                 gap: 3 * root.unit
                 thickness: 3 * root.unit
-                glowColor: "#73F0B4C4"
+                glowColor: ThemeInk.glowMid
                 glowBlur: 34 * root.unit
                 glowSpread: 8 * root.unit
                 pixelScale: root.pixelScale
@@ -57,7 +58,7 @@ FocusScope {
                 objectName: root.keyBgPrefix + keyBox.index
                 anchors.fill: parent
                 radius: 20 * root.unit
-                color: keyBox.accentFill ? "#F6E7D8" : "#1A1D2A"
+                color: keyBox.accentFill ? Kit.Tokens.accent : Kit.Tokens.surfaceRaised
             }
 
             CardLine {
@@ -69,7 +70,7 @@ FocusScope {
                 text: keyBox.label
                 size: !keyBox.isRow3 ? 34 : (keyBox.col === 1 ? 24 : 26)
                 weight: (!keyBox.isRow3 || keyBox.isDone) ? Font.DemiBold : Font.Normal
-                color: keyBox.accentFill ? "#07080F" : (keyBox.col === 1 && keyBox.isRow3 ? "#D8DBE6" : "#F4F1EC")
+                color: keyBox.accentFill ? Kit.Tokens.overAccent : (keyBox.col === 1 && keyBox.isRow3 ? ThemeInk.body : Kit.Tokens.text)
             }
 
             Item {
@@ -85,7 +86,7 @@ FocusScope {
                     preferredRendererType: Shape.CurveRenderer
                     ShapePath {
                         fillColor: "transparent"
-                        strokeColor: keyBox.accentFill ? "#07080F" : "#F4F1EC"
+                        strokeColor: keyBox.accentFill ? Kit.Tokens.overAccent : Kit.Tokens.text
                         strokeWidth: 1.8
                         capStyle: ShapePath.RoundCap
                         joinStyle: ShapePath.RoundJoin

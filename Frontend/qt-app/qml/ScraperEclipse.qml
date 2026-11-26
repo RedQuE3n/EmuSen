@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Eclipse Scraper (#66): per-game table, 3-tile media aside, and live Videos/Overwrite toggles.
 FocusScope {
@@ -50,9 +51,9 @@ FocusScope {
                         width: 140 * scaffold.unit
                         height: 105 * scaffold.unit
                         radius: 12 * scaffold.unit
-                        color: tileCol.modelData.present ? "#134B3A" : "transparent"
+                        color: tileCol.modelData.present ? ThemeInk.successFill : "transparent"
                         border.width: tileCol.modelData.present ? 0 : 2 * scaffold.unit
-                        border.color: "#5A6076"
+                        border.color: ThemeInk.pillBorder
                         Kit.RoundPicture {
                             anchors.fill: parent
                             visible: tileCol.modelData.present && (tileCol.modelData.source ?? "").length > 0
@@ -70,7 +71,7 @@ FocusScope {
                         text: tileCol.modelData.label ?? ""
                         size: 17
                         weight: Font.Normal
-                        color: "#B9BED0"
+                        color: Kit.Tokens.muted
                     }
                 }
             }
@@ -96,7 +97,7 @@ FocusScope {
                         gap: 3 * scaffold.unit
                         thickness: 3 * scaffold.unit
                         bandRadius: 25 * scaffold.unit
-                        glowColor: "#80F0B4C4"
+                        glowColor: ThemeInk.glowStrong
                         glowBlur: 32 * scaffold.unit
                         glowSpread: 8 * scaffold.unit
                         pixelScale: root.pixelScale
@@ -107,7 +108,7 @@ FocusScope {
                         radius: 19 * scaffold.unit
                         color: tog.modelData.on ? Kit.Tokens.accent : "transparent"
                         border.width: tog.modelData.on ? 0 : 2 * scaffold.unit
-                        border.color: "#5A6076"
+                        border.color: ThemeInk.pillBorder
                     }
                     CardLine {
                         id: togWords
@@ -119,7 +120,7 @@ FocusScope {
                         text: tog.modelData.label ?? ""
                         size: 18
                         weight: tog.modelData.on ? Font.DemiBold : Font.Normal
-                        color: tog.modelData.on ? Kit.Tokens.surface : "#B9BED0"
+                        color: tog.modelData.on ? Kit.Tokens.overAccent : Kit.Tokens.muted
                     }
                     MouseArea {
                         anchors.fill: parent

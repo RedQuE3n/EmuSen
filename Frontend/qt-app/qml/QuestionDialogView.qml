@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Circular 780x780 CoronaDisc question dialog content (board #14, EclipseDialog.dc.html, R-20261115-2).
 FocusScope {
@@ -24,7 +25,7 @@ FocusScope {
     Rectangle {
         objectName: "dialogScrim"
         anchors.fill: parent
-        color: Qt.rgba(4 / 255, 5 / 255, 10 / 255, 0.72)
+        color: ThemeInk.scrimDialog
     }
     Kit.CoronaDisc {
         id: disc
@@ -57,13 +58,13 @@ FocusScope {
                 width: preview.width + 4 * root.unit
                 height: preview.height + 4 * root.unit
                 radius: 18 * root.unit
-                color: Qt.rgba(246 / 255, 231 / 255, 216 / 255, 0.5)
+                color: ThemeInk.accentSoft
             }
             Rectangle {
                 objectName: "dialogPreviewBox"
                 anchors.fill: parent
                 radius: 16 * root.unit
-                color: "#1A2A6B"
+                color: Kit.Tokens.inputSurface
                 Kit.RoundPicture {
                     anchors.fill: parent
                     source: root.picture
@@ -109,7 +110,7 @@ FocusScope {
                     boardLineHeight: 30.45
                     width: bodyCol.width
                     text: root.message
-                    color: "#C9CDDB"
+                    color: ThemeInk.body
                     size: 21
                     weight: Font.Normal
                     wrapMode: Text.WordWrap
@@ -129,7 +130,7 @@ FocusScope {
                         boardLineHeight: 30.45
                         width: bodyCol.width
                         text: sentenceLine.modelData
-                        color: "#C9CDDB"
+                        color: ThemeInk.body
                         size: 21
                         weight: Font.Normal
                         wrapMode: Text.WordWrap
@@ -219,7 +220,7 @@ FocusScope {
                         radius: 36 * root.unit
                         color: answer.current ? Kit.Tokens.accent : "transparent"
                         border.width: answer.current ? 0 : 2 * root.unit
-                        border.color: "#5A6076"
+                        border.color: ThemeInk.pillBorder
                     }
                     CardLine {
                         objectName: "answerLabel." + answer.index

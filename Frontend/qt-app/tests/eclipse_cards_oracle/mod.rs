@@ -202,7 +202,7 @@ pub fn cards(backend: &str) {
     scene.pad(UiButton::Down);
     scene.wait(200);
     let tree = scene.tree();
-    assert_eq!(painted(&tree, "rowBg.0"), Colour::parse("#FF0F111A"), "unfocused Continue card dark fill");
+    assert_eq!(painted(&tree, "rowBg.0"), Colour::parse("#FF0F1119"), "unfocused Continue card dark fill");
     assert_eq!(painted(&tree, "rowBg.1"), Colour::parse("#FFF6E7D8"), "focused nav row cream fill");
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Home", 3000);
@@ -247,7 +247,7 @@ pub fn cards(backend: &str) {
     ]);
     assert!(scene.set_property("homeCardModel", "facts", &missing_fw.to_string()));
     scene.wait(150);
-    assert_eq!(painted(&scene.tree(), "paneStatus"), Colour::parse("#FFF3C9D2"), "missing firmware paints rose");
+    assert_eq!(painted(&scene.tree(), "paneStatus"), Colour::parse("#FFF0B4C4"), "missing firmware paints rose");
     assert!(scene.set_property("homeCardModel", "start", ""));
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Home", 3000);

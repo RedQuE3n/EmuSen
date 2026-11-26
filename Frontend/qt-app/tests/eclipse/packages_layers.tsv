@@ -1,0 +1,26 @@
+# Eclipse Package Layers (#23) against 23-packages-layers-improved.html (1920 by 1200).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+packageLayersScreen	1	Package Layers screen	PackageLayersEclipse	-	0	0	right:0	1200	-	-	-	built	-
+eclipseBackdrop	31	Backdrop surface	Kit.Backdrop	Backdrop	0	0	right:0	1200	-	-	-	built	-
+layersTopBar	78	Top header row	Item	Item	88	38	right:88	56	-	-	-	built	-
+layersCrescent	86	Crescent mark	Item	Item	in:layersTopBar:0	50	32	32	-	-	-	built	-
+trailWords.0	106	"Tools" crumb	CardLine	CardLine	140	-	-	-	-	Tokens.muted	22	built	400 0 none
+trailWords.1	122	"Packages" crumb	CardLine	CardLine	after:trailSlash.0:12	-	-	-	-	Tokens.muted	22	built	400 0 none
+trailWords.2	142	"Patch Layers" crumb	CardLine	CardLine	after:trailSlash.1:12	-	-	-	-	Tokens.textStrong	22	built	600 0 none
+statusPill	152	Status pill	Rectangle	Rectangle	-	-	inright:layersTopBar:0	48	24	-	-	built	-
+clock	214	"9:41 PM"	Device.shortTime	CardLine	-	-	-	-	-	Tokens.textStrong	19	built	600 0 none
+layersLeftRail	226	Left rail	Item	Item	88	136	356	950	-	-	-	built	-
+layersRailRow.0	272	First patched pkg	Rectangle	Rectangle	88	172	356	78	16	Tokens.surfaceRaised	-	built	-
+layersStackCol	328	Center stack column	Item	Item	480	136	756	950	-	-	-	built	-
+layersTitle	370	Stack title	CardLine	CardLine	480	-	756	-	-	Tokens.textStrong	40	built	600 -0.015 none
+layersOutputBanner	398	Resulting image banner	Rectangle	Rectangle	480	-	756	54	16	-	-	built	-
+patchCard.0	446	Top patch card	Item	Item	480	-	756	95	-	-	-	built	-
+baseRomCard	560	Base ROM card	Item	Item	480	-	756	99	-	-	-	built	-
+layersRightCol	660	Right inspector col	Column	Column	1272	136	560	-	-	-	-	built	-
+layersDetailCard	685	Focused patch card	Rectangle	Rectangle	1272	136	560	-	22	Tokens.inputSurface	-	built	-
+layersActionsCard	760	Local actions card	Rectangle	Rectangle	1272	-	560	-	22	Tokens.inputSurface	-	built	-
+layersAction.add-patch	785	Add patch action	Item	Item	-	-	508	52	-	-	-	built	-
+layersNoteBox	860	Read-only note box	Rectangle	Rectangle	1272	-	560	-	18	-	-	built	-
+layersFooter	882	Footer bar	Item	Item	88	1122	right:88	44	-	-	-	built	-
+positionCounterPill	910	Position counter pill	Rectangle	Rectangle	-	-	inright:layersFooter:0	38	18	-	-	built	-

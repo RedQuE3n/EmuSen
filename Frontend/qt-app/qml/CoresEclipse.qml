@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Eclipse Cores board (#10): console filter strip, 3-column console grid, right aside, and dynamic help footer.
 FocusScope {
@@ -96,7 +97,7 @@ FocusScope {
                 y: 80 * root.unit
                 width: 900 * root.unit
                 height: 900 * root.unit
-                color: "#2A6FD6"
+                color: ThemeInk.backdropGlow
                 blur: 150 * root.unit
                 opacity: 0.36
             }
@@ -184,7 +185,7 @@ FocusScope {
                 text: root.labels.slash ?? ""
                 size: 24
                 weight: Font.Normal
-                color: "#8E94AB"
+                color: ThemeInk.dim
             }
             CardLine {
                 objectName: "trailWords.1"
@@ -208,9 +209,9 @@ FocusScope {
                 height: 44 * root.unit
                 width: statusLine.implicitWidth + 32 * root.unit
                 radius: 22 * root.unit
-                color: root.statusPill.error ? "#261420" : "#151826"
+                color: root.statusPill.error ? ThemeInk.errorFill : Kit.Tokens.surfaceRaised
                 border.width: 2 * root.unit
-                border.color: root.statusPill.error ? "#F3C9D2" : "#4A5068"
+                border.color: root.statusPill.error ? Kit.Tokens.error : ThemeInk.pillBorder
                 CardLine {
                     id: statusLine
                     objectName: "coresStatusText"
@@ -221,7 +222,7 @@ FocusScope {
                     text: root.statusPill.text ?? ""
                     size: 17
                     weight: Font.Normal
-                    color: root.statusPill.error ? "#F3C9D2" : Kit.Tokens.textStrong
+                    color: root.statusPill.error ? Kit.Tokens.error : Kit.Tokens.textStrong
                 }
             }
             CardLine {
@@ -289,7 +290,7 @@ FocusScope {
                         bandRadius: 29 * root.unit
                         glowBlur: 36 * root.unit
                         glowSpread: 6 * root.unit
-                        glowColor: "#73F0B4C4"
+                        glowColor: ThemeInk.glowMid
                         pixelScale: root.pixelScale
                     }
                     Rectangle {
@@ -297,7 +298,7 @@ FocusScope {
                         radius: 26 * root.unit
                         color: filterPill.modelData.active ? Kit.Tokens.accent : "transparent"
                         border.width: filterPill.modelData.active ? 0 : 2 * root.unit
-                        border.color: filterPill.modelData.attention ? "#F3C9D2" : "#4A5068"
+                        border.color: filterPill.modelData.attention ? Kit.Tokens.error : ThemeInk.pillBorder
                     }
                     CardLine {
                         id: filterWords
@@ -309,7 +310,7 @@ FocusScope {
                         text: filterPill.modelData.label ?? ""
                         size: 21
                         weight: filterPill.modelData.active ? Font.DemiBold : Font.Normal
-                        color: filterPill.modelData.active ? Kit.Tokens.overAccent : (filterPill.modelData.attention ? Kit.Tokens.textStrong : "#E3E6F0")
+                        color: filterPill.modelData.active ? Kit.Tokens.overAccent : (filterPill.modelData.attention ? Kit.Tokens.textStrong : ThemeInk.body)
                         wrapMode: Text.WordWrap
                         maximumLineCount: 2
                         horizontalAlignment: Text.AlignHCenter
@@ -350,7 +351,7 @@ FocusScope {
                 bandRadius: 29 * root.unit
                 glowBlur: 36 * root.unit
                 glowSpread: 6 * root.unit
-                glowColor: "#73F0B4C4"
+                glowColor: ThemeInk.glowMid
                 pixelScale: root.pixelScale
             }
             Rectangle {
@@ -358,7 +359,7 @@ FocusScope {
                 radius: 26 * root.unit
                 color: viewButton.active ? Kit.Tokens.accent : "transparent"
                 border.width: viewButton.active ? 0 : 2 * root.unit
-                border.color: "#4A5068"
+                border.color: ThemeInk.pillBorder
             }
             Row {
                 id: viewContent
@@ -450,16 +451,16 @@ FocusScope {
                     bandRadius: 29 * root.unit
                     glowBlur: 44 * root.unit
                     glowSpread: 10 * root.unit
-                    glowColor: "#73F0B4C4"
+                    glowColor: ThemeInk.glowMid
                     pixelScale: root.pixelScale
                 }
                 Rectangle {
                     objectName: "consoleBg." + cardCell.index
                     anchors.fill: parent
                     radius: 22 * root.unit
-                    color: "#11131C"
+                    color: Kit.Tokens.inputSurface
                     border.width: (cardCell.cardSelected ? 2 : 1) * root.unit
-                    border.color: cardCell.cardSelected ? "#5A6076" : "#262A3A"
+                    border.color: cardCell.cardSelected ? ThemeInk.pillBorder : ThemeInk.hairline
                 }
                 Item {
                     anchors.fill: parent
@@ -511,7 +512,7 @@ FocusScope {
                             height: 32 * root.unit
                             width: flagText.implicitWidth + 24 * root.unit
                             radius: 16 * root.unit
-                            color: cardCell.modelData.flagRose ? "#F3C9D2" : "transparent"
+                            color: cardCell.modelData.flagRose ? ThemeInk.rose : "transparent"
                             border.width: cardCell.modelData.flagRose ? 0 : 2 * root.unit
                             border.color: Kit.Tokens.muted
                             CardLine {
@@ -543,8 +544,8 @@ FocusScope {
                                 visible: cardCell.modelData.otherCheckerboard === true
                                 side: 20
                                 corner: 5
-                                light: "#F6E7D8"
-                                dark: "#2A2E40"
+                                light: Kit.Tokens.accent
+                                dark: ThemeInk.checkerDark
                             }
                             CardLine {
                                 id: otherLineText
@@ -593,8 +594,8 @@ FocusScope {
                                     visible: cardCell.modelData.planet === -1
                                     side: 54
                                     corner: 12
-                                    light: "#F6E7D8"
-                                    dark: "#2A2E40"
+                                    light: Kit.Tokens.accent
+                                    dark: ThemeInk.checkerDark
                                 }
                                 Rectangle {
                                     anchors.fill: parent
@@ -602,7 +603,7 @@ FocusScope {
                                     radius: width / 2
                                     color: "transparent"
                                     border.width: 2 * root.unit
-                                    border.color: cardCell.modelData.planet === -3 ? "#F3C9D2" : "#4A5068"
+                                    border.color: cardCell.modelData.planet === -3 ? Kit.Tokens.error : ThemeInk.pillBorder
                                 }
                             }
                             Column {
@@ -668,7 +669,7 @@ FocusScope {
                 weight: Font.DemiBold
                 spacing: 18 * 0.2
                 capitalization: Font.AllUppercase
-                color: "#F3C9D2"
+                color: ThemeInk.rose
                 elide: Text.ElideRight
             }
             CardLine {
@@ -709,7 +710,7 @@ FocusScope {
                     text: root.labels.installedHeading ?? ""
                     size: 20
                     weight: Font.DemiBold
-                    color: "#D8DBE6"
+                    color: ThemeInk.body
                 }
                 CardLine {
                     unit: root.unit
@@ -741,16 +742,16 @@ FocusScope {
                             bandRadius: 24 * root.unit
                             glowBlur: 40 * root.unit
                             glowSpread: 8 * root.unit
-                            glowColor: "#59F0B4C4"
+                            glowColor: ThemeInk.glowRing
                             pixelScale: root.pixelScale
                         }
                         Rectangle {
                             objectName: "asideCoreBg." + instCard.index
                             anchors.fill: parent
                             radius: 18 * root.unit
-                            color: instCard.cardFocused ? "#151826" : "#0F111A"
+                            color: instCard.cardFocused ? Kit.Tokens.surfaceRaised : ThemeInk.rowSurface
                             border.width: instCard.cardFocused ? 0 : 1 * root.unit
-                            border.color: "#22263A"
+                            border.color: ThemeInk.hairline
                         }
                         Column {
                             id: instInner
@@ -787,8 +788,8 @@ FocusScope {
                                             visible: instCard.modelData.planet === -1
                                             side: 40
                                             corner: 9
-                                            light: "#F6E7D8"
-                                            dark: "#2A2E40"
+                                            light: Kit.Tokens.accent
+                                            dark: ThemeInk.checkerDark
                                         }
                                         Rectangle {
                                             anchors.fill: parent
@@ -796,7 +797,7 @@ FocusScope {
                                             radius: width / 2
                                             color: "transparent"
                                             border.width: 2 * root.unit
-                                            border.color: "#F3C9D2"
+                                            border.color: Kit.Tokens.error
                                         }
                                     }
                                     Column {
@@ -837,7 +838,7 @@ FocusScope {
                                     height: 32 * root.unit
                                     width: instBadgeText.implicitWidth + 24 * root.unit
                                     radius: 16 * root.unit
-                                    color: instCard.modelData.badgeRose ? "#F3C9D2" : "transparent"
+                                    color: instCard.modelData.badgeRose ? ThemeInk.rose : "transparent"
                                     border.width: instCard.modelData.badgeRose ? 0 : 2 * root.unit
                                     border.color: Kit.Tokens.accent
                                     CardLine {
@@ -894,8 +895,8 @@ FocusScope {
                                         height: 2 * root.unit
                                         gradient: Gradient {
                                             orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: "#4A5068" }
-                                            GradientStop { position: 1.0; color: "#F3C9D2" }
+                                            GradientStop { position: 0.0; color: ThemeInk.pillBorder }
+                                            GradientStop { position: 1.0; color: ThemeInk.rose }
                                         }
                                     }
                                     Row {
@@ -906,7 +907,7 @@ FocusScope {
                                             boardLine: true
                                             text: root.labels.newerPrefix ?? ""
                                             size: 17
-                                            color: "#F3C9D2"
+                                            color: ThemeInk.rose
                                         }
                                         CardLine {
                                             objectName: "asideNewer." + instCard.index
@@ -946,7 +947,7 @@ FocusScope {
                                                 side: 32
                                                 leadLetterSize: 15
                                                 leadWeight: Font.DemiBold
-                                                leadFill: Kit.Tokens.surface
+                                                leadFill: Kit.Tokens.overAccent
                                                 leadInk: Kit.Tokens.accent
                                             }
                                             CardLine {
@@ -974,7 +975,7 @@ FocusScope {
                                             radius: 22 * root.unit
                                             color: "transparent"
                                             border.width: 2 * root.unit
-                                            border.color: "#5A6076"
+                                            border.color: ThemeInk.pillBorder
                                         }
                                         Row {
                                             id: defRow
@@ -1016,7 +1017,7 @@ FocusScope {
                                             radius: 22 * root.unit
                                             color: "transparent"
                                             border.width: 2 * root.unit
-                                            border.color: "#5A6076"
+                                            border.color: ThemeInk.pillBorder
                                         }
                                         Row {
                                             id: remRow
@@ -1058,7 +1059,7 @@ FocusScope {
                                             radius: 22 * root.unit
                                             color: "transparent"
                                             border.width: 2 * root.unit
-                                            border.color: "#5A6076"
+                                            border.color: ThemeInk.pillBorder
                                         }
                                         Row {
                                             id: pageRow
@@ -1108,7 +1109,7 @@ FocusScope {
                         text: root.aside.availableHeading ?? ""
                         size: 20
                         weight: Font.DemiBold
-                        color: "#D8DBE6"
+                        color: ThemeInk.body
                     }
                 }
                 Repeater {
@@ -1132,16 +1133,16 @@ FocusScope {
                             bandRadius: 24 * root.unit
                             glowBlur: 40 * root.unit
                             glowSpread: 8 * root.unit
-                            glowColor: "#59F0B4C4"
+                            glowColor: ThemeInk.glowRing
                             pixelScale: root.pixelScale
                         }
                         Rectangle {
                             objectName: "asideAvailBg." + availCard.index
                             anchors.fill: parent
                             radius: 18 * root.unit
-                            color: availCard.cardFocused ? "#151826" : "#0F111A"
+                            color: availCard.cardFocused ? Kit.Tokens.surfaceRaised : ThemeInk.rowSurface
                             border.width: availCard.cardFocused ? 0 : 1 * root.unit
-                            border.color: "#22263A"
+                            border.color: ThemeInk.hairline
                         }
                         Row {
                             anchors.fill: parent
@@ -1153,8 +1154,8 @@ FocusScope {
                                 anchors.verticalCenter: parent.verticalCenter
                                 side: 34
                                 corner: 8
-                                light: "#8E94AB"
-                                dark: "#2A2E40"
+                                light: ThemeInk.dim
+                                dark: ThemeInk.checkerDark
                             }
                             Column {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -1199,7 +1200,7 @@ FocusScope {
                                         preferredRendererType: Shape.CurveRenderer
                                         ShapePath {
                                             fillColor: "transparent"
-                                            strokeColor: "#D8DBE6"
+                                            strokeColor: ThemeInk.body
                                             strokeWidth: 2
                                             capStyle: ShapePath.RoundCap
                                             joinStyle: ShapePath.RoundJoin
@@ -1222,7 +1223,7 @@ FocusScope {
                                     text: availCard.modelData.size ?? ""
                                     size: 17
                                     weight: Font.Normal
-                                    color: "#D8DBE6"
+                                    color: ThemeInk.body
                                 }
                             }
                         }
@@ -1269,7 +1270,7 @@ FocusScope {
             fitted: true
             ruled: false
             color: "transparent"
-            labelColor: "#D8DBE6"
+            labelColor: ThemeInk.body
             iconColor: Kit.Tokens.muted
             leadStyle: Kit.GlyphStyles.Filled
             leadColor: Kit.Tokens.accent
@@ -1295,7 +1296,7 @@ FocusScope {
                     wordSize: 14
                     padding: 10
                     boxMenu: false
-                    ink: "#D8DBE6"
+                    ink: ThemeInk.body
                     ring: Kit.Tokens.muted
                 }
             }
@@ -1309,7 +1310,7 @@ FocusScope {
             text: root.aside.footerSummary ?? ""
             size: 21
             weight: Font.Normal
-            color: "#D8DBE6"
+            color: ThemeInk.body
         }
     }
 }

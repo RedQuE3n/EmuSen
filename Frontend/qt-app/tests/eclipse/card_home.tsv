@@ -10,7 +10,7 @@ cardSection	26	menu column	section at 72,72,520x1056	Item	72	72	520	1056	-	-	-	b
 menuHeader	28	header bar	crescent, Menu, status	Item	72	72	520	43	-	-	-	built	-
 menuMark	30	crescent mark 34 px	Marks.menuCrescent	Item	72	mid:menuHeader	34	34	-	Tokens.accent	-	built	-
 cardTitle	31	"Menu"	CardModel.title	CardLine	after:menuMark:14	72	-	43	-	Tokens.textStrong	34	built	600 0 none
-menuStatus	33	"82% · 9:41 PM"	Words.statusClock	CardLine	-	mid:menuHeader	inright:menuHeader:0	27	-	#FFD8DBE6	22	built	400 0 none
+menuStatus	33	"82% · 9:41 PM"	Words.statusClock	CardLine	-	mid:menuHeader	inright:menuHeader:0	27	-	#FFD7D8DE	22	built	400 0 none
 rowGlow.0	36	Continue glow	Kit.Glow	Glow	72	149	520	118	22	#66F0B4C4	-	built	glow 46 6 0 0
 rowRing.0	36	Continue 6 px ring	rgba(246,231,216,0.18)	Rectangle	66	143	532	130	28	#2EF6E7D8	-	built	-
 rowBg.0	36	Continue card pill	Tokens.accent	Rectangle	72	149	520	118	22	Tokens.accent	-	built	-
@@ -32,6 +32,6 @@ cardRow.6	47	row 6 Power	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.5:6	520	
 rowIcon.6	48	Power icon	Marks.path	Item	92	mid:cardRow.6	30	30	-	Tokens.textStrong	-	built	-
 cardRow.7	47	row 7 Quit EmuSen	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.6:6	520	72	-	-	-	built	-
 rowIcon.7	48	Quit EmuSen icon	Marks.path	Item	92	mid:cardRow.7	30	30	-	Tokens.textStrong	-	built	-
-cardHelp	56	help bar A Choose B Close	HelpModel.CardHome	HelpBar	72	foot:cardSection	-	38	-	#FFD8DBE6	21	built	400 0 none
+cardHelp	56	help bar A Choose B Close	HelpModel.CardHome	HelpBar	72	foot:cardSection	-	38	-	#FFD7D8DE	21	built	400 0 none
 ownGlyph-Choose	57	A filled 34 px	CardGlyph	-	in:cardHelp:0	mid:cardHelp	34	34	-	-	-	built	glyph 17 700
 ownGlyph-Close	58	B ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400

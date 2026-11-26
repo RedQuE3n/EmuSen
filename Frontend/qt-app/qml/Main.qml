@@ -780,6 +780,8 @@ Window {
                 if (player.session.running && player.session.game === path) player.session.reloadCheats()
             }
             onCheatsMasterToggled: (on) => player.session.setMasterCheats(on)
+            onOpenFolder: (path) => folders.open(path)
+            onSaid: (words) => program.said(words, true, false)
         }
         Binding {
             target: screens

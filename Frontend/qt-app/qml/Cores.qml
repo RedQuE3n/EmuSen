@@ -1,7 +1,9 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Dialogs
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // A tool on the kit's tool screen, Cores and the tools of jobs alike (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7): every word, row and column from the ToolModel; A the row's action, X its page and Select the List card as cards over it, Start the plan, and the tool's questions in the question form.
 Kit.NormalizedCanvas {
@@ -18,8 +20,8 @@ Kit.NormalizedCanvas {
     readonly property real boardUnit: Kit.CanvasUnits.designHeight / 1200
     readonly property string shownClock: screen.clock ? screen.clock.shortTime : (screen.clockText.length > 0 ? screen.clockText : fallbackClock.shortTime)
     readonly property int shownBattery: screen.battery >= 0 ? screen.battery : fallbackBattery.level
-    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : screen.eclipseScreen === 8 ? cheatsView : frame
-    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : screen.eclipseScreen === 8 ? cheatsView.controller : frame.controller
+    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : screen.eclipseScreen === 5 ? packagesLoader : screen.eclipseScreen === 6 ? packageLayersLoader : screen.eclipseScreen === 7 ? packagePageLoader : screen.eclipseScreen === 8 ? cheatsView : frame
+    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : screen.eclipseScreen === 5 && packagesLoader.item ? (packagesLoader.item as PackagesEclipse).controller : screen.eclipseScreen === 6 && packageLayersLoader.item ? (packageLayersLoader.item as PackageLayersEclipse).controller : screen.eclipseScreen === 7 && packagePageLoader.item ? (packagePageLoader.item as PackagePageEclipse).controller : screen.eclipseScreen === 8 ? cheatsView.controller : frame.controller
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
     // B on the screen.
@@ -169,6 +171,68 @@ Kit.NormalizedCanvas {
         clockText: screen.shownClock
         onBacked: screen.backed()
     }
+    Loader {
+        id: packagesLoader
+        anchors.fill: parent
+        active: screen.eclipseMode && screen.eclipseScreen >= 5 && screen.eclipseScreen <= 7
+        visible: screen.eclipseScreen === 5 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 5 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        onLoaded: if (focus) forceActiveFocus()
+        sourceComponent: PackagesEclipse {
+            focus: true
+            tool: screen.tool
+            padFamily: screen.padFamily
+            pixelScale: screen.unit
+            battery: screen.shownBattery
+            clockText: screen.shownClock
+            onBacked: screen.backed()
+        }
+    }
+    Loader {
+        id: packageLayersLoader
+        anchors.fill: parent
+        active: screen.eclipseMode && screen.eclipseScreen >= 5 && screen.eclipseScreen <= 7
+        visible: screen.eclipseScreen === 6 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 6 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        onLoaded: if (focus) forceActiveFocus()
+        sourceComponent: PackageLayersEclipse {
+            focus: true
+            tool: screen.tool
+            padFamily: screen.padFamily
+            pixelScale: screen.unit
+            battery: screen.shownBattery
+            clockText: screen.shownClock
+        }
+    }
+    Loader {
+        id: packagePageLoader
+        anchors.fill: parent
+        active: screen.eclipseMode && screen.eclipseScreen >= 5 && screen.eclipseScreen <= 7
+        visible: screen.eclipseScreen === 7 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 7 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        onLoaded: if (focus) forceActiveFocus()
+        sourceComponent: PackagePageEclipse {
+            focus: true
+            tool: screen.tool
+            padFamily: screen.padFamily
+            pixelScale: screen.unit
+            battery: screen.shownBattery
+            clockText: screen.shownClock
+        }
+    }
+    FileDialog {
+        id: patchFileDialog
+        objectName: "patchFileDialog"
+        title: screen.tool.fileDialogTitle
+        currentFolder: screen.tool.fileDialogFolder
+        nameFilters: screen.tool.fileDialogFilters
+        onAccepted: screen.tool.addPatchUrl(patchFileDialog.selectedFile)
+        onRejected: screen.tool.cancelPatchFile()
+    }
+    Connections {
+        target: screen.tool
+        function onChoosePatchFile() { patchFileDialog.open() }
+    }
     CheatsEclipse {
         id: cheatsView
         objectName: `${screen.objectName}CheatsView`
@@ -239,12 +303,12 @@ Kit.NormalizedCanvas {
         objectName: "coresCardBackdrop"
         anchors.fill: parent
         visible: screen.eclipseAnyActive && screen.tool.cardOpen
-        ground: "#0A1024"
+        ground: Kit.Tokens.surface
         pixelScale: screen.unit
         fields: [
-            Kit.BackdropField { x: 1060 * screen.boardUnit; y: -140 * screen.boardUnit; width: 900 * screen.boardUnit; height: 760 * screen.boardUnit; color: "#1FC9A8"; blur: 90 * screen.boardUnit; opacity: 0.85 },
-            Kit.BackdropField { x: 1380 * screen.boardUnit; y: 420 * screen.boardUnit; width: 760 * screen.boardUnit; height: 760 * screen.boardUnit; color: "#6A4CF0"; blur: 110 * screen.boardUnit; opacity: 0.9 },
-            Kit.BackdropField { x: 900 * screen.boardUnit; y: -260 * screen.boardUnit; width: 700 * screen.boardUnit; height: 520 * screen.boardUnit; color: "#1D6BF2"; blur: 100 * screen.boardUnit; opacity: 0.8 }
+            Kit.BackdropField { x: 1060 * screen.boardUnit; y: -140 * screen.boardUnit; width: 900 * screen.boardUnit; height: 760 * screen.boardUnit; color: Kit.Tokens.success; blur: 90 * screen.boardUnit; opacity: 0.85 },
+            Kit.BackdropField { x: 1380 * screen.boardUnit; y: 420 * screen.boardUnit; width: 760 * screen.boardUnit; height: 760 * screen.boardUnit; color: ThemeInk.backdropHalo; blur: 110 * screen.boardUnit; opacity: 0.9 },
+            Kit.BackdropField { x: 900 * screen.boardUnit; y: -260 * screen.boardUnit; width: 700 * screen.boardUnit; height: 520 * screen.boardUnit; color: ThemeInk.backdropGlow; blur: 100 * screen.boardUnit; opacity: 0.8 }
         ]
     }
     // A row's page under X and the List card under Select, on the Card form over the screen (EmuSen_Interface.md §15.5).
@@ -295,7 +359,7 @@ Kit.NormalizedCanvas {
                 boardLineHeight: 22
                 width: parent.width
                 text: screen.tool.cardDetailLabel
-                color: "#F3C9D2"
+                color: ThemeInk.rose
                 size: 18
                 weight: Font.DemiBold
                 spacing: 18 * 0.18

@@ -67,4 +67,5 @@ overflow-checks = true
 inherits = "release"
 lto = false
 codegen-units = 16
-incremental = true
+incremental = false
+overflow-checks = true

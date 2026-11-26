@@ -11,10 +11,10 @@ root=$(cd "$1" && pwd); out=$2; shift 2
 mkdir -p "$out"; out=$(cd "$out" && pwd)
 sb=$root/lib/EmuSen; round=${ROUND:-1}
 roms=${ROMS:-/home/red/Documents/Roms}
-export HOME=$root/hh XDG_CONFIG_HOME=$root/hh/config XDG_DATA_HOME=$root/hh/data XDG_CACHE_HOME=$root/hh/cache
-export QT_QPA_PLATFORM=wayland SDL_AUDIODRIVER=dummy EMUSEN_PLATFORM_LIBRARY=$sb/libemusen_platform.so
+export HOME="$root/hh" XDG_CONFIG_HOME="$root/hh/config" XDG_DATA_HOME="$root/hh/data" XDG_CACHE_HOME="$root/hh/cache"
+export QT_QPA_PLATFORM=wayland SDL_AUDIODRIVER=dummy EMUSEN_PLATFORM_LIBRARY="$sb/libemusen_platform.so"
 export QT_LOGGING_RULES="qt.quick.focus=true" QT_MESSAGE_PATTERN="GATE %{time yyyy-MM-dd'T'HH:mm:ss.zzz} %{message}"
-export TMPDIR=$HOME/.cache/emusen/tmp
+export TMPDIR="$HOME/.cache/emusen/tmp"
 program=(bwrap --die-with-parent --dev-bind / / --ro-bind "$roms" "$roms" -- "$sb/emusen-qt")
 scope=(systemd-run --user --scope -p CPUWeight=20 -p MemoryMax=10G -p MemorySwapMax=2G -q)
 [ "${BOXED:-}" = 1 ] && program=(env "LD_LIBRARY_PATH=${QT_BUNDLE_LIBS:-}" "$sb/emusen-qt") && scope=()
@@ -29,7 +29,7 @@ route=${ROUTE:-"wait:3 tap:a wait:2.5 tap:down wait:1 tap:right wait:0.8 tap:rig
 for step in "$@"; do
   case $step in
     warm) run warm 25; rsync -a --delete "$root/home/" "$root/home.snap/";;
-    start) restore; PAD="settle:$out/start-$round/grabs.tsv:0.1 tap:right wait:2" RSS=emusen-qt run start-$round 8
+    start) restore; PAD="settle:\"$out/start-$round/grabs.tsv\":0.1 tap:right wait:2" RSS=emusen-qt run start-$round 8
       python3 -I "$here/press.py" "$out/start-$round";;
     idle) restore; RSS=emusen-qt run idle-$round 16;;
     pause) restore; PAD="$route" RSS=emusen-qt run pause-$round 40

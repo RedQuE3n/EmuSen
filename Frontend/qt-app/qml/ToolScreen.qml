@@ -12,6 +12,7 @@ Cores {
     // The screen Screens shows it as: Screens.Cores or Screens.Tool.
     required property int shownAs
     required property bool splashShown
+    property bool bigScreen: true
     property alias kind: toolModel.tool
     property alias jobs: toolModel.jobs
     property alias platformLibrary: toolModel.platformLibrary
@@ -31,14 +32,14 @@ Cores {
     // Cheats changed on disk for a game path, or master cheats switch changed.
     signal cheatsChanged(string path)
     signal cheatsMasterToggled(bool on)
-    visible: toolScreen.screens.shown === toolScreen.shownAs
+    visible: toolScreen.bigScreen && toolScreen.screens.shown === toolScreen.shownAs
     tool: toolModel
     inputs: visible && !toolScreen.splashShown
     onBacked: toolScreen.screens.back()
     ToolModel {
         id: toolModel
         objectName: `${toolScreen.objectName}Model`
-        open: toolScreen.screens.shown === toolScreen.shownAs
+        open: toolScreen.bigScreen && toolScreen.screens.shown === toolScreen.shownAs
         eclipse: Kit.Tokens.coronaRim > 0
         onOpenFolder: (path) => toolScreen.openFolder(path)
         onLibraryChanged: toolScreen.libraryChanged()

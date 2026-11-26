@@ -5,15 +5,58 @@ use emusen_kit_core::tokens::Variant;
 
 pub const ECLIPSE: &str = include_str!("../../../themes/eclipse/theme.json");
 
-/// Eclipse's dark overrides: each `"name": value` line of its `tokens.dark`, the value as written.
+/// Eclipse's dark overrides: each top-level scalar `"name": value` entry of its `tokens.dark`, skipping nested objects.
 pub fn eclipse() -> Vec<(String, String)> {
-    let dark = &ECLIPSE[ECLIPSE.find("\"dark\": {").expect("Eclipse's dark tokens")..];
-    let dark = &dark[..dark.find('}').unwrap_or(dark.len())];
-    dark.lines()
-        .skip(1)
-        .filter_map(|l| l.trim().trim_end_matches(',').split_once(": "))
-        .map(|(n, v)| (n.trim_matches('"').to_owned(), v.trim_matches('"').to_owned()))
-        .collect()
+    let start = ECLIPSE.find("\"dark\": {").expect("Eclipse's dark tokens");
+    let block = &ECLIPSE[start + ECLIPSE[start..].find('{').expect("dark brace")..];
+    let mut out = Vec::new();
+    let (mut depth, mut in_str, mut esc, mut entry_start) = (0usize, false, false, None);
+    for (i, b) in block.bytes().enumerate() {
+        if in_str {
+            if esc {
+                esc = false;
+            } else if b == b'\\' {
+                esc = true;
+            } else if b == b'"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match b {
+            b'"' => {
+                if depth == 1 && entry_start.is_none() {
+                    entry_start = Some(i);
+                }
+                in_str = true;
+            }
+            b'{' => {
+                if depth == 1 {
+                    entry_start = None;
+                }
+                depth += 1;
+            }
+            b'}' => {
+                if depth == 1 {
+                    if let Some(s) = entry_start.take() {
+                        if let Some((n, v)) = block[s..i].trim().split_once(':') {
+                            out.push((n.trim().trim_matches('"').to_owned(), v.trim().trim_matches('"').to_owned()));
+                        }
+                    }
+                    break;
+                }
+                depth -= 1;
+            }
+            b',' if depth == 1 => {
+                if let Some(s) = entry_start.take() {
+                    if let Some((n, v)) = block[s..i].trim().split_once(':') {
+                        out.push((n.trim().trim_matches('"').to_owned(), v.trim().trim_matches('"').to_owned()));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The same, for the kit's `set_overrides`.

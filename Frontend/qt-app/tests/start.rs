@@ -1,6 +1,6 @@
 //! What the program reads before its window opens (EmuSen_Qt.md §7): where the platform library is, and Moonrise on or off.
 
-use emusen_qt::start::{chosen_theme, cover_stores_from, game_mode_from, guide_chords_from, navigation_sounds_from, platform_library, reduced_motion_from, splash_from, theme, LIBRARY_FILE};
+use emusen_qt::start::{big_screen, chosen_theme, cover_stores_from, game_mode_from, guide_chords_from, initial, navigation_sounds_from, platform_library, reduced_motion_from, splash_from, theme, Start, LIBRARY_FILE};
 use serde_json::json;
 use std::path::Path;
 
@@ -93,4 +93,34 @@ fn a_stored_choice_of_a_retired_theme_shows_the_reference_with_words() {
         assert!(words.contains(id) && words.contains("EmuSen's own theme is shown"), "{id}: {words}");
     }
     std::fs::remove_dir_all(store).unwrap();
+}
+
+#[test]
+fn big_screen_defaults_true_and_respects_desktop_and_big_picture_flags() {
+    let args = |items: &[&str]| items.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+    assert!(big_screen(&args(&["emusen-qt"]), None), "defaults to Big Picture");
+    assert!(!big_screen(&args(&["emusen-qt", "--desktop"]), None), "--desktop starts in Desktop Mode");
+    assert!(!big_screen(&args(&["emusen-qt"]), Some("1".into())), "EMUSEN_DESKTOP=1 starts in Desktop Mode");
+    assert!(big_screen(&args(&["emusen-qt"]), Some("0".into())), "non-1 EMUSEN_DESKTOP stays in Big Picture");
+    assert!(big_screen(&args(&["emusen-qt", "--big-picture"]), Some("1".into())), "--big-picture overrides EMUSEN_DESKTOP=1");
+    assert!(big_screen(&args(&["emusen-qt", "--desktop", "--big-picture"]), None), "--big-picture forces Big Picture");
+
+    let start = Start {
+        platform_library: String::new(),
+        splash: true,
+        reduced_motion: false,
+        game_mode: false,
+        guide_chords: false,
+        theme: String::new(),
+        theme_words: String::new(),
+        cover_stores: Vec::new(),
+        esde: false,
+        navigation_sounds: true,
+        full_screen: true,
+        big_screen: false,
+        windowed: None,
+    };
+    let map = initial(&start);
+    let key = cxx_qt_lib::QString::from("bigScreen");
+    assert_eq!(map.get(&key).and_then(|v| v.value::<bool>()), Some(false), "initial properties include bigScreen");
 }

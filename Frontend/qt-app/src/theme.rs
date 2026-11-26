@@ -7,6 +7,7 @@ use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QList, QString, QStringList};
+use emusen_kit_qt::kinds::Form;
 use emusen_qt_models::game_model::qobject::GameModel;
 use emusen_qt_models::game_page_model::qobject::GamePageModel;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
@@ -66,6 +67,7 @@ pub mod qobject {
         #[qproperty(f64, splash_time, cxx_name = "splashTime")]
         /// The hand-over's length in ms after Home whole, the theme's `Splash.ease` (1.10).
         #[qproperty(f64, splash_ease, cxx_name = "splashEase")]
+        #[qproperty(bool, big_screen, cxx_name = "bigScreen")]
         type ThemeFeed = super::ThemeFeedRust;
     }
 
@@ -150,6 +152,9 @@ pub mod qobject {
         /// A game's favourite turned, by its file.
         #[qsignal]
         fn favourite(self: Pin<&mut ThemeFeed>, game: QString);
+        #[qsignal]
+        #[cxx_name = "bigScreenRequested"]
+        fn big_screen_requested(self: Pin<&mut ThemeFeed>, big_screen: bool);
     }
 
     impl cxx_qt::Initialize for ThemeFeed {}
@@ -226,6 +231,7 @@ pub struct ThemeFeedRust {
     splash_shown: bool,
     splash_time: f64,
     splash_ease: f64,
+    big_screen: bool,
     /// The engine's `Splash` and the generation it was found in, looked up again only in a new engine: fed every frame, a name's lookup allocates.
     splash: Cell<(i32, *mut emusen_theme_qt::splash::qobject::ThemeSplash)>,
     /// The feed as the sink sees it, emptied when the feed goes, so a sink that outlives it takes nothing.
@@ -259,6 +265,7 @@ impl Default for ThemeFeedRust {
             splash_shown: false,
             splash_time: 0.0,
             splash_ease: 0.0,
+            big_screen: true,
             splash: Cell::new((-1, std::ptr::null_mut())),
             me: Rc::new(Cell::new(std::ptr::null_mut())),
         }
@@ -349,7 +356,7 @@ impl ActionSink for Sink {
         let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
         // X back to default, Hotkeys X clear, Themes X check, Consoles Y filter, and LT/RT letter jump on a theme's Settings (R-20261116-22, -24).
         if matches!(action, Action::Act(key) if matches!(key.as_str(), help::DEFAULT | help::CLEAR | help::CHECK | help::CONSOLES_FILTER | help::CONSOLES_LETTER_BACK | help::CONSOLES_LETTER_ON)) {
-            let settings = feed.taken(Role::Settings).then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
+            let settings = feed.settings_taken().then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
             return settings.is_some_and(|s| match action {
                 Action::Act(key) if key == help::DEFAULT => {
                     let row = (*s.focused()).max(s.view().firmware_need_count() as i32);
@@ -411,8 +418,8 @@ impl ActionSink for Sink {
     fn screen(&mut self, action: &ScreenAction) -> bool {
         // Safety: as `act`; the models are the window's, alive as long as the feed, and pinned where QML made them.
         let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
-        let settings = feed.taken(Role::Settings).then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
-        let page = feed.taken(Role::Game).then(|| unsafe { feed.page.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
+        let settings = feed.settings_taken().then(|| unsafe { feed.settings.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
+        let page = feed.page_taken().then(|| unsafe { feed.page.as_mut() }).flatten().map(|m| unsafe { Pin::new_unchecked(m) });
         let within = |at: i32, count: usize| usize::try_from(at).is_ok_and(|at| at < count);
         match (action, settings, page) {
             (ScreenAction::SettingsStep(row, by), Some(s), _) => {
@@ -498,6 +505,13 @@ impl ActionSink for Sink {
             _ => false,
         }
     }
+
+    fn set_big_screen(&mut self, big_screen: bool) -> bool {
+        let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
+        let mut feed = unsafe { Pin::new_unchecked(feed) };
+        feed.as_mut().big_screen_requested(big_screen);
+        true
+    }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeFeed {
@@ -512,6 +526,12 @@ impl cxx_qt::Initialize for qobject::ThemeFeed {
         self.as_mut().on_short_time_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_battery_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_charging_changed(|feed| feed.feed_device()).release();
+        self.as_mut()
+            .on_big_screen_changed(|feed| {
+                feed.feed_device();
+                feed.feed_tokens();
+            })
+            .release();
         self.as_mut().on_reduced_motion_changed(|feed| feed.feed_motion()).release();
         self.as_mut().on_swap_changed(|feed| feed.feed_swap()).release();
         self.as_mut().on_shown_section_changed(|feed| feed.feed_section()).release();
@@ -649,16 +669,19 @@ impl qobject::ThemeFeed {
         unsafe { self.host.as_ref() }.is_some_and(|h| h.provides(role))
     }
 
-    /// Whether a theme's call of the screen's is taken: the theme draws it and the window shows it.
-    fn taken(&self, role: Role) -> bool {
-        let shown = (role == Role::Settings && self.settings_shown) || (role == Role::Game && self.page_shown);
-        shown && self.draws(role)
+    /// Whether a theme's call of Settings is taken: the theme draws Settings or DesktopSettings and the window shows it.
+    fn settings_taken(&self) -> bool {
+        self.settings_shown && self.draws(if self.big_screen { Role::Settings } else { Role::DesktopSettings })
+    }
+
+    fn page_taken(&self) -> bool {
+        self.page_shown && self.draws(Role::Game)
     }
 
     fn feed_settings(&self) {
         // Safety: the model is the window's, alive as long as the feed.
         let Some(settings) = (unsafe { self.settings.as_ref() }) else { return };
-        if !self.draws(Role::Settings) {
+        if !self.draws(Role::Settings) && !self.draws(Role::DesktopSettings) {
             return;
         }
         let facts = match emusen_theme_qt::settings::facts_of(settings.view(), settings.shown_rows(), *settings.focused()) {
@@ -829,8 +852,15 @@ impl qobject::ThemeFeed {
     }
 
     fn feed_device(&self) {
-        let facts = DeviceFacts { controllers: self.controllers, family: self.family, clock: self.clock.to_string(),
-            short_time: self.short_time.to_string(), battery: self.battery, charging: self.charging,
+        let facts = DeviceFacts {
+            controllers: self.controllers,
+            family: self.family,
+            clock: self.clock.to_string(),
+            short_time: self.short_time.to_string(),
+            battery: self.battery,
+            charging: self.charging,
+            big_screen: self.big_screen,
+            form: if self.big_screen { Form::BigScreen.repr } else { Form::Desktop.repr },
             ..DeviceFacts::default()
         };
         if let Some(device) = self.engine().and_then(host::device) {
@@ -863,8 +893,11 @@ impl qobject::ThemeFeed {
 
     /// The theme's own tokens on its engine's; `ThemeStyle` sets the chosen theme's on the program's engine by the same call.
     fn feed_tokens(&self) {
-        // Safety: the host is the window's, alive as long as the feed it is handed to.
-        let overrides = unsafe { self.host.as_ref() }.map(|h| h.overrides()).unwrap_or_default();
+        let overrides = host_overrides(self.host, self.big_screen);
+        let form = if self.big_screen { Form::BigScreen } else { Form::Desktop };
+        if let Some(tokens) = self.engine().and_then(host::kit_tokens) {
+            tokens.set_form(form);
+        }
         if let Some(engine) = self.engine() {
             host::set_token_overrides(engine, &overrides);
         }
@@ -894,4 +927,19 @@ impl qobject::ThemeFeed {
             router.push(emusen_kit_qt::kinds::PadButton { repr: button }, down);
         }
     }
+}
+
+pub(crate) fn host_overrides(host: *const qobject::ThemeHost, big_screen: bool) -> Vec<(bool, String, String)> {
+    let Some(host) = (unsafe { host.as_ref() }) else { return Vec::new() };
+    let mut overrides = host.overrides();
+    if !big_screen {
+        for (light, name, value) in host.desktop_overrides() {
+            if let Some(slot) = overrides.iter_mut().find(|(l, n, _)| *l == light && *n == name) {
+                slot.2 = value;
+            } else {
+                overrides.push((light, name, value));
+            }
+        }
+    }
+    overrides
 }

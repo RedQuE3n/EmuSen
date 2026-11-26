@@ -15,16 +15,17 @@ Kit.NormalizedCanvas {
     required property int padFamily
     property string inHand
     property int battery: -1
+    property bool bigScreen: true
     readonly property bool eclipse: Kit.Tokens.coronaRim > 0
     readonly property alias slide: homeCard.slide
-    visible: homeCard.open || homeCard.leaving
+    visible: homeCardCanvas.bigScreen && (homeCard.open || homeCard.leaving)
     CardModel {
         id: homeCardModel
         objectName: "homeCardModel"
         card: CardModel.Home
         eclipse: homeCardCanvas.eclipse
         start: homeCardCanvas.screens.page
-        shown: homeCardCanvas.screens.shown === Screens.HomeCard
+        shown: homeCardCanvas.bigScreen && homeCardCanvas.screens.shown === Screens.HomeCard
         facts: homeCardCanvas.eclipse
             ? homeCardCanvas.library.eclipseHomeCardFacts(homeCardCanvas.session.running ? homeCardCanvas.session.game : "", homeCardCanvas.session.running ? homeCardCanvas.session.console : "", homeCardCanvas.clock.paused, homeCardCanvas.gameMode, homeCardCanvas.library.startable, homeCardCanvas.library.toolSummaries, homeCardCanvas.inHand)
             : homeCardCanvas.library.homeCardFacts(homeCardCanvas.session.running ? homeCardCanvas.session.game : "", homeCardCanvas.session.running ? homeCardCanvas.session.console : "", homeCardCanvas.clock.paused, homeCardCanvas.gameMode, homeCardCanvas.library.startable, homeCardCanvas.library.toolSummaries)
@@ -34,7 +35,7 @@ Kit.NormalizedCanvas {
     MenuCard {
         id: homeCard
         anchors.fill: parent
-        open: homeCardCanvas.screens.shown === Screens.HomeCard
+        open: homeCardCanvas.bigScreen && homeCardCanvas.screens.shown === Screens.HomeCard
         eclipse: homeCardCanvas.eclipse
         focus: open
         padFamily: homeCardCanvas.padFamily

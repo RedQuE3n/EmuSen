@@ -31,6 +31,7 @@ Window {
     property bool guideChords: false
     // What was last asked of the window, apart from the visibility the compositor gives it: the start's (`full_screen`), then the Fullscreen hotkey's.
     property bool fullScreenAsked: false
+    property bool bigScreen: true
     // The window's size has one owner at a time (EmuSen_Qt.md §7.7.H7, The window's size): full screen, its screen, followed as
     // the screen's geometry or the window's screen changes, and overridden by a compositor that names a size; out of it, the setting.
     Binding { target: program; property: "width"; value: program.screen.width; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
@@ -110,6 +111,30 @@ Window {
     // Every notice is raised here, and words that say nothing (a model's cleared problem) raise none (EmuSen_Qt.md §7.9).
     signal said(string words, bool attention, bool overGame)
     onSaid: (words, attention, overGame) => { if (words.length > 0) notices.raise(words, attention, overGame) }
+    signal settleFocus()
+    onSettleFocus: {
+        if (program.splashShown)
+            return
+        if (!program.bigScreen) {
+            if (chosenTheme.active && chosenTheme.focus)
+                chosenTheme.forceActiveFocus()
+            else if (desktopShell.focus)
+                desktopShell.forceActiveFocus()
+            else if (player.focus)
+                player.forceActiveFocus()
+            else
+                shell.forceActiveFocus()
+        } else if (player.focus) {
+            player.forceActiveFocus()
+        } else if (chosenTheme.active && chosenTheme.focus) {
+            chosenTheme.forceActiveFocus()
+        } else if (esdeLoader.focus) {
+            esdeLoader.forceActiveFocus()
+        } else if (!referenceHost.holdsFocus) {
+            shell.forceActiveFocus()
+        }
+    }
+    onBigScreenChanged: program.settleFocus()
     signal saidFolder(string words, string folder, bool attention, bool overGame)
     onSaidFolder: (words, folder, attention, overGame) => {
         noticePresenter.setPendingFolder(words, folder)
@@ -179,6 +204,11 @@ Window {
             property: "variant"
             value: settingsModel.light ? Kit.Variants.Light : Kit.Variants.Dark
             when: settingsModel.ready
+        }
+        Binding {
+            target: Kit.Tokens
+            property: "form"
+            value: program.bigScreen ? Kit.Forms.BigScreen : Kit.Forms.Desktop
         }
         LibraryModel {
             id: library
@@ -285,14 +315,14 @@ Window {
             id: player
             objectName: "game"
             anchors.fill: parent
-            visible: program.gameShown || program.pauseShown || (screens.shown === Screens.Home && player.session.running)
+            visible: program.gameShown || (program.bigScreen && (program.pauseShown || (screens.shown === Screens.Home && player.session.running)))
             inFront: program.gameShown && !player.session.resumeAsked
             // As the start read them until the settings are read, then as they say, changed on the screen or not.
             guideChords: settingsModel.ready ? settingsModel.guideChords : program.guideChords
             showStatusText: settingsModel.showStatusText
             showFps: settingsModel.showFps
             showStatusBar: settingsModel.showStatusBar
-            focus: program.gameShown && !player.session.resumeAsked
+            focus: program.gameShown && !player.session.resumeAsked && (program.bigScreen || !desktopModel.drawerOpen)
             feed: program.feed
             platformLibrary: program.platformLibrary
             cores: library.cores
@@ -307,6 +337,7 @@ Window {
                 player.session.pause()
                 screens.library()
             }
+            onBigScreenAsked: program.bigScreen = !program.bigScreen
             onFullScreenAsked: {
                 program.fullScreenAsked = program.visibility !== Window.FullScreen
                 program.visibility = program.fullScreenAsked ? Window.FullScreen : Window.Windowed
@@ -335,7 +366,7 @@ Window {
             id: referenceHost
             objectName: "reference"
             anchors.fill: parent
-            visible: !program.gameShown
+            visible: program.bigScreen && !program.gameShown
             folder: BuiltInThemes.reference
             coverStores: program.coverStores
             screens: screens
@@ -351,9 +382,14 @@ Window {
             reducedMotion: program.reducedMotion
             swap: Kit.PadRouter.swapAcceptBack
             inputs: !program.splashShown
+            bigScreen: program.bigScreen
             homeWanted: !program.esdeLook && !(program.themeHost?.home ?? false)
             consolesWanted: !program.esdeLook && !(program.themeHost?.consoles ?? false)
             gamesWanted: !program.esdeLook && !(program.themeHost?.games ?? false)
+            desktopLibraryWanted: false
+            desktopTableWanted: false
+            desktopPlayingWanted: false
+            desktopSettingsWanted: false
             onPlayed: (path) => program.play(path)
             onFavourite: (path) => library.toggleFavourite(path)
             onResumed: screens.resume()
@@ -365,18 +401,109 @@ Window {
                     games.focused = games.rowOf(game)
             }
         }
+        DesktopModel {
+            id: desktopModel
+            objectName: "desktopModel"
+            library: library
+            session: player.session
+            settings: settingsModel
+            themeName: program.themeHost ? program.themeHost.host.name : ""
+            hasGame: player.session.running
+            gamePaused: player.session.paused
+            gameShown: program.gameShown || program.pauseShown
+            fullScreen: program.fullScreenAsked
+            controllers: pads.connected
+            clockText: clock.shortTime
+            battery: machineBattery.level
+            onLaunchRequested: (path) => program.play(path)
+            onLaunchFromRequested: (path, state) => program.playFrom(path, state)
+            onResumeRequested: screens.resume()
+            onOpenFolderRequested: (path) => folders.open(path)
+            onPageRequested: (path) => {
+                program.inHand = path
+                screens.openGame(path)
+                program.bigScreen = true
+            }
+        }
+        Connections {
+            target: program
+            function onBigScreenChanged() { desktopModel.refresh() }
+        }
+        Connections {
+            target: library
+            function onLoadingChanged() { desktopModel.refresh() }
+            function onHomeLinesChanged() { desktopModel.refresh() }
+        }
+        Connections {
+            target: settingsModel
+            function onReadyChanged() { desktopModel.refresh() }
+            function onSectionChanged() { desktopModel.refresh() }
+            function onTrailChanged() { desktopModel.refresh() }
+            function onDataChanged() { desktopModel.refresh() }
+            function onModelReset() { desktopModel.refresh() }
+            function onFocusedChanged() { desktopModel.refresh() }
+        }
+        Connections {
+            target: player.session
+            enabled: !program.bigScreen
+            function onCardFactsChanged() { desktopModel.refresh() }
+            function onFpsWordsChanged() { desktopModel.refresh() }
+            function onSlotChanged() { desktopModel.refresh() }
+            function onSpeedChanged() { desktopModel.refresh() }
+            function onMasterCheatsChanged() { desktopModel.refresh() }
+        }
+        Loader {
+            id: desktopShell
+            objectName: "desktopShellLoader"
+            anchors.fill: parent
+            active: !program.bigScreen && !program.splashShown
+            visible: active
+            focus: active && !(program.themeHost?.takesFocus ?? false) && !(program.gameShown && !desktopModel.drawerOpen) && !settingsModel.bindingsShown && !settingsModel.shadersShown
+            onFocusChanged: program.settleFocus()
+            onLoaded: program.settleFocus()
+            onActiveChanged: if (!active) program.settleFocus()
+            sourceComponent: DesktopShell {
+                model: desktopModel
+                session: player.session
+                settings: settingsModel
+                library: library
+                platformLibrary: program.platformLibrary
+                builtInManifests: BuiltInThemes.manifests
+                themedViewActive: !program.bigScreen && (desktopModel.gameShown ? (program.themeHost?.desktopPlaying ?? false) : desktopModel.view === 0 ? (program.themeHost?.desktopLibrary ?? false) : desktopModel.view === 1 ? (program.themeHost?.desktopTable ?? false) : (program.themeHost?.desktopSettings ?? false))
+                onBigPictureRequested: program.bigScreen = true
+                onFullScreenRequested: {
+                    program.fullScreenAsked = program.visibility !== Window.FullScreen
+                    program.visibility = program.fullScreenAsked ? Window.FullScreen : Window.Windowed
+                }
+                onLibraryRequested: {
+                    player.session.pause()
+                    screens.library()
+                }
+                onDisplaySettingsRequested: {
+                    player.session.pause()
+                    screens.library()
+                }
+                onThemeUsed: (folder) => program.theme = folder
+                onThemeRestyled: (esde) => program.esdeChosen = program.esdeChosen && esde
+            }
+        }
         // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed; the host and
         // its engine are made only while a theme other than the reference is chosen (EmuSen_Qt.md §3.5.2, §9.3.5).
         Loader {
             id: chosenTheme
             objectName: "chosenTheme"
             anchors.fill: parent
-            active: program.theme.length > 0 && program.theme !== BuiltInThemes.reference && !program.esdeLook
+            active: program.theme.length > 0 && program.theme !== BuiltInThemes.reference && (!program.esdeLook || !program.bigScreen)
             // A Loader is a focus scope: it takes the focus while one of the theme's screens is to hold it.
             focus: program.themeHost?.takesFocus ?? false
+            onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: ThemeHost {
                 objectName: "theme"
-                visible: !program.gameShown
+                visible: !program.gameShown || (!program.bigScreen && (program.themeHost?.desktopPlaying ?? false))
+                bigScreen: program.bigScreen
+                desktopView: desktopModel.view
+                desktopGameShown: program.gameShown || program.pauseShown
+                onBigScreenRequested: (big) => program.bigScreen = big
                 // Loaded once the host is whole, so its connections hear the new engine and feed it the models as they stand.
                 folder: chosenTheme.status === Loader.Ready ? program.theme : ""
                 coverStores: program.coverStores
@@ -418,6 +545,7 @@ Window {
             id: themeStyle
             objectName: "themeStyle"
             host: program.themeHost?.host ?? null
+            bigScreen: program.bigScreen
         }
         Connections {
             target: program.themeHost?.host ?? null
@@ -434,8 +562,8 @@ Window {
             anchors.fill: parent
             enabled: !esdeLoader.backdrop
             active: program.esdeWanted
-            visible: program.esdeLook && !program.gameShown && !program.pauseShown
-            focus: program.esdeLook && screens.shown === Screens.Esde && !program.splashShown
+            visible: program.bigScreen && program.esdeLook && !program.gameShown && !program.pauseShown
+            focus: program.bigScreen && program.esdeLook && screens.shown === Screens.Esde && !program.splashShown
             sourceComponent: Esde.View {
                 settings: library.esdeSettings
                 shelves: library.esdeShelves
@@ -501,6 +629,7 @@ Window {
             padFamily: program.padFamily
             gameShown: program.gameShown
             splashShown: program.splashShown
+            bigScreen: program.bigScreen
             clock: clock
             battery: machineBattery.level
             library: library
@@ -512,6 +641,7 @@ Window {
             padFamily: program.padFamily
             esdeLook: program.esdeLook
             esdeView: program.esdeView
+            bigScreen: program.bigScreen
             clock: clock
             battery: machineBattery.level
         }
@@ -523,12 +653,12 @@ Window {
             platformLibrary: program.platformLibrary
             cores: library.cores
             builtIns: BuiltInThemes.manifests
-            themedSettings: program.themeHost?.settings ?? false
-            open: screens.shown === Screens.Settings || program.pauseShown
+            themedSettings: program.bigScreen ? (program.themeHost?.settings ?? false) : (program.themeHost?.desktopSettings ?? false)
+            open: (program.bigScreen && (screens.shown === Screens.Settings || program.pauseShown)) || (!program.bigScreen && (desktopModel.view === 2 || program.gameShown || program.pauseShown))
             facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
             gamePads: pads.gamePads
             gameMode: program.gameMode
-            onDoor: (name) => screens.act(name)
+            onDoor: (name) => program.bigScreen ? screens.act(name) : desktopModel.handleSettingsDoor(name)
             // A shader's lever moved: the running game's picture follows it at once (EmuSen_Qt.md §1.8.10).
             onLever: (system, id, value) => player.session.setLever(system, id, value)
             onOpenFolder: (path) => folders.open(path)
@@ -565,7 +695,7 @@ Window {
             objectName: "settingsSlot"
             anchors.fill: parent
             // The chosen theme's Settings stands in its place where the theme draws one (EmuSen_Qt.md §3.2, `Settings`).
-            active: screens.shown === Screens.Settings && !(program.themeHost?.settings ?? false)
+            active: program.bigScreen && screens.shown === Screens.Settings && !(program.themeHost?.settings ?? false)
             focus: active
             // Opened again on the row it was left on, which the model holds, before the frame's own row is written back.
             onLoaded: {
@@ -584,7 +714,7 @@ Window {
         // Settings.qml's answers to the model while the chosen theme's Settings is shown (EmuSen_Qt.md §3.2, `Settings`).
         Connections {
             target: settingsModel
-            enabled: (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings
+            enabled: program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : ((program.themeHost?.desktopSettings ?? false) && desktopModel.view === 2 && !desktopModel.gameShown)
             function onLeft() { screens.back() }
             function onPassed(key) { screens.act(key) }
             function onRefocus(row) { settingsModel.setFocused(row) }
@@ -595,7 +725,7 @@ Window {
             id: settingsEclipseBindings
             objectName: "settingsEclipseBindings"
             anchors.fill: parent
-            active: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.bindingsShown
+            active: !program.splashShown && settingsModel.bindingsShown && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : desktopModel.view === 2)
             focus: active
             onActiveChanged: if (!active && screens.shown === Screens.Settings && chosenTheme.focus) chosenTheme.forceActiveFocus()
             sourceComponent: ControllersEclipse {
@@ -611,7 +741,7 @@ Window {
             id: settingsEclipseShaders
             objectName: "settingsEclipseShaders"
             anchors.fill: parent
-            active: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.shadersShown
+            active: !program.splashShown && settingsModel.shadersShown && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : desktopModel.view === 2)
             focus: active && !settingsModel.typing
             onFocusChanged: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
             onLoaded: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
@@ -641,7 +771,7 @@ Window {
         Loader {
             id: settingsThemeTypingScope
             anchors.fill: parent
-            active: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && settingsModel.typing
+            active: !program.splashShown && settingsModel.typing && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : ((program.themeHost?.desktopSettings ?? false) && desktopModel.view === 2))
             focus: active
             onActiveChanged: if (!active && chosenTheme.focus) chosenTheme.forceActiveFocus()
             sourceComponent: Kit.NormalizedCanvas {
@@ -708,7 +838,7 @@ Window {
         FocusScope {
             id: settingsThemeListener
             objectName: "settingsThemeListener"
-            focus: !program.splashShown && (program.themeHost?.settings ?? false) && screens.shown === Screens.Settings && !settingsModel.bindingsShown && settingsModel.listening && !settingsModel.listeningPad
+            focus: !program.splashShown && !settingsModel.bindingsShown && settingsModel.listening && !settingsModel.listeningPad && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : ((program.themeHost?.desktopSettings ?? false) && desktopModel.view === 2))
             Keys.onPressed: (event) => event.accepted = settingsModel.heardKey(event.key, event.modifiers)
             Connections {
                 target: Kit.PadRouter
@@ -734,6 +864,7 @@ Window {
             platformLibrary: program.platformLibrary
             padFamily: program.padFamily
             splashShown: program.splashShown
+            bigScreen: program.bigScreen
             onUsed: (folder) => program.theme = folder
             // The start's choice of an ES-DE theme is let go once another look is stored.
             onRestyled: (esde) => program.esdeChosen = program.esdeChosen && esde
@@ -749,6 +880,7 @@ Window {
             world: program.coresWorld
             padFamily: program.padFamily
             splashShown: program.splashShown
+            bigScreen: program.bigScreen
             clock: clock
             battery: machineBattery.level
             consoleCounts: library.loading ? "" : library.settingsFacts("")
@@ -774,6 +906,7 @@ Window {
             battery: machineBattery.level
             padFamily: program.padFamily
             splashShown: program.splashShown
+            bigScreen: program.bigScreen
             // The Scraper's run ended: the library shows what it fetched.
             onLibraryChanged: library.refresh()
             onCheatsChanged: (path) => {
@@ -795,6 +928,7 @@ Window {
             battery: machineBattery.level
             padFamily: program.padFamily
             splashShown: program.splashShown
+            bigScreen: program.bigScreen
         }
         ToolsEclipse {
             screens: screens
@@ -804,6 +938,7 @@ Window {
             battery: machineBattery.level
             padFamily: program.padFamily
             splashShown: program.splashShown
+            bigScreen: program.bigScreen
         }
         PageScreen {
             id: pageScreen
@@ -817,6 +952,7 @@ Window {
             scraperTest: program.scraperTest
             padFamily: program.padFamily
             splashShown: program.splashShown
+            bigScreen: program.bigScreen
             onPlay: (path) => program.play(path)
             onPlayFrom: (path, state) => program.playFrom(path, state)
             onOpenFolder: (path) => folders.open(path)
@@ -831,6 +967,7 @@ Window {
             padFamily: program.padFamily
             inHand: program.inHand
             battery: machineBattery.level
+            bigScreen: program.bigScreen
         }
         PauseScreen {
             screens: screens
@@ -842,6 +979,7 @@ Window {
             gameShown: program.gameShown
             clock: clock
             battery: machineBattery.level
+            bigScreen: program.bigScreen
         }
         ResumeQuestion {
             session: player.session

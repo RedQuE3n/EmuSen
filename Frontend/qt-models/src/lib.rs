@@ -17,6 +17,7 @@ pub mod console_list;
 pub mod consoles;
 pub mod consoles_source;
 pub mod controllers;
+pub mod desktop;
 pub mod esde_shelves;
 pub mod esde_texts;
 pub mod firmware;

@@ -17,11 +17,12 @@ Kit.NormalizedCanvas {
     required property int padFamily
     required property bool gameShown
     required property bool splashShown
+    property bool bigScreen: true
     property Clock clock: null
     property int battery: -1
     property LibraryModel library: null
     readonly property bool eclipse: Kit.Tokens.coronaRim > 0
-    visible: !searchCanvas.gameShown && searchCanvas.host.searching
+    visible: searchCanvas.bigScreen && !searchCanvas.gameShown && searchCanvas.host.searching
     Kit.KeyboardModel {
         id: typist
         objectName: "typist"
@@ -48,7 +49,7 @@ Kit.NormalizedCanvas {
         helpGlyphGap: 10
         // Its help stands while the keyboard holds the focus; on the covers the theme's own does.
         helpShown: !searchCanvas.eclipse && searchCanvas.screens.shown === Screens.Search
-        focus: !searchCanvas.eclipse && !searchCanvas.splashShown && searchCanvas.screens.shown === Screens.Search
+        focus: searchCanvas.bigScreen && !searchCanvas.eclipse && !searchCanvas.splashShown && searchCanvas.screens.shown === Screens.Search
         controller.navigationShown: false
         help: HelpModel {
             screen: HelpModel.Search
@@ -103,7 +104,7 @@ Kit.NormalizedCanvas {
         objectName: "searchEclipse"
         anchors.fill: parent
         visible: searchCanvas.eclipse
-        focus: searchCanvas.eclipse && !searchCanvas.splashShown && (searchCanvas.screens.shown === Screens.Search || searchCanvas.screens.shown === Screens.SearchGrid)
+        focus: searchCanvas.bigScreen && searchCanvas.eclipse && !searchCanvas.splashShown && (searchCanvas.screens.shown === Screens.Search || searchCanvas.screens.shown === Screens.SearchGrid)
         pixelScale: searchCanvas.unit
         screens: searchCanvas.screens
         games: searchCanvas.games

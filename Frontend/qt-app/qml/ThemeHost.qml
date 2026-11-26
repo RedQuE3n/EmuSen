@@ -34,6 +34,13 @@ Item {
     property bool homeWanted: true
     property bool consolesWanted: true
     property bool gamesWanted: true
+    property bool bigScreen: true
+    property int desktopView: 0
+    property bool desktopGameShown: false
+    property bool desktopLibraryWanted: true
+    property bool desktopTableWanted: true
+    property bool desktopPlayingWanted: true
+    property bool desktopSettingsWanted: true
     property bool splashShown: false
     // Where the splash's slot is drawn: over Moonrise, which keeps the splash's clock, its skip and its fade (EmuSen_Interface.md §22).
     property Item splashLayer: themed
@@ -51,6 +58,11 @@ Item {
     readonly property bool splash: splashSlot.themed
     readonly property bool settings: settingsSlot.themed
     readonly property bool game: gameSlot.themed
+    readonly property bool desktopLibrary: desktopLibrarySlot.themed
+    readonly property bool desktopTable: desktopTableSlot.themed
+    readonly property bool desktopPlaying: desktopPlayingSlot.themed
+    readonly property bool desktopSettings: desktopSettingsSlot.themed
+    readonly property bool hasDesktopFace: host.ready && !host.failed && host.hasDesktopFace()
     // The theme draws the game's page as it stands: its screen is placed and names the tab shown, or names none (1.13).
     readonly property bool pageDrawn: gameSlot.themed && (themed.pageModel?.themeDraws ?? true)
     readonly property alias failed: host.failed
@@ -58,9 +70,9 @@ Item {
     readonly property alias host: host
     readonly property alias feed: feed
     // Whether one of the theme's screens holds the focus, so the pad's presses go to the theme's engine.
-    readonly property bool holdsFocus: homeSlot.activeFocus || consolesSlot.activeFocus || gamesSlot.activeFocus || settingsSlot.activeFocus || gameSlot.activeFocus
+    readonly property bool holdsFocus: homeSlot.activeFocus || consolesSlot.activeFocus || gamesSlot.activeFocus || settingsSlot.activeFocus || gameSlot.activeFocus || desktopLibrarySlot.activeFocus || desktopTableSlot.activeFocus || desktopPlayingSlot.activeFocus || desktopSettingsSlot.activeFocus
     // Whether one of its screens is to take the keys, for a host made inside a focus scope (the window's Loader).
-    readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus || settingsSlot.focus || gameSlot.focus
+    readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus || settingsSlot.focus || gameSlot.focus || desktopLibrarySlot.focus || desktopTableSlot.focus || desktopPlayingSlot.focus || desktopSettingsSlot.focus
     // The Home screen placed, read as a theme's ThemeScreen (its engine's type, so not named here).
     readonly property var homeScreen: homeSlot.placed ? (homeSlot.item as Placing)?.screen.children[0] ?? null : null
     // The splash placed, read as a theme's ThemeScreen; from 1.10 one that enters Home leads the start, with no Moonrise under it.
@@ -68,13 +80,13 @@ Item {
     // The game's page placed, read as a theme's ThemeScreen, whose pageSections the page's model hears (1.13).
     readonly property var gameScreen: gameSlot.placed ? (gameSlot.item as Placing)?.screen.children[0] ?? null : null
     readonly property bool leads: themed.splash && (themed.splashScreen?.entersHome ?? false)
-    // The theme provides a splash not yet placed while the splash shows, so the window waits to know which splash leads.
-    readonly property bool splashComing: themed.splashShown && host.ready && !host.failed && host.provides(Host.ThemeHost.Splash) && !themed.splash
+    readonly property bool splashComing: themed.bigScreen && themed.splashShown && host.ready && !host.failed && host.provides(Host.ThemeHost.Splash) && !themed.splash
     signal played(string path)
     signal resumed()
     signal backed()
     signal focused(string game)
     signal favourite(string game)
+    signal bigScreenRequested(bool bigScreen)
     // What a slot holds: the scope the theme's screen is made in, out of the window's items while not shown, so a forceActiveFocus
     // in it climbs no scope of the window's, the slot's included, and takes no focus from the screen shown (EmuSen_Qt.md §3.5.2).
     component Placing: Item {
@@ -124,11 +136,12 @@ Item {
         id: feed
         objectName: "feed." + themed.objectName
         host: host
+        bigScreen: themed.bigScreen
         clock: themed.clock.time
         shortTime: themed.clock.shortTime
         now: themed.clock.now
-        settingsShown: settingsSlot.shown
-        pageShown: gameSlot.shown
+        settingsShown: settingsSlot.shown || desktopSettingsSlot.shown
+        pageShown: gameSlot.shown || desktopPlayingSlot.shown
         shownSection: themed.screens.section
         splashShown: themed.splashLeading
         splashTime: themed.splashTime
@@ -144,6 +157,7 @@ Item {
         onFocused: (game) => themed.focused(game)
         onFavourite: (game) => themed.favourite(game)
         onSelected: (index) => themed.library.select(index)
+        onBigScreenRequested: (bigScreen) => themed.bigScreenRequested(bigScreen)
     }
     // A new engine is fed everything the feed holds, and the models as they stand, since a host made at run time (the
     // Themes tab's Use) has held nothing yet; each feed after is the one model that changed.
@@ -256,7 +270,7 @@ Item {
         wanted: themed.homeWanted
         inputs: themed.inputs && themed.screens.shown === Screens.Home
         backdrop: themed.screens.shown === Screens.HomeCard
-        shown: themed.screens.shown === Screens.Home || themed.screens.shown === Screens.HomeCard
+        shown: themed.bigScreen && (themed.screens.shown === Screens.Home || themed.screens.shown === Screens.HomeCard)
     }
     Slot {
         id: consolesSlot
@@ -265,7 +279,7 @@ Item {
         host: host
         wanted: themed.consolesWanted
         inputs: themed.inputs
-        shown: themed.screens.shown === Screens.Consoles
+        shown: themed.bigScreen && themed.screens.shown === Screens.Consoles
     }
     Slot {
         id: gamesSlot
@@ -276,7 +290,7 @@ Item {
         // The search's keyboard and the List card hold the keys over it while they are open; under the card nothing on it is reached.
         inputs: themed.inputs && !themed.typing && !themed.listOpen
         backdrop: themed.listOpen
-        shown: themed.screens.shown === Screens.Grid || themed.listOpen || themed.searching
+        shown: themed.bigScreen && (themed.screens.shown === Screens.Grid || themed.listOpen || themed.searching)
     }
     Slot {
         id: settingsSlot
@@ -285,14 +299,14 @@ Item {
         host: host
         wanted: themed.settingsModel !== null
         inputs: themed.inputs && !(themed.settingsModel?.listening ?? false) && !(themed.settingsModel?.typing ?? false) && !(themed.settingsModel?.bindingsShown ?? false) && !(themed.settingsModel?.shadersShown ?? false)
-        shown: themed.screens.shown === Screens.Settings && !(themed.settingsModel?.bindingsShown ?? false) && !(themed.settingsModel?.shadersShown ?? false)
+        shown: themed.bigScreen && themed.screens.shown === Screens.Settings && !(themed.settingsModel?.bindingsShown ?? false) && !(themed.settingsModel?.shadersShown ?? false)
     }
     // Trusted host stage for themed Media Viewer clips: keeps QtMultimedia out of the theme sandbox.
     Loader {
         id: viewerClipStage
         objectName: "themeViewerClipStage"
         anchors.fill: parent
-        active: gameSlot.shown && (themed.pageModel?.viewing ?? false) && (themed.pageModel?.viewKind ?? 0) === 1
+        active: themed.bigScreen && gameSlot.shown && (themed.pageModel?.viewing ?? false) && (themed.pageModel?.viewKind ?? 0) === 1
         sourceComponent: Rectangle {
             color: Kit.Tokens.voidFill
             Kit.NormalizedCanvas {
@@ -323,7 +337,7 @@ Item {
         wanted: themed.pageModel !== null
         inputs: themed.inputs && !(themed.pageModel?.asking ?? false)
         backdrop: themed.pageModel?.asking ?? false
-        shown: themed.screens.shown === Screens.Page && ((themed.pageModel?.themeDraws ?? true) || (themed.pageModel?.asking ?? false))
+        shown: themed.bigScreen && themed.screens.shown === Screens.Page && ((themed.pageModel?.themeDraws ?? true) || (themed.pageModel?.asking ?? false))
     }
     Binding {
         target: themed.pageModel
@@ -346,7 +360,43 @@ Item {
         inputs: false
         // A splash that enters Home is drawn in the place Home names, between what Home draws under it and over it (1.10).
         parent: themed.leads && themed.homeScreen?.splashPlace ? themed.homeScreen.splashPlace : themed.splashLayer
-        wanted: themed.splashShown
-        shown: themed.splashShown
+        wanted: themed.bigScreen && themed.splashShown
+        shown: themed.bigScreen && themed.splashShown
+    }
+    Slot {
+        id: desktopLibrarySlot
+        objectName: "desktopLibrary." + themed.objectName
+        role: Host.ThemeHost.DesktopLibrary
+        host: host
+        wanted: themed.desktopLibraryWanted
+        inputs: themed.inputs
+        shown: !themed.bigScreen && themed.desktopView === 0 && !themed.desktopGameShown
+    }
+    Slot {
+        id: desktopTableSlot
+        objectName: "desktopTable." + themed.objectName
+        role: Host.ThemeHost.DesktopTable
+        host: host
+        wanted: themed.desktopTableWanted
+        inputs: themed.inputs
+        shown: !themed.bigScreen && themed.desktopView === 1 && !themed.desktopGameShown
+    }
+    Slot {
+        id: desktopPlayingSlot
+        objectName: "desktopPlaying." + themed.objectName
+        role: Host.ThemeHost.DesktopPlaying
+        host: host
+        wanted: themed.desktopPlayingWanted
+        inputs: themed.inputs
+        shown: !themed.bigScreen && themed.desktopGameShown
+    }
+    Slot {
+        id: desktopSettingsSlot
+        objectName: "desktopSettings." + themed.objectName
+        role: Host.ThemeHost.DesktopSettings
+        host: host
+        wanted: themed.desktopSettingsWanted && themed.settingsModel !== null
+        inputs: themed.inputs && !(themed.settingsModel?.listening ?? false) && !(themed.settingsModel?.typing ?? false) && !(themed.settingsModel?.bindingsShown ?? false) && !(themed.settingsModel?.shadersShown ?? false)
+        shown: !themed.bigScreen && themed.desktopView === 2 && !themed.desktopGameShown && !(themed.settingsModel?.bindingsShown ?? false) && !(themed.settingsModel?.shadersShown ?? false)
     }
 }

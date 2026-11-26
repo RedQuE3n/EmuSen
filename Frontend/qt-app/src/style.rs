@@ -17,6 +17,7 @@ pub mod qobject {
         #[qml_element]
         /// The chosen theme's host, whose package's overrides the program's engine takes; null for none.
         #[qproperty(*mut ThemeHost, host)]
+        #[qproperty(bool, big_screen, cxx_name = "bigScreen")]
         type ThemeStyle = super::ThemeStyleRust;
 
         /// The host's package as it is now on the program's engine: the window calls it as the host makes a new engine.
@@ -29,25 +30,26 @@ pub mod qobject {
 
 pub struct ThemeStyleRust {
     host: *mut qobject::ThemeHost,
+    big_screen: bool,
 }
 
 impl Default for ThemeStyleRust {
     fn default() -> Self {
-        ThemeStyleRust { host: std::ptr::null_mut() }
+        ThemeStyleRust { host: std::ptr::null_mut(), big_screen: true }
     }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeStyle {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_host_changed(|style| style.restyle()).release();
+        self.as_mut().on_big_screen_changed(|style| style.restyle()).release();
     }
 }
 
 impl qobject::ThemeStyle {
     /// The overrides `ThemeFeed` sets on the theme's engine, by the same call, on the engine this object lives in.
     pub fn restyle(self: Pin<&mut Self>) {
-        // Safety: the host is the window's chosen theme's, alive while it is handed here; the window hands null as it goes.
-        let overrides = unsafe { self.host.as_ref() }.map(|h| h.overrides()).unwrap_or_default();
+        let overrides = crate::theme::host_overrides(self.host, self.big_screen);
         use cxx_qt::casting::Upcast;
         let object: Pin<&mut cxx_qt::QObject> = self.upcast_pin();
         host::set_token_overrides(object, &overrides);

@@ -50,8 +50,8 @@ const KIT_FILES: [&str; 43] = [
     "qml/GaussianBlur.qml",
 ];
 
-/// The kit's fragment shaders: EdgeFade's and the backdrop's Gaussian.
-const SHADERS: [&str; 2] = ["edge_fade.frag", "gaussian.frag"];
+/// The kit's fragment shaders: EdgeFade's, the backdrop's Gaussian, the analytical glow, and rounded pictures.
+const SHADERS: [&str; 4] = ["edge_fade.frag", "gaussian.frag", "glow.frag", "round_picture.frag"];
 
 /// Qt's shader baker over the kit's fragment shaders, into a resource beside the module's own at qrc:/qt/qml/EmuSen/Kit/shaders/ (EmuSen_Kit.md §7.35).
 fn baked_shader() -> PathBuf {

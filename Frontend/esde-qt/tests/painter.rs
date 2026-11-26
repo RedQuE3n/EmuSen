@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use emusen_esde::scene::{DateTime, Layout};
 use emusen_esde_qt::painter::{systems, Action, Painter, ThemeCache};
@@ -321,4 +322,20 @@ fn a_press_while_the_first_gamelist_fades_in_moves_its_selection() {
     p.tick(500.0);
     assert!(!p.frame.moving);
     assert_eq!(selected(&p), 1, "the press moved the list");
+}
+
+#[test]
+fn switching_views_and_systems_shares_systems_arc_without_cloning() {
+    let theme = Theme::with("shared-arc", "<transitions name=\"f\"><systemToGamelist>instant</systemToGamelist><gamelistToGamelist>instant</gamelistToGamelist></transitions>");
+    let mut p = painter(&theme);
+    let initial_ptr = Arc::as_ptr(&p.stage.as_ref().unwrap().current.data.systems);
+    let before = Arc::strong_count(&p.stage.as_ref().unwrap().current.data.systems);
+
+    p.pressed(Button::Accept, false);
+    assert_eq!(p.view(), "gamelist");
+    assert_eq!(Arc::as_ptr(&p.stage.as_ref().unwrap().current.data.systems), initial_ptr, "switch keeps the same Arc");
+
+    assert_eq!(p.pressed(Button::PageDown, false), Some(Action::Cue("quicksysselect")));
+    assert_eq!(Arc::as_ptr(&p.stage.as_ref().unwrap().current.data.systems), initial_ptr, "quick system select shares the same Arc");
+    assert!(Arc::strong_count(&p.stage.as_ref().unwrap().current.data.systems) >= before);
 }

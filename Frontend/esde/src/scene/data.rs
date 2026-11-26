@@ -2,6 +2,7 @@
 //! (EmuSen_BigPicture.md §13.2). Plain records the host fills from its models.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::loader::{SystemKind, Theme, ThemeSystem};
 
@@ -200,7 +201,7 @@ impl System {
 /// Everything a view is drawn from besides the theme.
 #[derive(Clone, Debug)]
 pub struct Data {
-    pub systems: Vec<System>,
+    pub systems: Arc<Vec<System>>,
     pub width: f64,
     pub height: f64,
     pub system_index: usize,
@@ -240,7 +241,7 @@ pub struct Data {
 impl Data {
     pub fn new(systems: Vec<System>, width: f64, height: f64) -> Self {
         Data {
-            systems,
+            systems: Arc::new(systems),
             width,
             height,
             system_index: 0,

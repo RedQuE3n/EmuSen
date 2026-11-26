@@ -9,11 +9,16 @@ Popup {
     signal pressed(int button)
     modal: true
     focus: true
-    closePolicy: Popup.CloseOnEscape
+    closePolicy: Popup.NoAutoClose
     anchors.centerIn: Overlay.overlay
     width: Kit.Tokens.cardWidth
     onOpened: root.controller.sheetOpen = true
     onClosed: root.controller.sheetOpen = false
+    Shortcut {
+        enabled: root.opened
+        sequence: "Escape"
+        onActivated: root.controller.key(Qt.Key_Escape, 0)
+    }
     Connections {
         target: root.controller
         function onSheetDismissed() { root.close() }

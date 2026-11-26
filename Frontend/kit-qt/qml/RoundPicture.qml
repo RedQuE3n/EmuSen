@@ -1,8 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Shapes
 
-// A picture with rounded corners, fitted whole or filling its box, drawn as a Shape filled with the Image's own texture; plain corners on the software backend, which has no texture fills (EmuSen_Qt.md §7.1, step 6; EmuSen_Kit.md §7.29).
+// A picture with rounded corners, fitted whole or filling its box, drawn via a single-pass SDF shader on RHI and plain corners on software (EmuSen_Qt.md §7.1, step 6; EmuSen_Kit.md §7.29).
 Item {
     id: root
     property alias source: picture.source
@@ -30,29 +29,21 @@ Item {
         visible: !root.rounded
         clip: root.crop
         fillMode: root.crop ? Image.PreserveAspectCrop : Image.PreserveAspectFit
-        asynchronous: false
+        asynchronous: true
         sourceSize: Qt.size(Math.ceil(root.width * root.pixelScale * Screen.devicePixelRatio), Math.ceil(root.height * root.pixelScale * Screen.devicePixelRatio))
         smooth: true
         mipmap: true
     }
-    Shape {
+    ShaderEffect {
         visible: root.rounded && picture.status === Image.Ready
         x: root.paintedX
         y: root.paintedY
         width: root.paintedWidth
         height: root.paintedHeight
-        preferredRendererType: Shape.CurveRenderer
-        ShapePath {
-            strokeColor: "transparent"
-            fillColor: "transparent"
-            fillItem: root.rounded ? picture : null
-            fillTransform: PlanarTransform.fromAffineMatrix(root.textureScale, 0, 0, root.textureScale,
-                (root.paintedWidth - picture.implicitWidth * root.textureScale) / 2, (root.paintedHeight - picture.implicitHeight * root.textureScale) / 2)
-            PathRectangle {
-                width: root.paintedWidth
-                height: root.paintedHeight
-                radius: root.radius
-            }
-        }
+        readonly property var source: picture
+        readonly property vector2d boxSize: Qt.vector2d(width, height)
+        readonly property vector2d texSize: Qt.vector2d(picture.implicitWidth * root.textureScale, picture.implicitHeight * root.textureScale)
+        readonly property real radius: root.radius
+        fragmentShader: "qrc:/qt/qml/EmuSen/Kit/shaders/round_picture.frag.qsb"
     }
 }

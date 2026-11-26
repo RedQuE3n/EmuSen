@@ -11,8 +11,8 @@ use emusen_platform_client::pads::Pads;
 use crate::game::{GamePads, GameReading};
 use crate::reading::{Reading, Tick};
 
-/// How often the pads are read: Mistress's pad timer's 16 ms (EmuSen_Input.md §8.12).
-pub const TICK: Duration = Duration::from_millis(16);
+/// How often the pads are read: 4 ms (250 Hz) for low-latency gameplay and UI response.
+pub const TICK: Duration = Duration::from_millis(4);
 
 /// What the thread hands its sink: a tick's changes, or words when opening or a poll failed (each failure once).
 pub type Delivery = std::result::Result<Tick, String>;

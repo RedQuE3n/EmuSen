@@ -10,9 +10,14 @@ Item {
     property real pixelScale: 1
     property real radius: 12
     property string cover: ""
-    property color bgColor: "#12806F"
-    property color dotColor: "#B8FFE9"
-    property color waveColor: "#6A4CF0"
+    property var swatch: null
+    property int slot: 0
+    readonly property color fallbackBg: slot === 2 ? "#2C1A57" : slot === 1 ? "#5B1C1A" : "#12806F"
+    readonly property color fallbackDot: slot === 2 ? "#E3CCFF" : slot === 1 ? "#FFD1B0" : "#B8FFE9"
+    readonly property color fallbackWave: slot === 2 ? "#6C3FB8" : slot === 1 ? "#B5432E" : "#6A4CF0"
+    property color bgColor: swatch?.bg ?? fallbackBg
+    property color dotColor: swatch?.dot ?? fallbackDot
+    property color waveColor: swatch?.wave ?? fallbackWave
     property color shadowColor: "transparent"
     property real shadowBlur: 0
     property real shadowOffsetY: 0

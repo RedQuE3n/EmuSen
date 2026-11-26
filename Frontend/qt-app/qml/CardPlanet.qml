@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
+import EmuSen.App
 
 // Program-drawn Eclipse core planet sphere with radial gradient and glow (EclipseStartConsole:46).
 Item {
@@ -69,6 +70,6 @@ Item {
         radius: width / 2
         color: "transparent"
         border.width: 2 * root.unit
-        border.color: "#5A6076"
+        border.color: ThemeInk.pillBorder
     }
 }

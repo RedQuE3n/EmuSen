@@ -9,7 +9,7 @@ coronaGlow.1	23	outer corona halo	170 px blur, 46 px spread, 0.28	-	in:powerDisc
 powerSection	25	power column at y 300 w 600	Column	Column	-	300	600	602	-	-	-	built	-
 powerHeader	26	header column	Column	Column	in:powerSection:0	top:powerSection:0	600	116	-	-	-	built	-
 powerTitle	27	"Power"	CardModel.title	CardLine	in:powerHeader:0	top:powerHeader:0	600	58	-	Tokens.textStrong	46	built	600 0 none
-powerSubtitle	28	suspended game subtitle	CardModel.subtitle	CardLine	in:powerHeader:0	below:powerTitle:8	600	50	-	#FFC9CDDB	20	built	400 0 none
+powerSubtitle	28	suspended game subtitle	CardModel.subtitle	CardLine	in:powerHeader:0	below:powerTitle:8	600	50	-	#FFD7D8DE	20	built	400 0 none
 powerList	30	5 power pill rows	ListView	ListView	in:powerSection:0	below:powerHeader:26	600	460	-	-	-	built	-
 powerRow.0	32	row 0 Sleep	Walkable	Walkable	in:powerList:0	top:powerList:0	600	84	-	-	-	built	-
 pillGlow.0	32	focused row glow	Kit.Glow	Glow	in:powerRow.0:0	top:powerRow.0:0	600	84	42	#66F0B4C4	-	built	glow 46 6 0 0
@@ -17,24 +17,24 @@ pillRing.0	32	focused row 6 px ring	rgba(246,231,216,0.18)	Rectangle	in:powerRow
 powerRowBg.0	32	focused cream pill	Tokens.accent	Rectangle	in:powerRow.0:0	top:powerRow.0:0	600	84	42	Tokens.accent	-	built	-
 powerIcon.0	33	Sleep icon 32 px	Marks.path	Item	in:powerRow.0:26	mid:powerRow.0	32	32	-	Tokens.overAccent	-	built	-
 powerLabel.0	34	"Sleep"	CardLine	CardLine	after:powerIcon.0:20	mid:powerRow.0	-	31	-	Tokens.overAccent	25	built	600 0 none
-powerHint.0	35	"Wakes where you are"	CardLine	CardLine	-	mid:powerRow.0	inright:powerRow.0:26	22	-	#FF2A2E40	18	built	400 0 none
+powerHint.0	35	"Wakes where you are"	CardLine	CardLine	-	mid:powerRow.0	inright:powerRow.0:26	22	-	#C707080F	18	built	400 0 none
 powerRow.1	32	row 1 Restart	Walkable	Walkable	in:powerList:0	below:powerRow.0:10	600	84	-	-	-	built	-
-powerRowBg.1	32	unfocused pill	Rectangle	Rectangle	in:powerRow.1:0	top:powerRow.1:0	600	84	42	-	-	built	line 2 #FF3A3F55
+powerRowBg.1	32	unfocused pill	Rectangle	Rectangle	in:powerRow.1:0	top:powerRow.1:0	600	84	42	-	-	built	line 2 #D95E647B
 powerIcon.1	33	Restart icon 32 px	Marks.path	Item	in:powerRow.1:26	mid:powerRow.1	32	32	-	Tokens.textStrong	-	built	-
 powerLabel.1	34	"Restart"	CardLine	CardLine	after:powerIcon.1:20	mid:powerRow.1	-	31	-	Tokens.textStrong	25	built	400 0 none
 powerRow.2	32	row 2 Shut down	Walkable	Walkable	in:powerList:0	below:powerRow.1:10	600	84	-	-	-	built	-
-powerRowBg.2	32	unfocused pill	Rectangle	Rectangle	in:powerRow.2:0	top:powerRow.2:0	600	84	42	-	-	built	line 2 #FF3A3F55
+powerRowBg.2	32	unfocused pill	Rectangle	Rectangle	in:powerRow.2:0	top:powerRow.2:0	600	84	42	-	-	built	line 2 #D95E647B
 powerIcon.2	33	Shut down icon 32 px	Marks.path	Item	in:powerRow.2:26	mid:powerRow.2	32	32	-	Tokens.textStrong	-	built	-
 powerLabel.2	34	"Shut down"	CardLine	CardLine	after:powerIcon.2:20	mid:powerRow.2	-	31	-	Tokens.textStrong	25	built	400 0 none
 powerRow.3	32	row 3 Back to the desktop	Walkable	Walkable	in:powerList:0	below:powerRow.2:10	600	84	-	-	-	built	-
-powerRowBg.3	32	unfocused pill	Rectangle	Rectangle	in:powerRow.3:0	top:powerRow.3:0	600	84	42	-	-	built	line 2 #FF3A3F55
+powerRowBg.3	32	unfocused pill	Rectangle	Rectangle	in:powerRow.3:0	top:powerRow.3:0	600	84	42	-	-	built	line 2 #D95E647B
 powerIcon.3	33	Desktop icon 32 px	Marks.path	Item	in:powerRow.3:26	mid:powerRow.3	32	32	-	Tokens.textStrong	-	built	-
 powerLabel.3	34	"Back to the desktop"	CardLine	CardLine	after:powerIcon.3:20	mid:powerRow.3	-	31	-	Tokens.textStrong	25	built	400 0 none
 powerHint.3	35	"EmuSen keeps running"	CardLine	CardLine	-	mid:powerRow.3	inright:powerRow.3:26	22	-	Tokens.muted	18	built	400 0 none
 powerRow.4	32	row 4 Quit EmuSen	Walkable	Walkable	in:powerList:0	below:powerRow.3:10	600	84	-	-	-	built	-
-powerRowBg.4	32	unfocused pill	Rectangle	Rectangle	in:powerRow.4:0	top:powerRow.4:0	600	84	42	-	-	built	line 2 #FF3A3F55
+powerRowBg.4	32	unfocused pill	Rectangle	Rectangle	in:powerRow.4:0	top:powerRow.4:0	600	84	42	-	-	built	line 2 #D95E647B
 powerIcon.4	33	Quit icon 32 px	Marks.path	Item	in:powerRow.4:26	mid:powerRow.4	32	32	-	Tokens.textStrong	-	built	-
 powerLabel.4	34	"Quit EmuSen"	CardLine	CardLine	after:powerIcon.4:20	mid:powerRow.4	-	31	-	Tokens.textStrong	25	built	400 0 none
-powerHelp	41	footer A Choose B Back	HelpModel.QuestionBack	HelpBar	-	1122	-	38	-	#FFD8DBE6	21	built	400 0 none
+powerHelp	41	footer A Choose B Back	HelpModel.QuestionBack	HelpBar	-	1122	-	38	-	#FFD7D8DE	21	built	400 0 none
 ownGlyph-Choose	42	A filled 34 px	CardGlyph	-	in:powerHelp:0	mid:powerHelp	34	34	-	-	-	built	glyph 17 700
 ownGlyph-Back	43	B ringed 38 px	CardGlyph	-	-	mid:powerHelp	38	38	-	-	-	built	glyph 16 400

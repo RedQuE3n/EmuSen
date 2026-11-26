@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Shared Eclipse scaffold for Scraper (#66), Scrape Status (#67), and Library Manager (#68).
 FocusScope {
@@ -63,8 +64,8 @@ FocusScope {
         ground: Kit.Tokens.surface
         pixelScale: root.pixelScale
         fields: [
-            Kit.BackdropField { x: 1240 * root.unit; y: -420 * root.unit; width: 900 * root.unit; height: 2 * 360 * root.unit; color: "#1FC9A8"; blur: 110 * root.unit; opacity: 0.5 },
-            Kit.BackdropField { x: 1500 * root.unit; y: -200 * root.unit; width: 700 * root.unit; height: 600 * root.unit; color: "#6A4CF0"; blur: 120 * root.unit; opacity: 0.55 }
+            Kit.BackdropField { x: 1240 * root.unit; y: -420 * root.unit; width: 900 * root.unit; height: 2 * 360 * root.unit; color: Kit.Tokens.success; blur: 110 * root.unit; opacity: 0.5 },
+            Kit.BackdropField { x: 1500 * root.unit; y: -200 * root.unit; width: 700 * root.unit; height: 600 * root.unit; color: ThemeInk.backdropHalo; blur: 120 * root.unit; opacity: 0.55 }
         ]
     }
 
@@ -150,7 +151,7 @@ FocusScope {
                             text: crumbItem.modelData.label ?? ""
                             size: 24
                             weight: crumbItem.modelData.current ? Font.DemiBold : Font.Normal
-                            color: crumbItem.modelData.current ? Kit.Tokens.textStrong : "#B9BED0"
+                            color: crumbItem.modelData.current ? Kit.Tokens.textStrong : Kit.Tokens.muted
                             MouseArea {
                                 visible: !crumbItem.modelData.current
                                 anchors.fill: parent
@@ -166,7 +167,7 @@ FocusScope {
                             text: crumbItem.modelData.slash ?? ""
                             size: 24
                             weight: Font.Normal
-                            color: "#8E94AB"
+                            color: ThemeInk.dim
                         }
                     }
                 }
@@ -180,7 +181,7 @@ FocusScope {
             height: 56 * root.unit
             width: statusPillRow.implicitWidth + 44 * root.unit
             radius: 28 * root.unit
-            color: "#C707080F"
+            color: ThemeInk.glass
             Row {
                 id: statusPillRow
                 x: 22 * root.unit
@@ -239,7 +240,7 @@ FocusScope {
             text: root.view.subtitle ?? ""
             size: 22
             weight: Font.Light
-            color: "#C9CDDB"
+            color: ThemeInk.body
             elide: Text.ElideRight
         }
     }
@@ -278,7 +279,7 @@ FocusScope {
                             gap: 4 * root.unit
                             thickness: 3 * root.unit
                             bandRadius: 29 * root.unit
-                            glowColor: "#80F0B4C4"
+                            glowColor: ThemeInk.glowStrong
                             glowBlur: 40 * root.unit
                             glowSpread: 10 * root.unit
                             pixelScale: root.pixelScale
@@ -289,7 +290,7 @@ FocusScope {
                             radius: 22 * root.unit
                             color: pill.modelData.active ? Kit.Tokens.accent : "transparent"
                             border.width: pill.modelData.active ? 0 : 2 * root.unit
-                            border.color: "#5A6076"
+                            border.color: ThemeInk.pillBorder
                         }
                         CardLine {
                             id: pillLabel
@@ -301,7 +302,7 @@ FocusScope {
                             text: pill.modelData.label ?? ""
                             size: 20
                             weight: pill.modelData.active ? Font.DemiBold : Font.Normal
-                            color: pill.modelData.active ? Kit.Tokens.surface : "#D8DBE6"
+                            color: pill.modelData.active ? Kit.Tokens.overAccent : ThemeInk.body
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -348,7 +349,7 @@ FocusScope {
                                 weight: Font.Normal
                                 spacing: 2.24
                                 capitalization: Font.AllUppercase
-                                color: "#8E94AB"
+                                color: ThemeInk.dim
                             }
                         }
                     }
@@ -386,7 +387,7 @@ FocusScope {
                                 gap: 4 * root.unit
                                 thickness: 3 * root.unit
                                 bandRadius: 23 * root.unit
-                                glowColor: "#80F0B4C4"
+                                glowColor: ThemeInk.glowStrong
                                 glowBlur: 40 * root.unit
                                 glowSpread: 10 * root.unit
                                 pixelScale: root.pixelScale
@@ -396,9 +397,9 @@ FocusScope {
                                 objectName: rowItem.modelData.bgObjectName ?? ""
                                 anchors.fill: parent
                                 radius: 16 * root.unit
-                                color: rowItem.modelData.focused ? "#151826" : "#11131C"
+                                color: rowItem.modelData.focused ? Kit.Tokens.surfaceRaised : Kit.Tokens.inputSurface
                                 border.width: rowItem.modelData.focused ? 0 : 1 * root.unit
-                                border.color: "#262A3A"
+                                border.color: ThemeInk.hairline
                             }
                             Row {
                                 id: cellsRow
@@ -444,7 +445,7 @@ FocusScope {
                         text: root.view.emptyMessage ?? ""
                         size: 20
                         weight: Font.Normal
-                        color: "#B9BED0"
+                        color: Kit.Tokens.muted
                     }
                 }
             }
@@ -457,9 +458,9 @@ FocusScope {
             width: 524 * root.unit
             height: asideCol.implicitHeight + 64 * root.unit
             radius: 28 * root.unit
-            color: "#11131C"
+            color: Kit.Tokens.inputSurface
             border.width: 1 * root.unit
-            border.color: "#262A3A"
+            border.color: ThemeInk.hairline
             Column {
                 id: asideCol
                 x: 32 * root.unit
@@ -493,7 +494,7 @@ FocusScope {
                     text: root.aside.subtitle ?? ""
                     size: 20
                     weight: Font.Normal
-                    color: root.aside.subtitleMuted ? "#B9BED0" : "#D8DBE6"
+                    color: root.aside.subtitleMuted ? Kit.Tokens.muted : ThemeInk.body
                 }
                 Loader {
                     id: asideMediaLoader
@@ -518,7 +519,7 @@ FocusScope {
                         text: asideLine.modelData.text ?? ""
                         size: 20
                         weight: Font.Normal
-                        color: asideLine.modelData.muted ? "#B9BED0" : "#D8DBE6"
+                        color: asideLine.modelData.muted ? Kit.Tokens.muted : ThemeInk.body
                     }
                 }
             }
@@ -531,9 +532,9 @@ FocusScope {
             width: root.width - 192 * root.unit
             height: 64 * root.unit
             radius: 20 * root.unit
-            color: "#151826"
+            color: Kit.Tokens.surfaceRaised
             border.width: 1 * root.unit
-            border.color: "#262A3A"
+            border.color: ThemeInk.hairline
             CardLine {
                 objectName: root.view.markBarTextObjectName ?? ""
                 x: 24 * root.unit
@@ -579,7 +580,7 @@ FocusScope {
             fitted: true
             ruled: false
             color: "transparent"
-            labelColor: "#D8DBE6"
+            labelColor: ThemeInk.body
             iconColor: Kit.Tokens.muted
             leadStyle: Kit.GlyphStyles.Filled
             leadColor: Kit.Tokens.accent
@@ -610,8 +611,8 @@ FocusScope {
                     boxMenu: true
                     boxOptions: true
                     keyPairs: true
-                    ink: "#D8DBE6"
-                    ring: "#B9BED0"
+                    ink: ThemeInk.body
+                    ring: Kit.Tokens.muted
                 }
             }
         }
@@ -624,7 +625,7 @@ FocusScope {
             text: root.view.counter ?? ""
             size: 21
             weight: Font.Normal
-            color: "#B9BED0"
+            color: Kit.Tokens.muted
         }
     }
 }

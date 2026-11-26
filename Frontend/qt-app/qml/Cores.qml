@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // A tool on the kit's tool screen, Cores and the tools of jobs alike (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7): every word, row and column from the ToolModel; A the row's action, X its page and Select the List card as cards over it, Start the plan, and the tool's questions in the question form.
 Kit.NormalizedCanvas {
@@ -226,12 +227,12 @@ Kit.NormalizedCanvas {
         objectName: "coresCardBackdrop"
         anchors.fill: parent
         visible: screen.eclipseAnyActive && screen.tool.cardOpen
-        ground: "#0A1024"
+        ground: Kit.Tokens.surface
         pixelScale: screen.unit
         fields: [
-            Kit.BackdropField { x: 1060 * screen.boardUnit; y: -140 * screen.boardUnit; width: 900 * screen.boardUnit; height: 760 * screen.boardUnit; color: "#1FC9A8"; blur: 90 * screen.boardUnit; opacity: 0.85 },
-            Kit.BackdropField { x: 1380 * screen.boardUnit; y: 420 * screen.boardUnit; width: 760 * screen.boardUnit; height: 760 * screen.boardUnit; color: "#6A4CF0"; blur: 110 * screen.boardUnit; opacity: 0.9 },
-            Kit.BackdropField { x: 900 * screen.boardUnit; y: -260 * screen.boardUnit; width: 700 * screen.boardUnit; height: 520 * screen.boardUnit; color: "#1D6BF2"; blur: 100 * screen.boardUnit; opacity: 0.8 }
+            Kit.BackdropField { x: 1060 * screen.boardUnit; y: -140 * screen.boardUnit; width: 900 * screen.boardUnit; height: 760 * screen.boardUnit; color: Kit.Tokens.success; blur: 90 * screen.boardUnit; opacity: 0.85 },
+            Kit.BackdropField { x: 1380 * screen.boardUnit; y: 420 * screen.boardUnit; width: 760 * screen.boardUnit; height: 760 * screen.boardUnit; color: ThemeInk.backdropHalo; blur: 110 * screen.boardUnit; opacity: 0.9 },
+            Kit.BackdropField { x: 900 * screen.boardUnit; y: -260 * screen.boardUnit; width: 700 * screen.boardUnit; height: 520 * screen.boardUnit; color: ThemeInk.backdropGlow; blur: 100 * screen.boardUnit; opacity: 0.8 }
         ]
     }
     // A row's page under X and the List card under Select, on the Card form over the screen (EmuSen_Interface.md §15.5).
@@ -282,7 +283,7 @@ Kit.NormalizedCanvas {
                 boardLineHeight: 22
                 width: parent.width
                 text: screen.tool.cardDetailLabel
-                color: "#F3C9D2"
+                color: ThemeInk.rose
                 size: 18
                 weight: Font.DemiBold
                 spacing: 18 * 0.18

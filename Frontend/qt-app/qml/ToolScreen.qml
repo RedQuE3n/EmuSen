@@ -24,6 +24,7 @@ Cores {
     property alias sessionGame: toolModel.sessionGame
     property alias masterCheats: toolModel.masterCheats
     property alias consoleCounts: toolModel.consoleCounts
+    readonly property alias problem: toolModel.problem
     // Open Folder on a firmware page, and what failed, which the window answers.
     signal openFolder(string path)
     signal said(string words)

@@ -13,6 +13,7 @@ import EmuSen.Esde as Esde
 Window {
     id: program
     objectName: "program"
+    component ToolHolder: Item { property string problem }
     // Shown by the program once its scene graph has adopted the device, as a test harness shows it.
     visible: false
     // Out of full screen, graphics.json's WindowWidth, WindowHeight and WindowResizable, as the start read them; left at 0 where not read whole.
@@ -131,21 +132,27 @@ Window {
         } else if (settingsEclipseShaders.focus) {
             settingsEclipseShaders.forceActiveFocus()
         } else if (pauseScreen.visible && program.pauseShown) {
-            pauseScreen.forceActiveFocus()
+            pauseScreen.focusActive()
         } else if (homeCardScreen.visible && screens.shown === Screens.HomeCard) {
-            homeCardScreen.forceActiveFocus()
+            homeCardScreen.focusActive()
         } else if (pageScreen.visible && screens.shown === Screens.Page && !(program.themeHost?.pageDrawn ?? false)) {
-            pageScreen.forceActiveFocus()
+            pageScreen.focusActive()
         } else if (collectionsEclipse.visible) {
-            collectionsEclipse.forceActiveFocus()
+            collectionsEclipse.focusActive()
         } else if (toolsEclipse.visible) {
-            toolsEclipse.forceActiveFocus()
+            toolsEclipse.focusActive()
         } else if (chosenTheme.active && chosenTheme.focus) {
             chosenTheme.forceActiveFocus()
         } else if (esdeLoader.focus) {
             esdeLoader.forceActiveFocus()
         } else if (settingsSlot.focus) {
             settingsSlot.forceActiveFocus()
+        } else if (themesLoader.focus) {
+            themesLoader.forceActiveFocus()
+        } else if (coresLoader.focus) {
+            coresLoader.forceActiveFocus()
+        } else if (jobsLoader.focus) {
+            jobsLoader.forceActiveFocus()
         } else if (referenceHost.takesFocus) {
             referenceHost.focusActiveSlot()
         } else if (!shell.activeFocus && (!program.activeFocusItem || program.activeFocusItem === program.contentItem)) {
@@ -919,11 +926,12 @@ Window {
             function onTrailChanged() { screens.checkToolsSettingsTrail() }
         }
         Loader {
+            id: themesLoader
             anchors.fill: parent
             active: program.bigScreen && screens.shown === Screens.Themes
             focus: active
             onActiveChanged: if (!active) program.settleFocus()
-            onLoaded: if (focus) forceActiveFocus()
+            onLoaded: if (focus) program.settleFocus()
             sourceComponent: Item {
                 ThemesScreen {
                     objectName: "themes"
@@ -941,13 +949,20 @@ Window {
         }
         // Cores on the tool screen, from Home's place (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7).
         Loader {
+            id: coresLoader
             anchors.fill: parent
             active: program.bigScreen && screens.shown === Screens.Cores
             focus: active
             onActiveChanged: if (!active) program.settleFocus()
-            onLoaded: if (focus) forceActiveFocus()
-            sourceComponent: Item {
+            onLoaded: {
+                if (focus) program.settleFocus()
+                const shown = coresLoader.item as ToolHolder
+                if (shown && shown.problem.length > 0) program.said(shown.problem, true, false)
+            }
+            sourceComponent: ToolHolder {
+                problem: coresTool.problem
                 ToolScreen {
+                    id: coresTool
                     objectName: "cores"
                     kind: ToolModel.Cores
                     shownAs: Screens.Cores
@@ -969,13 +984,20 @@ Window {
         }
         // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, or the Scraper, as Screens names it (tools/jobs.rs, tools/scraper.rs).
         Loader {
+            id: jobsLoader
             anchors.fill: parent
             active: program.bigScreen && screens.shown === Screens.Tool
             focus: active
             onActiveChanged: if (!active) program.settleFocus()
-            onLoaded: if (focus) forceActiveFocus()
-            sourceComponent: Item {
+            onLoaded: {
+                if (focus) program.settleFocus()
+                const shown = jobsLoader.item as ToolHolder
+                if (shown && shown.problem.length > 0) program.said(shown.problem, true, false)
+            }
+            sourceComponent: ToolHolder {
+                problem: jobsTool.problem
                 ToolScreen {
+                    id: jobsTool
                     objectName: "jobs"
                     kind: ToolModel.Jobs
                     shownAs: Screens.Tool

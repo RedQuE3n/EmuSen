@@ -1,6 +1,6 @@
 //! What the program reads before its window opens (EmuSen_Qt.md §7): where the platform library is, and Moonrise on or off.
 
-use emusen_qt::start::{all_cover_stores, big_screen, chosen_theme, cover_stores_from, game_mode_from, guide_chords_from, initial, navigation_sounds_from, platform_library, reduced_motion_from, splash_from, theme, Start, LIBRARY_FILE};
+use emusen_qt::start::{all_cover_stores, big_screen, chosen_theme, cover_stores_from, cover_stores_update_from, game_mode_from, guide_chords_from, initial, navigation_sounds_from, platform_library, reduced_motion_from, splash_from, theme, Start, LIBRARY_FILE};
 use serde_json::json;
 use std::path::Path;
 
@@ -67,6 +67,9 @@ fn a_theme_s_pictures_come_from_the_media_store_and_the_artwork_folders_set() {
     let settings = json!({ "ArtworkDirectory": "/art", "EsdeMediaDirectory": "" });
     assert_eq!(cover_stores_from(Some(Path::new("/media")), &settings), ["/media", "/art"]);
     assert_eq!(all_cover_stores(None, &json!({ "ArtworkDirectory": "/art", "EsdeMediaDirectory": "/art" })), ["/art"]);
+    assert_eq!(cover_stores_update_from(None, &serde_json::Value::Null, &[]), None);
+    assert_eq!(cover_stores_update_from(None, &json!({ "EsdeMediaDirectory": "/media" }), &[String::from("/media")]), None);
+    assert_eq!(cover_stores_update_from(None, &json!({ "ArtworkDirectory": "/art" }), &[]), Some(vec![String::from("/art")]));
     assert!(cover_stores_from(None, &serde_json::Value::Null).is_empty());
 }
 

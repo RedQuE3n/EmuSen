@@ -30,13 +30,16 @@ Kit.NormalizedCanvas {
     }
 
     visible: canvas.bigScreen && canvas.screens.shown === Screens.Collections
-    focus: !canvas.splashShown && canvas.visible
     onVisibleChanged: {
         if (canvas.visible && canvas.library) canvas.library.ensureMetadata()
         if (canvas.visible) collectionsModel.refresh()
-        if (canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
+        if (canvas.visible && !canvas.splashShown) canvas.focusActive()
     }
-    onActiveFocusChanged: if (canvas.activeFocus && !collectionsModel.dialogOpen && !collectionsModel.typingOpen) mainFocus.forceActiveFocus()
+    signal focusActive()
+    onFocusActive: {
+        if (collectionsModel.typingOpen) collectionKeyboard.forceActiveFocus()
+        else if (!collectionsModel.dialogOpen) mainFocus.forceActiveFocus()
+    }
 
     CollectionsEclipseModel {
         id: collectionsModel
@@ -85,7 +88,7 @@ Kit.NormalizedCanvas {
         id: frame
         objectName: "collectionsFrame"
         anchors.fill: parent
-        focus: true
+        focus: !canvas.splashShown && canvas.visible
         form: Kit.Forms.BigScreen
         surfaceDrawn: false
         helpShown: false

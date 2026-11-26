@@ -200,7 +200,10 @@ impl qobject::BuiltInThemes {
         if lib.is_empty() {
             return current.clone();
         }
-        let fresh = crate::start::cover_stores_for(std::path::Path::new(&lib));
+        let cur: Vec<String> = current.iter().map(|s| s.to_string()).collect();
+        let Some(fresh) = crate::start::cover_stores_update(std::path::Path::new(&lib), &cur) else {
+            return current.clone();
+        };
         let mut out = QList::<QString>::default();
         fresh.iter().for_each(|s| out.append(QString::from(s.as_str())));
         QStringList::from(&out)

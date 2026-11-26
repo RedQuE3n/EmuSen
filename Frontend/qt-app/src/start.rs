@@ -114,15 +114,7 @@ pub fn cover_stores_from(media: Option<&Path>, settings: &Value) -> Vec<String> 
     media.map(|m| m.to_string_lossy().into_owned()).into_iter().chain(set("ArtworkDirectory")).chain(set("EsdeMediaDirectory")).collect()
 }
 
-/// Base stores (`DIR_MEDIA`, `DIR_SCREENSHOTS`, `DIR_THEMES`) merged with configured artwork stores, deduplicated.
-pub fn all_cover_stores(platform: Option<&Platform>, settings: &Value) -> Vec<String> {
-    let media = platform.and_then(|p| p.directory(DIR_MEDIA).ok().flatten());
-    let mut stores = cover_stores_from(media.as_deref(), settings);
-    for key in [DIR_SCREENSHOTS, DIR_THEMES] {
-        if let Some(dir) = platform.and_then(|p| p.directory(key).ok().flatten()) {
-            stores.push(dir.to_string_lossy().into_owned());
-        }
-    }
+fn dedup_stores(stores: Vec<String>) -> Vec<String> {
     let mut unique = Vec::with_capacity(stores.len());
     for s in stores {
         if !s.is_empty() && !unique.contains(&s) {
@@ -132,11 +124,39 @@ pub fn all_cover_stores(platform: Option<&Platform>, settings: &Value) -> Vec<St
     unique
 }
 
-/// Recomputes all cover stores from `appsettings.json` and Galaxia directories.
-pub fn cover_stores_for(library: &Path) -> Vec<String> {
+/// Base stores (`DIR_MEDIA`, `DIR_SCREENSHOTS`, `DIR_THEMES`) merged with configured artwork stores, deduplicated.
+pub fn all_cover_stores(platform: Option<&Platform>, settings: &Value) -> Vec<String> {
+    let media = platform.and_then(|p| p.directory(DIR_MEDIA).ok().flatten());
+    let mut stores = cover_stores_from(media.as_deref(), settings);
+    for key in [DIR_SCREENSHOTS, DIR_THEMES] {
+        if let Some(dir) = platform.and_then(|p| p.directory(key).ok().flatten()) {
+            stores.push(dir.to_string_lossy().into_owned());
+        }
+    }
+    dedup_stores(stores)
+}
+
+/// Computes updated cover stores after Settings saves without reloading unrelated test harnesses.
+pub fn cover_stores_update(library: &Path, current: &[String]) -> Option<Vec<String>> {
     let platform = Platform::load(library).ok();
     let settings = platform.as_ref().and_then(|p| emusen_qt_models::clients::app_settings(p).ok()).unwrap_or(Value::Null);
-    all_cover_stores(platform.as_deref(), &settings)
+    cover_stores_update_from(platform.as_deref(), &settings, current)
+}
+
+pub fn cover_stores_update_from(platform: Option<&Platform>, settings: &Value, current: &[String]) -> Option<Vec<String>> {
+    let base = all_cover_stores(platform, &Value::Null);
+    if !base.is_empty() && base.iter().all(|b| current.contains(b)) {
+        let fresh = all_cover_stores(platform, settings);
+        return (fresh != current).then_some(fresh);
+    }
+    let configured = dedup_stores(cover_stores_from(None, settings));
+    let mut next = current.to_vec();
+    for s in configured {
+        if !next.contains(&s) {
+            next.push(s);
+        }
+    }
+    (next != current).then_some(next)
 }
 
 /// The start read through the platform library at `library`; its settings unread (the defaults) when it cannot load.

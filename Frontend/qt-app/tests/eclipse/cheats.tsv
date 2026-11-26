@@ -1,0 +1,34 @@
+# Eclipse Cheats (#21) against 21-cheats-improved.html (1920 by 1200).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+cheatsMark	103	crescent mark	Marks.menuCrescent	Item	88	mid:66	32	32	-	-	-	built	-
+trailWords.0	126	"Consoles"	trail[0]	CardLine	after:cheatsMark:20	mid:66	-	-	-	#FFB9BED0	22	built	400 0 none
+trailSlash.0	136	"/"	trail[0].slash	CardLine	after:trailWords.0:12	mid:66	-	-	-	#FF8E94AB	22	built	400 0 none
+trailWords.3	126	"Cheats"	trail[3]	CardLine	-	mid:66	-	-	-	Tokens.textStrong	22	built	600 0 none
+cheatsStatusPill	169	top-right status pill	Rectangle	Rectangle	-	mid:66	right:88	48	24	#DB11131C	-	built	line 1 #FF262A3A
+cheatsBattery	188	"82%"	battery	CardLine	in:cheatsStatusPill:20	mid:cheatsStatusPill	-	-	-	Tokens.textStrong	19	built	500 0 none
+cheatsClock	199	"9:41 PM"	clockText	CardLine	after:cheatsBattery:18	mid:cheatsStatusPill	inright:cheatsStatusPill:20	-	-	Tokens.textStrong	19	built	500 0 none
+gameStrip	215	game context strip	Rectangle	Rectangle	88	112	right:88	108	22	#FF11131C	-	built	line 1 #FF262A3A
+gameCover	239	cover thumb	Item	Item	in:gameStrip:18	mid:gameStrip	124	78	-	-	-	built	-
+gameTitle	280	game title	view.gameTitle	CardLine	after:gameCover:20	-	-	-	-	Tokens.textStrong	34	built	600 -0.015 none
+systemTag	292	system badge	Rectangle	Rectangle	after:gameTitle:14	-	-	24	12	-	-	built	-
+masterPill	414	master cheats pill	Item	Item	-	mid:gameStrip	right:114	58	-	-	-	built	-
+filterBar	509	filter bar	Item	Item	88	242	1068	48	-	-	-	built	-
+filterPill.all	524	All filter pill	filters[0]	Item	in:filterBar:0	mid:filterBar	-	42	-	-	-	built	-
+sortCaption	591	"Active first, then A–Z"	view.sortCaption	CardLine	-	mid:filterBar	inright:filterBar:0	-	-	#FF8E94AB	16	built	400 0 none
+groupLabel.database	650	"FROM THE DATABASE · N"	groups[0].title	CardLine	94	314	-	-	-	-	13	built	600 0.16 upper
+cheatRow.0	677	row 0 focused	groups[0].rows[0]	Item	88	342	1068	70	-	-	-	built	-
+cheatRowRing.0	683	row 0 focus ring	Kit.FocusRing	FocusRing	in:cheatRow.0:0	top:cheatRow.0:0	1068	70	-	-	-	built	ring 3 2.5 38 7 19 #66F0B4C4 #FF07080F #FFF6E7D8
+cheatRowBg.0	695	row 0 focused surface	Rectangle	Rectangle	in:cheatRow.0:0	top:cheatRow.0:0	1068	70	16	#FF151826	-	built	line 0 -
+cheatRow.1	677	row 1 unfocused	groups[0].rows[1]	Item	88	below:cheatRow.0:9	1068	70	-	-	-	built	-
+cheatRowBg.1	695	row 1 surface	Rectangle	Rectangle	in:cheatRow.1:0	top:cheatRow.1:0	1068	70	16	#FF11131C	-	built	line 1 #FF262A3A
+inspectorCard	824	focused cheat inspector	Rectangle	Rectangle	1192	242	right:88	-	22	#FF11131C	-	built	line 1 #FF262A3A
+inspectorName	856	focused cheat name	inspector.name	CardLine	-	-	-	-	-	Tokens.textStrong	27	built	600 -0.01 none
+inspectorCode	915	large mono hex code	inspector.code	CardLine	-	-	-	-	-	#FFF6E7D8	31	built	700 0.08 none
+dbCard	1024	local cheat db card	Rectangle	Rectangle	1192	below:inspectorCard:16	right:88	-	22	#FF11131C	-	built	line 1 #FF262A3A
+dbBrowseButton	1108	Browse N in file	Item	Item	in:dbCard:24	-	-	46	-	-	-	built	-
+dbUpdateButton	1164	Update database	Item	Item	after:dbBrowseButton:10	-	-	46	-	-	-	built	-
+addCheatCard	1212	add cheat dashed card	Item	Item	1192	below:dbCard:16	right:88	-	-	-	-	built	-
+cheatsFooter	1312	footer container	Item	Item	88	1122	right:88	44	-	-	-	built	-
+cheatsHelp	1319	footer help bar	EclipseBoardHelpBar	HelpBar	in:cheatsFooter:0	mid:cheatsFooter	-	-	-	#FFD7D8DE	21	built	400 0 none
+cheatsPosCounter	1328	position counter	Rectangle	Rectangle	-	mid:cheatsFooter	inright:cheatsFooter:0	38	18	#D111131C	-	built	line 1 #FF262A3A

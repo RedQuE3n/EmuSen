@@ -20,8 +20,8 @@ Kit.NormalizedCanvas {
     readonly property real boardUnit: Kit.CanvasUnits.designHeight / 1200
     readonly property string shownClock: screen.clock ? screen.clock.shortTime : (screen.clockText.length > 0 ? screen.clockText : fallbackClock.shortTime)
     readonly property int shownBattery: screen.battery >= 0 ? screen.battery : fallbackBattery.level
-    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : screen.eclipseScreen === 5 ? packagesLoader : screen.eclipseScreen === 6 ? packageLayersLoader : screen.eclipseScreen === 7 ? packagePageLoader : frame
-    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : screen.eclipseScreen === 5 && packagesLoader.item ? (packagesLoader.item as PackagesEclipse).controller : screen.eclipseScreen === 6 && packageLayersLoader.item ? (packageLayersLoader.item as PackageLayersEclipse).controller : screen.eclipseScreen === 7 && packagePageLoader.item ? (packagePageLoader.item as PackagePageEclipse).controller : frame.controller
+    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : screen.eclipseScreen === 5 ? packagesLoader : screen.eclipseScreen === 6 ? packageLayersLoader : screen.eclipseScreen === 7 ? packagePageLoader : screen.eclipseScreen === 8 ? cheatsView : frame
+    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : screen.eclipseScreen === 5 && packagesLoader.item ? (packagesLoader.item as PackagesEclipse).controller : screen.eclipseScreen === 6 && packageLayersLoader.item ? (packageLayersLoader.item as PackageLayersEclipse).controller : screen.eclipseScreen === 7 && packagePageLoader.item ? (packagePageLoader.item as PackagePageEclipse).controller : screen.eclipseScreen === 8 ? cheatsView.controller : frame.controller
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
     // B on the screen.
@@ -232,6 +232,19 @@ Kit.NormalizedCanvas {
     Connections {
         target: screen.tool
         function onChoosePatchFile() { patchFileDialog.open() }
+    }
+    CheatsEclipse {
+        id: cheatsView
+        objectName: `${screen.objectName}CheatsView`
+        anchors.fill: parent
+        visible: screen.eclipseScreen === 8 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 8 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking
+        tool: screen.tool
+        padFamily: screen.padFamily
+        pixelScale: screen.unit
+        battery: screen.shownBattery
+        clockText: screen.shownClock
+        onBacked: screen.backed()
     }
     // The search's words typed on the docked keyboard, from the List card's Search (EmuSen_Interface.md §15.2), as the grid's search types them.
     Kit.KeyboardModel {

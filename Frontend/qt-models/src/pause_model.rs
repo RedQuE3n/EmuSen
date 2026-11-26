@@ -215,6 +215,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "cheatAsked"]
         fn cheat_asked(self: Pin<&mut PauseModel>, index: i32, on: bool);
+        /// The Pause Card's Cheats page asks to open the full Cheats tool.
+        #[qsignal]
+        #[cxx_name = "cheatsToolAsked"]
+        fn cheats_tool_asked(self: Pin<&mut PauseModel>);
 
         /// Display's or Sound's page (`page`, "display" or "sound") turned to, for `SettingsModel.cardOpen` with the
         /// running console.
@@ -495,6 +499,7 @@ impl qobject::PauseModel {
                 self.as_mut().cheat_asked(index as i32, on);
                 self.shown();
             }
+            Outcome::ManageCheats => self.as_mut().cheats_tool_asked(),
             Outcome::SettingsPage { page, console } => {
                 self.as_mut().turned();
                 self.settings_page_asked(QString::from(page.key()), QString::from(console.as_str()));

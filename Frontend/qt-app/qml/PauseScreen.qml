@@ -32,6 +32,7 @@ Kit.NormalizedCanvas {
         focus: cardCanvas.pauseShown
         onResumed: cardCanvas.screens.play()
         onBackToLibrary: cardCanvas.screens.library()
+        onCheatsToolAsked: cardCanvas.screens.openCheats()
         onQuitGame: cardCanvas.session.close()
         onQuitAll: cardCanvas.screens.quit()
         onGone: if (cardCanvas.gameShown) cardCanvas.session.resume()

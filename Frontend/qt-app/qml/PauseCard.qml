@@ -15,6 +15,7 @@ MenuCard {
     readonly property int coverRow: games.revision >= 0 ? games.rowOf(root.session.game) : -1
     signal resumed()
     signal backToLibrary()
+    signal cheatsToolAsked()
     // Quit Game answered Yes, and Quit EmuSen.
     signal quitGame()
     signal quitAll()
@@ -67,6 +68,7 @@ MenuCard {
         controllers: root.settings ? root.settings.cardControllers : ""
         onControllersAsked: (index, by) => root.settings?.cardAct(index, by)
         onCheatAsked: (index, on) => root.session.switchCheat(index, on)
+        onCheatsToolAsked: root.cheatsToolAsked()
         // Game Options ▸ Display and Sound: Settings' rows for the running console; a display setting stored redraws the paused picture.
         settings: root.settings ? root.settings.cardSettings : ""
         onSettingsPageAsked: (page, system) => root.settings?.cardOpen(page, system)

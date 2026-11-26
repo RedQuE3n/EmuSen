@@ -89,6 +89,7 @@ Window {
     readonly property int dark: Tokens.Dark
     readonly property int screenRole: screen.role
     readonly property int screenFocus: screen.focusRole
+    readonly property string desktopKinds: [ThemeScreen.DesktopLibrary, ThemeScreen.DesktopTable, ThemeScreen.DesktopPlaying, ThemeScreen.DesktopSettings].join(",")
     readonly property string firstConsole: (consoleList.count > 0 ? consoleList.itemAt(0) as ConsoleRow : null)?.key ?? ""
     // Home's places stand before the feed, so their probe is read again when the test names a console after the feed.
     readonly property string secondPlace: (scene.consoleKey.length >= 0 && placeList.count > 1 ? placeList.itemAt(1) as PlaceRow : null)?.name ?? ""

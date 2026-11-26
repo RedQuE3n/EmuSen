@@ -38,6 +38,19 @@ fn qt_3_5_a_theme_reaches_its_folder_and_nothing_else() {
     assert_eq!(picture(&mut scene, "stubPicture"), "Ready", "a picture in the theme's folder loads");
     assert_eq!(scene.property("host", "warnings"), "", "a theme that keeps the rules is quiet");
     assert_eq!(scene.property("host", "liveEngines"), "1");
+    assert_eq!(scene.property("scene", "desktopFace"), "false", "a schema 1 theme has no desktop face");
+
+    // A schema 2 theme resolves both Big Picture and Desktop screens inside the same sandbox.
+    load(&mut scene, "dual");
+    assert_eq!(scene.property("host", "ready"), "true", "{}", scene.property("host", "warnings"));
+    assert_eq!(scene.property("scene", "placed"), "true", "{}", scene.property("host", "warnings"));
+    assert_eq!(scene.property("scene", "desktopPlaced"), "true", "{}", scene.property("host", "warnings"));
+    assert_eq!(scene.property("scene", "desktopFace"), "true");
+    assert_eq!(scene.property("scene", "providesDesktopLibrary"), "true");
+    assert_eq!(scene.property("scene", "providesDesktopTable"), "false");
+    assert_eq!(scene.property("dualDesktopLibrary", "width"), "640", "the desktop screen fills its slot");
+    assert_eq!(scene.property("host", "warnings"), "", "{}", scene.property("host", "warnings"));
+    assert_eq!(scene.property("host", "liveEngines"), "1", "both faces share one engine");
 
     // Importing the program's own models is refused before the screen compiles, with words naming the module and the file.
     load(&mut scene, "models");

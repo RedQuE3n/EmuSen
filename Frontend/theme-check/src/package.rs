@@ -3,7 +3,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use emusen_qml_rules::{check_theme, local_imports, qml_files};
-use emusen_theme_manifest::{Manifest, Screen};
+use emusen_theme_manifest::{DesktopScreen, Manifest, Screen};
 
 use crate::Finding;
 
@@ -22,19 +22,42 @@ fn folded(path: &Path) -> PathBuf {
     out
 }
 
+fn check_screens<'a>(
+    items: impl Iterator<Item = (&'a str, &'a str, bool)>,
+    list_name: &str,
+    folder: &Path,
+    file: &str,
+    findings: &mut Vec<Finding>,
+) {
+    for (name, rel, listed) in items {
+        let present = folder.join(rel).is_file();
+        if listed && !present {
+            findings.push(Finding::new(file, 1, "screen", format!("{name} is listed and {rel} is missing")));
+        } else if !listed && present {
+            findings.push(Finding::new(file, 1, "screen", format!("{rel} is not listed in {list_name}, so it never loads")));
+        }
+    }
+}
+
 /// Each listed screen's file present, each screen file listed, and each file the manifest names present.
 pub fn files(manifest: &Manifest, folder: &Path, shown: &str) -> Vec<Finding> {
     let file = format!("{shown}/theme.json");
     let mut findings = Vec::new();
-    for screen in Screen::ALL {
-        let listed = manifest.screens.contains(&screen);
-        let present = folder.join(screen.file()).is_file();
-        if listed && !present {
-            findings.push(Finding::new(&file, 1, "screen", format!("{} is listed and {} is missing", screen.name(), screen.file())));
-        } else if !listed && present {
-            findings.push(Finding::new(&file, 1, "screen", format!("{} is not listed in screens, so it never loads", screen.file())));
-        }
-    }
+    let bp_list = if manifest.schema >= 2 { "faces.bigPicture" } else { "screens" };
+    check_screens(
+        Screen::ALL.into_iter().map(|s| (s.name(), s.file(), manifest.screens.contains(&s))),
+        bp_list,
+        folder,
+        &file,
+        &mut findings,
+    );
+    check_screens(
+        DesktopScreen::ALL.into_iter().map(|s| (s.name(), s.file(), manifest.desktop_screens.contains(&s))),
+        "faces.desktop",
+        folder,
+        &file,
+        &mut findings,
+    );
     for p in manifest.cues.iter().map(|(_, p)| p).chain(&manifest.previews) {
         if !folder.join(&p.path).is_file() {
             findings.push(Finding::new(&file, p.line, "path", format!("{} is missing", p.path)));

@@ -3,6 +3,13 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.22, an addition: Dual-face themes (Big Picture and Desktop faces) (2026-11-26)
+
+- **`theme.json` schema 2**: adds `"faces": { "bigPicture": [...], "desktop": [...] }` (`screens/desktop/{Library,Table,Playing,Settings}.qml`) and optional nested `tokens.<variant>.desktop` token overrides layered over the variant's base overrides; schema 1 packages remain 100% valid unchanged.
+- **`ThemeScreen.DesktopLibrary`**, **`ThemeScreen.DesktopTable`**, **`ThemeScreen.DesktopPlaying`** and **`ThemeScreen.DesktopSettings`**: appended to `ThemeScreen.Kind` after `Game` (`0..=5` unchanged).
+- **`Actions.setBigScreen(bigScreen)`**: toggles between Big Picture (`true`) and Desktop (`false`) faces when hosted (`ActionSink::set_big_screen`).
+- The module is 1.22 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.22.*`.
+
 ## 1.21, an addition: Settings Shader levers, Parameters, Themes and Scraping boards (2026-11-25)
 
 - **`Settings.boardTrailLine`**, **`Settings.inlinePills`**, **`Settings.inlinePill`**, **`Settings.themePreview`**, **`Settings.previewImage`** and **`Settings.boardMeta`**: Eclipse board crumb line, Themes inline kind pills (`EmuSen` / `ES-DE`), 424×265 theme preview card (image URL or swatch fallback) and author/API/variants metadata line for boards #59–#62 without altering reference-theme fields (R-20261116-20, -22, -24, R-20261123-32).

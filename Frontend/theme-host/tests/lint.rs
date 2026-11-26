@@ -5,8 +5,8 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::path::PathBuf;
 
 const MANIFEST: &str = include_str!("../Cargo.toml");
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.ThemeHost-1.0.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.ThemeHost-1.0.qmldir");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.ThemeHost-1.1.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.ThemeHost-1.1.qmldir");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
 fn normalized(text: &str) -> String {
@@ -28,7 +28,7 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.ThemeHost's types changed: review it, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.ThemeHost-1.0.qmltypes"
+        "EmuSen.ThemeHost's types changed: review it, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.ThemeHost-1.1.qmltypes"
     );
     assert_eq!(normalized(COMMITTED_QMLDIR), normalized(&built("qmldir")), "EmuSen.ThemeHost's qmldir changed: review it, then copy it");
 }

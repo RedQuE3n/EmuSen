@@ -1,6 +1,6 @@
 // EmuSen_Qt.md §3.3, §3.4, §5.2: theme.json's schema 1, what it reads and what it refuses.
 
-use emusen_theme_manifest::{API, Kind, Screen, TokenValue, Variant, inside_package, line_of, parse};
+use emusen_theme_manifest::{API, DesktopScreen, Kind, SCHEMA, Screen, TokenValue, Variant, inside_package, line_of, parse};
 
 const GOOD: &str = r##"{
     "schema": 1,
@@ -51,7 +51,8 @@ fn qt_3_3_a_newer_api_or_schema_is_refused_and_an_older_minor_is_not_possible_be
     // A minor past the build's own, read from the build rather than typed, so the next minor's bump keeps the case.
     assert_eq!(kinds(&GOOD.replace("\"1.0\"", &format!("\"{}.{}\"", API.0, API.1 + 1))), vec![(3, Kind::Api), (16, Kind::Note)]);
     assert_eq!(kinds(&GOOD.replace("\"1.0\"", "\"one\"")), vec![(3, Kind::Schema), (16, Kind::Note)]);
-    assert_eq!(kinds(&GOOD.replace("\"schema\": 1", "\"schema\": 2")), vec![(2, Kind::Api), (16, Kind::Note)]);
+    assert_eq!(kinds(&GOOD.replace("\"schema\": 1", &format!("\"schema\": {}", SCHEMA + 1))), vec![(2, Kind::Api), (16, Kind::Note)]);
+    assert_eq!(kinds(&GOOD.replace("\"schema\": 1", "\"schema\": 0")), vec![(2, Kind::Schema), (16, Kind::Note)]);
     let words = parse(&GOOD.replace("\"1.0\"", "\"2.0\"")).unwrap().1[0].words.clone();
     assert!(words.contains("2.0") && words.contains(&format!("{}.{}", API.0, API.1)), "the words name both: {words}");
 }
@@ -99,4 +100,80 @@ fn qt_3_4_a_key_is_found_after_its_parent_and_never_as_a_value() {
     let text = "{\n \"name\": \"accent\",\n \"tokens\": {\n  \"dark\": {\n   \"accent\": \"#000\"\n  }\n }\n}";
     assert_eq!(line_of(text, &["tokens", "dark", "accent"]), 5);
     assert_eq!(line_of(text, &["nothing"]), 1);
+}
+
+const GOOD_V2: &str = r##"{
+    "schema": 2,
+    "api": "1.22",
+    "name": "Eclipse",
+    "author": "The EmuSen project",
+    "licence": "GPL-3.0-or-later",
+    "variants": ["dark", "light"],
+    "faces": {
+        "bigPicture": ["home", "consoles", "games", "splash", "settings", "game"],
+        "desktop": ["library", "table", "playing", "settings"]
+    },
+    "tokens": {
+        "dark": {
+            "surface": "#07080F",
+            "rowHeight": 56.0,
+            "desktop": {
+                "rowHeight": 38.0,
+                "fontRow": 13.5
+            }
+        },
+        "light": {
+            "accent": "#B4442A",
+            "desktop": {
+                "tileRadius": 12.0
+            }
+        }
+    },
+    "extra": true
+}
+"##;
+
+#[test]
+fn schema_2_reads_faces_desktop_screens_and_desktop_tokens() {
+    let (m, findings) = parse(GOOD_V2).unwrap();
+    assert_eq!((m.schema, m.api, m.name.as_str()), (2, (1, 22), "Eclipse"));
+    assert_eq!(m.screens, Screen::ALL.to_vec());
+    assert_eq!(m.desktop_screens, DesktopScreen::ALL.to_vec());
+    assert_eq!(DesktopScreen::Library.file(), "screens/desktop/Library.qml");
+    assert_eq!(DesktopScreen::Table.file(), "screens/desktop/Table.qml");
+    assert_eq!(DesktopScreen::Playing.file(), "screens/desktop/Playing.qml");
+    assert_eq!(DesktopScreen::Settings.file(), "screens/desktop/Settings.qml");
+    assert_eq!(DesktopScreen::listed(), "library, table, playing or settings");
+    assert_eq!(m.tokens.len(), 3);
+    assert_eq!(m.desktop_tokens.len(), 3);
+    assert_eq!((m.desktop_tokens[0].variant, m.desktop_tokens[0].name.as_str(), &m.desktop_tokens[0].value, m.desktop_tokens[0].line), (Variant::Dark, "fontRow", &TokenValue::Number(13.5), 18));
+    assert_eq!((m.desktop_tokens[1].variant, m.desktop_tokens[1].name.as_str(), &m.desktop_tokens[1].value, m.desktop_tokens[1].line), (Variant::Dark, "rowHeight", &TokenValue::Number(38.0), 17));
+    assert_eq!((m.desktop_tokens[2].variant, m.desktop_tokens[2].name.as_str(), m.desktop_tokens[2].line), (Variant::Light, "tileRadius", 24));
+    assert_eq!(findings.len(), 1);
+    assert_eq!((findings[0].line, findings[0].kind, findings[0].refuses()), (28, Kind::Note, false));
+    assert!(findings[0].words.contains("schema 2"), "{}", findings[0].words);
+    assert_eq!(kinds(&GOOD_V2.replace("\"schema\": 2", "\"schema\": 3")), vec![(2, Kind::Api), (28, Kind::Note)]);
+}
+
+#[test]
+fn schema_1_and_schema_2_reject_mixed_or_invalid_faces_and_desktop_tokens() {
+    let v1_with_faces = "{\n  \"schema\": 1,\n  \"api\": \"1.22\",\n  \"name\": \"T\",\n  \"author\": \"A\",\n  \"licence\": \"L\",\n  \"variants\": [\"dark\"],\n  \"screens\": [\"home\"],\n  \"faces\": { \"desktop\": [\"library\"] },\n  \"tokens\": { \"dark\": { \"desktop\": { \"rowHeight\": 38.0 } } }\n}\n";
+    let f1: Vec<_> = parse(v1_with_faces).unwrap().1.into_iter().filter(|f| f.refuses()).map(|f| (f.line, f.kind, f.words)).collect();
+    assert_eq!(f1, vec![(9, Kind::Schema, "faces requires schema 2".to_owned()), (10, Kind::Schema, "desktop token overrides require schema 2".to_owned())]);
+
+    let v2_bare = "{\n  \"schema\": 2\n}\n";
+    let words: Vec<String> = parse(v2_bare).unwrap().1.into_iter().map(|f| f.words).collect();
+    assert_eq!(words, vec!["api is missing", "name is missing", "author is missing", "licence is missing", "variants is missing", "faces is missing"]);
+
+    let v2_bad = "{\n  \"schema\": 2,\n  \"api\": \"1.22\",\n  \"name\": \"T\",\n  \"author\": \"A\",\n  \"licence\": \"L\",\n  \"variants\": [\"dark\"],\n  \"screens\": [\"home\"],\n  \"faces\": {\n    \"bigPicture\": [\"library\"],\n    \"desktop\": [\"home\", \"library\", \"library\"],\n    \"mobile\": []\n  },\n  \"tokens\": { \"dark\": { \"desktop\": { \"bad\": null } } }\n}\n";
+    let f2: Vec<_> = parse(v2_bad).unwrap().1.into_iter().filter(|f| f.refuses()).map(|f| (f.line, f.kind, f.words)).collect();
+    assert!(f2.iter().any(|(l, k, w)| *l == 8 && *k == Kind::Schema && w.contains("screens")), "{f2:?}");
+    assert!(f2.iter().any(|(l, k, w)| *l == 10 && *k == Kind::Schema && w.contains("is not a screen")), "{f2:?}");
+    assert!(f2.iter().any(|(l, k, w)| *l == 11 && *k == Kind::Schema && w.contains("is not a desktop screen")), "{f2:?}");
+    assert!(f2.iter().any(|(l, k, w)| *l == 11 && *k == Kind::Schema && w.contains("twice")), "{f2:?}");
+    assert!(f2.iter().any(|(l, k, w)| *l == 12 && *k == Kind::Schema && w.contains("is not a face")), "{f2:?}");
+    assert!(f2.iter().any(|(l, k, w)| *l == 14 && *k == Kind::Schema && w.contains("bad is a value")), "{f2:?}");
+
+    let v2_desktop_non_obj = GOOD_V2.replace("\"desktop\": {\n                \"rowHeight\": 38.0,\n                \"fontRow\": 13.5\n            }", "\"desktop\": 42");
+    assert!(parse(&v2_desktop_non_obj).unwrap().1.iter().any(|f| f.refuses() && f.kind == Kind::Schema && f.words.contains("tokens.dark.desktop")));
 }

@@ -35,6 +35,19 @@ impl ActionSink for Taker {
     }
 }
 
+struct BigScreenTaker(Arc<Mutex<Vec<bool>>>);
+
+impl ActionSink for BigScreenTaker {
+    fn act(&mut self, _action: &Action) -> bool {
+        false
+    }
+
+    fn set_big_screen(&mut self, big_screen: bool) -> bool {
+        self.0.lock().unwrap().push(big_screen);
+        true
+    }
+}
+
 /// A striker keeping the rungs made ready and struck.
 struct Struck(Arc<Mutex<Vec<(&'static str, usize)>>>);
 
@@ -155,6 +168,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "accent"), scene.property("scene", "kitAccent"), "the theme's Tokens are the kit's");
     assert_eq!(scene.property("scene", "dark"), "0");
     assert_eq!((scene.property("scene", "screenRole").as_str(), scene.property("scene", "screenFocus").as_str()), ("2", "0"));
+    assert_eq!(scene.property("scene", "desktopKinds"), "6,7,8,9");
     assert_eq!(scene.property("scene", "gameHelp"), "5", "Home's shelf: Play, Game page, Favourite, Search, Home");
     assert_eq!((scene.property("scene", "placeHelp").as_str(), scene.property("scene", "placeGroup").as_str()), ("5", "Group"), "a place: Open, Back, Group, Search, Home");
     assert_eq!(scene.property("scene", "declinedHelp"), "false|true|5", "accept: false dims A's entry alone");
@@ -236,6 +250,12 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
             Action::OpenSection("consoles".into())
         ]
     );
+    assert!(!actions.as_mut().set_big_screen(false), "default ActionSink declines setBigScreen");
+    let big_screens = Arc::new(Mutex::new(Vec::new()));
+    actions.as_mut().set_sink(Some(Box::new(BigScreenTaker(Arc::clone(&big_screens)))));
+    assert!(actions.as_mut().set_big_screen(false));
+    assert!(actions.as_mut().set_big_screen(true));
+    assert_eq!(*big_screens.lock().unwrap(), [false, true]);
 
     let rung = Arc::new(Mutex::new(Vec::new()));
     let mut cues = host::cues(within(window)).unwrap();

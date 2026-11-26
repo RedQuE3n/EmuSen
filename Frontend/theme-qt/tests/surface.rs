@@ -6,8 +6,8 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.21.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.21.qmldir");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.22.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.22.qmldir");
 const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.13.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
@@ -71,12 +71,12 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.16.qmltypes"
+        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.22.qmltypes"
     );
     assert_eq!(
         normalized(COMMITTED_QMLDIR),
         normalized(&built("qmldir")),
-        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.16.qmldir"
+        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.22.qmldir"
     );
 }
 
@@ -127,6 +127,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "stepLetter",
                 "setFilter",
                 "enabled",
+                "setBigScreen",
                 "settingsStep",
                 "settingsChoose",
                 "settingsSlide",
@@ -351,6 +352,7 @@ fn qt_3_2_the_tokens_and_the_screen_s_enums_are_the_kit_s() {
     let declared = |text: &str, name: &str| -> String {
         text.split(&format!("enum {name} {{")).nth(1).unwrap().split('}').next().unwrap().split_whitespace().collect::<String>()
     };
+    assert_eq!(declared(&screen, "Kind"), "Home,Consoles,Games,Splash,Settings,Game,DesktopLibrary,DesktopTable,DesktopPlaying,DesktopSettings", "the screen kinds keep Big Picture 0..=5 and append Desktop");
     assert_eq!(declared(&screen, "Walk"), values(KIT_TYPES, "Role").trim_end_matches(",NoRole"), "the walk's roles in the kit's order");
     assert_eq!(declared(&tokens, "Variant"), values(KIT_TYPES, "Variant"));
     assert_eq!(declared(&tokens, "Form"), values(KIT_TYPES, "Form"));

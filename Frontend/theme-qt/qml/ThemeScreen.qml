@@ -2,7 +2,7 @@ import QtQuick
 
 // The root of a theme's screen (EmuSen_Qt.md §3.2): which screen it is, the walk's first role, the items a free arrangement walks in order, for the splash its length, whether it is drawn still, its end, and from 1.10 whether it enters Home and its sound, for Home where such a splash is placed, and from 1.13 the game page's tabs it draws.
 FocusScope {
-    enum Kind { Home, Consoles, Games, Splash, Settings, Game }
+    enum Kind { Home, Consoles, Games, Splash, Settings, Game, DesktopLibrary, DesktopTable, DesktopPlaying, DesktopSettings }
     enum Walk { Navigation, Content, Detail, Actions, Search }
     property int role: ThemeScreen.Home
     property int focusRole: ThemeScreen.Content

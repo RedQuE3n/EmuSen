@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
+import EmuSen.App
 
 // Centered bottom help bar for Eclipse circular dialogs (EclipseDialog:44-47, EclipsePower:41-44).
 Item {
@@ -24,7 +25,7 @@ Item {
         fitted: true
         ruled: false
         color: "transparent"
-        labelColor: "#D8DBE6"
+        labelColor: ThemeInk.body
         iconColor: Kit.Tokens.muted
         leadStyle: Kit.GlyphStyles.Filled
         leadColor: Kit.Tokens.accent
@@ -44,7 +45,7 @@ Item {
             CardGlyph {
                 unit: footer.unit
                 side: 34
-                ink: "#D8DBE6"
+                ink: ThemeInk.body
             }
         }
     }

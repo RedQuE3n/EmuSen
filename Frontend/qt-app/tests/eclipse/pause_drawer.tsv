@@ -7,7 +7,7 @@ coronaRim	30	2 px corona rim	Tokens.coronaColor	Rectangle	in:cardDisc:-2	top:car
 coronaGlow.0	30	inner corona glow	44 px blur, 8 px spread, 0.6	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 44 8 0.6
 coronaGlow.1	30	outer corona halo	170 px blur, 46 px spread, 0.28	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 170 46 0.28
 cardSection	32	card section 560x1026	Item	Item	72	64	560	1026	-	-	-	built	-
-cardBreadcrumb	34	"TOWER SET · MEMORY CARDS" eyebrow	PauseModel.breadcrumb	CardLine	72	64	560	22	-	#FFF3C9D2	18	built	600 0.22 upper
+cardBreadcrumb	34	"TOWER SET · MEMORY CARDS" eyebrow	PauseModel.breadcrumb	CardLine	72	64	560	22	-	#FFF0B4C4	18	built	600 0.22 upper
 cardTitle	35	"Memory Cards" 1 line	PauseModel.title	CardLine	72	below:cardBreadcrumb:8	560	53	-	Tokens.textStrong	50	built	600 -0.01 none
 cardRow.0	41	row 0 Card 1 in Tower Set	MenuRowEclipse	MenuRowEclipse	72	below:cardTitle:26	560	66	-	-	-	built	-
 cardRow.1	41	row 1 Card 2 in Tower Set	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.0:6	560	66	-	-	-	built	-
@@ -16,16 +16,16 @@ rowGlow.2	41	Card 3 glow	Kit.Glow	Glow	72	top:cardRow.2:0	560	72	36	#66F0B4C4	-	
 rowRing.2	41	Card 3 6 px ring	rgba(246,231,216,0.18)	Rectangle	66	top:cardRow.2:-6	572	84	42	#2EF6E7D8	-	built	-
 rowBg.2	41	Card 3 cream pill	Tokens.accent	Rectangle	72	top:cardRow.2:0	560	72	36	Tokens.accent	-	built	-
 rowGlyph.2	42	A badge 46 px	CardGlyph	CardGlyph	86	mid:cardRow.2	46	46	-	-	-	built	glyph 21 600
-AdaptiveCardPane	51	floating drawer detail card	Rectangle	Rectangle	800	210	760	318.8	28	#F207080F	-	built	line 1 #FF262A3A
+AdaptiveCardPane	51	floating drawer detail card	Rectangle	Rectangle	800	210	760	318.8	28	#F207080F	-	built	line 1 #615E647B
 PaneDrawerCards	51	drawer card tiles row	Row	Row	836	246	-	190	-	-	-	built	-
-PaneDrawerCard.0	51	Card 1 tile	Rectangle	Rectangle	836	246	150	190	-	#FF151826	-	built	line 2 #FF5A6076
-PaneDrawerCardSlot.0	51	Card 1 label recess	Rectangle	Rectangle	in:PaneDrawerCard.0:22	top:PaneDrawerCard.0:22	106	54	8	#FF262A3A	-	built	-
+PaneDrawerCard.0	51	Card 1 tile	Rectangle	Rectangle	836	246	150	190	-	Tokens.surfaceRaised	-	built	line 2 #D95E647B
+PaneDrawerCardSlot.0	51	Card 1 label recess	Rectangle	Rectangle	in:PaneDrawerCard.0:22	top:PaneDrawerCard.0:22	106	54	8	#525E647B	-	built	-
 PaneDrawerCardName.0	51	"Card 1"	PaneModel.name	CardLine	in:PaneDrawerCard.0:0	up:PaneDrawerCard.0:26	150	25	-	Tokens.textStrong	20	built	400 0 none
-PaneDrawerCard.1	51	Card 2 tile	Rectangle	Rectangle	after:PaneDrawerCard.0:22	246	150	190	-	#FF151826	-	built	line 2 #FF5A6076
-PaneDrawerCardSlot.1	51	Card 2 label recess	Rectangle	Rectangle	in:PaneDrawerCard.1:22	top:PaneDrawerCard.1:22	106	54	8	#FF262A3A	-	built	-
+PaneDrawerCard.1	51	Card 2 tile	Rectangle	Rectangle	after:PaneDrawerCard.0:22	246	150	190	-	Tokens.surfaceRaised	-	built	line 2 #D95E647B
+PaneDrawerCardSlot.1	51	Card 2 label recess	Rectangle	Rectangle	in:PaneDrawerCard.1:22	top:PaneDrawerCard.1:22	106	54	8	#525E647B	-	built	-
 PaneDrawerCardName.1	51	"Card 2"	PaneModel.name	CardLine	in:PaneDrawerCard.1:0	up:PaneDrawerCard.1:26	150	25	-	Tokens.textStrong	20	built	400 0 none
-PaneDrawerCard.2	51	Card 3 focused tile	Rectangle	Rectangle	after:PaneDrawerCard.1:22	246	150	190	-	#FF151826	-	built	line 2 #FFF6E7D8
-PaneDrawerCardSlot.2	51	Card 3 label recess	Rectangle	Rectangle	in:PaneDrawerCard.2:22	top:PaneDrawerCard.2:22	106	54	8	#FF262A3A	-	built	-
+PaneDrawerCard.2	51	Card 3 focused tile	Rectangle	Rectangle	after:PaneDrawerCard.1:22	246	150	190	-	Tokens.surfaceRaised	-	built	line 2 #FFF6E7D8
+PaneDrawerCardSlot.2	51	Card 3 label recess	Rectangle	Rectangle	in:PaneDrawerCard.2:22	top:PaneDrawerCard.2:22	106	54	8	#525E647B	-	built	-
 PaneDrawerCardName.2	51	"Card 3"	PaneModel.name	CardLine	in:PaneDrawerCard.2:0	up:PaneDrawerCard.2:26	150	25	-	Tokens.textStrong	20	built	400 0 none
 PaneSentence	51	"A card in the drawer."	PaneModel.sentence	CardLine	836	below:PaneDrawerCards:22	688	34.8	-	Tokens.textStrong	24	built	400 0 none
 cardStatus	53	top-right status pill	Rectangle	Rectangle	-	48	right:200	56	28	#D107080F	-	built	-
@@ -33,7 +33,7 @@ cardBattery	54	"82%"	Words.percent	CardLine	in:cardStatus:22	mid:cardStatus	-	27
 cardClock	54	"9:41 PM"	Clock.shortTime	CardLine	after:cardBattery:22	mid:cardStatus	inright:cardStatus:22	27	-	Tokens.textStrong	22	built	600 0 none
 cardFooterBar	57	bottom footer bar 76 px	Rectangle	Rectangle	0	1124	right:0	76	-	Tokens.surface	-	built	-
 cardFooterRule	57	top 2 px hairline	Tokens.rule	Rectangle	0	1124	right:0	2	-	Tokens.rule	-	built	-
-cardHelp	58	help bar Choose Back Screenshot Resume	HelpModel.PausePage	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD8DBE6	21	built	400 0 none
+cardHelp	58	help bar Choose Back Screenshot Resume	HelpModel.PausePage	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD7D8DE	21	built	400 0 none
 ownGlyph-Choose	59	A filled 34 px	CardGlyph	-	in:cardHelp:0	mid:cardHelp	34	34	-	-	-	built	glyph 17 700
 ownGlyph-Back	60	B ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Screenshot	61	X ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400

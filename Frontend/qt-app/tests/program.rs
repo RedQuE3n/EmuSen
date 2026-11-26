@@ -118,3 +118,71 @@ fn kit_7_109_the_program_itself_never_prints_the_main_thread_line() {
     assert!(words.contains("No game can be played"), "the program made its application and said so: {words}");
     assert!(!words.contains("QApplication was not created in the main() thread"), "the program printed the main-thread line:\n{words}");
 }
+
+fn hex_colour_in_line(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'#' {
+            let start = i + 1;
+            let mut end = start;
+            while end < bytes.len() && bytes[end].is_ascii_hexdigit() {
+                end += 1;
+            }
+            let len = end - start;
+            let delimited = end == bytes.len() || !bytes[end].is_ascii_alphanumeric();
+            if delimited && matches!(len, 3 | 4 | 6 | 8) {
+                return true;
+            }
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+    false
+}
+
+fn allowed_procedural_art_line(file: &str, trimmed: &str) -> bool {
+    match file {
+        "EclipseArtPlate.qml" => {
+            trimmed.starts_with("readonly property color fallbackBg:")
+                || trimmed.starts_with("readonly property color fallbackDot:")
+                || trimmed.starts_with("readonly property color fallbackWave:")
+        }
+        "CardPlanet.qml" => {
+            trimmed.starts_with("readonly property color light:")
+                || trimmed.starts_with("readonly property color middle:")
+                || trimmed.starts_with("readonly property color shade:")
+        }
+        _ => false,
+    }
+}
+
+#[test]
+fn the_program_s_scenes_use_kit_tokens_not_hex_colours() {
+    // Program-owned QML chrome derives every colour from Kit.Tokens or ThemeInk (R-20261125-18).
+    let qml_dir = emusen_qt_test::lint::frontend().join("qt-app").join("qml");
+    let mut entries: Vec<_> = std::fs::read_dir(&qml_dir)
+        .expect("program qml dir")
+        .map(|e| e.expect("dir entry").path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "qml"))
+        .collect();
+    entries.sort();
+    assert!(!entries.is_empty(), "program qml dir has .qml files");
+
+    let mut violations = Vec::new();
+    for path in entries {
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let text = std::fs::read_to_string(&path).expect("read qml file");
+        for (idx, line) in text.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") || allowed_procedural_art_line(&name, trimmed) {
+                continue;
+            }
+            if hex_colour_in_line(line) {
+                violations.push(format!("{name}:{}: {}", idx + 1, line.trim()));
+            }
+        }
+    }
+    assert!(violations.is_empty(), "hardcoded hex colours in program QML:\n{}", violations.join("\n"));
+}

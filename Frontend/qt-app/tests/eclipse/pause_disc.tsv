@@ -7,7 +7,7 @@ coronaRim	30	2 px corona rim	Tokens.coronaColor	Rectangle	in:cardDisc:-2	top:car
 coronaGlow.0	30	inner corona glow	44 px blur, 8 px spread, 0.6	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 44 8 0.6
 coronaGlow.1	30	outer corona halo	170 px blur, 46 px spread, 0.28	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 170 46 0.28
 cardSection	32	card section 560x1026	Item	Item	72	64	560	1026	-	-	-	built	-
-cardBreadcrumb	34	"PAUSED · PLAYSTATION · TOWER SET" eyebrow	PauseModel.breadcrumb	CardLine	72	64	560	22	-	#FFF3C9D2	18	built	600 0.22 upper
+cardBreadcrumb	34	"PAUSED · PLAYSTATION · TOWER SET" eyebrow	PauseModel.breadcrumb	CardLine	72	64	560	22	-	#FFF0B4C4	18	built	600 0.22 upper
 cardTitle	35	"Change Disc" 1 line	PauseModel.title	CardLine	72	below:cardBreadcrumb:8	560	53	-	Tokens.textStrong	50	built	600 -0.01 none
 cardRow.0	41	row 0 Tower Set (Disc 1) Inserted	MenuRowEclipse	MenuRowEclipse	72	below:cardTitle:26	560	66	-	-	-	built	-
 cardRow.1	41	row 1 Tower Set (Disc 2) focused	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.0:6	560	72	-	-	-	built	-
@@ -16,13 +16,13 @@ rowRing.1	41	Disc 2 6 px ring	rgba(246,231,216,0.18)	Rectangle	66	top:cardRow.1:
 rowBg.1	41	Disc 2 cream pill	Tokens.accent	Rectangle	72	top:cardRow.1:0	560	72	36	Tokens.accent	-	built	-
 rowGlyph.1	42	A badge 46 px	CardGlyph	CardGlyph	86	mid:cardRow.1	46	46	-	-	-	built	glyph 21 600
 cardRow.2	41	row 2 Tower Set (Disc 3) with divider	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.1:6	560	93	-	-	-	built	-
-rowDivider.2	41	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.2:82	516	1	-	#FF262A3A	-	built	-
+rowDivider.2	41	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.2:82	516	1	-	#615E647B	-	built	-
 cardRow.3	41	row 3 Glass Orchard	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.2:6	560	66	-	-	-	built	-
 cardRow.4	41	row 4 Ninth Lantern	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.3:6	560	66	-	-	-	built	-
 cardRow.5	41	row 5 Saltwater Kings with divider	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.4:6	560	93	-	-	-	built	-
-rowDivider.5	41	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.5:82	516	1	-	#FF262A3A	-	built	-
+rowDivider.5	41	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.5:82	516	1	-	#615E647B	-	built	-
 cardRow.6	41	row 6 Eject disc	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.5:6	560	66	-	-	-	built	-
-AdaptiveCardPane	51	floating disc detail card	Rectangle	Rectangle	800	210	760	372	28	#F207080F	-	built	line 1 #FF262A3A
+AdaptiveCardPane	51	floating disc detail card	Rectangle	Rectangle	800	210	760	372	28	#F207080F	-	built	line 1 #615E647B
 PaneCoverFrame	51	disc cover frame	Item	Item	836	246	241.15625	300	-	-	-	built	-
 PaneCoverShadow	51	disc cover drop shadow	Kit.Glow	Glow	836	246	241.15625	300	16	#80000000	-	built	glow 50 0 0 18
 PaneCoverBox	51	disc cover rounded container	Rectangle	Rectangle	836	246	241.15625	300	16	Tokens.inputSurface	-	built	-
@@ -34,7 +34,7 @@ cardBattery	54	"82%"	Words.percent	CardLine	in:cardStatus:22	mid:cardStatus	-	27
 cardClock	54	"9:41 PM"	Clock.shortTime	CardLine	after:cardBattery:22	mid:cardStatus	inright:cardStatus:22	27	-	Tokens.textStrong	22	built	600 0 none
 cardFooterBar	57	bottom footer bar 76 px	Rectangle	Rectangle	0	1124	right:0	76	-	Tokens.surface	-	built	-
 cardFooterRule	57	top 2 px hairline	Tokens.rule	Rectangle	0	1124	right:0	2	-	Tokens.rule	-	built	-
-cardHelp	58	help bar A Put in B Back X Screenshot	HelpModel.PauseDisc	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD8DBE6	21	built	400 0 none
+cardHelp	58	help bar A Put in B Back X Screenshot	HelpModel.PauseDisc	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD7D8DE	21	built	400 0 none
 ownGlyph-Put in	59	A filled 34 px	CardGlyph	-	in:cardHelp:0	mid:cardHelp	34	34	-	-	-	built	glyph 17 700
 ownGlyph-Back	60	B ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Screenshot	61	X ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400

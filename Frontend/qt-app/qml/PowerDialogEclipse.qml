@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Circular 900x900 CoronaDisc Power dialog (board #15, EclipsePower.dc.html).
 FocusScope {
@@ -23,7 +24,7 @@ FocusScope {
     Rectangle {
         objectName: "powerScrim"
         anchors.fill: parent
-        color: Qt.rgba(4 / 255, 5 / 255, 10 / 255, 0.74)
+        color: ThemeInk.scrimPower
     }
     Kit.CoronaDisc {
         id: disc
@@ -65,7 +66,7 @@ FocusScope {
                 boardLine: true
                 width: header.width
                 text: root.subtitle
-                color: "#C9CDDB"
+                color: ThemeInk.body
                 size: 20
                 weight: Font.Normal
                 wrapMode: Text.WordWrap
@@ -116,7 +117,7 @@ FocusScope {
                     radius: 42 * root.unit
                     color: row.current ? Kit.Tokens.accent : "transparent"
                     border.width: row.current ? 0 : 2 * root.unit
-                    border.color: "#3A3F55"
+                    border.color: ThemeInk.pillBorder
                 }
                 Item {
                     id: iconBox
@@ -151,7 +152,7 @@ FocusScope {
                     x: row.width - 26 * root.unit - width
                     y: (row.height - height) / 2
                     text: row.model.value
-                    color: row.current ? "#2A2E40" : Kit.Tokens.muted
+                    color: row.current ? ThemeInk.overAccentMuted : Kit.Tokens.muted
                     size: 18
                     weight: Font.Normal
                 }

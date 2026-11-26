@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Eclipse Tools hub (#9): blue/magenta corner glows, top nav, "Tools" heading, 3x2 tool cards, footer.
 Kit.NormalizedCanvas {
@@ -92,7 +93,7 @@ Kit.NormalizedCanvas {
 
             Rectangle {
                 anchors.fill: parent
-                color: "#07080F"
+                color: Kit.Tokens.surface
             }
 
             Kit.Backdrop {
@@ -105,7 +106,7 @@ Kit.NormalizedCanvas {
                         y: -300 * canvas.boardUnit
                         width: 1100 * canvas.boardUnit
                         height: 900 * canvas.boardUnit
-                        color: "#2A6FD6"
+                        color: ThemeInk.backdropGlow
                         blur: 160 * canvas.boardUnit
                         opacity: 0.35
                     },
@@ -114,7 +115,7 @@ Kit.NormalizedCanvas {
                         y: 700 * canvas.boardUnit
                         width: 900 * canvas.boardUnit
                         height: Kit.CanvasUnits.designHeight * canvas.boardUnit
-                        color: "#B0487A"
+                        color: ThemeInk.backdropHalo
                         blur: 170 * canvas.boardUnit
                         opacity: 0.25
                     }
@@ -143,7 +144,7 @@ Kit.NormalizedCanvas {
                     size: 56
                     weight: Font.DemiBold
                     spacing: -56 * 0.01
-                    color: "#F4F1EC"
+                    color: Kit.Tokens.text
                 }
 
                 CardLine {
@@ -153,7 +154,7 @@ Kit.NormalizedCanvas {
                     text: canvas.view.subtitle ?? ""
                     size: 22
                     weight: Font.Light
-                    color: "#B9BED0"
+                    color: Kit.Tokens.muted
                 }
             }
 
@@ -184,7 +185,7 @@ Kit.NormalizedCanvas {
                             radius: 26 * canvas.boardUnit
                             gap: 4 * canvas.boardUnit
                             thickness: 3 * canvas.boardUnit
-                            glowColor: "#73F0B4C4"
+                            glowColor: ThemeInk.glowMid
                             glowBlur: 46 * canvas.boardUnit
                             glowSpread: 10 * canvas.boardUnit
                             pixelScale: canvas.unit
@@ -194,9 +195,9 @@ Kit.NormalizedCanvas {
                             objectName: "toolCardBg." + card.index
                             anchors.fill: parent
                             radius: 26 * canvas.boardUnit
-                            color: "#11131C"
+                            color: Kit.Tokens.inputSurface
                             border.width: 1 * canvas.boardUnit
-                            border.color: "#262A3A"
+                            border.color: ThemeInk.hairline
                         }
 
                         Item {
@@ -213,7 +214,7 @@ Kit.NormalizedCanvas {
                                     radius: 42 * canvas.boardUnit
                                     gap: 0
                                     thickness: 2 * canvas.boardUnit
-                                    glowColor: "#66F6D6C8"
+                                    glowColor: ThemeInk.coronaGlowSoft
                                     glowBlur: 26 * canvas.boardUnit
                                     glowSpread: 4 * canvas.boardUnit
                                     pixelScale: canvas.unit
@@ -223,7 +224,7 @@ Kit.NormalizedCanvas {
                                     objectName: "toolIconCircle." + card.index
                                     anchors.fill: parent
                                     radius: 42 * canvas.boardUnit
-                                    color: "#07080F"
+                                    color: Kit.Tokens.surface
                                 }
 
                                 Item {
@@ -238,7 +239,7 @@ Kit.NormalizedCanvas {
                                         preferredRendererType: Shape.CurveRenderer
                                         ShapePath {
                                             fillColor: "transparent"
-                                            strokeColor: "#F6E7D8"
+                                            strokeColor: Kit.Tokens.coronaColor
                                             strokeWidth: 1.6
                                             capStyle: ShapePath.RoundCap
                                             joinStyle: ShapePath.RoundJoin
@@ -255,7 +256,7 @@ Kit.NormalizedCanvas {
                                 width: badgeLabel.width + 32 * canvas.boardUnit
                                 height: 38 * canvas.boardUnit
                                 radius: 19 * canvas.boardUnit
-                                color: "#F3C9D2"
+                                color: ThemeInk.rose
 
                                 CardLine {
                                     id: badgeLabel
@@ -266,7 +267,7 @@ Kit.NormalizedCanvas {
                                     text: card.modelData.badge ?? ""
                                     size: 17
                                     weight: Font.Bold
-                                    color: "#07080F"
+                                    color: Kit.Tokens.overAccent
                                 }
                             }
 
@@ -284,7 +285,7 @@ Kit.NormalizedCanvas {
                                     text: card.modelData.name ?? ""
                                     size: 34
                                     weight: Font.DemiBold
-                                    color: "#F4F1EC"
+                                    color: Kit.Tokens.text
                                     elide: Text.ElideRight
                                 }
 
@@ -295,7 +296,7 @@ Kit.NormalizedCanvas {
                                     text: card.modelData.line ?? ""
                                     size: 20
                                     weight: Font.Normal
-                                    color: "#C9CDDB"
+                                    color: ThemeInk.body
                                     lineHeight: 1.4
                                     lineHeightMode: Text.ProportionalHeight
                                     wrapMode: Text.WordWrap

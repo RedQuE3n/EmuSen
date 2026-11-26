@@ -39,7 +39,7 @@ Item {
                     transformOrigin: Item.TopLeft
                     preferredRendererType: Shape.CurveRenderer
                     ShapePath {
-                        fillColor: "#F6E7D8"
+                        fillColor: Kit.Tokens.coronaColor
                         strokeColor: "transparent"
                         fillRule: ShapePath.OddEvenFill
                         PathSvg { path: Marks.menuCrescent }
@@ -56,7 +56,7 @@ Item {
                 size: 24
                 weight: Font.DemiBold
                 spacing: 24 * 0.02
-                color: "#F4F1EC"
+                color: Kit.Tokens.text
             }
         }
 
@@ -83,7 +83,7 @@ Item {
                         text: tab.modelData.name ?? ""
                         size: 24
                         weight: tab.modelData.active === true ? Font.DemiBold : Font.Normal
-                        color: tab.modelData.active === true ? "#FFFFFF" : "#B9BED0"
+                        color: tab.modelData.active === true ? Kit.Tokens.textStrong : Kit.Tokens.muted
                     }
 
                     Rectangle {
@@ -92,7 +92,7 @@ Item {
                         y: navText.height + 10 * root.unit
                         width: navText.width
                         height: 3 * root.unit
-                        color: "#F6E7D8"
+                        color: Kit.Tokens.accent
                     }
 
                     TapHandler {
@@ -118,7 +118,7 @@ Item {
             text: root.battery >= 0 ? Words.percent(root.battery) : ""
             size: 22
             weight: Font.Normal
-            color: "#F4F1EC"
+            color: Kit.Tokens.text
         }
 
         CardLine {
@@ -130,7 +130,7 @@ Item {
             text: root.clockText
             size: 22
             weight: Font.DemiBold
-            color: "#F4F1EC"
+            color: Kit.Tokens.text
         }
     }
 }

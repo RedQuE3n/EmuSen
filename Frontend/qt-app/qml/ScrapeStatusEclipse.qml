@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Eclipse Scrape Status (#67): 460 px progress ring, live status summary, and Pause/Cancel/Hide actions.
 FocusScope {
@@ -46,7 +47,7 @@ FocusScope {
                     objectName: "statusRingGlow"
                     anchors.fill: parent
                     radius: 230 * scaffold.unit
-                    color: "#4DF0B4C4"
+                    color: ThemeInk.glowSoft
                     blur: 60 * scaffold.unit
                     spread: 10 * scaffold.unit
                     pixelScale: root.pixelScale
@@ -56,7 +57,7 @@ FocusScope {
                     preferredRendererType: Shape.CurveRenderer
                     ShapePath {
                         strokeWidth: 14 * scaffold.unit
-                        strokeColor: "#262A3A"
+                        strokeColor: ThemeInk.hairline
                         fillColor: "transparent"
                         PathAngleArc {
                             centerX: 230 * scaffold.unit
@@ -114,7 +115,7 @@ FocusScope {
                             text: scaffold.view.ringSubtitle ?? ""
                             size: 26
                             weight: Font.Normal
-                            color: "#B9BED0"
+                            color: Kit.Tokens.muted
                             horizontalAlignment: Text.AlignHCenter
                         }
                     }
@@ -151,7 +152,7 @@ FocusScope {
                     text: scaffold.view.currentStage ?? ""
                     size: 20
                     weight: Font.Normal
-                    color: "#D8DBE6"
+                    color: ThemeInk.body
                     elide: Text.ElideRight
                 }
                 CardLine {
@@ -163,7 +164,7 @@ FocusScope {
                     text: scaffold.view.paceLine ?? ""
                     size: 20
                     weight: Font.Normal
-                    color: "#B9BED0"
+                    color: Kit.Tokens.muted
                     elide: Text.ElideRight
                 }
                 Item {
@@ -174,7 +175,7 @@ FocusScope {
                         y: 8 * scaffold.unit
                         width: parent.width
                         height: 1 * scaffold.unit
-                        color: "#262A3A"
+                        color: ThemeInk.track
                     }
                 }
                 CardLine {
@@ -186,7 +187,7 @@ FocusScope {
                     text: scaffold.view.countsLine ?? ""
                     size: 20
                     weight: Font.Normal
-                    color: "#D8DBE6"
+                    color: ThemeInk.body
                     elide: Text.ElideRight
                 }
                 CardLine {
@@ -198,7 +199,7 @@ FocusScope {
                     text: scaffold.view.accountLine ?? ""
                     size: 20
                     weight: Font.Normal
-                    color: "#B9BED0"
+                    color: Kit.Tokens.muted
                     elide: Text.ElideRight
                 }
                 CardLine {
@@ -210,7 +211,7 @@ FocusScope {
                     text: scaffold.view.quotaLine ?? ""
                     size: 20
                     weight: Font.Normal
-                    color: "#B9BED0"
+                    color: Kit.Tokens.muted
                     elide: Text.ElideRight
                 }
                 Item {
@@ -221,7 +222,7 @@ FocusScope {
                         y: 8 * scaffold.unit
                         width: parent.width
                         height: 1 * scaffold.unit
-                        color: "#262A3A"
+                        color: ThemeInk.track
                     }
                 }
                 Repeater {
@@ -238,7 +239,7 @@ FocusScope {
                         text: recentLine.modelData
                         size: 20
                         weight: Font.Normal
-                        color: "#D8DBE6"
+                        color: ThemeInk.body
                         elide: Text.ElideRight
                     }
                 }
@@ -273,7 +274,7 @@ FocusScope {
                             radius: 34 * scaffold.unit
                             color: actPill.modelData.focused ? Kit.Tokens.accent : "transparent"
                             border.width: actPill.modelData.focused ? 0 : 2 * scaffold.unit
-                            border.color: "#5A6076"
+                            border.color: ThemeInk.pillBorder
                         }
                         Row {
                             id: actRow
@@ -295,8 +296,8 @@ FocusScope {
                                 side: 44
                                 leadLetterSize: 20
                                 leadWeight: Font.DemiBold
-                                leadFill: "#07080F"
-                                leadInk: "#F6E7D8"
+                                leadFill: Kit.Tokens.overAccent
+                                leadInk: Kit.Tokens.accent
                             }
                             CardLine {
                                 id: actText
@@ -307,7 +308,7 @@ FocusScope {
                                 text: actPill.modelData.label ?? ""
                                 size: 24
                                 weight: actPill.modelData.focused ? Font.DemiBold : Font.Normal
-                                color: actPill.modelData.focused ? Kit.Tokens.surface : Kit.Tokens.textStrong
+                                color: actPill.modelData.focused ? Kit.Tokens.overAccent : Kit.Tokens.textStrong
                             }
                         }
                         MouseArea {

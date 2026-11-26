@@ -7,14 +7,14 @@ coronaRim	30	2 px corona rim	Tokens.coronaColor	Rectangle	in:cardDisc:-2	top:car
 coronaGlow.0	30	inner corona glow	44 px blur, 8 px spread, 0.6	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 44 8 0.6
 coronaGlow.1	30	outer corona halo	170 px blur, 46 px spread, 0.28	-	in:cardDisc:0	top:cardDisc:0	3120	3120	-	-	-	built	corona 170 46 0.28
 cardSection	32	card section 560x1026	Item	Item	72	64	560	1026	-	-	-	built	-
-cardBreadcrumb	34	"PAUSED · PLAYSTATION · TOWER SET" eyebrow	PauseModel.breadcrumb	CardLine	72	64	560	22	-	#FFF3C9D2	18	built	600 0.22 upper
+cardBreadcrumb	34	"PAUSED · PLAYSTATION · TOWER SET" eyebrow	PauseModel.breadcrumb	CardLine	72	64	560	22	-	#FFF0B4C4	18	built	600 0.22 upper
 cardTitle	35	"Leave" 1 line	PauseModel.title	CardLine	72	below:cardBreadcrumb:8	560	53	-	Tokens.textStrong	50	built	600 -0.01 none
 cardRow.0	41	row 0 Back to Library focused with divider	MenuRowEclipse	MenuRowEclipse	72	below:cardTitle:26	560	99	-	-	-	built	-
 rowGlow.0	41	Back to Library glow	Kit.Glow	Glow	72	top:cardRow.0:0	560	72	36	#66F0B4C4	-	built	glow 46 6 0 0
 rowRing.0	41	Back to Library 6 px ring	rgba(246,231,216,0.18)	Rectangle	66	top:cardRow.0:-6	572	84	42	#2EF6E7D8	-	built	-
 rowBg.0	41	Back to Library cream pill	Tokens.accent	Rectangle	72	top:cardRow.0:0	560	72	36	Tokens.accent	-	built	-
 rowGlyph.0	42	A badge 46 px	CardGlyph	CardGlyph	86	mid:rowBg.0	46	46	-	-	-	built	glyph 21 600
-rowDivider.0	41	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.0:88	516	1	-	#FF262A3A	-	built	-
+rowDivider.0	41	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.0:88	516	1	-	#615E647B	-	built	-
 cardRow.1	41	row 1 Restart Game...	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.0:6	560	66	-	-	-	built	-
 cardRow.2	41	row 2 Quit Game...	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.1:6	560	66	-	-	-	built	-
 cardRow.3	41	row 3 Quit EmuSen...	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.2:6	560	66	-	-	-	built	-
@@ -23,7 +23,7 @@ cardBattery	54	"82%"	Words.percent	CardLine	in:cardStatus:22	mid:cardStatus	-	27
 cardClock	54	"9:41 PM"	Clock.shortTime	CardLine	after:cardBattery:22	mid:cardStatus	inright:cardStatus:22	27	-	Tokens.textStrong	22	built	600 0 none
 cardFooterBar	57	bottom footer bar 76 px	Rectangle	Rectangle	0	1124	right:0	76	-	Tokens.surface	-	built	-
 cardFooterRule	57	top 2 px hairline	Tokens.rule	Rectangle	0	1124	right:0	2	-	Tokens.rule	-	built	-
-cardHelp	58	help bar A Choose B Back X Screenshot START Resume	HelpModel.PausePage	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD8DBE6	21	built	400 0 none
+cardHelp	58	help bar A Choose B Back X Screenshot START Resume	HelpModel.PausePage	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD7D8DE	21	built	400 0 none
 ownGlyph-Choose	59	A filled 34 px	CardGlyph	-	in:cardHelp:0	mid:cardHelp	34	34	-	-	-	built	glyph 17 700
 ownGlyph-Back	60	B ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Screenshot	61	X ringed 38 px	CardGlyph	-	-	mid:cardHelp	38	38	-	-	-	built	glyph 16 400

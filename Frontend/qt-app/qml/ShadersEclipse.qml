@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Eclipse Screen filter / Shaders browser (#20, EclipseShaders.dc.html) with live before/after Serenity preview.
 FocusScope {
@@ -139,7 +140,7 @@ FocusScope {
             Kit.Backdrop {
                 objectName: "shadersBackdrop"
                 anchors.fill: parent
-                ground: "#07080F"
+                ground: Kit.Tokens.surface
                 pixelScale: canvas.unit
             }
             // Top header bar (left 96, top 40, height 64).
@@ -162,7 +163,7 @@ FocusScope {
                     transformOrigin: Item.TopLeft
                     preferredRendererType: Shape.CurveRenderer
                     ShapePath {
-                        fillColor: "#F6E7D8"
+                        fillColor: Kit.Tokens.coronaColor
                         strokeColor: "transparent"
                         fillRule: ShapePath.OddEvenFill
                         PathSvg { path: Marks.menuCrescent }
@@ -184,7 +185,7 @@ FocusScope {
                         boardLine: true
                         size: 24
                         weight: Font.Normal
-                        color: "#B9BED0"
+                        color: Kit.Tokens.muted
                         text: root.labels.settings ?? ""
                         MouseArea {
                             anchors.fill: parent
@@ -201,7 +202,7 @@ FocusScope {
                         boardLine: true
                         size: 24
                         weight: Font.Normal
-                        color: "#8E94AB"
+                        color: ThemeInk.dim
                         text: root.labels.slash ?? ""
                     }
                     CardLine {
@@ -213,7 +214,7 @@ FocusScope {
                         boardLine: true
                         size: 24
                         weight: Font.Normal
-                        color: "#B9BED0"
+                        color: Kit.Tokens.muted
                         text: root.labels.picture ?? ""
                         MouseArea {
                             anchors.fill: parent
@@ -230,7 +231,7 @@ FocusScope {
                         boardLine: true
                         size: 24
                         weight: Font.Normal
-                        color: "#8E94AB"
+                        color: ThemeInk.dim
                         text: root.labels.slash ?? ""
                     }
                     CardLine {
@@ -242,7 +243,7 @@ FocusScope {
                         boardLine: true
                         size: 24
                         weight: Font.DemiBold
-                        color: "#F4F1EC"
+                        color: Kit.Tokens.text
                         text: root.labels.filter ?? ""
                     }
                 }
@@ -259,7 +260,7 @@ FocusScope {
                         boardLine: true
                         size: 22
                         weight: Font.Normal
-                        color: "#F4F1EC"
+                        color: Kit.Tokens.text
                         text: canvas.battery >= 0 ? Words.percent(canvas.battery) : ""
                     }
                     CardLine {
@@ -271,7 +272,7 @@ FocusScope {
                         boardLine: true
                         size: 22
                         weight: Font.DemiBold
-                        color: "#F4F1EC"
+                        color: Kit.Tokens.text
                         text: canvas.clockText
                     }
                 }
@@ -285,9 +286,9 @@ FocusScope {
                 width: 400 * root.px
                 height: 64 * root.px
                 radius: 32 * root.px
-                color: "#11131C"
+                color: Kit.Tokens.inputSurface
                 border.width: 1 * root.px
-                border.color: "#262A3A"
+                border.color: ThemeInk.hairline
                 Repeater {
                     model: root.sources
                     Rectangle {
@@ -302,7 +303,7 @@ FocusScope {
                         width: 194 * root.px
                         height: 52 * root.px
                         radius: 26 * root.px
-                        color: srcTab.isActive ? "#F6E7D8" : "transparent"
+                        color: srcTab.isActive ? Kit.Tokens.accent : "transparent"
                         Kit.FocusRing {
                             objectName: srcTab.modelData.ringName ?? ""
                             visible: srcTab.isFocused
@@ -311,7 +312,7 @@ FocusScope {
                             gap: 3 * root.px
                             thickness: 3 * root.px
                             bandRadius: 32 * root.px
-                            glowColor: "#66F0B4C4"
+                            glowColor: Kit.Tokens.glowColor
                             glowBlur: 34 * root.px
                             glowSpread: 8 * root.px
                             pixelScale: canvas.unit
@@ -325,7 +326,7 @@ FocusScope {
                             boardLine: true
                             size: 19
                             weight: srcTab.isActive ? Font.DemiBold : Font.Normal
-                            color: srcTab.isActive ? "#07080F" : "#D8DBE6"
+                            color: srcTab.isActive ? Kit.Tokens.overAccent : ThemeInk.body
                             text: srcTab.modelData.text ?? ""
                         }
                         MouseArea {
@@ -356,7 +357,7 @@ FocusScope {
                         width: 400 * root.px
                         height: 60 * root.px
                         radius: 14 * root.px
-                        color: catRow.isActive ? "#F6E7D8" : (catRow.isFocused ? "#151826" : "transparent")
+                        color: catRow.isActive ? Kit.Tokens.accent : (catRow.isFocused ? Kit.Tokens.surfaceRaised : "transparent")
                         Kit.FocusRing {
                             objectName: catRow.modelData.ringName ?? ""
                             visible: catRow.isFocused
@@ -365,7 +366,7 @@ FocusScope {
                             gap: 3 * root.px
                             thickness: 3 * root.px
                             bandRadius: 20 * root.px
-                            glowColor: "#66F0B4C4"
+                            glowColor: Kit.Tokens.glowColor
                             glowBlur: 34 * root.px
                             glowSpread: 8 * root.px
                             pixelScale: canvas.unit
@@ -380,7 +381,7 @@ FocusScope {
                             boardLine: true
                             size: 21
                             weight: catRow.isActive ? Font.DemiBold : Font.Normal
-                            color: catRow.isActive ? "#07080F" : "#D8DBE6"
+                            color: catRow.isActive ? Kit.Tokens.overAccent : ThemeInk.body
                             elide: Text.ElideRight
                             text: catRow.modelData.name ?? ""
                         }
@@ -393,7 +394,7 @@ FocusScope {
                             boardLine: true
                             size: 17
                             weight: Font.Normal
-                            color: catRow.isActive ? "#07080F" : "#D8DBE6"
+                            color: catRow.isActive ? Kit.Tokens.overAccent : ThemeInk.body
                             text: catRow.modelData.count ?? ""
                         }
                         MouseArea {
@@ -413,9 +414,9 @@ FocusScope {
                 width: 400 * root.px
                 height: packCol.height + 40 * root.px
                 radius: 18 * root.px
-                color: "#11131C"
+                color: Kit.Tokens.inputSurface
                 border.width: 1 * root.px
-                border.color: "#262A3A"
+                border.color: ThemeInk.hairline
                 Column {
                     id: packCol
                     x: 20 * root.px
@@ -429,7 +430,7 @@ FocusScope {
                         boardLine: true
                         size: 20
                         weight: Font.DemiBold
-                        color: "#F4F1EC"
+                        color: Kit.Tokens.text
                         text: root.labels.packTitle ?? ""
                     }
                     CardLine {
@@ -440,7 +441,7 @@ FocusScope {
                         boardLineHeight: 24.65
                         size: 17
                         weight: Font.Normal
-                        color: "#C9CDDB"
+                        color: ThemeInk.body
                         wrapMode: Text.WordWrap
                         text: root.pack.status ?? ""
                     }
@@ -453,7 +454,7 @@ FocusScope {
                         radius: 23 * root.px
                         color: "transparent"
                         border.width: 2 * root.px
-                        border.color: removeBtn.isFocused ? "#F6E7D8" : "#4A5068"
+                        border.color: removeBtn.isFocused ? Kit.Tokens.accent : ThemeInk.pillBorder
                         readonly property bool isFocused: root.pack.removeFocused === true
                         Kit.FocusRing {
                             objectName: "removePackRing"
@@ -463,7 +464,7 @@ FocusScope {
                             gap: 3 * root.px
                             thickness: 3 * root.px
                             bandRadius: 29 * root.px
-                            glowColor: "#66F0B4C4"
+                            glowColor: Kit.Tokens.glowColor
                             glowBlur: 34 * root.px
                             glowSpread: 8 * root.px
                             pixelScale: canvas.unit
@@ -477,7 +478,7 @@ FocusScope {
                             boardLine: true
                             size: 17
                             weight: Font.Normal
-                            color: "#D8DBE6"
+                            color: ThemeInk.body
                             text: root.labels.removePack ?? ""
                         }
                         MouseArea {
@@ -497,9 +498,9 @@ FocusScope {
                 width: 430 * root.px
                 height: 56 * root.px
                 radius: 28 * root.px
-                color: "#11131C"
+                color: Kit.Tokens.inputSurface
                 border.width: 1 * root.px
-                border.color: "#2A2E40"
+                border.color: ThemeInk.hairline
                 readonly property bool isFocused: root.search.focused === true
                 Kit.FocusRing {
                     objectName: "searchRing"
@@ -509,7 +510,7 @@ FocusScope {
                     gap: 3 * root.px
                     thickness: 3 * root.px
                     bandRadius: 34 * root.px
-                    glowColor: "#66F0B4C4"
+                    glowColor: Kit.Tokens.glowColor
                     glowBlur: 34 * root.px
                     glowSpread: 8 * root.px
                     pixelScale: canvas.unit
@@ -526,7 +527,7 @@ FocusScope {
                     preferredRendererType: Shape.CurveRenderer
                     ShapePath {
                         fillColor: "transparent"
-                        strokeColor: "#B9BED0"
+                        strokeColor: Kit.Tokens.muted
                         strokeWidth: 2
                         capStyle: ShapePath.RoundCap
                         PathAngleArc { centerX: 11; centerY: 11; radiusX: 7; radiusY: 7; startAngle: 0; sweepAngle: 360 }
@@ -544,7 +545,7 @@ FocusScope {
                     boardLine: true
                     size: 19
                     weight: Font.Normal
-                    color: (root.search.hasText === true) ? "#F4F1EC" : "#B9BED0"
+                    color: (root.search.hasText === true) ? Kit.Tokens.text : Kit.Tokens.muted
                     elide: Text.ElideRight
                     text: (root.search.hasText === true) ? (root.search.text ?? "") : (root.search.placeholder ?? "")
                 }
@@ -591,9 +592,9 @@ FocusScope {
                             width: 430 * root.px
                             height: 88 * root.px
                             radius: 16 * root.px
-                            color: presetRow.isFocused ? "#151826" : "transparent"
+                            color: presetRow.isFocused ? Kit.Tokens.surfaceRaised : "transparent"
                             border.width: (!presetRow.isFocused && presetRow.isSelected) ? 1 * root.px : 0
-                            border.color: "#4A5068"
+                            border.color: ThemeInk.pillBorder
                             Kit.FocusRing {
                                 objectName: presetRow.modelData.ringName ?? ""
                                 visible: presetRow.isFocused
@@ -602,7 +603,7 @@ FocusScope {
                                 gap: 3 * root.px
                                 thickness: 3 * root.px
                                 bandRadius: 22 * root.px
-                                glowColor: "#66F0B4C4"
+                                glowColor: Kit.Tokens.glowColor
                                 glowBlur: 34 * root.px
                                 glowSpread: 8 * root.px
                                 pixelScale: canvas.unit
@@ -614,21 +615,21 @@ FocusScope {
                                 width: 84 * root.px
                                 height: 62 * root.px
                                 radius: 8 * root.px
-                                color: "#17306E"
+                                color: Kit.Tokens.inputSurface
                                 clip: true
                                 Rectangle {
                                     x: 52 * root.px
                                     y: 8 * root.px
                                     width: 18 * root.px
                                     height: 18 * root.px
-                                    color: "#B8FFE9"
+                                    color: Kit.Tokens.accent
                                 }
                                 Rectangle {
                                     x: 0
                                     y: 38 * root.px
                                     width: swatchBox.width
                                     height: 24 * root.px
-                                    color: "#0E5A50"
+                                    color: Kit.Tokens.success
                                 }
                                 Repeater {
                                     model: presetRow.drawScan ? 10 : 0
@@ -639,7 +640,7 @@ FocusScope {
                                         y: scanBar.index * 6 * root.px
                                         width: swatchBox.width
                                         height: 2 * root.px
-                                        color: "#4D000000"
+                                        color: ThemeInk.shadowSoft
                                     }
                                 }
                             }
@@ -653,7 +654,7 @@ FocusScope {
                                 boardLine: true
                                 size: 21
                                 weight: Font.DemiBold
-                                color: "#F4F1EC"
+                                color: Kit.Tokens.text
                                 elide: Text.ElideRight
                                 text: presetRow.modelData.name ?? ""
                             }
@@ -667,7 +668,7 @@ FocusScope {
                                 boardLine: true
                                 size: 16
                                 weight: Font.Normal
-                                color: "#B9BED0"
+                                color: Kit.Tokens.muted
                                 elide: Text.ElideRight
                                 text: presetRow.modelData.meta ?? ""
                             }
@@ -693,8 +694,8 @@ FocusScope {
                                     transformOrigin: Item.TopLeft
                                     preferredRendererType: Shape.CurveRenderer
                                     ShapePath {
-                                        fillColor: presetRow.isFav ? "#F3C9D2" : "transparent"
-                                        strokeColor: presetRow.isFav ? "#F3C9D2" : "#5A6076"
+                                        fillColor: presetRow.isFav ? ThemeInk.rose : "transparent"
+                                        strokeColor: presetRow.isFav ? ThemeInk.rose : ThemeInk.pillBorder
                                         strokeWidth: 1.4
                                         joinStyle: ShapePath.RoundJoin
                                         startX: 12; startY: 3
@@ -729,7 +730,7 @@ FocusScope {
                     boardLine: true
                     size: 18
                     weight: Font.Normal
-                    color: "#B9BED0"
+                    color: Kit.Tokens.muted
                     wrapMode: Text.WordWrap
                     text: root.model.emptyListText ?? ""
                 }
@@ -743,9 +744,9 @@ FocusScope {
                 width: 820 * root.px
                 height: 60 * root.px
                 radius: 32 * root.px
-                color: "#11131C"
+                color: Kit.Tokens.inputSurface
                 border.width: 1 * root.px
-                border.color: "#262A3A"
+                border.color: ThemeInk.hairline
                 Repeater {
                     model: root.scopes
                     Rectangle {
@@ -760,7 +761,7 @@ FocusScope {
                         width: 404 * root.px
                         height: 48 * root.px
                         radius: 24 * root.px
-                        color: scpTab.isActive ? "#F6E7D8" : "transparent"
+                        color: scpTab.isActive ? Kit.Tokens.accent : "transparent"
                         Kit.FocusRing {
                             objectName: scpTab.modelData.ringName ?? ""
                             visible: scpTab.isFocused
@@ -769,7 +770,7 @@ FocusScope {
                             gap: 3 * root.px
                             thickness: 3 * root.px
                             bandRadius: 30 * root.px
-                            glowColor: "#66F0B4C4"
+                            glowColor: Kit.Tokens.glowColor
                             glowBlur: 34 * root.px
                             glowSpread: 8 * root.px
                             pixelScale: canvas.unit
@@ -783,7 +784,7 @@ FocusScope {
                             boardLine: true
                             size: 19
                             weight: scpTab.isActive ? Font.DemiBold : Font.Normal
-                            color: scpTab.isActive ? "#07080F" : "#D8DBE6"
+                            color: scpTab.isActive ? Kit.Tokens.overAccent : ThemeInk.body
                             text: scpTab.modelData.text ?? ""
                         }
                         MouseArea {
@@ -806,7 +807,7 @@ FocusScope {
                     objectName: "previewGlow"
                     anchors.fill: parent
                     radius: 20 * root.px
-                    color: "#38788CFF"
+                    color: ThemeInk.glowWeak
                     blur: 70 * root.px
                     spread: 12 * root.px
                     pixelScale: canvas.unit
@@ -820,7 +821,7 @@ FocusScope {
                     radius: 22 * root.px
                     color: "transparent"
                     border.width: 2 * root.px
-                    border.color: "#8CF6E7D8"
+                    border.color: ThemeInk.coronaSoft
                 }
                 Item {
                     id: previewLayers
@@ -828,7 +829,7 @@ FocusScope {
                     anchors.fill: parent
                     Rectangle {
                         anchors.fill: parent
-                        color: "#17306E"
+                        color: Kit.Tokens.surface
                     }
                     Image {
                         id: unfilteredPic
@@ -894,10 +895,10 @@ FocusScope {
                     y: 0
                     width: 4 * root.px
                     height: previewBox.height
-                    color: "#F6E7D8"
+                    color: Kit.Tokens.coronaColor
                     Kit.Glow {
                         anchors.fill: parent
-                        color: "#B2F6D6C8"
+                        color: ThemeInk.coronaGlowMid
                         blur: 22 * root.px
                         spread: 4 * root.px
                         pixelScale: canvas.unit
@@ -910,13 +911,13 @@ FocusScope {
                     width: 60 * root.px
                     height: 60 * root.px
                     radius: 30 * root.px
-                    color: "#07080F"
+                    color: Kit.Tokens.surface
                     border.width: 2 * root.px
-                    border.color: "#F6E7D8"
+                    border.color: Kit.Tokens.coronaColor
                     Kit.Glow {
                         anchors.fill: parent
                         radius: 30 * root.px
-                        color: "#99F6D6C8"
+                        color: Kit.Tokens.coronaGlowColor
                         blur: 26 * root.px
                         spread: 6 * root.px
                         pixelScale: canvas.unit
@@ -932,7 +933,7 @@ FocusScope {
                         preferredRendererType: Shape.CurveRenderer
                         ShapePath {
                             fillColor: "transparent"
-                            strokeColor: "#F6E7D8"
+                            strokeColor: Kit.Tokens.coronaColor
                             strokeWidth: 2
                             capStyle: ShapePath.RoundCap
                             joinStyle: ShapePath.RoundJoin
@@ -953,7 +954,7 @@ FocusScope {
                     width: beforeWord.width + 28 * root.px
                     height: 38 * root.px
                     radius: 19 * root.px
-                    color: "#D107080F"
+                    color: ThemeInk.glassPill
                     CardLine {
                         id: beforeWord
                         objectName: "previewBeforeWords"
@@ -963,7 +964,7 @@ FocusScope {
                         boardLine: true
                         size: 17
                         weight: Font.Normal
-                        color: "#F4F1EC"
+                        color: Kit.Tokens.text
                         text: root.labels.noFilter ?? ""
                     }
                 }
@@ -975,7 +976,7 @@ FocusScope {
                     width: afterWord.width + 28 * root.px
                     height: 38 * root.px
                     radius: 19 * root.px
-                    color: "#F6E7D8"
+                    color: Kit.Tokens.accent
                     CardLine {
                         id: afterWord
                         objectName: "previewAfterWords"
@@ -985,7 +986,7 @@ FocusScope {
                         boardLine: true
                         size: 17
                         weight: Font.DemiBold
-                        color: "#07080F"
+                        color: Kit.Tokens.overAccent
                         text: root.preview.afterLabel ?? ""
                     }
                 }
@@ -1015,7 +1016,7 @@ FocusScope {
                     boardLine: true
                     size: 36
                     weight: Font.DemiBold
-                    color: "#F4F1EC"
+                    color: Kit.Tokens.text
                     elide: Text.ElideRight
                     text: root.preview.heading ?? ""
                 }
@@ -1029,7 +1030,7 @@ FocusScope {
                     boardLine: true
                     size: 18
                     weight: Font.Normal
-                    color: "#C9CDDB"
+                    color: ThemeInk.body
                     elide: Text.ElideRight
                     text: root.preview.subtitle ?? ""
                 }
@@ -1063,7 +1064,7 @@ FocusScope {
                                 gap: 3 * root.px
                                 thickness: 3 * root.px
                                 bandRadius: 16 * root.px
-                                glowColor: "#66F0B4C4"
+                                glowColor: Kit.Tokens.glowColor
                                 glowBlur: 34 * root.px
                                 glowSpread: 8 * root.px
                                 pixelScale: canvas.unit
@@ -1078,7 +1079,7 @@ FocusScope {
                                 boardLine: true
                                 size: 18
                                 weight: Font.Normal
-                                color: "#F4F1EC"
+                                color: Kit.Tokens.text
                                 elide: Text.ElideRight
                                 text: slCol.modelData.label ?? ""
                             }
@@ -1091,7 +1092,7 @@ FocusScope {
                                 boardLine: true
                                 size: 18
                                 weight: Font.Normal
-                                color: "#D8DBE6"
+                                color: ThemeInk.body
                                 text: slCol.modelData.value ?? ""
                             }
                             Rectangle {
@@ -1101,14 +1102,14 @@ FocusScope {
                                 width: slCol.width
                                 height: 8 * root.px
                                 radius: 4 * root.px
-                                color: "#262A3A"
+                                color: ThemeInk.track
                                 Rectangle {
                                     x: 0
                                     y: 0
                                     width: slTrack.width * slCol.fillNorm
                                     height: slTrack.height
                                     radius: 4 * root.px
-                                    color: "#F6E7D8"
+                                    color: Kit.Tokens.accent
                                 }
                                 Rectangle {
                                     objectName: slCol.modelData.knobName ?? ""
@@ -1117,9 +1118,9 @@ FocusScope {
                                     width: 26 * root.px
                                     height: 26 * root.px
                                     radius: 13 * root.px
-                                    color: "#07080F"
+                                    color: Kit.Tokens.surface
                                     border.width: 3 * root.px
-                                    border.color: "#F6E7D8"
+                                    border.color: Kit.Tokens.accent
                                 }
                             }
                             MouseArea {
@@ -1155,7 +1156,7 @@ FocusScope {
                         gap: 3 * root.px
                         thickness: 3 * root.px
                         bandRadius: 14 * root.px
-                        glowColor: "#66F0B4C4"
+                        glowColor: Kit.Tokens.glowColor
                         glowBlur: 34 * root.px
                         glowSpread: 8 * root.px
                         pixelScale: canvas.unit
@@ -1167,7 +1168,7 @@ FocusScope {
                         boardLine: true
                         size: 18
                         weight: Font.Normal
-                        color: "#F6E7D8"
+                        color: Kit.Tokens.accent
                         text: root.allSettings.text ?? ""
                     }
                     MouseArea {
@@ -1188,8 +1189,8 @@ FocusScope {
                 fitted: true
                 ruled: false
                 color: "transparent"
-                labelColor: "#D8DBE6"
-                iconColor: "#B9BED0"
+                labelColor: ThemeInk.body
+                iconColor: Kit.Tokens.muted
                 leadStyle: Kit.GlyphStyles.Filled
                 leadColor: Kit.Tokens.accent
                 entrySpacing: 30 * root.px
@@ -1211,8 +1212,8 @@ FocusScope {
                         unit: root.px
                         side: 34
                         keyPairs: true
-                        ink: "#D8DBE6"
-                        ring: "#B9BED0"
+                        ink: ThemeInk.body
+                        ring: Kit.Tokens.muted
                         leadFill: Kit.Tokens.accent
                         leadInk: Kit.Tokens.overAccent
                     }

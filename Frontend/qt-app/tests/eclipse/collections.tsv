@@ -4,14 +4,14 @@ name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 mark	25	crescent mark	Item	Item	96	mid:80	34	34	-	-	-	built	-
 wordmark	26	"EmuSen"	CardLine	CardLine	after:mark:14	mid:80	-	-	-	#FFF4F1EC	24	built	600 0.02 none
 nav	28	section tabs	Row	Row	after:wordmark:64	mid:80	-	-	-	-	-	built	-
-navUnderline.collections	32	active Collections underline	Rectangle	Rectangle	in:nav.collections:0	foot:nav.collections	fit:nav.collections:0	3	-	#FFF6E7D8	-	built	-
-navWords.collections	32	"Collections" active tab	CardLine	CardLine	in:nav.collections:0	top:nav.collections:0	-	-	-	#FFFFFFFF	24	built	600 0 none
-clock	36	"9:41 PM"	CardLine	CardLine	-	mid:80	right:96	-	-	#FFF4F1EC	22	built	600 0 none
-battery	36	"82%"	CardLine	CardLine	before:clock:22	mid:80	-	-	-	#FFF4F1EC	22	built	400 0 none
+navUnderline.collections	32	active Collections underline	Rectangle	Rectangle	in:nav.collections:0	foot:nav.collections	fit:nav.collections:0	3	-	Tokens.accent	-	built	-
+navWords.collections	32	"Collections" active tab	CardLine	CardLine	in:nav.collections:0	top:nav.collections:0	-	-	-	Tokens.textStrong	24	built	600 0 none
+clock	36	"9:41 PM"	CardLine	CardLine	-	mid:80	right:96	-	-	Tokens.text	22	built	600 0 none
+battery	36	"82%"	CardLine	CardLine	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none
 collectionCard.0	41	card 0 Favourites	Item	Item	96	190	-	410	-	-	-	built	-
-collectionCardBg.0	41	card 0 surface	Rectangle	Rectangle	in:collectionCard.0:0	top:collectionCard.0:0	-	410	26	#FF11131C	-	built	line 1 #FF262A3A
-collectionCardTitle.0	48	card 0 title	CardLine	CardLine	in:collectionCard.0:26	-	-	-	-	#FFF4F1EC	30	built	600 0 none
-collectionCardMeta.0	49	card 0 meta	CardLine	CardLine	in:collectionCard.0:26	below:collectionCardTitle.0:8	-	-	-	#FFB9BED0	19	built	400 0 none
+collectionCardBg.0	41	card 0 surface	Rectangle	Rectangle	in:collectionCard.0:0	top:collectionCard.0:0	-	410	26	Tokens.inputSurface	-	built	line 1 #615E647B
+collectionCardTitle.0	48	card 0 title	CardLine	CardLine	in:collectionCard.0:26	-	-	-	-	Tokens.text	30	built	600 0 none
+collectionCardMeta.0	49	card 0 meta	CardLine	CardLine	in:collectionCard.0:26	below:collectionCardTitle.0:8	-	-	-	Tokens.muted	19	built	400 0 none
 collectionCard.1	41	card 1 Couch co-op	Item	Item	after:collectionCard.0:28	190	-	410	-	-	-	built	-
 collectionCard.2	41	card 2 Finished	Item	Item	after:collectionCard.1:28	190	-	410	-	-	-	built	-
 collectionCard.3	41	card 3 Recently played	Item	Item	after:collectionCard.2:28	190	right:96	410	-	-	-	built	-
@@ -19,9 +19,9 @@ collectionCard.4	41	card 4 row 1 col 0	Item	Item	96	below:collectionCard.0:28	-	
 collectionCard.5	41	card 5 row 1 col 1	Item	Item	after:collectionCard.4:28	below:collectionCard.1:28	-	410	-	-	-	built	-
 collectionCard.6	41	card 6 row 1 col 2	Item	Item	after:collectionCard.5:28	below:collectionCard.2:28	-	410	-	-	-	built	-
 newCollectionCard	53	+ New collection card	Item	Item	after:collectionCard.6:28	below:collectionCard.3:28	right:96	410	-	-	-	built	-
-newCollectionLabel	55	"New collection"	CardLine	CardLine	-	-	-	-	-	#FFD8DBE6	26	built	400 0 none
+newCollectionLabel	55	"New collection"	CardLine	CardLine	-	-	-	-	-	#FFD7D8DE	26	built	400 0 none
 collectionsFooter	59	footer row	Item	Item	96	1122	right:96	38	-	-	-	built	-
-collectionsHelp	59	footer A X B	HelpBar	HelpBar	in:collectionsFooter:0	mid:collectionsFooter	-	-	-	#FFD8DBE6	21	built	400 0 none
+collectionsHelp	59	footer A X B	HelpBar	HelpBar	in:collectionsFooter:0	mid:collectionsFooter	-	-	-	#FFD7D8DE	21	built	400 0 none
 ownGlyph-Open	61	A filled 34 px	CardGlyph	-	in:collectionsHelp:0	mid:collectionsFooter	34	34	-	-	-	built	glyph 17 700
 ownGlyph-Back	63	B ringed 38 px	CardGlyph	-	-	mid:collectionsFooter	38	38	-	-	-	built	glyph 16 400
-collectionsFooterSummary	65	"1 of 7 · 3 made by you, 4 kept by EmuSen"	CardLine	CardLine	-	mid:collectionsFooter	right:96	-	-	#FFD8DBE6	21	built	400 0 none
+collectionsFooterSummary	65	"1 of 7 · 3 made by you, 4 kept by EmuSen"	CardLine	CardLine	-	mid:collectionsFooter	right:96	-	-	#FFD7D8DE	21	built	400 0 none

@@ -43,10 +43,10 @@ Item {
         id: words
         // The Line's name, so a reader and the tests find the words themselves by it.
         objectName: root.objectName
-        // Its own width where the box is its words', which the division by the measure could leave a hair short of and so elide.
+        // Its own width/height where the box matches its words', which division by the measure can leave a ULP short and trigger elide.
         width: root.width === root.implicitWidth ? words.implicitWidth : root.width / root.unit
         y: root.boardLine ? (root.boardBaseline - words.baselineOffset) * root.unit : 0
-        height: root.boardLine ? words.implicitHeight : root.height / root.unit
+        height: root.boardLine || root.height === root.implicitHeight ? words.implicitHeight : root.height / root.unit
         scale: root.unit
         transformOrigin: Item.TopLeft
         font.family: Tokens.faceText

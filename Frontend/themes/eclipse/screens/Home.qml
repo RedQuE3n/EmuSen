@@ -278,14 +278,18 @@ ThemeScreen {
                             size: 26
                             weight: Tokens.weightSentence
                         }
-                        // The resume point (Main:57-60): the suspended game's paused picture and when it was saved, while that game is shown.
-                        Item {
+                        // The resume point (Main:57-60): framed in a rounded inputSurface card while the suspended game is shown.
+                        Rectangle {
                             id: resume
                             objectName: "resume"
                             x: 96 * design.unit
                             y: facts.y + facts.height + 26 * design.unit
-                            width: 980 * design.unit
-                            height: 60 * design.unit
+                            width: Math.min(980 * design.unit, Math.max(560 * design.unit, resumeWords.x + resumeWords.implicitWidth + 24 * design.unit))
+                            height: 84 * design.unit
+                            radius: 18 * design.unit
+                            color: Tokens.inputSurface
+                            border.width: 1 * design.unit
+                            border.color: ink.plateEdge
                             visible: root.resuming
                             // The game's own picture at its centre, cut to the board's 96 by 60.
                             ShaderEffectSource {
@@ -302,6 +306,8 @@ ThemeScreen {
                             Shape {
                                 id: resumePicture
                                 objectName: "resumePicture"
+                                x: 12 * design.unit
+                                y: (resume.height - height) / 2
                                 width: 96 * design.unit
                                 height: 60 * design.unit
                                 readonly property real radius: 10 * design.unit
@@ -334,7 +340,7 @@ ThemeScreen {
                                 id: resumeWords
                                 objectName: "resumeWords"
                                 unit: design.unit
-                                x: resumePicture.width + 16 * design.unit
+                                x: resumePicture.x + resumePicture.width + 16 * design.unit
                                 y: (resume.height - height) / 2
                                 text: root.resuming ? Words.resumePoint(Session.pausedSince) : ""
                                 color: ink.help
@@ -362,14 +368,19 @@ ThemeScreen {
                                     pixelScale: canvas.unit
                                     visible: pill.index < root.gameButtons
                                     live: pill.model.enabled ?? true
-                                    filled: pill.index === 0
-                                    outline: ink.pillLine
-                                    glyphSide: pill.filled ? 46 : 44
+                                    filled: pill.index === 0 && pill.activeFocus
+                                    fill: Tokens.surfaceRaised
+                                    borderWidth: pill.index === 0 ? 1.5 * design.unit : Tokens.hoverBorder
+                                    outline: pill.index === 0 ? "#94F6E7D8" : ink.pillLine
+                                    leadGlyph: pill.index === 0
+                                    labelWeight: pill.index === 0 ? Font.DemiBold : Font.Normal
+                                    glyphSide: pill.filled ? 46 : (pill.index === 0 ? 38 : 44)
+                                    leadLetterSize: pill.filled ? 22 : 18
                                     labelSize: pill.filled ? 26 : 24
                                     trail: pill.filled ? 34 : 30
                                     gap: pill.filled ? 16 : 14
                                     // A plays the game; the others are their buttons' presses, which the host acts on as the help line does.
-                                    onActivated: pill.filled ? Actions.play(root.currentTile?.key ?? "") : frame.controller.offer(pill.button)
+                                    onActivated: pill.index === 0 ? Actions.play(root.currentTile?.key ?? "") : frame.controller.offer(pill.button)
                                     KeyNavigation.left: pill.index > 0 ? buttons.itemAt(pill.index - 1) : null
                                     KeyNavigation.right: pill.index + 1 < Math.min(root.gameButtons, buttons.count) ? buttons.itemAt(pill.index + 1) : null
                                     KeyNavigation.up: status.search
@@ -394,18 +405,6 @@ ThemeScreen {
                             color: Tokens.text
                             size: 28
                             weight: Font.DemiBold
-                        }
-                        // Where the shown tile stands among every game played, its baseline on the heading's (Main:78-80).
-                        Line {
-                            id: recentCount
-                            objectName: "recentCount"
-                            unit: design.unit
-                            x: recentHeading.x + recentHeading.width + 18 * design.unit
-                            y: recentHeading.y + (recentHeading.words.baselineOffset - recentCount.words.baselineOffset) * design.unit
-                            visible: tiles.count > 0
-                            text: Words.place(root.current, tiles.count)
-                            color: Tokens.muted
-                            size: 20
                         }
                         Item {
                             id: row
@@ -513,7 +512,10 @@ ThemeScreen {
                             unit: design.unit
                             controller: frame.controller
                             color: ink.glass
+                            borderColor: "#38F6E7D8"
+                            borderWidth: 1
                             wordsColor: ink.help
+                            placeWords: tiles.count > 0 ? Words.place(root.current, tiles.count) : ""
                         }
                     }
                 }

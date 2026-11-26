@@ -53,25 +53,23 @@ eyebrow	54	"CONTINUE · SUPER NINTENDO"	Words.continuePlaying, "CONTINUE PLAYING
 titleLine	55	"Aurora Drift"'s line box, 112 px at the board's line height of 1.02	the title's line height, times its lines	Item	96	below:eyebrow:26	980	114.24	-	-	-	built	-
 title	55	"Aurora Drift", the face's own height about the line box's middle, as CSS spreads the leading (Main:55)	Session.title, or the focused game row's title	Text	96	mid:titleLine	-	-	-	Tokens.textStrong	112	built	600 -0.02 none
 facts	56	"Last played yesterday · 3 h 20 min played"	Words.pausedFacts (qt-models/src/words.rs:169), or the row's facts; Session.played is never fed (qt-app/src/theme.rs:351)	Text	96	below:titleLine:26	-	-	-	Tokens.muted	26	built	300 0 none
-resume	57	the resume point's row, 60 high, while the suspended game is shown	Session.hasGame and the shown tile its key	Item	96	below:facts:26	980	60	-	-	-	built	-
-resumePicture	58	the resume point's picture, 96 by 60 at radius 10	Session.frame, the paused picture, cut at its centre	Shape	in:resume:0	mid:resume	96	60	10	-	-	built	-
-resumeRim	58	its inset rim, 2 px of rgba(246, 231, 216, 0.5)	none: the board's own colour	Rectangle	in:resume:0	mid:resume	96	60	10	#80F6E7D8	-	built	-
+resume	57	the resume point's card, 84 high, while the suspended game is shown	Session.hasGame and the shown tile its key	Rectangle	96	below:facts:26	560	84	18	Tokens.inputSurface	-	built	line 1 #FF262A3A
+resumePicture	58	the resume point's picture, 96 by 60 at radius 10	Session.frame, the paused picture, cut at its centre	Shape	in:resume:12	mid:resume	96	60	10	-	-	built	-
+resumeRim	58	its inset rim, 2 px of rgba(246, 231, 216, 0.5)	none: the board's own colour	Rectangle	in:resumePicture:0	mid:resume	96	60	10	#80F6E7D8	-	built	-
 resumeWords	59	"Resume point · saved 9:12 PM"	Words.resumePoint(Session.pausedSince) (qt-models/src/words.rs resume_point), the time in the machine's short form (qt-models/src/clock.rs short_time)	Text	after:resumePicture:16	mid:resume	-	-	-	#FFD8DBE6	22	built	400 0 none
-button.0	61	Resume, filled	Help.entries(Help.Continue), first row (qt-models/src/help.rs:103)	Pill	96	below:resume:44	fit:buttonLabel.0:34	72	36	Tokens.accent	-	built	-
-buttonGlyph.0	62	the A disc	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.0:14	mid:button.0	46	46	-	-	-	built	glyph 22 600
-buttonLabel.0	62	"Resume"	the row's label	Text	after:buttonGlyph.0:16	mid:button.0	-	-	-	Tokens.overAccent	26	built	600 0 none
+button.0	61	Resume, quiet outlined dark pill at rest while Recent holds focus	Help.entries(Help.Continue), first row (qt-models/src/help.rs:103)	Pill	96	below:resume:44	fit:buttonLabel.0:31.5	72	36	#94F6E7D8	-	built	-
+pillLine.0	61	its dark raised fill and 1.5 px cream hairline at rest	Tokens.surfaceRaised	Rectangle	in:button.0:0	foot:button.0	fit:button.0:0	72	36	Tokens.surfaceRaised	-	built	line 1.5 #94F6E7D8
+buttonGlyph.0	62	the A badge	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): cream disc with dark letter at rest	Glyph	in:button.0:15.5	mid:button.0	38	38	-	-	-	built	glyph 18 600
+buttonLabel.0	62	"Resume"	the row's label	Text	after:buttonGlyph.0:14	mid:button.0	-	-	-	Tokens.text	24	built	600 0 none
 button.1	64	"Options", outlined, its 2 px line inside its box	the second row, X: Words' "Options" through Help.entries(kind, { card: true }) (qt-models/src/help.rs card_named, words.rs OPTIONS)	Pill	after:button.0:18	foot:button.0	fit:buttonLabel.1:32	72	36	#FF5A6076	-	built	-
 buttonGlyph.1	65	the X disc, 44 inside its 2 px ring	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.1:16	mid:button.1	48	48	-	-	-	built	glyph 20 400
 buttonLabel.1	65	"Options"	the row's label	Text	after:buttonGlyph.1:14	mid:button.1	-	-	-	Tokens.text	24	built	400 0 none
 button.2	67	"Favourite", outlined, its 2 px line inside its box	the third row (qt-models/src/help.rs:105)	Pill	after:button.1:18	foot:button.0	fit:buttonLabel.2:32	72	36	#FF5A6076	-	built	-
 buttonGlyph.2	68	the Y disc, 44 inside its 2 px ring	Eclipse's Glyph (themes/eclipse/parts/Glyph.qml): the kit's letter for Device.family in the face	Glyph	in:button.2:16	mid:button.2	48	48	-	-	-	built	glyph 20 400
 buttonLabel.2	68	"Favourite"	the row's label	Text	after:buttonGlyph.2:14	mid:button.2	-	-	-	Tokens.text	24	built	400 0 none
-buttonHalo.0	61	the filled button's halo, 6 px out	the kit's Glow, exported (R-20261115-6)	Glow	in:button.0:0	foot:button.0	fit:button.0:0	72	36	#2EF6E7D8	-	built	glow 0 6 0 0
-buttonGlow.0	61	the filled button's glow, 46 px of blur 6 px out	the kit's Glow	Glow	in:button.0:0	foot:button.0	fit:button.0:0	72	36	#73F0B4C4	-	built	glow 46 6 0 0
 artLabel	75	the art's glass, 8 by 16 px round the words at radius 18, rgba(7, 8, 15, 0.78)	the shown game's art, while Library.artHues reads hues of it	Rectangle	right:96	150	fit:artWords:16	up:artWords:-8	18	#C707080F	-	built	-
 artWords	75	"GAME ART · AURORA DRIFT", 0.14em apart	Words.gameArt(the shown game's title) (qt-models/src/words.rs game_art), in capitals	Text	in:artLabel:16	mid:artLabel	-	-	-	#FFD8DBE6	16	built	400 0.14 upper
 recentHeading	79	"Recent"	Words.recentEntry (qt-models/src/words.rs:73)	Text	96	790	-	-	-	Tokens.text	28	built	600 0 none
-recentCount	80	"1 of 24", its baseline on the heading's	Words.place(the shown tile, Library.recent's count) (qt-models/src/game_page.rs place)	Text	after:recentHeading:18	base:recentHeading	-	-	-	Tokens.muted	20	built	400 0 none
 tile.0	83	the focused game's tile	Library.recent, first row	Walkable	96	below:recentHeading:22	312	196	18	-	-	built	-
 tile.1	83	a game's tile	the second row	Walkable	after:tile.0:24	foot:tile.0	264	165	18	-	-	built	-
 tile.2	83	a game's tile	the third row	Walkable	after:tile.1:24	foot:tile.0	264	165	18	-	-	built	-
@@ -88,7 +86,9 @@ help	99	the help bar's entries	Help.entries(Help.Continue) (qt-models/src/help.r
 ownGlyph-Resume	94	the help line's A, a filled disc of 34	Eclipse's Glyph, lead	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
 ownGlyph-Options	95	the help line's X, 34 inside a 2 px ring	Eclipse's Glyph	-	-	mid:help	38	38	-	-	-	built	glyph 16 400
 ownGlyph-Home card	97	"MENU" in a 2 px capsule, 34 inside, the kit's name for Start in the pad's family	Eclipse's Glyph, named	-	-	mid:help	-	38	-	-	-	built	word 15 400
-helpSections	99	the glass at the help line's right, 46 tall, 18 px in, rgba(7, 8, 15, 0.78)	none: the board's own colour (Ink.glass), Eclipse's SectionsHelp part	SectionsHelp	-	mid:help	right:96	46	23	#C707080F	-	built	-
+helpSections	99	the glass at the help line's right, 46 tall, 18 px in, rgba(7, 8, 15, 0.78), 1 px border	none: the board's own colour (Ink.glass), Eclipse's SectionsHelp part	SectionsHelp	-	mid:help	right:96	46	23	#C707080F	-	built	line 1 #38F6E7D8
 ownGlyph-Sections	100	LB in a 2 px box, 30 px inside, corner 8, padding 10	Help.sections (qt-models/src/help.rs SECTIONS), the kit's named glyph through Eclipse's Glyph part	-	in:helpSections:18	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
 ownGlyph2-Sections	101	RB, the pair's second, in the same box	the kit's HelpBar's pair through Eclipse's Glyph part	-	after:ownGlyph-Sections:10	mid:helpSections	-	34	-	-	-	built	word 15 400 8 10
-helpSectionsWords	102	"Sections"	the entry's label, help.rs SECTIONS	Text	after:ownGlyph2-Sections:10	mid:helpSections	inright:helpSections:18	-	-	#FFD8DBE6	21	built	400 0 none
+helpSectionsWords	102	"Sections"	the entry's label, help.rs SECTIONS	Text	after:ownGlyph2-Sections:10	mid:helpSections	-	-	-	#FFD8DBE6	21	built	400 0 none
+helpSectionsDivider	103	"·"	Words.between	Text	after:helpSectionsWords:10	mid:helpSections	-	-	-	Tokens.muted	21	built	400 0 none
+helpSectionsPlace	104	"1 of 24"	Words.place(the shown tile, Library.recent's count)	Text	after:helpSectionsDivider:10	mid:helpSections	inright:helpSections:18	-	-	Tokens.muted	21	built	400 0 none

@@ -5,9 +5,9 @@
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 backdropGround	17	the ground, #07080F	the kit's Backdrop, its ground Tokens.surface	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
 backdropField.0	19	the page's glow: a 900 px disc of #6A4CF0, blurred 150 px at 0.4	the kit's BackdropField, SettingsInk.pageGlow	-	right:-280	60	900	900	-	opacity:0.4	blur:150	built	field 0 -1 #6A4CF0 0
-backdropField.1	20	the limb's glow: 0 0 40px 6px rgba(246, 214, 200, 0.35)	the kit's BackdropField, SettingsInk.limbGlow	-	-1566	-706	2012	2612	-	opacity:0.35	blur:20	built	field 0 -1 #F6D6C8 0
-limbRim	20	the limb's 2 px rim, rgba(246, 231, 216, 0.75)	Eclipse's Limb, SettingsInk.limbRim	Limb	-1562	-702	2004	2604	-	#BFF6E7D8	-	built	-
-limb	20	the limb, a 2000 by 2600 ellipse of #0B0D16	Eclipse's Limb, SettingsInk.limb	Limb	-1560	-700	2000	2600	-	#FF0B0D16	-	built	-
+backdropField.1	20	the limb's glow: 0 0 40px 6px rgba(246, 214, 200, 0.35)	the kit's BackdropField, SettingsInk.limbGlow	-	-1626	-706	2012	2612	-	opacity:0.35	blur:20	built	field 0 -1 #F6D6C8 0
+limbRim	20	the limb's 2 px rim, rgba(246, 231, 216, 0.75)	Eclipse's Limb, SettingsInk.limbRim	Limb	-1622	-702	2004	2604	-	#BFF6E7D8	-	built	-
+limb	20	the limb, a 2000 by 2600 ellipse of #0B0D16	Eclipse's Limb, SettingsInk.limb	Limb	-1620	-700	2000	2600	-	#FF0B0D16	-	built	-
 mark	24	the crescent mark, 34	Marks.crescent, Eclipse's Brand part unnamed	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-
 settingsTitle	25	"Settings", 20 px after the mark	Settings.title	Text	after:mark:20	mid:80	-	-	-	Tokens.text	34	built	600 0 none
 battery	27	"82%"	Device.battery as Words.percent gives it	Text	before:clock:22	mid:80	-	-	-	Tokens.text	22	built	400 0 none

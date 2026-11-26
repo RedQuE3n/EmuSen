@@ -516,8 +516,13 @@ pub fn hold_board(scene: &mut Scene<'_>, table: &str, words: &[(&str, String, bo
         }
         if rows(table).1.iter().any(|r| r.name == "helpSections") {
             let shoulders = glyphs(&tree, &["ownGlyph-Section", "ownGlyph2-Section"]);
-            if shoulders != ["LB", "RB"] || words_under(&tree, "helpSections") != ["Section"] {
-                differences.push(format!("{at}: the shoulders read {shoulders:?} {:?} where the board draws LB RB Section", words_under(&tree, "helpSections")));
+            let place = table.lines().find(|l| l.starts_with("helpSectionsPlace\t")).and_then(|l| l.split('\t').nth(2));
+            let want = match place {
+                Some(p) => vec!["Section", "·", p.trim_matches('"')],
+                None => vec!["Section"],
+            };
+            if shoulders != ["LB", "RB"] || words_under(&tree, "helpSections") != want {
+                differences.push(format!("{at}: the shoulders read {shoulders:?} {:?} where the board draws LB RB {want:?}", words_under(&tree, "helpSections")));
             }
         } else if tree.nodes.iter().any(|n| n.name == "helpSections" && n.visible) {
             differences.push(format!("{at}: helpSections is visible where the board draws none"));

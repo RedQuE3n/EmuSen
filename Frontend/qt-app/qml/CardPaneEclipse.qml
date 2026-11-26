@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Eclipse Pause Card detail pane: save slots (#6), disc cover (#38), reel/moment, and sentences.
 Item {
@@ -31,7 +32,7 @@ Item {
                 objectName: "PaneCoverShadow"
                 anchors.fill: parent
                 radius: 16 * root.unit
-                color: Qt.rgba(0, 0, 0, 0.5)
+                color: ThemeInk.shadowHalf
                 blur: 50 * root.unit
                 spread: 0
                 offsetX: 0
@@ -202,7 +203,7 @@ Item {
                             gap: 3 * root.unit
                             thickness: 3 * root.unit
                             bandRadius: tile.tileRadius + 6 * root.unit
-                            glowColor: Qt.rgba(240 / 255, 180 / 255, 196 / 255, 0.45)
+                            glowColor: ThemeInk.glowMid
                             glowBlur: 34 * root.unit
                             glowSpread: 8 * root.unit
                             pixelScale: root.pixelScale
@@ -253,9 +254,9 @@ Item {
                     topRightRadius: 14 * root.unit
                     bottomLeftRadius: 22 * root.unit
                     bottomRightRadius: 22 * root.unit
-                    color: "#151826"
+                    color: Kit.Tokens.surfaceRaised
                     border.width: 2 * root.unit
-                    border.color: drawerCard.ringed ? Kit.Tokens.accent : "#5A6076"
+                    border.color: drawerCard.ringed ? Kit.Tokens.accent : ThemeInk.pillBorder
                     Rectangle {
                         objectName: "PaneDrawerCardSlot." + drawerCard.index
                         x: 22 * root.unit
@@ -263,7 +264,7 @@ Item {
                         width: 106 * root.unit
                         height: 54 * root.unit
                         radius: 8 * root.unit
-                        color: "#262A3A"
+                        color: ThemeInk.track
                     }
                     CardLine {
                         objectName: "PaneDrawerCardName." + drawerCard.index
@@ -298,7 +299,7 @@ Item {
                     width: 22 * root.unit
                     height: (16 + bar.index * 8) * root.unit
                     radius: 6 * root.unit
-                    color: bar.index < root.paneModel.bars ? Kit.Tokens.accent : "#262A3A"
+                    color: bar.index < root.paneModel.bars ? Kit.Tokens.accent : ThemeInk.track
                 }
             }
         }

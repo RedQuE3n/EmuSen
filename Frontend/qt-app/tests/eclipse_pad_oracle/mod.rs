@@ -78,7 +78,7 @@ fn check_card_column(tree: &Tree, side: &str, scrolls: bool, k: f64, unit: f64, 
         if lit {
             focused_count += 1;
         }
-        let (fill_col, border_rule) = if lit { ("#FF151826", "line 0 -") } else { ("#FF0F111A", "line 1 #FF22263A") };
+        let (fill_col, border_rule) = if lit { ("#FF151826", "line 0 -") } else { ("#FF0F1119", "line 1 #615E647B") };
         let (left_col, left_size, left_type, right_col, right_size, right_type) = if side == "left" {
             ("#FFB9BED0", "16", "400 0 none", "#FFF4F1EC", "19", "600 0 none")
         } else {
@@ -220,7 +220,7 @@ fn check_pad_board(
             differences.push(format!("{at_size}: leaders unlit={unlit_leaders} lit={lit_leaders} for {want_controls}"));
         }
         for n in tree.nodes.iter().filter(|n| n.visible && n.name.starts_with("leader") && n.ty.contains("Shape")) {
-            let want = if n.name.starts_with("leaderFocused") { "#FFF6E7D8" } else { "#FF5A6076" };
+            let want = if n.name.starts_with("leaderFocused") { "#FFF6E7D8" } else { "#D95E647B" };
             if painted(&tree, &n.name) != Colour::parse(want) {
                 differences.push(format!("{at_size}: {} colour {:?} != {want}", n.name, painted(&tree, &n.name)));
             }

@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Shared Eclipse Cards frame: left corona disc, Menu or standard header + nav, detail card, status pill, and footer bar (boards #5, #44-#46, Pause Card).
 FocusScope {
@@ -127,7 +128,7 @@ FocusScope {
                     x: menuHeader.width - width
                     y: (menuHeader.height - height) / 2
                     text: Words.statusClock(root.battery, root.clockText)
-                    color: "#D8DBE6"
+                    color: ThemeInk.body
                     size: 22
                     weight: Font.Normal
                 }
@@ -148,7 +149,7 @@ FocusScope {
                     width: parent.width
                     text: root.breadcrumb
                     capitalization: Font.AllUppercase
-                    color: "#F3C9D2"
+                    color: ThemeInk.rose
                     size: 18
                     weight: Font.DemiBold
                     spacing: 0.22 * 18
@@ -177,7 +178,7 @@ FocusScope {
                     boardLineHeight: 30.45
                     width: 520 * root.unit
                     text: root.subtitle
-                    color: "#C9CDDB"
+                    color: ThemeInk.body
                     size: 21
                     weight: Font.Light
                     wrapMode: Text.WordWrap
@@ -265,7 +266,7 @@ FocusScope {
                 fitted: true
                 ruled: false
                 color: "transparent"
-                labelColor: "#D8DBE6"
+                labelColor: ThemeInk.body
                 iconColor: Kit.Tokens.muted
                 leadStyle: Kit.GlyphStyles.Filled
                 leadColor: Kit.Tokens.accent
@@ -285,7 +286,7 @@ FocusScope {
                     CardGlyph {
                         unit: root.unit
                         side: 34
-                        ink: "#D8DBE6"
+                        ink: ThemeInk.body
                     }
                 }
             }
@@ -303,7 +304,7 @@ FocusScope {
         radius: 28 * root.unit
         color: Qt.alpha(Kit.Tokens.surface, 0.95)
         border.width: 1 * root.unit
-        border.color: "#262A3A"
+        border.color: ThemeInk.hairline
         Column {
             id: detailColumn
             objectName: "AdaptiveDetail"
@@ -337,7 +338,7 @@ FocusScope {
                     x: 34 * root.unit
                     y: (coreRow.height - height) / 2
                     text: root.paneCore
-                    color: "#D8DBE6"
+                    color: ThemeInk.body
                     size: 20
                     weight: Font.Normal
                 }
@@ -409,7 +410,7 @@ FocusScope {
                 boardLine: true
                 width: parent.width
                 text: root.paneStatus
-                color: root.paneStatusOk ? "#C8F0DA" : "#F3C9D2"
+                color: root.paneStatusOk ? Kit.Tokens.success : ThemeInk.rose
                 size: 20
                 weight: Font.Normal
                 wrapMode: Text.WordWrap
@@ -511,7 +512,7 @@ FocusScope {
             fitted: true
             ruled: false
             color: "transparent"
-            labelColor: "#D8DBE6"
+            labelColor: ThemeInk.body
             iconColor: Kit.Tokens.muted
             leadStyle: Kit.GlyphStyles.Filled
             leadColor: Kit.Tokens.accent
@@ -531,7 +532,7 @@ FocusScope {
                 CardGlyph {
                     unit: root.unit
                     side: 34
-                    ink: "#D8DBE6"
+                    ink: ThemeInk.body
                     keyPairs: true
                     boxMenu: true
                 }

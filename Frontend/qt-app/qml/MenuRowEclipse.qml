@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // One row of an Eclipse card: Home Menu Continue card, Home Menu icon row, or standard pill row (boards #5, #44-#46).
 Kit.Walkable {
@@ -32,7 +33,7 @@ Kit.Walkable {
     readonly property bool showSteps: !root.menu && !root.continueCard && root.steps && root.current
     readonly property bool showChevron: !root.menu && !root.continueCard && root.opens
     readonly property color ink: root.current ? Kit.Tokens.overAccent : Kit.Tokens.textStrong
-    readonly property color mutedInk: root.current ? "#3A3F52" : Kit.Tokens.muted
+    readonly property color mutedInk: root.current ? ThemeInk.overAccentMuted : Kit.Tokens.muted
     readonly property real labelLeft: (root.menu ? 70 : (root.current ? 76 : 22)) * root.unit
     readonly property real valueRight: root.menu ? root.width - 20 * root.unit : (root.showSteps ? root.width - 58 * root.unit : (root.showChevron ? root.width - 60 * root.unit : root.width - 22 * root.unit))
     readonly property real rightEdge: root.showSteps ? stepPrev.x - 16 * root.unit : (root.value.length > 0 ? valueText.x - (root.menu ? 20 : 16) * root.unit : (root.showChevron ? chevronMark.x - 16 * root.unit : root.width - (root.menu ? 20 : 22) * root.unit))
@@ -70,9 +71,9 @@ Kit.Walkable {
         width: root.width
         height: root.boxH
         radius: root.pillRadius
-        color: root.current ? Kit.Tokens.accent : "#0F111A"
+        color: root.current ? Kit.Tokens.accent : ThemeInk.rowSurface
         border.width: !root.current && root.continueCard ? 1 * root.unit : 0
-        border.color: "#262A3A"
+        border.color: ThemeInk.hairline
     }
     Item {
         id: continueGroup
@@ -89,10 +90,10 @@ Kit.Walkable {
             height: 84 * root.unit
             radius: 14 * root.unit
             gradient: Gradient {
-                GradientStop { position: 0.0; color: "#1FC9A8" }
-                GradientStop { position: 50 / 84; color: "#1FC9A8" }
-                GradientStop { position: 50 / 84 + 0.0001; color: "#6A4CF0" }
-                GradientStop { position: 1.0; color: "#6A4CF0" }
+                GradientStop { position: 0.0; color: Kit.Tokens.success }
+                GradientStop { position: 50 / 84; color: Kit.Tokens.success }
+                GradientStop { position: 50 / 84 + 0.0001; color: ThemeInk.rose }
+                GradientStop { position: 1.0; color: ThemeInk.rose }
             }
             Kit.RoundPicture {
                 anchors.fill: parent
@@ -260,6 +261,6 @@ Kit.Walkable {
         y: root.boxH + 16 * root.unit
         width: root.width - 44 * root.unit
         height: 1 * root.unit
-        color: "#262A3A"
+        color: ThemeInk.hairline
     }
 }

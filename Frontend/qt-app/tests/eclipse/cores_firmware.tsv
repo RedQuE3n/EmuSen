@@ -4,21 +4,21 @@ name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 AdaptiveCardScrim	23	dimming scrim	Tokens.scrim	Rectangle	0	0	right:0	1200	-	Tokens.scrim	-	built	-
 cardDisc	25	left eclipse disc	Kit.CoronaDisc	CoronaDisc	-2400	-960	3120	3120	-	Tokens.surface	-	built	-
 cardSection	27	card section 560x1026	Item	Item	72	64	560	1026	-	-	-	built	-
-cardBreadcrumb	29	"CORES · PLAYSTATION" eyebrow	CardLine	CardLine	72	64	560	22	-	#FFF3C9D2	18	built	600 0.22 upper
+cardBreadcrumb	29	"CORES · PLAYSTATION" eyebrow	CardLine	CardLine	72	64	560	22	-	#FFF0B4C4	18	built	600 0.22 upper
 cardTitle	30	"SwanStation · Firmware"	CardLine	CardLine	72	below:cardBreadcrumb:8	560	106	-	Tokens.textStrong	50	built	600 -0.01 none
 cardRow.0	36	row 0 PlayStation BIOS with divider	MenuRowEclipse	MenuRowEclipse	72	below:cardTitle:26	560	99	-	-	-	built	-
 rowGlow.0	36	BIOS glow	Kit.Glow	Glow	72	top:cardRow.0:0	560	72	36	#66F0B4C4	-	built	glow 46 6 0 0
 rowRing.0	36	BIOS 6 px ring	rgba(246,231,216,0.18)	Rectangle	66	top:cardRow.0:-6	572	84	42	#2EF6E7D8	-	built	-
 rowBg.0	36	BIOS cream pill	Tokens.accent	Rectangle	72	top:cardRow.0:0	560	72	36	Tokens.accent	-	built	-
 rowGlyph.0	37	A badge 46 px	CardGlyph	CardGlyph	86	mid:rowBg.0	46	46	-	-	-	built	glyph 21 600
-rowDivider.0	36	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.0:88	516	1	-	#FF262A3A	-	built	-
+rowDivider.0	36	section divider 1 px #262A3A	Rectangle	Rectangle	94	top:cardRow.0:88	516	1	-	#615E647B	-	built	-
 cardRow.1	36	row 1 Open Folder	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.0:6	560	66	-	-	-	built	-
-AdaptiveCardPane	46	floating detail card	Rectangle	Rectangle	800	210	760	-	28	#F207080F	-	built	line 1 #FF262A3A
+AdaptiveCardPane	46	floating detail card	Rectangle	Rectangle	800	210	760	-	28	#F207080F	-	built	line 1 #615E647B
 paneLead.0	46	"Your own: PS1_BIOS"	CardLine	CardLine	836	246	688	-	-	Tokens.textStrong	24	built	400 0 none
 paneMuted.0	46	"Recognised by its content."	CardLine	CardLine	836	below:paneLead.0:22	688	-	-	Tokens.muted	19	built	400 0 none
 cardStatus	48	top-right status pill	Rectangle	Rectangle	-	48	right:200	56	28	#D107080F	-	built	-
 cardBattery	49	"82%"	CardLine	CardLine	in:cardStatus:22	mid:cardStatus	-	27	-	Tokens.textStrong	22	built	400 0 none
 cardClock	49	"9:41 PM"	CardLine	CardLine	after:cardBattery:22	mid:cardStatus	inright:cardStatus:22	27	-	Tokens.textStrong	22	built	600 0 none
 cardFooterBar	52	bottom footer bar 76 px	Rectangle	Rectangle	0	1124	right:0	76	-	Tokens.surface	-	built	-
-cardHelp	53	help bar A Choose B Back START Close	HelpModel.Card	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD8DBE6	21	built	400 0 none
+cardHelp	53	help bar A Choose B Back START Close	HelpModel.Card	HelpBar	72	mid:cardFooterBar	-	38	-	#FFD7D8DE	21	built	400 0 none
 cardPosition	58	"1 of 2"	CardLine	CardLine	-	mid:cardFooterBar	right:72	26	-	Tokens.muted	21	built	400 0 none

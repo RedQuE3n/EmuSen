@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
+import EmuSen.App
 
 // Eclipse Search screen (#8): purple top glow, pill search bar, horizontal game cards, 4-row keyboard, centered footer.
 Item {
@@ -81,7 +82,7 @@ Item {
 
             Rectangle {
                 anchors.fill: parent
-                color: "#07080F"
+                color: Kit.Tokens.surface
             }
 
             Kit.Backdrop {
@@ -94,7 +95,7 @@ Item {
                         y: -420 * root.unit
                         width: 1000 * root.unit
                         height: Kit.CanvasUnits.designHeight * root.unit
-                        color: "#5B3FD6"
+                        color: ThemeInk.backdropHalo
                         blur: 150 * root.unit
                         opacity: 0.45
                     }
@@ -116,7 +117,7 @@ Item {
                     radius: 52 * root.unit
                     gap: 3 * root.unit
                     thickness: 3 * root.unit
-                    glowColor: "#59F0B4C4"
+                    glowColor: ThemeInk.glowRing
                     glowBlur: 46 * root.unit
                     glowSpread: 8 * root.unit
                     pixelScale: root.pixelScale
@@ -126,7 +127,7 @@ Item {
                     objectName: "searchInputBg"
                     anchors.fill: parent
                     radius: 52 * root.unit
-                    color: "#11131C"
+                    color: Kit.Tokens.inputSurface
                 }
 
                 Item {
@@ -143,7 +144,7 @@ Item {
                         preferredRendererType: Shape.CurveRenderer
                         ShapePath {
                             fillColor: "transparent"
-                            strokeColor: "#F6E7D8"
+                            strokeColor: Kit.Tokens.accent
                             strokeWidth: 2
                             capStyle: ShapePath.RoundCap
                             PathSvg { path: root.view.magnifierIcon ?? "" }
@@ -162,7 +163,7 @@ Item {
                     text: root.typist.text.length > 0 ? root.typist.text : (root.view.placeholder ?? "")
                     size: 44
                     weight: Font.DemiBold
-                    color: root.typist.text.length > 0 ? "#F4F1EC" : "#B9BED0"
+                    color: root.typist.text.length > 0 ? Kit.Tokens.text : Kit.Tokens.muted
                     elide: Text.ElideRight
                 }
 
@@ -177,7 +178,7 @@ Item {
                     text: root.view.countLine ?? ""
                     size: 22
                     weight: Font.Normal
-                    color: "#B9BED0"
+                    color: Kit.Tokens.muted
                 }
 
                 TapHandler {
@@ -200,7 +201,7 @@ Item {
                     text: root.view.gamesHeading ?? ""
                     size: 24
                     weight: Font.DemiBold
-                    color: "#D8DBE6"
+                    color: ThemeInk.body
                 }
 
                 FocusScope {
@@ -243,7 +244,7 @@ Item {
                                 radius: 20 * root.unit
                                 gap: 3 * root.unit
                                 thickness: 3 * root.unit
-                                glowColor: "#73F0B4C4"
+                                glowColor: ThemeInk.glowMid
                                 glowBlur: 34 * root.unit
                                 glowSpread: 8 * root.unit
                                 pixelScale: root.pixelScale
@@ -253,9 +254,9 @@ Item {
                                 objectName: "searchResultBg." + card.index
                                 anchors.fill: parent
                                 radius: 20 * root.unit
-                                color: "#11131C"
+                                color: Kit.Tokens.inputSurface
                                 border.width: 1 * root.unit
-                                border.color: "#262A3A"
+                                border.color: ThemeInk.hairline
                             }
 
                             EclipseArtPlate {
@@ -268,9 +269,7 @@ Item {
                                 unit: root.unit
                                 pixelScale: root.pixelScale
                                 cover: card.modelData.cover ?? ""
-                                bgColor: card.modelData.bg ?? "#12806F"
-                                dotColor: card.modelData.dot ?? "#B8FFE9"
-                                waveColor: card.modelData.wave ?? "#6A4CF0"
+                                swatch: card.modelData
                             }
 
                             Column {
@@ -287,7 +286,7 @@ Item {
                                     text: card.modelData.title ?? ""
                                     size: 23
                                     weight: Font.DemiBold
-                                    color: "#F4F1EC"
+                                    color: Kit.Tokens.text
                                     elide: Text.ElideRight
                                 }
 
@@ -299,7 +298,7 @@ Item {
                                     text: card.modelData.subtitle ?? ""
                                     size: 17
                                     weight: Font.Normal
-                                    color: "#B9BED0"
+                                    color: Kit.Tokens.muted
                                     elide: Text.ElideRight
                                 }
                             }
@@ -322,7 +321,7 @@ Item {
                         text: root.view.emptyLine ?? ""
                         size: 22
                         weight: Font.Normal
-                        color: "#B9BED0"
+                        color: Kit.Tokens.muted
                     }
                 }
 
@@ -336,7 +335,7 @@ Item {
                     text: root.view.note ?? ""
                     size: 20
                     weight: Font.Normal
-                    color: "#B9BED0"
+                    color: Kit.Tokens.muted
                     elide: Text.ElideRight
                 }
             }
@@ -350,8 +349,8 @@ Item {
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
                     GradientStop { position: 0.0; color: "transparent" }
-                    GradientStop { position: 0.30; color: "#8CF6E7D8" }
-                    GradientStop { position: 0.70; color: "#8CF6E7D8" }
+                    GradientStop { position: 0.30; color: ThemeInk.coronaSoft }
+                    GradientStop { position: 0.70; color: ThemeInk.coronaSoft }
                     GradientStop { position: 1.0; color: "transparent" }
                 }
             }

@@ -4,70 +4,70 @@
 # Rulings applied: R-20261125-10 (no unmeasured ms numbers or 2.9 ms badge), R-20261125-14 (local pack card without Newer pack / Get it), R-20261125-15 (scope pill omits This game).
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
 backdropGround	17	the ground, #07080F	ShadersEclipse Kit.Backdrop ground	Rectangle	0	0	right:0	1200	-	Tokens.surface	-	built	-
-shadersMark	21	the crescent mark, 34 px	ShadersEclipse crescent Shape	Shape	96	mid:72	34	34	-	#FFF6E7D8	-	built	-
-crumbSettings	23	"Settings", 28 px after mark	ShadersEclipse breadcrumb link	CardLine	after:shadersMark:28	mid:72	-	-	-	#FFB9BED0	24	built	400 0 none
-crumbSlash.0	24	"/", 14 px after Settings	ShadersEclipse breadcrumb slash	CardLine	after:crumbSettings:14	mid:72	-	-	-	#FF8E94AB	24	built	400 0 none
-crumbPicture	25	"Picture", 14 px after /	ShadersEclipse breadcrumb link	CardLine	after:crumbSlash.0:14	mid:72	-	-	-	#FFB9BED0	24	built	400 0 none
-crumbSlash.1	26	"/", 14 px after Picture	ShadersEclipse breadcrumb slash	CardLine	after:crumbPicture:14	mid:72	-	-	-	#FF8E94AB	24	built	400 0 none
-crumbScreenFilter	27	"Screen filter", 14 px after /	ShadersEclipse breadcrumb current	CardLine	after:crumbSlash.1:14	mid:72	-	-	-	#FFF4F1EC	24	built	600 0 none
-battery	30	"82%"	Device.battery as Words.percent	CardLine	before:clock:22	mid:72	-	-	-	#FFF4F1EC	22	built	400 0 none
-clock	30	"9:41 PM"	Device.shortTime	CardLine	-	mid:72	right:96	-	-	#FFF4F1EC	22	built	600 0 none
-sourceSwitch	34	Source toggle container	ShadersEclipse source pill	Rectangle	96	130	400	64	32	#FF11131C	-	built	line 1 #FF262A3A
+shadersMark	21	the crescent mark, 34 px	ShadersEclipse crescent Shape	Shape	96	mid:72	34	34	-	Tokens.accent	-	built	-
+crumbSettings	23	"Settings", 28 px after mark	ShadersEclipse breadcrumb link	CardLine	after:shadersMark:28	mid:72	-	-	-	Tokens.muted	24	built	400 0 none
+crumbSlash.0	24	"/", 14 px after Settings	ShadersEclipse breadcrumb slash	CardLine	after:crumbSettings:14	mid:72	-	-	-	#C7B9BED0	24	built	400 0 none
+crumbPicture	25	"Picture", 14 px after /	ShadersEclipse breadcrumb link	CardLine	after:crumbSlash.0:14	mid:72	-	-	-	Tokens.muted	24	built	400 0 none
+crumbSlash.1	26	"/", 14 px after Picture	ShadersEclipse breadcrumb slash	CardLine	after:crumbPicture:14	mid:72	-	-	-	#C7B9BED0	24	built	400 0 none
+crumbScreenFilter	27	"Screen filter", 14 px after /	ShadersEclipse breadcrumb current	CardLine	after:crumbSlash.1:14	mid:72	-	-	-	Tokens.text	24	built	600 0 none
+battery	30	"82%"	Device.battery as Words.percent	CardLine	before:clock:22	mid:72	-	-	-	Tokens.text	22	built	400 0 none
+clock	30	"9:41 PM"	Device.shortTime	CardLine	-	mid:72	right:96	-	-	Tokens.text	22	built	600 0 none
+sourceSwitch	34	Source toggle container	ShadersEclipse source pill	Rectangle	96	130	400	64	32	Tokens.inputSurface	-	built	line 1 #615E647B
 sourceTab.0	35	EmuSen source tab inactive	ShadersEclipse source tab	Rectangle	in:sourceSwitch:6	top:sourceSwitch:6	194	52	26	#00000000	-	built	-
-sourceWords.0	35	"EmuSen's · N", 19 px	ShadersEclipse source text	CardLine	-	mid:sourceTab.0	-	-	-	#FFD8DBE6	19	built	400 0 none
-sourceTab.1	36	libretro source tab active	ShadersEclipse source tab	Rectangle	after:sourceTab.0:0	top:sourceSwitch:6	194	52	26	#FFF6E7D8	-	built	-
-sourceWords.1	36	"libretro · N", 19 px semibold	ShadersEclipse source text	CardLine	-	mid:sourceTab.1	-	-	-	#FF07080F	19	built	600 0 none
+sourceWords.0	35	"EmuSen's · N", 19 px	ShadersEclipse source text	CardLine	-	mid:sourceTab.0	-	-	-	#FFD7D8DE	19	built	400 0 none
+sourceTab.1	36	libretro source tab active	ShadersEclipse source tab	Rectangle	after:sourceTab.0:0	top:sourceSwitch:6	194	52	26	Tokens.accent	-	built	-
+sourceWords.1	36	"libretro · N", 19 px semibold	ShadersEclipse source text	CardLine	-	mid:sourceTab.1	-	-	-	Tokens.overAccent	19	built	600 0 none
 shaderCat.0	39	Category 0: Favourites	ShadersEclipse category row	Rectangle	96	208	400	60	14	#00000000	-	built	-
-shaderCatName.0	40	Category 0 name	ShadersEclipse category label	CardLine	in:shaderCat.0:18	mid:shaderCat.0	-	-	-	#FFD8DBE6	21	built	400 0 none
-shaderCatCount.0	40	Category 0 count	ShadersEclipse category count	CardLine	-	mid:shaderCat.0	inright:shaderCat.0:18	-	-	#FFD8DBE6	17	built	400 0 none
-shaderCat.1	39	Category 1: CRT active	ShadersEclipse category row	Rectangle	96	below:shaderCat.0:4	400	60	14	#FFF6E7D8	-	built	-
-shaderCatName.1	40	Category 1 name semibold	ShadersEclipse category label	CardLine	in:shaderCat.1:18	mid:shaderCat.1	-	-	-	#FF07080F	21	built	600 0 none
-shaderCatCount.1	40	Category 1 count	ShadersEclipse category count	CardLine	-	mid:shaderCat.1	inright:shaderCat.1:18	-	-	#FF07080F	17	built	400 0 none
+shaderCatName.0	40	Category 0 name	ShadersEclipse category label	CardLine	in:shaderCat.0:18	mid:shaderCat.0	-	-	-	#FFD7D8DE	21	built	400 0 none
+shaderCatCount.0	40	Category 0 count	ShadersEclipse category count	CardLine	-	mid:shaderCat.0	inright:shaderCat.0:18	-	-	#FFD7D8DE	17	built	400 0 none
+shaderCat.1	39	Category 1: CRT active	ShadersEclipse category row	Rectangle	96	below:shaderCat.0:4	400	60	14	Tokens.accent	-	built	-
+shaderCatName.1	40	Category 1 name semibold	ShadersEclipse category label	CardLine	in:shaderCat.1:18	mid:shaderCat.1	-	-	-	Tokens.overAccent	21	built	600 0 none
+shaderCatCount.1	40	Category 1 count	ShadersEclipse category count	CardLine	-	mid:shaderCat.1	inright:shaderCat.1:18	-	-	Tokens.overAccent	17	built	400 0 none
 shaderCat.2	39	Category 2: Handheld panels	ShadersEclipse category row	Rectangle	96	below:shaderCat.1:4	400	60	14	#00000000	-	built	-
 shaderCat.3	39	Category 3: Broadcast and composite	ShadersEclipse category row	Rectangle	96	below:shaderCat.2:4	400	60	14	#00000000	-	built	-
 shaderCat.4	39	Category 4: Sharpening and scaling	ShadersEclipse category row	Rectangle	96	below:shaderCat.3:4	400	60	14	#00000000	-	built	-
 shaderCat.5	39	Category 5: Colour and film	ShadersEclipse category row	Rectangle	96	below:shaderCat.4:4	400	60	14	#00000000	-	built	-
 shaderCat.6	39	Category 6: Borders and bezels	ShadersEclipse category row	Rectangle	96	below:shaderCat.5:4	400	60	14	#00000000	-	built	-
 shaderCat.7	39	Category 7: Made for one console	ShadersEclipse category row	Rectangle	96	below:shaderCat.6:4	400	60	14	#00000000	-	built	-
-packCard	43	Local shader pack status card	ShadersEclipse pack card	Rectangle	96	736	400	-	18	#FF11131C	-	built	line 1 #FF262A3A
-packTitle	44	"libretro's shader pack", 20 px semibold	ShadersEclipse pack heading	CardLine	in:packCard:20	top:packCard:20	360	-	-	#FFF4F1EC	20	built	600 0 none
-packStatus	45	Local pack status copy, 17 px	ShadersEclipse pack body	CardLine	in:packCard:20	below:packTitle:12	360	-	-	#FFC9CDDB	17	built	400 0 none
-removePackButton	48	"Remove the pack" action pill	ShadersEclipse remove pill	Rectangle	in:packCard:20	below:packStatus:12	fit:removePackLabel:16	46	23	#00000000	-	built	line 2 #FF4A5068
-removePackLabel	48	"Remove the pack", 17 px	ShadersEclipse remove label	CardLine	in:removePackButton:16	mid:removePackButton	-	-	-	#FFD8DBE6	17	built	400 0 none
-searchBar	54	Filter search bar pill	ShadersEclipse search pill	Rectangle	536	130	430	56	28	#FF11131C	-	built	line 1 #FF2A2E40
-searchText	56	Search placeholder text, 19 px	ShadersEclipse search text	CardLine	in:searchBar:52	mid:searchBar	358	-	-	#FFB9BED0	19	built	400 0 none
-shaderRow.0	60	First preset row focused	ShadersEclipse preset row	Rectangle	536	202	430	88	16	#FF151826	-	built	-
-shaderRowName.0	67	First preset name, 21 px semibold	ShadersEclipse preset name	CardLine	in:shaderRow.0:114	top:shaderRow.0:18.5	-	-	-	#FFF4F1EC	21	built	600 0 none
-shaderRowMeta.0	68	First preset metadata, 16 px	ShadersEclipse preset meta	CardLine	in:shaderRow.0:114	top:shaderRow.0:48.5	-	-	-	#FFB9BED0	16	built	400 0 none
-scopeSwitch	77	Scope pill container	ShadersEclipse scope switch	Rectangle	1004	130	820	60	32	#FF11131C	-	built	line 1 #FF262A3A
+packCard	43	Local shader pack status card	ShadersEclipse pack card	Rectangle	96	736	400	-	18	Tokens.inputSurface	-	built	line 1 #615E647B
+packTitle	44	"libretro's shader pack", 20 px semibold	ShadersEclipse pack heading	CardLine	in:packCard:20	top:packCard:20	360	-	-	Tokens.text	20	built	600 0 none
+packStatus	45	Local pack status copy, 17 px	ShadersEclipse pack body	CardLine	in:packCard:20	below:packTitle:12	360	-	-	#FFD7D8DE	17	built	400 0 none
+removePackButton	48	"Remove the pack" action pill	ShadersEclipse remove pill	Rectangle	in:packCard:20	below:packStatus:12	fit:removePackLabel:16	46	23	#00000000	-	built	line 2 #D95E647B
+removePackLabel	48	"Remove the pack", 17 px	ShadersEclipse remove label	CardLine	in:removePackButton:16	mid:removePackButton	-	-	-	#FFD7D8DE	17	built	400 0 none
+searchBar	54	Filter search bar pill	ShadersEclipse search pill	Rectangle	536	130	430	56	28	Tokens.inputSurface	-	built	line 1 #615E647B
+searchText	56	Search placeholder text, 19 px	ShadersEclipse search text	CardLine	in:searchBar:52	mid:searchBar	358	-	-	Tokens.muted	19	built	400 0 none
+shaderRow.0	60	First preset row focused	ShadersEclipse preset row	Rectangle	536	202	430	88	16	Tokens.surfaceRaised	-	built	-
+shaderRowName.0	67	First preset name, 21 px semibold	ShadersEclipse preset name	CardLine	in:shaderRow.0:114	top:shaderRow.0:18.5	-	-	-	Tokens.text	21	built	600 0 none
+shaderRowMeta.0	68	First preset metadata, 16 px	ShadersEclipse preset meta	CardLine	in:shaderRow.0:114	top:shaderRow.0:48.5	-	-	-	Tokens.muted	16	built	400 0 none
+scopeSwitch	77	Scope pill container	ShadersEclipse scope switch	Rectangle	1004	130	820	60	32	Tokens.inputSurface	-	built	line 1 #615E647B
 scopeTab.0	78	Every console scope tab inactive	ShadersEclipse scope tab	Rectangle	in:scopeSwitch:6	top:scopeSwitch:6	404	48	24	#00000000	-	built	-
-scopeWords.0	78	"Every console", 19 px	ShadersEclipse scope text	CardLine	-	mid:scopeTab.0	-	-	-	#FFD8DBE6	19	built	400 0 none
-scopeTab.1	79	Active console scope tab active	ShadersEclipse scope tab	Rectangle	after:scopeTab.0:0	top:scopeSwitch:6	404	48	24	#FFF6E7D8	-	built	-
-scopeWords.1	79	Console scope name, 19 px semibold	ShadersEclipse scope text	CardLine	-	mid:scopeTab.1	-	-	-	#FF07080F	19	built	600 0 none
+scopeWords.0	78	"Every console", 19 px	ShadersEclipse scope text	CardLine	-	mid:scopeTab.0	-	-	-	#FFD7D8DE	19	built	400 0 none
+scopeTab.1	79	Active console scope tab active	ShadersEclipse scope tab	Rectangle	after:scopeTab.0:0	top:scopeSwitch:6	404	48	24	Tokens.accent	-	built	-
+scopeWords.1	79	Console scope name, 19 px semibold	ShadersEclipse scope text	CardLine	-	mid:scopeTab.1	-	-	-	Tokens.overAccent	19	built	600 0 none
 previewBox	83	820x560 live preview frame	ShadersEclipse preview box	Item	1004	208	820	560	-	-	-	built	-
-previewGlow	83	Outer blue preview glow	ShadersEclipse Kit.Glow	Glow	in:previewBox:0	top:previewBox:0	820	560	20	#38788CFF	-	built	glow 70 12 0 0
+previewGlow	83	Outer blue preview glow	ShadersEclipse Kit.Glow	Glow	in:previewBox:0	top:previewBox:0	820	560	20	#38F0B4C4	-	built	glow 70 12 0 0
 previewRim	83	2 px cream preview rim, r=22	ShadersEclipse preview rim	Rectangle	in:previewBox:-2	top:previewBox:-2	824	564	22	#00000000	-	built	line 2 #8CF6E7D8
-previewDivider	91	Vertical 4 px divider line	ShadersEclipse preview divider	Rectangle	-	top:previewBox:0	4	560	-	#FFF6E7D8	-	built	-
-previewHandle	92	Circular 60 px split drag handle	ShadersEclipse preview handle	Rectangle	-	mid:previewBox	60	60	30	#FF07080F	-	built	line 2 #FFF6E7D8
+previewDivider	91	Vertical 4 px divider line	ShadersEclipse preview divider	Rectangle	-	top:previewBox:0	4	560	-	Tokens.accent	-	built	-
+previewHandle	92	Circular 60 px split drag handle	ShadersEclipse preview handle	Rectangle	-	mid:previewBox	60	60	30	Tokens.surface	-	built	line 2 #FFF6E7D8
 previewBeforePill	95	"No filter" badge	ShadersEclipse before pill	Rectangle	in:previewBox:16	top:previewBox:16	fit:previewBeforeWords:14	38	19	#D107080F	-	built	-
-previewBeforeWords	95	"No filter", 17 px	ShadersEclipse before text	CardLine	-	mid:previewBeforePill	-	-	-	#FFF4F1EC	17	built	400 0 none
-previewAfterPill	96	Active filter badge	ShadersEclipse after pill	Rectangle	-	top:previewBox:16	inright:previewBox:16	38	19	#FFF6E7D8	-	built	-
-previewAfterWords	96	Filter name, 17 px semibold	ShadersEclipse after text	CardLine	-	mid:previewAfterPill	-	-	-	#FF07080F	17	built	600 0 none
-presetHeading	102	Active preset heading, 36 px semibold	ShadersEclipse preset heading	CardLine	1004	794	820	-	-	#FFF4F1EC	36	built	600 0 none
-presetSubtitle	103	Pack/passes/settings subtitle, 18 px	ShadersEclipse preset sub	CardLine	1004	845	820	-	-	#FFC9CDDB	18	built	400 0 none
+previewBeforeWords	95	"No filter", 17 px	ShadersEclipse before text	CardLine	-	mid:previewBeforePill	-	-	-	Tokens.text	17	built	400 0 none
+previewAfterPill	96	Active filter badge	ShadersEclipse after pill	Rectangle	-	top:previewBox:16	inright:previewBox:16	38	19	Tokens.accent	-	built	-
+previewAfterWords	96	Filter name, 17 px semibold	ShadersEclipse after text	CardLine	-	mid:previewAfterPill	-	-	-	Tokens.overAccent	17	built	600 0 none
+presetHeading	102	Active preset heading, 36 px semibold	ShadersEclipse preset heading	CardLine	1004	794	820	-	-	Tokens.text	36	built	600 0 none
+presetSubtitle	103	Pack/passes/settings subtitle, 18 px	ShadersEclipse preset sub	CardLine	1004	845	820	-	-	#FFD7D8DE	18	built	400 0 none
 shaderSlider.0	110	First slider box	ShadersEclipse slider 0	Item	1004	885	256	50	-	-	-	built	-
 shaderSlider.1	110	Second slider box	ShadersEclipse slider 1	Item	after:shaderSlider.0:26	885	256	50	-	-	-	built	-
 shaderSlider.2	110	Third slider box	ShadersEclipse slider 2	Item	after:shaderSlider.1:26	885	256	50	-	-	-	built	-
-allSettingsWords	121	"All N settings", 18 px accent link	ShadersEclipse all settings	CardLine	1004	943	-	-	-	#FFF6E7D8	18	built	400 0 none
-help	124	Footer help bar, mid 1147, gap 30, 20 px	ShadersEclipse Kit.HelpBar	HelpBar	96	mid:1147	-	38	-	#FFD8DBE6	20	built	400 0 none
+allSettingsWords	121	"All N settings", 18 px accent link	ShadersEclipse all settings	CardLine	1004	943	-	-	-	Tokens.accent	18	built	400 0 none
+help	124	Footer help bar, mid 1147, gap 30, 20 px	ShadersEclipse Kit.HelpBar	HelpBar	96	mid:1147	-	38	-	#FFD7D8DE	20	built	400 0 none
 ownGlyph-Use this	125	A filled 34 px	ShadersEclipse CardGlyph	-	in:help:0	mid:help	34	34	-	-	-	built	glyph 17 700
-helpWords-Use this	125	"Use this", 10 px after A	ShadersEclipse help label	CardLine	after:ownGlyph-Use this:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+helpWords-Use this	125	"Use this", 10 px after A	ShadersEclipse help label	CardLine	after:ownGlyph-Use this:10	mid:help	-	-	-	#FFD7D8DE	20	built	400 0 none
 ownGlyph-Hold to see it off	126	X ringed 38 px	ShadersEclipse CardGlyph	-	after:helpWords-Use this:30	mid:help	38	38	-	-	-	built	glyph 16 400
-helpWords-Hold to see it off	126	"Hold to see it off", 10 px after X	ShadersEclipse help label	CardLine	after:ownGlyph-Hold to see it off:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+helpWords-Hold to see it off	126	"Hold to see it off", 10 px after X	ShadersEclipse help label	CardLine	after:ownGlyph-Hold to see it off:10	mid:help	-	-	-	#FFD7D8DE	20	built	400 0 none
 ownGlyph-Favourite	127	Y ringed 38 px	ShadersEclipse CardGlyph	-	after:helpWords-Hold to see it off:30	mid:help	38	38	-	-	-	built	glyph 16 400
-helpWords-Favourite	127	"Favourite", 10 px after Y	ShadersEclipse help label	CardLine	after:ownGlyph-Favourite:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+helpWords-Favourite	127	"Favourite", 10 px after Y	ShadersEclipse help label	CardLine	after:ownGlyph-Favourite:10	mid:help	-	-	-	#FFD7D8DE	20	built	400 0 none
 ownGlyph-Move the line	128	LB boxed 30 px inside	ShadersEclipse CardGlyph	-	after:helpWords-Favourite:30	mid:help	-	34	-	-	-	built	word 15 400 8 10
 ownGlyph2-Move the line	128	RB boxed 30 px inside	ShadersEclipse CardGlyph	-	after:ownGlyph-Move the line:10	mid:help	-	34	-	-	-	built	word 15 400 8 10
-helpWords-Move the line	128	"Move the line", 10 px after RB	ShadersEclipse help label	CardLine	after:ownGlyph2-Move the line:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+helpWords-Move the line	128	"Move the line", 10 px after RB	ShadersEclipse help label	CardLine	after:ownGlyph2-Move the line:10	mid:help	-	-	-	#FFD7D8DE	20	built	400 0 none
 ownGlyph-Back	129	B ringed 38 px	ShadersEclipse CardGlyph	-	after:helpWords-Move the line:30	mid:help	38	38	-	-	-	built	glyph 16 400
-helpWords-Back	129	"Back", 10 px after B	ShadersEclipse help label	CardLine	after:ownGlyph-Back:10	mid:help	-	-	-	#FFD8DBE6	20	built	400 0 none
+helpWords-Back	129	"Back", 10 px after B	ShadersEclipse help label	CardLine	after:ownGlyph-Back:10	mid:help	-	-	-	#FFD7D8DE	20	built	400 0 none

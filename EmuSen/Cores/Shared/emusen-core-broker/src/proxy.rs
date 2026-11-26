@@ -841,6 +841,9 @@ pub unsafe fn set_axis(m: *mut RawMachine, port: u32, axis: u32, value: f64) -> 
 }
 
 pub unsafe fn set_settings(m: *mut RawMachine, text: *const u8, len: usize) -> i32 {
+    if unsafe { proxied(m) }.is_none() {
+        return status::NULL;
+    }
     let bytes = if text.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(text, len) } };
     let (rest, deadline) = split_settings(bytes);
     if let (Some(d), Some(p)) = (deadline, unsafe { proxied(m) }) {

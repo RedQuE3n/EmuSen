@@ -350,6 +350,8 @@ pub const TRAY: &str = "tray";
 pub const CONTROLLER: &str = "controller";
 /// A cheat of Cheats' page, each found by its place on the page.
 pub const CHEAT: &str = "cheat";
+/// Eclipse's link from Pause Cheats to the Cheats tool.
+pub const MANAGE_CHEATS: &str = "manageCheats";
 /// A row of Display's or Sound's page, each found by its place on the page.
 pub const SETTING: &str = "setting";
 
@@ -448,6 +450,8 @@ pub enum Outcome {
     Controllers { index: usize, by: i32 },
     /// The game's cheat at that place of its list switched on or off; the card stays.
     Cheat { index: usize, on: bool },
+    /// Eclipse Pause Cheats' link to open the full Cheats tool.
+    ManageCheats,
     /// Display's or Sound's page turned to, for Settings to read its rows for the running console.
     SettingsPage { page: CardPage, console: String },
     /// A row of Display's or Sound's page stepped (`by` ±1) or chosen (`by` 0), for Settings to carry out.
@@ -614,7 +618,13 @@ impl Card {
                 rows
             }
             Page::Disc => self.disc_rows(),
-            Page::Cheats => facts.cheats.iter().map(|c| Row { steps: true, ..row(CHEAT, &c.description, on_words(c.on).to_owned()) }).collect(),
+            Page::Cheats => {
+                let mut rows: Vec<Row> = facts.cheats.iter().map(|c| Row { steps: true, ..row(CHEAT, &c.description, on_words(c.on).to_owned()) }).collect();
+                if self.eclipse {
+                    rows.push(Row { opens: true, ..row(MANAGE_CHEATS, "All cheats…", String::new()) });
+                }
+                rows
+            }
             Page::Controllers => self
                 .controllers
                 .iter()
@@ -809,6 +819,7 @@ impl Card {
                 Outcome::Shown
             }
             CHEAT if self.page == Page::Cheats => self.switch(self.current),
+            MANAGE_CHEATS if self.eclipse && self.page == Page::Cheats => Outcome::ManageCheats,
             CONTROLLERS if self.page == Page::Options => {
                 self.turn(Page::Controllers, 0);
                 Outcome::Shown
@@ -958,6 +969,7 @@ impl Card {
             (Page::First, _) => Screen::Pause,
             (Page::Reel, _) => Screen::PauseReel,
             (Page::Disc, _) => Screen::PauseDisc,
+            (Page::Cheats, _) if self.eclipse => Screen::PauseCheats,
             _ if self.eclipse && self.rows().get(self.current).is_some_and(|r| r.steps) => Screen::PausePageValue,
             _ => Screen::PausePage,
         }

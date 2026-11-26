@@ -117,3 +117,25 @@ impl Given {
         self.list.save(platform)
     }
 }
+
+/// Replaces a running session's loaded cheat list from disk so external edits apply immediately.
+pub fn reload(platform: &Platform, runtime: &Runtime, session: u32, path: &str) -> Result<Option<Given>, String> {
+    let words = |e: emusen_crystal_client::Error| e.to_string();
+    let service = runtime.session_service(session, 0).map_err(words)?;
+    service.cheat_op(session, consts::CHEAT_CLEAR, &json!({})).map_err(words)?;
+    give(platform, runtime, session, path)
+}
+
+/// Reads the running session's master cheat enable state.
+pub fn master(runtime: &Runtime, session: u32) -> Result<bool, String> {
+    let words = |e: emusen_crystal_client::Error| e.to_string();
+    let res = runtime.session_service(session, 0).and_then(|s| s.cheat_op(session, consts::CHEAT_MASTER, &json!({}))).map_err(words)?;
+    Ok(res["enabled"].as_bool().unwrap_or(true))
+}
+
+/// Sets the running session's master cheat enable state immediately.
+pub fn set_master(runtime: &Runtime, session: u32, enabled: bool) -> Result<(), String> {
+    let words = |e: emusen_crystal_client::Error| e.to_string();
+    runtime.session_service(session, 0).and_then(|s| s.cheat_op(session, consts::CHEAT_MASTER, &json!({ "enabled": enabled }))).map_err(words)?;
+    Ok(())
+}

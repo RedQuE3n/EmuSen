@@ -18,8 +18,8 @@ Kit.NormalizedCanvas {
     readonly property real boardUnit: Kit.CanvasUnits.designHeight / 1200
     readonly property string shownClock: screen.clock ? screen.clock.shortTime : (screen.clockText.length > 0 ? screen.clockText : fallbackClock.shortTime)
     readonly property int shownBattery: screen.battery >= 0 ? screen.battery : fallbackBattery.level
-    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : frame
-    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : frame.controller
+    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : screen.eclipseScreen === 8 ? cheatsView : frame
+    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : screen.eclipseScreen === 8 ? cheatsView.controller : frame.controller
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
     // B on the screen.
@@ -162,6 +162,19 @@ Kit.NormalizedCanvas {
         anchors.fill: parent
         visible: screen.eclipseScreen === 4 && !screen.tool.cardOpen
         focus: screen.eclipseScreen === 4 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        tool: screen.tool
+        padFamily: screen.padFamily
+        pixelScale: screen.unit
+        battery: screen.shownBattery
+        clockText: screen.shownClock
+        onBacked: screen.backed()
+    }
+    CheatsEclipse {
+        id: cheatsView
+        objectName: `${screen.objectName}CheatsView`
+        anchors.fill: parent
+        visible: screen.eclipseScreen === 8 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 8 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking
         tool: screen.tool
         padFamily: screen.padFamily
         pixelScale: screen.unit

@@ -215,6 +215,7 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Home | Shown::Grid | Shown::Pause | Shown::List | Shown::Search | Shown::SearchGrid, Ask::Play) => Some((Shown::Game, None)),
         (Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
         (Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
+        (Shown::Pause, Ask::Act(key)) if key == crate::home_card::CHEATS => Some((Shown::Tool, Some(crate::home_card::CHEATS.to_owned()))),
         (Shown::Game | Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
         (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
         (Shown::Home, Ask::Place(at)) if (1..=crate::words::HOME_TOOLS.len()).contains(at) => open_tool(crate::words::HOME_TOOLS[at - 1]),
@@ -245,6 +246,7 @@ pub fn tool_back(themed: bool, opened_over: Option<Shown>, shown: Shown, ask: &A
         (Some(Shown::Settings), Shown::Cores | Shown::Tool, Ask::Back) => Some(Shown::Settings),
         (Some(Shown::Tools), Shown::Cores | Shown::Themes | Shown::Tool, Ask::Back) => Some(Shown::Tools),
         (Some(Shown::Page), Shown::Tool, Ask::Back) => Some(Shown::Page),
+        (Some(Shown::Pause), Shown::Tool, Ask::Back) => Some(Shown::Pause),
         (Some(Shown::HomeCard), Shown::Cores | Shown::Themes | Shown::Tool, Ask::Back) => Some(library_of(themed)),
         (_, Shown::Cores | Shown::Tool, Ask::Back) => Some(library_of(themed)),
         _ => None,
@@ -314,6 +316,7 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         (true, Shown::HomeCard | Shown::List, Ask::Back | Ask::Close | Ask::Act(_)) => Some((Shown::Esde, None)),
         (true, Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
         (true, Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
+        (true, Shown::Pause, Ask::Act(key)) if key == crate::home_card::CHEATS => Some((Shown::Tool, Some(crate::home_card::CHEATS.to_owned()))),
         (true, Shown::Game | Shown::Pause, Ask::Library) => Some((Shown::Esde, None)),
         (true, Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Esde, None)),
         _ => None,
@@ -421,6 +424,12 @@ pub mod qobject {
         #[qproperty(QString, list_page, cxx_name = "listPage", READ, NOTIFY)]
         /// The key of the program's section the shown screen is (crate::sections), empty for a screen that is none.
         #[qproperty(QString, section, READ, NOTIFY)]
+        /// The game shown on Home when opening its page without a specific grid path.
+        #[qproperty(QString, in_hand, cxx_name = "inHand")]
+        /// The running session's game path when opening Cheats from Pause Card.
+        #[qproperty(QString, pause_game, cxx_name = "pauseGame")]
+        /// The game path passed to the Cheats tool; empty opens the library overview.
+        #[qproperty(QString, cheats_game, cxx_name = "cheatsGame", READ, NOTIFY)]
         type Screens = super::ScreensRust;
     }
 
@@ -434,6 +443,10 @@ pub mod qobject {
         /// B that the shown screen did not keep.
         #[qinvokable]
         fn back(self: Pin<&mut Screens>);
+        /// Opens the Cheats tool from the active screen context without hardcoding an action string in QML.
+        #[qinvokable]
+        #[cxx_name = "openCheats"]
+        fn open_cheats(self: Pin<&mut Screens>);
         /// A screen's declared action, by its key.
         #[qinvokable]
         fn act(self: Pin<&mut Screens>, key: &QString);
@@ -529,6 +542,9 @@ pub struct ScreensRust {
     grid_origin: Option<Shown>,
     /// Screen Search was opened over.
     search_origin: Option<Shown>,
+    in_hand: QString,
+    pause_game: QString,
+    cheats_game: QString,
 }
 
 impl Default for ScreensRust {
@@ -555,6 +571,9 @@ impl Default for ScreensRust {
             over_consoles: false,
             grid_origin: None,
             search_origin: None,
+            in_hand: QString::default(),
+            pause_game: QString::default(),
+            cheats_game: QString::default(),
         }
     }
 }
@@ -626,6 +645,10 @@ impl qobject::Screens {
 
     pub fn back(self: Pin<&mut Self>) {
         self.ask(Ask::Back);
+    }
+
+    pub fn open_cheats(self: Pin<&mut Self>) {
+        self.ask(Ask::Act(crate::home_card::CHEATS.to_owned()));
     }
 
     pub fn act(mut self: Pin<&mut Self>, key: &QString) {
@@ -814,6 +837,17 @@ impl qobject::Screens {
                 self.as_mut().page_changed();
             }
         } else if let (Shown::Tool, Some(tool)) = (shown, &key) {
+            if tool == crate::home_card::CHEATS && was != Shown::Tool {
+                let target = match was {
+                    Shown::Page => if !self.page_game.is_empty() { self.page_game.clone() } else { self.in_hand.clone() },
+                    Shown::Pause => self.pause_game.clone(),
+                    _ => QString::default(),
+                };
+                if self.cheats_game != target {
+                    self.as_mut().rust_mut().cheats_game = target;
+                    self.as_mut().cheats_game_changed();
+                }
+            }
             let tool = QString::from(tool.as_str());
             if self.tool != tool {
                 self.as_mut().rust_mut().tool = tool;
@@ -825,6 +859,10 @@ impl qobject::Screens {
                 self.as_mut().rust_mut().key = key;
                 self.as_mut().key_changed();
             }
+        }
+        if shown != Shown::Tool && was == Shown::Tool && !self.cheats_game.is_empty() {
+            self.as_mut().rust_mut().cheats_game = QString::default();
+            self.as_mut().cheats_game_changed();
         }
         let section = QString::from(eclipse_section(shown).unwrap_or_else(|| crate::sections::current(shown).map_or("", |s| s.key)));
         if self.section != section {

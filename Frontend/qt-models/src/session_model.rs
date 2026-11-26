@@ -103,6 +103,8 @@ pub mod qobject {
         #[qproperty(bool, resume_asked, cxx_name = "resumeAsked", READ, NOTIFY)]
         /// The game the Resume question names.
         #[qproperty(QString, resume_subject, cxx_name = "resumeSubject", READ, NOTIFY)]
+        /// Whether the running session's master cheat switch is on.
+        #[qproperty(bool, master_cheats, cxx_name = "masterCheats", READ, NOTIFY)]
         type SessionModel = super::SessionModelRust;
 
         #[cxx_name = "setPlatformLibrary"]
@@ -262,6 +264,14 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "switchCheat"]
         fn switch_cheat(self: Pin<&mut SessionModel>, index: i32, on: bool);
+        /// Reloads the running game's saved cheat list into the active session.
+        #[qinvokable]
+        #[cxx_name = "reloadCheats"]
+        fn reload_cheats(self: Pin<&mut SessionModel>);
+        /// Switches the running session's master cheat enable state without altering saved entries.
+        #[qinvokable]
+        #[cxx_name = "setMasterCheats"]
+        fn set_master_cheats(self: Pin<&mut SessionModel>, on: bool);
 
         /// Guide held with `button` over the running game (`PadRouter.guideChord`): pause.rs's `guide_chord` says what it asks.
         #[qinvokable]
@@ -380,6 +390,7 @@ pub struct SessionModelRust {
     session: Option<Session>,
     /// The game's own cheat list as given to the open session.
     cheats: Option<crate::cheats::Given>,
+    master_cheats: bool,
     /// The runtime holding the game after a Frame Advance, until a resume lets it run (Mistress's `AdvanceOneFrame`).
     stepped: bool,
     /// The game running and when it began to, for the play time recorded when it stops.
@@ -445,6 +456,7 @@ impl Default for SessionModelRust {
             platform: None,
             session: None,
             cheats: None,
+            master_cheats: true,
             stepped: false,
             playing: None,
         }
@@ -1243,6 +1255,10 @@ impl qobject::SessionModel {
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().rust_mut().opened = None;
         self.as_mut().rust_mut().cheats = None;
+        if !self.master_cheats {
+            self.as_mut().rust_mut().master_cheats = true;
+            self.as_mut().master_cheats_changed();
+        }
         self.as_mut().rust_mut().holding = None;
         self.as_mut().rust_mut().from_state = None;
         self.as_mut().set_resume_asked(false);
@@ -1318,6 +1334,37 @@ impl qobject::SessionModel {
         self.as_mut().rust_mut().cheats = Some(given);
         if let Err(words) = switched {
             self.as_mut().say(format!("The cheat was not switched: {words}"), true);
+        }
+        self.read_card_facts();
+    }
+
+    fn reload_cheats(mut self: Pin<&mut Self>) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        let Ok(platform) = self.as_mut().platform() else { return };
+        let path = self.game.to_string();
+        if path.is_empty() {
+            return;
+        }
+        match crate::cheats::reload(&platform, &runtime, session, &path) {
+            Ok(given) => {
+                self.as_mut().rust_mut().cheats = given;
+                if let Err(words) = crate::cheats::set_master(&runtime, session, self.master_cheats) {
+                    self.as_mut().say(format!("The cheat switch was not set: {words}"), true);
+                }
+            }
+            Err(words) => self.as_mut().say(format!("The cheats were not reloaded: {words}"), true),
+        }
+        self.read_card_facts();
+    }
+
+    fn set_master_cheats(mut self: Pin<&mut Self>, on: bool) {
+        if self.master_cheats != on {
+            self.as_mut().rust_mut().master_cheats = on;
+            self.as_mut().master_cheats_changed();
+        }
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        if let Err(words) = crate::cheats::set_master(&runtime, session, on) {
+            self.as_mut().say(format!("The cheat switch was not set: {words}"), true);
         }
         self.read_card_facts();
     }

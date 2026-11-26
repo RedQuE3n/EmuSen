@@ -40,6 +40,8 @@ pub enum Screen {
     QuestionBack,
     /// The Pause Card's Change Disc (EmuSen_Interface.md §20.2): A puts the disc in, Start is not offered.
     PauseDisc,
+    /// Eclipse's Pause Card Cheats page, offering X to open the Cheats tool.
+    PauseCheats,
     /// The Themes tab on a theme Use is offered for (EmuSen_Qt.md §3.8).
     Themes,
     /// The Themes tab on a theme in use, not checked clean, or of a kind not chosen here: Check alone.
@@ -226,6 +228,12 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Accept, "Put in", None),
             (UiButton::Back, "Back", None),
             (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
+        ],
+        Screen::PauseCheats => &[
+            (UiButton::Accept, "Choose", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Screensaver, "All cheats", Some(crate::pause::MANAGE_CHEATS)),
+            (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
         Screen::Themes => &[
             (UiButton::Accept, "Use", None),

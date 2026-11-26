@@ -41,6 +41,12 @@ pub mod qobject {
         #[qproperty(QString, scraper_test, cxx_name = "scraperTest")]
         /// The address Cheats downloads the cheat database from in place of the header's; empty for the header's.
         #[qproperty(QString, cheats_url, cxx_name = "cheatsUrl")]
+        /// The game path Cheats opens focused on; empty lets Cheats pick its own overview game.
+        #[qproperty(QString, cheats_game, cxx_name = "cheatsGame")]
+        /// The currently running session's game path so Cheats shows live-session application.
+        #[qproperty(QString, session_game, cxx_name = "sessionGame")]
+        /// Whether the running session's master cheat switch is active.
+        #[qproperty(bool, master_cheats, cxx_name = "masterCheats")]
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
         /// The runtime's cores folder, as the library's; empty for the installation's own.
         #[qproperty(QString, cores)]
@@ -183,6 +189,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "eclipseNav"]
         fn eclipse_nav(self: Pin<&mut ToolModel>, code: i32);
+        /// Updates an Eclipse form text field value from the docked keyboard or text box.
+        #[qinvokable]
+        #[cxx_name = "eclipseSetField"]
+        fn eclipse_set_field(self: Pin<&mut ToolModel>, field: i32, text: &QString);
         /// A card or the docked keyboard over the screen closed, so the list takes the keys back.
         #[qsignal]
         #[cxx_name = "listFocused"]
@@ -203,6 +213,14 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "libraryChanged"]
         fn library_changed(self: Pin<&mut ToolModel>);
+        /// Eclipse Cheats saved changes to `path`, so a running session for that game reloads cheats.
+        #[qsignal]
+        #[cxx_name = "cheatsChanged"]
+        fn cheats_changed(self: Pin<&mut ToolModel>, path: QString);
+        /// Eclipse Cheats toggled the master switch, so a running session applies the master state.
+        #[qsignal]
+        #[cxx_name = "cheatsMasterToggled"]
+        fn cheats_master_toggled(self: Pin<&mut ToolModel>, on: bool);
     }
 
     impl cxx_qt::Initialize for ToolModel {}
@@ -216,6 +234,9 @@ pub struct ToolModelRust {
     jobs: QString,
     scraper_test: QString,
     cheats_url: QString,
+    cheats_game: QString,
+    session_game: QString,
+    master_cheats: bool,
     platform_library: QString,
     cores: QString,
     world: QString,
@@ -283,6 +304,9 @@ impl Default for ToolModelRust {
             jobs: QString::default(),
             scraper_test: QString::default(),
             cheats_url: QString::default(),
+            cheats_game: QString::default(),
+            session_game: QString::default(),
+            master_cheats: true,
             platform_library: QString::default(),
             cores: QString::default(),
             world: QString::default(),
@@ -347,7 +371,10 @@ impl cxx_qt::Initialize for qobject::ToolModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_open_changed(|model| model.opened()).release();
         self.as_mut().on_eclipse_changed(|model| model.sync_eclipse()).release();
-        self.on_console_counts_changed(|model| model.sync_eclipse()).release();
+        self.as_mut().on_console_counts_changed(|model| model.sync_eclipse()).release();
+        self.as_mut().on_cheats_game_changed(|model| model.sync_eclipse()).release();
+        self.as_mut().on_session_game_changed(|model| model.sync_eclipse()).release();
+        self.on_master_cheats_changed(|model| model.sync_eclipse()).release();
     }
 }
 
@@ -446,20 +473,28 @@ impl qobject::ToolModel {
                 Err(words) => put!(self, problem, QString::from(words.as_str()), problem_changed),
             }
         }
+        self.as_mut().apply_eclipse_state(true);
+    }
+
+    fn apply_eclipse_state(mut self: Pin<&mut Self>, refresh: bool) {
+        let e = self.eclipse;
+        let counts = crate::tools::cores::eclipse::parse_console_counts(&self.console_counts.to_string());
+        let cheats_game = self.cheats_game.to_string();
+        let session_game = self.session_game.to_string();
+        let master_on = self.master_cheats;
         if let Some(tool) = self.as_mut().rust_mut().shown.as_mut() {
-            tool.refresh();
+            tool.set_eclipse(e);
+            tool.set_console_counts(counts);
+            tool.eclipse_set_cheats_target(&cheats_game, &session_game, master_on);
+            if refresh {
+                tool.refresh();
+            }
         }
         self.fill();
     }
 
-    fn sync_eclipse(mut self: Pin<&mut Self>) {
-        let e = self.eclipse;
-        let counts = crate::tools::cores::eclipse::parse_console_counts(&self.console_counts.to_string());
-        if let Some(tool) = self.as_mut().rust_mut().shown.as_mut() {
-            tool.set_eclipse(e);
-            tool.set_console_counts(counts);
-        }
-        self.fill();
+    fn sync_eclipse(self: Pin<&mut Self>) {
+        self.apply_eclipse_state(false);
     }
 
     /// A change asked by QML, made after the event that asked, so one press is never answered by the card it closed and
@@ -469,16 +504,26 @@ impl qobject::ToolModel {
     }
 
     fn change(mut self: Pin<&mut Self>, change: impl FnOnce(&mut Tool<Box<dyn Source>>) -> Option<String>) {
-        let (host, lib_dirty) = {
+        let (host, lib_dirty, cheats_dirty, master_dirty) = {
             let mut rust = self.as_mut().rust_mut();
             let Some(tool) = rust.shown.as_mut() else { return };
             let host = change(tool);
-            let dirty = tool.source.take_library_changed();
-            (host, dirty)
+            let lib_dirty = tool.source.take_library_changed();
+            let cheats_dirty = tool.source.take_cheats_changed();
+            let master_dirty = tool.source.take_master_changed();
+            (host, lib_dirty, cheats_dirty, master_dirty)
         };
         self.as_mut().fill();
         if lib_dirty {
             self.as_mut().library_changed();
+        }
+        if let Some(path) = cheats_dirty {
+            self.as_mut().cheats_changed(QString::from(path.as_str()));
+        }
+        if let Some(on) = master_dirty {
+            self.as_mut().rust_mut().master_cheats = on;
+            self.as_mut().master_cheats_changed();
+            self.as_mut().cheats_master_toggled(on);
         }
         match host.as_deref().map(|k| (k, k.strip_prefix(crate::tools::cores::OPEN_FOLDER))) {
             Some((_, Some(path))) => self.as_mut().open_folder(QString::from(path)),
@@ -662,6 +707,14 @@ impl qobject::ToolModel {
 
     pub fn eclipse_nav(self: Pin<&mut Self>, code: i32) {
         self.with(move |t| t.eclipse_nav(code));
+    }
+
+    pub fn eclipse_set_field(self: Pin<&mut Self>, field: i32, text: &QString) {
+        let text = text.to_string();
+        self.with(move |t| {
+            t.eclipse_set_field(field, &text);
+            None
+        });
     }
 
     /// Every property read again from the tool's description.

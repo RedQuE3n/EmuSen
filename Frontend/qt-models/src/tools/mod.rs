@@ -6,6 +6,7 @@
 //! No Qt here.
 
 pub mod cheats;
+pub mod cheats_eclipse;
 pub mod cores;
 pub mod jobs;
 pub mod library_eclipse;
@@ -251,7 +252,19 @@ pub trait Source {
     fn take_library_changed(&mut self) -> bool {
         false
     }
-    /// Eclipse screen selector (0=none, 1=cores, 2=scraper, 3=scrapeStatus, 4=libraryManager).
+    /// Sets the requested game, running session game, and master switch for `#21` Cheats.
+    fn eclipse_set_cheats_target(&mut self, _game: &str, _session_game: &str, _master_on: bool) {}
+    /// Updates an interactive form text field inside an Eclipse overlay.
+    fn eclipse_set_field(&mut self, _field: i32, _text: &str) {}
+    /// Returns the modified game's path once when Eclipse Cheats saves changes.
+    fn take_cheats_changed(&mut self) -> Option<String> {
+        None
+    }
+    /// Returns the new master cheat state once when toggled on Eclipse Cheats.
+    fn take_master_changed(&mut self) -> Option<bool> {
+        None
+    }
+    /// Eclipse screen selector (0=none, 1=cores, 2=scraper, 3=scrapeStatus, 4=libraryManager, 8=cheats).
     fn eclipse_screen_code(&self) -> i32 {
         0
     }
@@ -608,6 +621,14 @@ impl<S: Source> Tool<S> {
         self.take_eclipse(effect, None)
     }
 
+    pub fn eclipse_set_cheats_target(&mut self, game: &str, session_game: &str, master_on: bool) {
+        self.source.eclipse_set_cheats_target(game, session_game, master_on);
+    }
+
+    pub fn eclipse_set_field(&mut self, field: i32, text: &str) {
+        self.source.eclipse_set_field(field, text);
+    }
+
     fn card_rows(&self, card: &Card) -> Vec<CardRow> {
         match card {
             Card::Page { rows, .. } => rows.clone(),
@@ -955,6 +976,18 @@ impl Source for Box<dyn Source> {
     }
     fn take_library_changed(&mut self) -> bool {
         (**self).take_library_changed()
+    }
+    fn eclipse_set_cheats_target(&mut self, game: &str, session_game: &str, master_on: bool) {
+        (**self).eclipse_set_cheats_target(game, session_game, master_on)
+    }
+    fn eclipse_set_field(&mut self, field: i32, text: &str) {
+        (**self).eclipse_set_field(field, text)
+    }
+    fn take_cheats_changed(&mut self) -> Option<String> {
+        (**self).take_cheats_changed()
+    }
+    fn take_master_changed(&mut self) -> Option<bool> {
+        (**self).take_master_changed()
     }
     fn eclipse_screen_code(&self) -> i32 {
         (**self).eclipse_screen_code()

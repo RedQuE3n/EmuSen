@@ -19,12 +19,18 @@ Cores {
     property alias world: toolModel.world
     property alias scraperTest: toolModel.scraperTest
     property alias cheatsUrl: toolModel.cheatsUrl
+    property alias cheatsGame: toolModel.cheatsGame
+    property alias sessionGame: toolModel.sessionGame
+    property alias masterCheats: toolModel.masterCheats
     property alias consoleCounts: toolModel.consoleCounts
     // Open Folder on a firmware page, and what failed, which the window answers.
     signal openFolder(string path)
     signal said(string words)
     // A run ended that changed the library (the Scraper's).
     signal libraryChanged()
+    // Cheats changed on disk for a game path, or master cheats switch changed.
+    signal cheatsChanged(string path)
+    signal cheatsMasterToggled(bool on)
     visible: toolScreen.screens.shown === toolScreen.shownAs
     tool: toolModel
     inputs: visible && !toolScreen.splashShown
@@ -36,6 +42,8 @@ Cores {
         eclipse: Kit.Tokens.coronaRim > 0
         onOpenFolder: (path) => toolScreen.openFolder(path)
         onLibraryChanged: toolScreen.libraryChanged()
+        onCheatsChanged: (path) => toolScreen.cheatsChanged(path)
+        onCheatsMasterToggled: (on) => toolScreen.cheatsMasterToggled(on)
     }
     Connections {
         target: toolModel

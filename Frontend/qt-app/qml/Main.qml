@@ -143,6 +143,8 @@ Window {
             objectName: "screens"
             gameRunning: player.session.running
             lastPlayed: library.lastPlayed
+            inHand: program.inHand
+            pauseGame: player.session.game
             found: games.count > 0
             themed: program.esdeLook
             onQuit: power.finishQuit(player.session.saveForPower(true))
@@ -765,10 +767,19 @@ Window {
             cores: library.cores
             scraperTest: program.scraperTest
             cheatsUrl: program.cheatsUrl
+            cheatsGame: screens.cheatsGame
+            sessionGame: player.session.running ? player.session.game : ""
+            masterCheats: player.session.masterCheats
+            clock: clock
+            battery: machineBattery.level
             padFamily: program.padFamily
             splashShown: program.splashShown
             // The Scraper's run ended: the library shows what it fetched.
             onLibraryChanged: library.refresh()
+            onCheatsChanged: (path) => {
+                if (player.session.running && player.session.game === path) player.session.reloadCheats()
+            }
+            onCheatsMasterToggled: (on) => player.session.setMasterCheats(on)
         }
         Binding {
             target: screens

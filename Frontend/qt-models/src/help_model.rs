@@ -84,6 +84,7 @@ pub mod qobject {
         PausePageValue,
         SettingsEclipseButtons,
         SettingsEclipseButtonsCard,
+        PauseCheats,
     }
 
     extern "RustQt" {
@@ -220,6 +221,7 @@ impl qobject::HelpModel {
             HelpScreen::GamePageCoverArt => Screen::GamePageCoverArt,
             HelpScreen::SettingsEclipseButtons => Screen::SettingsEclipseButtons,
             HelpScreen::SettingsEclipseButtonsCard => Screen::SettingsEclipseButtonsCard,
+            HelpScreen::PauseCheats => Screen::PauseCheats,
             _ => Screen::Home,
         }
     }
@@ -327,6 +329,7 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageCropToggle | Screen::GamePageCropEdge => HelpScreen::GamePageValue,
         Screen::SettingsEclipseButtons => HelpScreen::SettingsEclipseButtons,
         Screen::SettingsEclipseButtonsCard => HelpScreen::SettingsEclipseButtonsCard,
+        Screen::PauseCheats => HelpScreen::PauseCheats,
     };
     shown.repr
 }

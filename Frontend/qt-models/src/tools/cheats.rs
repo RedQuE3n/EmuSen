@@ -154,21 +154,23 @@ pub fn made_words(left_out: u64) -> Option<Words> {
 /// The tool: the clients it reads through, the address it downloads from, what the last read found, the read going,
 /// the download going with what its thread tells, how the last download ended, and what failed.
 pub struct Cheats {
-    source: Arc<ClientSource>,
+    pub(super) source: Arc<ClientSource>,
     url: String,
     found: Option<Found>,
-    reading: Option<Receiver<Result<Found, String>>>,
-    download: Option<(Arc<Download>, Receiver<Words>)>,
+    reading: Option<Receiver<Result<(Found, Option<super::cheats_eclipse::EclipseRead>), String>>>,
+    pub(super) download: Option<(Arc<Download>, Receiver<Words>)>,
     outcome: Option<Words>,
     problem: Option<String>,
     acted: Option<String>,
+    eclipse: bool,
+    eclipse_state: super::cheats_eclipse::State,
 }
 
 impl Cheats {
     /// The tool over `source`, its database downloaded from `url` where one is named, else the header's address.
     pub fn new(source: Arc<ClientSource>, url: Option<String>) -> Cheats {
         let url = url.unwrap_or_else(|| emusen_platform_client::cheats::database_url().to_owned());
-        Cheats { source, url, found: None, reading: None, download: None, outcome: None, problem: None, acted: None }
+        Cheats { source, url, found: None, reading: None, download: None, outcome: None, problem: None, acted: None, eclipse: false, eclipse_state: super::cheats_eclipse::State::default() }
     }
 
     /// The download started off the GUI thread, into the folder the last read found; installed when it ends.
@@ -345,6 +347,10 @@ impl Source for Cheats {
     }
 
     fn act(&mut self, action: &str, key: Option<&str>, _section: &str) -> super::Effect {
+        if self.eclipse && matches!(action, super::cheats_eclipse::ACT_EDIT_ROW | super::cheats_eclipse::ACT_REMOVE_ROW) {
+            let platform = self.source.platform.clone();
+            return self.eclipse_state.eclipse_act(&platform, action, key, self.download.is_some()).0;
+        }
         match (action, key) {
             (GET, _) => self.get(),
             (STOP, _) => self.stop(),
@@ -354,13 +360,25 @@ impl Source for Cheats {
         super::Effect::Done
     }
 
-    fn answer(&mut self, _asked: &str, _yes: bool) {}
+    fn answer(&mut self, asked: &str, yes: bool) {
+        if self.eclipse {
+            let platform = self.source.platform.clone();
+            self.eclipse_state.answer(asked, yes, &platform);
+        }
+    }
 
     /// The database and the library read anew off the GUI thread, as the screen opens.
     fn refresh(&mut self) {
         let (tx, rx) = channel();
         let source = self.source.clone();
-        std::thread::spawn(move || drop(tx.send(read(&source))));
+        let want_eclipse = self.eclipse;
+        std::thread::spawn(move || {
+            let res = read(&source).and_then(|found| {
+                let ec = if want_eclipse { Some(super::cheats_eclipse::read_eclipse(&source, &found)?) } else { None };
+                Ok((found, ec))
+            });
+            drop(tx.send(res));
+        });
         self.reading = Some(rx);
     }
 
@@ -368,7 +386,11 @@ impl Source for Cheats {
         let told = self.download.as_ref().map(|(_, told)| told.try_recv());
         if let Some(ended @ (Ok(_) | Err(TryRecvError::Disconnected))) = told {
             self.download = None;
-            self.outcome = Some(ended.unwrap_or_else(|_| Words::new("The download's thread ended without a word", Tone::Error)));
+            let words = ended.unwrap_or_else(|_| Words::new("The download's thread ended without a word", Tone::Error));
+            if self.eclipse {
+                self.eclipse_state.status_note = words.words.clone();
+            }
+            self.outcome = Some(words);
             self.refresh();
             return true;
         }
@@ -378,7 +400,14 @@ impl Source for Cheats {
         let Some(read) = self.reading.as_ref().and_then(|r| r.try_recv().ok()) else { return false };
         self.reading = None;
         match read {
-            Ok(found) => {
+            Ok((found, ec)) => {
+                if let Some(eclipse_read) = ec {
+                    self.eclipse_state.take_read(eclipse_read);
+                } else if self.eclipse {
+                    if let Ok(eclipse_read) = super::cheats_eclipse::read_eclipse(&self.source, &found) {
+                        self.eclipse_state.take_read(eclipse_read);
+                    }
+                }
                 self.found = Some(found);
                 self.problem = None;
             }
@@ -394,5 +423,109 @@ impl Source for Cheats {
 
     fn acted_on(&mut self) -> Option<String> {
         self.acted.take()
+    }
+
+    fn set_eclipse(&mut self, eclipse: bool) {
+        self.eclipse = eclipse;
+        if eclipse && self.eclipse_state.read.is_none() {
+            if let Some(found) = &self.found {
+                if let Ok(eclipse_read) = super::cheats_eclipse::read_eclipse(&self.source, found) {
+                    self.eclipse_state.take_read(eclipse_read);
+                }
+            }
+        }
+    }
+
+    fn eclipse_screen_code(&self) -> i32 {
+        8
+    }
+
+    fn eclipse_view(&self) -> Option<Value> {
+        self.eclipse.then(|| self.eclipse_state.projection(self.download.is_some()))
+    }
+
+    fn eclipse_choose_filter(&mut self, key: &str) {
+        self.eclipse_state.choose_filter(key);
+    }
+
+    fn eclipse_focus_core(&mut self, key: &str) {
+        self.eclipse_state.focus_cheat_key(key);
+    }
+
+    fn eclipse_focus_zone_code(&mut self, code: i32) {
+        self.eclipse_state.zone = super::cheats_eclipse::Zone::from_code_pub(code);
+    }
+
+    fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> super::Effect {
+        let platform = self.source.platform.clone();
+        let (eff, db_toggle) = self.eclipse_state.eclipse_act(&platform, action, key, self.download.is_some());
+        if db_toggle {
+            if self.download.is_some() {
+                self.stop();
+            } else {
+                self.get();
+            }
+        }
+        eff
+    }
+
+    fn eclipse_action_key(&mut self, key: &str) -> super::Effect {
+        self.eclipse_act(key, None)
+    }
+
+    fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> super::Effect {
+        let action = match code {
+            0 => super::cheats_eclipse::ACT_TOGGLE,
+            1 => super::cheats_eclipse::ACT_MASTER,
+            2 => super::cheats_eclipse::ACT_MORE,
+            3 => super::cheats_eclipse::ACT_BROWSE,
+            4 => super::cheats_eclipse::ACT_ADD,
+            5 => super::cheats_eclipse::ACT_UPDATE_DB,
+            6 => "chooseFilter",
+            7 => "focusField",
+            8 => "saveEditor",
+            9 => "cancelEditor",
+            10 => "closeOverlay",
+            11 => "stopTyping",
+            12 => "focusField0",
+            13 => "focusField1",
+            _ => return super::Effect::Done,
+        };
+        self.eclipse_act(action, key)
+    }
+
+    fn eclipse_navigate(&mut self, dir: &str) -> super::Effect {
+        self.eclipse_state.navigate(dir)
+    }
+
+    fn eclipse_nav(&mut self, code: i32) -> super::Effect {
+        match code {
+            0 => self.eclipse_state.navigate("up"),
+            1 => self.eclipse_state.navigate("down"),
+            2 => self.eclipse_state.navigate("left"),
+            3 => self.eclipse_state.navigate("right"),
+            4 => self.eclipse_act("activate", None),
+            5 => self.eclipse_act("prevFilter", None),
+            6 => self.eclipse_act("nextFilter", None),
+            7 => self.eclipse_act("prevGame", None),
+            8 => self.eclipse_act("nextGame", None),
+            _ => super::Effect::Done,
+        }
+    }
+
+    fn eclipse_set_cheats_target(&mut self, game: &str, session_game: &str, master_on: bool) {
+        self.eclipse_state.set_target(game, session_game, master_on);
+    }
+
+    fn eclipse_set_field(&mut self, field: i32, text: &str) {
+        self.eclipse_state.set_field(field, text);
+    }
+
+    fn take_cheats_changed(&mut self) -> Option<String> {
+        self.eclipse_state.cheats_dirty_for.take()
+    }
+
+    fn take_master_changed(&mut self) -> Option<bool> {
+        self.eclipse_state.master_dirty.take()
     }
 }

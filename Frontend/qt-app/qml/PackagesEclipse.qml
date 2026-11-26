@@ -114,7 +114,7 @@ FocusScope {
             height: 32 * root.unit
             Shape {
                 id: crescent
-                readonly property real box: 140
+                readonly property real box: 34
                 width: box
                 height: box
                 scale: (32 * root.unit) / crescent.box
@@ -578,9 +578,9 @@ FocusScope {
 
             Column {
                 x: 20 * root.unit
-                y: 18 * root.unit
+                y: 16 * root.unit
                 width: 264 * root.unit
-                spacing: 10 * root.unit
+                spacing: 9 * root.unit
 
                 Item {
                     width: parent.width
@@ -629,6 +629,8 @@ FocusScope {
                     size: 14
                     weight: Font.Normal
                     color: root.mutedColor
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
                     elide: Text.ElideRight
                     text: root.view?.batchSummary ?? ""
                 }
@@ -747,7 +749,8 @@ FocusScope {
             width: parent.width
             height: parent.height - 34 * root.unit
             spacing: 10 * root.unit
-            clip: true
+            clip: gamesList.contentHeight > gamesList.height
+            interactive: gamesList.contentHeight > gamesList.height
             boundsBehavior: Flickable.StopAtBounds
             currentIndex: root.view?.focusedIndex ?? -1
             highlightFollowsCurrentItem: true

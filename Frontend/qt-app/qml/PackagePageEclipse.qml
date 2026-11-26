@@ -109,7 +109,7 @@ FocusScope {
             height: 34 * root.unit
             Shape {
                 id: crescent
-                readonly property real box: 140
+                readonly property real box: 34
                 width: box
                 height: box
                 scale: (34 * root.unit) / crescent.box
@@ -383,7 +383,8 @@ FocusScope {
         width: 840 * root.unit
         height: 790 * root.unit
         spacing: 10 * root.unit
-        clip: true
+        clip: actionsList.contentHeight > actionsList.height
+        interactive: actionsList.contentHeight > actionsList.height
         boundsBehavior: Flickable.StopAtBounds
         currentIndex: root.view?.focusedActionIndex ?? -1
         highlightFollowsCurrentItem: true

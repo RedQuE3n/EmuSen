@@ -113,7 +113,7 @@ FocusScope {
             height: 32 * root.unit
             Shape {
                 id: crescent
-                readonly property real box: 140
+                readonly property real box: 34
                 width: box
                 height: box
                 scale: (32 * root.unit) / crescent.box

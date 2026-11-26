@@ -186,23 +186,24 @@ pub fn oracle_software() {
             let at_size = format!("{width}x{height}");
             held(&tree, &table, k, unit, f64::from(width) / unit, &tokens, &at_size, &|_, _, _| false, &mut differences);
             let help_words = words_under(&tree, "help");
-            if help_words != ["Use this", "Hold to see it off", "Favourite", "Move the line", "Back"] {
+            if help_words != ["Use shader", "Hold to see off", "Favourite", "Scrub split", "Step split", "Back"] {
                 differences.push(format!("{at_size}: help words {help_words:?}"));
             }
             let glyphs = glyphs_in(&tree, "help");
-            if glyphs != ["A", "X", "Y", "LB", "B"] {
+            if glyphs != ["A", "X", "Y", "RS", "LB", "B"] {
                 differences.push(format!("{at_size}: help glyphs {glyphs:?}"));
             }
             for (name, want) in [
-                ("crumbSettings", "Settings"),
-                ("crumbPicture", "Picture"),
-                ("crumbScreenFilter", "Screen filter"),
+                ("crumbSettings", "Tools"),
+                ("crumbScreenFilter", "Shaders"),
                 ("battery", "82%"),
                 ("clock", "9:41 PM"),
                 ("previewBeforeWords", "No filter"),
                 ("previewAfterWords", "crt-royale"),
+                ("previewScrubWords", "RS or LB / RB moves split"),
                 ("presetHeading", "crt-royale"),
-                ("allSettingsWords", "All 4 settings"),
+                ("allSettingsWords", "All 4 parameters ›"),
+                ("shadersCounter", "1 of 2"),
             ] {
                 let got = read(&tree, name, "text");
                 if got != want {

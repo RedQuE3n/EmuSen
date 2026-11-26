@@ -59,6 +59,109 @@ FocusScope {
             readonly property real boardHeight: 1200
             readonly property real px: canvas.designHeight / root.boardHeight
             readonly property real reach: 48 * root.px
+            component ShaderHelpGlyph: Item {
+                id: sg
+                property int button: Kit.Pad.Accept
+                property int family: canvas.padFamily
+                property bool lead: false
+                property int pair: -1
+                readonly property bool drawsPair: sg.button === Kit.Pad.Left || sg.button === Kit.Pad.PageUp
+                readonly property bool isRs: sg.button === Kit.Pad.Random
+                readonly property bool pairedShoulders: sg.button === Kit.Pad.PageUp && sg.pair >= 0
+                readonly property bool named: sg.isRs ? true : baseGlyph.named
+                readonly property string word: sg.isRs ? (root.labels.rsGlyph ?? "") : baseGlyph.word
+                readonly property string letter: sg.isRs ? "" : baseGlyph.letter
+                readonly property bool filled: sg.isRs ? false : baseGlyph.filled
+                readonly property real wordSize: sg.isRs ? 14 : baseGlyph.wordSize
+                readonly property real letterSize: baseGlyph.letterSize
+                readonly property real leadLetterSize: baseGlyph.leadLetterSize
+                readonly property int leadWeight: baseGlyph.leadWeight
+                readonly property real corner: sg.isRs ? 9 * root.px : baseGlyph.corner
+                readonly property real inset: sg.isRs ? 10 * root.px : baseGlyph.inset
+                implicitWidth: sg.isRs ? rsPill.width : glyphRow.implicitWidth
+                implicitHeight: sg.isRs ? rsPill.height : glyphRow.implicitHeight
+                width: implicitWidth
+                height: implicitHeight
+                Rectangle {
+                    id: rsPill
+                    visible: sg.isRs
+                    height: 30 * root.px
+                    width: (rsMetrics.advanceWidth + 20) * root.px
+                    radius: 9 * root.px
+                    color: "transparent"
+                    border.width: 2 * root.px
+                    border.color: Kit.Tokens.muted
+                    TextMetrics {
+                        id: rsMetrics
+                        font.family: Kit.Tokens.faceText
+                        font.pixelSize: 14
+                        font.weight: Font.Normal
+                        text: root.labels.rsGlyph ?? ""
+                    }
+                    Shape {
+                        width: rsPill.width / root.px
+                        height: rsPill.height / root.px
+                        scale: root.px
+                        transformOrigin: Item.TopLeft
+                        preferredRendererType: Shape.CurveRenderer
+                        ShapePath {
+                            fillColor: ThemeInk.body
+                            strokeColor: "transparent"
+                            fillRule: ShapePath.WindingFill
+                            PathText {
+                                x: (rsPill.width / root.px - rsMetrics.tightBoundingRect.width) / 2 - rsMetrics.tightBoundingRect.x
+                                y: (rsPill.height / root.px - rsMetrics.tightBoundingRect.height) / 2
+                                font: rsMetrics.font
+                                text: rsMetrics.text
+                            }
+                        }
+                    }
+                }
+                Row {
+                    id: glyphRow
+                    visible: !sg.isRs
+                    spacing: 5 * root.px
+                    CardGlyph {
+                        id: baseGlyph
+                        anchors.verticalCenter: parent.verticalCenter
+                        unit: root.px
+                        button: sg.button
+                        family: sg.family
+                        lead: sg.lead
+                        pair: sg.button === Kit.Pad.Left ? sg.pair : -1
+                        side: 32
+                        boxSide: 30
+                        boxRadius: 9
+                        boxPadding: 10
+                        wordSize: 14
+                        letterSize: 15
+                        leadLetterSize: 16
+                        leadWeight: Font.Bold
+                        boxMenu: true
+                        boxOptions: true
+                        ink: ThemeInk.body
+                        ring: Kit.Tokens.muted
+                        leadFill: Kit.Tokens.accent
+                        leadInk: Kit.Tokens.overAccent
+                    }
+                    CardGlyph {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: sg.pairedShoulders
+                        unit: root.px
+                        button: sg.pair >= 0 ? sg.pair : Kit.Pad.PageDown
+                        family: sg.family
+                        lead: false
+                        side: 32
+                        boxSide: 30
+                        boxRadius: 9
+                        boxPadding: 10
+                        wordSize: 14
+                        letterSize: 15
+                        ink: ThemeInk.body
+                        ring: Kit.Tokens.muted
+                    }
+                }
+            }
             readonly property var model: canvas.board
             readonly property var labels: root.model.labels ?? ({})
             readonly property var sources: root.model.sources ?? []
@@ -208,6 +311,7 @@ FocusScope {
                     CardLine {
                         id: crumbPicture
                         objectName: "crumbPicture"
+                        visible: (root.labels.picture ?? "").length > 0
                         x: crumbSlash0.x + crumbSlash0.width + 14 * root.px
                         y: (headerBar.height - crumbPicture.height) / 2
                         unit: root.px
@@ -225,6 +329,7 @@ FocusScope {
                     CardLine {
                         id: crumbSlash1
                         objectName: "crumbSlash.1"
+                        visible: (root.labels.picture ?? "").length > 0
                         x: crumbPicture.x + crumbPicture.width + 14 * root.px
                         y: (headerBar.height - crumbSlash1.height) / 2
                         unit: root.px
@@ -237,7 +342,7 @@ FocusScope {
                     CardLine {
                         id: crumbScreenFilter
                         objectName: "crumbScreenFilter"
-                        x: crumbSlash1.x + crumbSlash1.width + 14 * root.px
+                        x: ((root.labels.picture ?? "").length > 0 ? crumbSlash1.x + crumbSlash1.width : crumbSlash0.x + crumbSlash0.width) + 14 * root.px
                         y: (headerBar.height - crumbScreenFilter.height) / 2
                         unit: root.px
                         boardLine: true
@@ -990,6 +1095,32 @@ FocusScope {
                         text: root.preview.afterLabel ?? ""
                     }
                 }
+                Rectangle {
+                    id: scrubBadge
+                    objectName: "previewScrubPill"
+                    visible: (root.preview.splitHint ?? "").length > 0
+                    x: previewBox.width - 16 * root.px - scrubBadge.width
+                    y: previewBox.height - 16 * root.px - scrubBadge.height
+                    width: scrubWords.width + 28 * root.px
+                    height: 34 * root.px
+                    radius: 17 * root.px
+                    color: ThemeInk.glassPill
+                    border.width: 1 * root.px
+                    border.color: ThemeInk.hairline
+                    CardLine {
+                        id: scrubWords
+                        objectName: "previewScrubWords"
+                        x: 14 * root.px
+                        y: (scrubBadge.height - scrubWords.height) / 2
+                        unit: root.px
+                        boardLine: true
+                        boardLineHeight: 18
+                        size: 14
+                        weight: Font.Normal
+                        color: Kit.Tokens.muted
+                        text: root.preview.splitHint ?? ""
+                    }
+                }
                 MouseArea {
                     id: splitMouse
                     anchors.fill: parent
@@ -1193,9 +1324,9 @@ FocusScope {
                 iconColor: Kit.Tokens.muted
                 leadStyle: Kit.GlyphStyles.Filled
                 leadColor: Kit.Tokens.accent
-                entrySpacing: 30 * root.px
-                glyphGap: 10 * root.px
-                glyphSize: 34 * root.px
+                entrySpacing: 22 * root.px
+                glyphGap: 9 * root.px
+                glyphSize: 32 * root.px
                 snapped: false
                 onPressed: (button) => canvas.settings.shadersPadButton(button, true, false)
                 label: Component {
@@ -1204,19 +1335,35 @@ FocusScope {
                         objectName: "helpWords-" + helpWordLine.text
                         unit: root.px
                         boardLine: true
-                        size: 20
+                        size: 19
                     }
                 }
                 glyph: Component {
-                    CardGlyph {
-                        unit: root.px
-                        side: 34
-                        keyPairs: true
-                        ink: ThemeInk.body
-                        ring: Kit.Tokens.muted
-                        leadFill: Kit.Tokens.accent
-                        leadInk: Kit.Tokens.overAccent
-                    }
+                    ShaderHelpGlyph {}
+                }
+            }
+            Rectangle {
+                objectName: "shadersCounterPill"
+                visible: counterWords.text.length > 0
+                x: root.width - 96 * root.px - width
+                y: root.height - 53 * root.px - height / 2
+                width: counterWords.width + 32 * root.px
+                height: 36 * root.px
+                radius: 18 * root.px
+                color: ThemeInk.glassPill
+                border.width: 1 * root.px
+                border.color: ThemeInk.hairline
+                CardLine {
+                    id: counterWords
+                    objectName: "shadersCounter"
+                    anchors.centerIn: parent
+                    unit: root.px
+                    boardLine: true
+                    size: 16
+                    weight: Font.Normal
+                    family: Kit.Tokens.faceCode
+                    color: Kit.Tokens.muted
+                    text: root.model.counter ?? ""
                 }
             }
             // Pack removal confirm (#14) over the board.

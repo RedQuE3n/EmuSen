@@ -269,13 +269,17 @@ pub fn pause(backend: &str) {
         &[
             ("cardBreadcrumb", "PAUSED · PLAYSTATION", true),
             ("cardTitle", "Tower Set", false),
+            ("PaneSlotHeader", "LOAD STATE PREVIEW · SLOTS 1\u{2013}3 OF 8", false),
+            ("PaneSlotHint", "◀ ▶ steps slot", false),
+            ("PaneSlotSelectedLabel2", "SELECTED", false),
             ("PaneSlotName1", "Slot 1", false),
             ("PaneSlotWhen1", "8:40 PM", false),
             ("PaneSlotName2", "Slot 2", false),
             ("PaneSlotWhen2", "8 November", false),
             ("PaneSlotName3", "Slot 3", false),
             ("PaneSlotWhen3", "Empty", false),
-            ("PaneSentence", "A loads Slot 2.", false),
+            ("PaneSentence", "Press A to load Slot 2 immediately.", false),
+            ("PaneSlotOccupied", "2 of 8 slots occupied", false),
             ("cardBattery", "82%", false),
             ("cardClock", "9:41 PM", false),
             ("cardPosition", "4 of 8", false),
@@ -285,6 +289,7 @@ pub fn pause(backend: &str) {
         &mut differences,
     );
     let tree = scene.tree();
+    assert!(!tree.nodes.iter().any(|n| n.visible && n.name == "PaneSlotRing2"), "active slot wears selected border without second FocusRing");
     let unit: f64 = read(&tree, "cardCanvas", "unit").parse().expect("cardCanvas unit");
     check_resume_glyphs(&tree, unit, &mut differences);
     picture(&mut scene, &format!("pause-1920x1200-{backend}.png"));
@@ -301,7 +306,7 @@ pub fn pause(backend: &str) {
     assert!(scene.set_property("pause", "facts", &facts.to_json()));
     scene.pad(UiButton::Up);
     scene.wait(80);
-    assert_eq!(read(&scene.tree(), "PaneSentence", "text"), "A saves to Slot 2, replacing it.");
+    assert_eq!(read(&scene.tree(), "PaneSentence", "text"), "Press A to save to Slot 2, replacing it.");
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Down);
     scene.wait(80);

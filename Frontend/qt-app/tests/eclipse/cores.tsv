@@ -32,32 +32,36 @@ consoleCard.7	40	grid card 7 PlayStation 2	Item	Item	after:consoleCard.6:20	belo
 consoleFlag.7	45	Firmware outlined badge	Rectangle	Rectangle	inright:consoleCard.7:24	top:consoleCard.7:22	-	32	16	#00000000	-	built	line 2 #FFB9BED0
 asideEyebrow	63	"SONY · 88 GAMES"	CardLine	CardLine	1280	146	544	22	-	#FFF0B4C4	18	built	600 0.2 upper
 asideHeading	64	"PlayStation"	CardLine	CardLine	1280	below:asideEyebrow:6	544	-	-	Tokens.textStrong	46	built	600 0 none
-asideInstalledHeading	66	"On this machine"	CardLine	CardLine	1280	below:asideHeading:24	544	-	-	#FFD7D8DE	20	built	600 0 none
-asideCore.0	68	installed core 0 Diamond	Item	Item	1280	below:asideInstalledHeading:18	544	90	-	-	-	built	-
-asideCoreBg.0	68	core 0 card bg	Rectangle	Rectangle	in:asideCore.0:0	top:asideCore.0:0	544	90	18	#FF0F1119	-	built	line 1 #615E647B
+asideInstalledHeading	66	"On this machine · 2"	CardLine	CardLine	1280	below:asideHeading:24	544	-	-	#C7B9BED0	14	built	600 0.15 upper
+asideCore.0	68	installed core 0 Diamond	Item	Item	1280	below:asideInstalledHeading:16	544	-	-	-	-	built	-
+asideCoreBg.0	68	core 0 card bg	Rectangle	Rectangle	in:asideCore.0:0	top:asideCore.0:0	544	-	18	#FF0F1119	-	built	line 1 #615E647B
 asideCoreMark.0	69	core 0 40px mark	Item	Item	in:asideCore.0:20	mid:asideCore.0	40	40	-	-	-	built	-
 asideCoreName.0	71	"Diamond"	CardLine	CardLine	after:asideCoreMark.0:14	-	-	-	-	Tokens.textStrong	25	built	600 0 none
 asideCoreKind.0	72	"EmuSen's own core · up to date"	CardLine	CardLine	after:asideCoreMark.0:14	below:asideCoreName.0:2	-	-	-	Tokens.muted	16	built	400 0 none
 asideCoreBadge.0	74	"Plays this console"	Rectangle	Rectangle	inright:asideCore.0:20	mid:asideCore.0	-	32	16	#00000000	-	built	line 2 #FFF6E7D8
-asideCore.1	78	installed core 1 focused	Item	Item	1280	below:asideCore.0:18	544	233	-	-	-	built	-
-asideCoreRing.1	78	focused core focus ring	Kit.FocusRing	FocusRing	in:asideCore.1:0	top:asideCore.1:0	544	233	-	-	-	built	ring 3 3 40 8 24 #59F0B4C4 #FF07080F #FFF6E7D8
-asideCoreBg.1	78	focused core bg	Rectangle	Rectangle	in:asideCore.1:0	top:asideCore.1:0	544	233	18	Tokens.surfaceRaised	-	built	line 0 -
+asideCore.1	78	installed core 1 focused	Item	Item	1280	below:asideCore.0:16	544	-	-	-	-	built	-
+asideCoreRing.1	78	focused core focus ring	Kit.FocusRing	FocusRing	in:asideCore.1:0	top:asideCore.1:0	544	-	-	-	-	built	ring 3 3 40 8 24 #59F0B4C4 #FF07080F #FFF6E7D8
+asideCoreBg.1	78	focused core bg	Rectangle	Rectangle	in:asideCore.1:0	top:asideCore.1:0	544	-	18	Tokens.surfaceRaised	-	built	line 0 -
 asideCoreName.1	82	"Beetle PSX HW"	CardLine	CardLine	after:asideCoreMark.1:14	-	-	-	-	Tokens.textStrong	25	built	600 0 none
 asideCoreKind.1	83	"Hosted core from libretro"	CardLine	CardLine	after:asideCoreMark.1:14	below:asideCoreName.1:2	-	-	-	Tokens.muted	16	built	400 0 none
-asidePillUpdate.1	91	Update pill	Item	Item	in:asideCore.1:20	-	-	44	-	-	-	built	-
-asidePillDefault.1	92	Use for this console pill	Item	Item	after:asidePillUpdate.1:10	top:asidePillUpdate.1:0	-	44	-	-	-	built	-
-asidePillRemove.1	93	Remove pill	Item	Item	in:asideCore.1:20	below:asidePillUpdate.1:10	-	44	-	-	-	built	-
-asideAvailableHeading	98	More from libretro heading	CardLine	CardLine	1280	below:asideCore.1:26	544	-	-	#FFD7D8DE	20	built	600 0 none
-asideAvail.0	100	available core 0 SwanStation	Item	Item	1280	below:asideAvailableHeading:18	544	84	-	-	-	built	-
+asideTimelineBox.1	87	update timeline bar	Rectangle	Rectangle	in:asideCore.1:20	-	504	40	12	Tokens.surface	-	built	line 1 #615E647B
+asidePillUpdate.1	91	Update pill	Item	Item	in:asideCore.1:20	-	-	36	-	-	-	built	-
+asidePillDefault.1	92	Use for console pill	Item	Item	after:asidePillUpdate.1:8	top:asidePillUpdate.1:0	-	36	-	-	-	built	-
+asidePillRemove.1	93	Remove pill	Item	Item	after:asidePillDefault.1:8	top:asidePillUpdate.1:0	-	36	-	-	-	built	-
+asidePillPage.1	94	Core page pill	Item	Item	-	top:asidePillUpdate.1:0	inright:asideCore.1:20	36	-	-	-	built	-
+asideAvailableHeading	98	More from libretro heading	CardLine	CardLine	1280	-	544	-	-	#C7B9BED0	14	built	600 0.15 upper
+asideAvail.0	100	available core 0 SwanStation	Item	Item	1280	-	544	84	-	-	-	built	-
 asideAvailBg.0	100	avail 0 bg	Rectangle	Rectangle	in:asideAvail.0:0	top:asideAvail.0:0	544	84	18	#FF0F1119	-	built	line 1 #615E647B
 asideAvailName.0	103	"SwanStation"	CardLine	CardLine	1348	-	-	-	-	Tokens.textStrong	22	built	600 0 none
 asideAvailDesc.0	104	"Fast, with upscaling"	CardLine	CardLine	1348	below:asideAvailName.0:2	-	-	-	Tokens.muted	16	built	400 0 none
-asideAvail.1	109	available core 1 PCSX ReARMed	Item	Item	1280	below:asideAvail.0:18	544	84	-	-	-	built	-
-asideNote	118	safety disclaimer note	CardLine	CardLine	1280	below:asideAvail.1:18	544	-	-	Tokens.muted	17	built	400 0 none
-coresHelp	122	footer help bar	Kit.HelpBar	HelpBar	96	mid:1141	-	38	-	-	21	built	400 0 none
-ownGlyph-Update	123	A filled 34 px	CardGlyph	-	in:coresHelp:0	mid:coresHelp	34	34	-	-	-	built	glyph 17 700
-ownGlyph-Use for this console	124	X ringed 38 px	CardGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
-ownGlyph-Remove	125	Y ringed 38 px	CardGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
-ownGlyph-Update all · 2	126	MENU capsule 34 px	CardGlyph	-	-	mid:coresHelp	-	34	-	-	-	built	word 14 400 15 10
-ownGlyph-Back	127	B ringed 38 px	CardGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
-coresSummary	129	footer console summary	CardLine	CardLine	-	mid:coresHelp	right:96	-	-	#FFD7D8DE	21	built	400 0 none
+asideAvail.1	109	available core 1 PCSX ReARMed	Item	Item	1280	below:asideAvail.0:16	544	84	-	-	-	built	-
+asideNote	118	safety disclaimer note	CardLine	CardLine	1280	below:asideAvail.1:16	544	-	-	Tokens.muted	17	built	400 0 none
+coresHelp	122	footer help bar	Kit.HelpBar	HelpBar	96	mid:1141	-	38	-	-	19	built	400 0 none
+ownGlyph-Update…	123	A filled 34 px	CoreHelpGlyph	-	in:coresHelp:0	mid:coresHelp	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Use for console	124	X ringed 38 px	CoreHelpGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Remove…	125	Y ringed 38 px	CoreHelpGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Filter	126	LB RB boxed 34 px	CoreHelpGlyph	-	-	mid:coresHelp	-	34	-	-	-	built	word 14 400 9 10
+ownGlyph-Update all · 2	126	MENU capsule 34 px	CoreHelpGlyph	-	-	mid:coresHelp	-	34	-	-	-	built	word 14 400 9 10
+ownGlyph-Back	127	B ringed 38 px	CoreHelpGlyph	-	-	mid:coresHelp	38	38	-	-	-	built	glyph 16 400
+coresSummaryPill	129	footer console counter pill	Rectangle	Rectangle	-	mid:coresHelp	right:96	38	19	#D107080F	-	built	line 1 #615E647B
+coresSummary	129	footer console counter	CardLine	CardLine	-	mid:coresHelp	-	-	-	Tokens.muted	16	built	400 0 none

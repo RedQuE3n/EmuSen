@@ -89,6 +89,14 @@ pub fn short_day_in(text: &str, current_year: u32) -> Option<String> {
     })
 }
 
+/// Abbreviated date as "28 Oct", adding the year when it differs from `current_year`.
+pub fn short_month_day_in(text: &str, current_year: u32) -> Option<String> {
+    date(text).map(|(y, m, d)| {
+        let mon = &MONTHS[m - 1][..3];
+        if y == current_year { format!("{d} {mon}") } else { format!("{d} {mon} {y}") }
+    })
+}
+
 /// Current UTC year, for omitting redundant years in recent build dates.
 pub fn current_year() -> u32 {
     crate::words::utc(crate::words::now())[..4].parse().unwrap_or(2026)

@@ -14,9 +14,10 @@ clock	30	"9:41 PM"	clockText	CardLine	after:battery:22	mid:statusPill	inright:st
 toolTitle	34	"Library Manager"	view.title	CardLine	96	150	-	59.36	-	Tokens.textStrong	56	built	600 -0.01 none
 toolSubtitle	35	library check summary	view.subtitle	CardLine	96	below:toolTitle:10	1100	31.9	-	#FFD7D8DE	22	built	300 0 none
 filterPill.all	37	All filter pill active	filters[0]	Item	96	276	-	44	-	-	-	built	-
-filterWords.all	37	"All" active text	filters[0].label	CardLine	-	mid:filterPill.all	-	-	-	Tokens.overAccent	20	built	600 0 none
+filterWords.all	37	"All" active text	filters[0].label	CardLine	-	mid:filterPill.all	-	-	-	Tokens.overAccent	17	built	600 0 none
+filterCount.all	37	All count text	filters[0].countText	CardLine	after:filterWords.all:8	mid:filterPill.all	-	-	-	-	14	built	400 0 none
 filterPill.same_dump	37	Same Dump pill	filters[1]	Item	after:filterPill.all:10	276	-	44	-	-	-	built	-
-filterWords.same_dump	37	"Same Dump" text	filters[1].label	CardLine	-	mid:filterPill.same_dump	-	-	-	#FFD7D8DE	20	built	400 0 none
+filterWords.same_dump	37	"Same Dump" text	filters[1].label	CardLine	-	mid:filterPill.same_dump	-	-	-	#FFD7D8DE	17	built	400 0 none
 filterPill.same_game	37	Same Game pill	filters[2]	Item	after:filterPill.same_dump:10	276	-	44	-	-	-	built	-
 filterPill.broken	37	Broken or Suspect pill	filters[3]	Item	after:filterPill.same_game:10	276	-	44	-	-	-	built	-
 filterPill.unrecognised	37	Unrecognised pill	filters[4]	Item	after:filterPill.broken:10	276	-	44	-	-	-	built	-
@@ -33,20 +34,24 @@ tableRowBg.0	40	row 0 surface	Rectangle	Rectangle	in:tableRow.0:0	top:tableRow.0
 tableRow.2	40	row 2 focused	rows[2]	Item	96	below:tableRow.1:8	1160	-	-	-	-	built	-
 tableRowRing.2	40	row 2 focus ring	Kit.FocusRing	FocusRing	in:tableRow.2:0	top:tableRow.2:0	1160	-	-	-	-	built	ring 4 3 40 10 23 #80F0B4C4 #FF07080F #FFF6E7D8
 tableRowBg.2	40	row 2 focused bg	Rectangle	Rectangle	in:tableRow.2:0	top:tableRow.2:0	1160	-	16	Tokens.surfaceRaised	-	built	line 0 -
-libraryAside	42	right detail aside	aside	Rectangle	1300	276	524	-	28	Tokens.inputSurface	-	built	line 1 #615E647B
-asideHeading	42	focused filename	aside.title	CardLine	1332	308	460	36	-	Tokens.textStrong	30	built	600 0 none
-asidePath	42	relative path	aside.subtitle	CardLine	1332	below:asideHeading:16	460	-	-	Tokens.muted	20	built	400 0 none
-asideLine.0	42	finding explanation	aside.lines[0]	CardLine	1332	below:asidePath:16	460	-	-	#FFD7D8DE	20	built	400 0 none
-asideLine.1	42	system line	aside.lines[1]	CardLine	1332	below:asideLine.0:16	460	29	-	#FFD7D8DE	20	built	400 0 none
+libraryAside	42	right detail aside	aside	Rectangle	1300	276	524	-	22	Tokens.inputSurface	-	built	line 1 #615E647B
+asideEyebrow	42	diagnostic status eyebrow	aside.eyebrow	CardLine	1328	302	468	-	-	-	13	built	600 0.16 upper
+asideHeading	42	focused filename	aside.title	CardLine	1328	-	468	-	-	Tokens.textStrong	23	built	700 0 none
+asidePathBox	42	relative path container	Rectangle	Rectangle	1328	-	468	-	12	Tokens.surface	-	built	line 1 #615E647B
+asidePath	42	relative path	aside.subtitle	CardLine	in:asidePathBox:15	-	438	-	-	Tokens.accent	14	built	400 0 none
+asideDiagBanner	42	diagnostic explanation box	Rectangle	Rectangle	1328	-	468	-	14	-	-	built	-
+asideLine.0	42	finding explanation	aside.diagnostic	CardLine	in:asideDiagBanner:16	-	436	-	-	Tokens.textStrong	15	built	400 0 none
+asideContractCard	42	read-only contract card	Rectangle	Rectangle	1300	below:libraryAside:16	524	-	20	Tokens.surfaceRaised	-	built	line 1 #615E647B
+asideContractHeading	42	"Read-only library guarantee"	aside.contractHeading	CardLine	1324	-	476	-	-	Tokens.textStrong	16	built	600 0 none
+asideContractBody	42	read-only contract body	aside.contractBody	CardLine	1324	-	476	-	-	#FFD7D8DE	14	built	400 0 none
 libraryMarkBar	42	bottom mark summary bar	Rectangle	Rectangle	96	1032	right:96	64	20	Tokens.surfaceRaised	-	built	line 1 #615E647B
 libraryMarkSummary	42	findings/marked summary	view.markBarText	CardLine	in:libraryMarkBar:24	mid:libraryMarkBar	-	-	-	Tokens.textStrong	21	built	400 0 none
 libraryFooter	43	bottom footer	Item	Item	96	1122	right:96	38	-	-	-	built	-
-libraryHelp	44	help bar	Kit.HelpBar	HelpBar	96	mid:libraryFooter	-	38	-	#FFD7D8DE	21	built	400 0 none
-ownGlyph-Hide…	45	A filled 34 px	CardGlyph	-	in:libraryHelp:0	mid:libraryHelp	34	34	-	-	-	built	glyph 17 700
-ownGlyph-Back	46	B ringed 38 px	CardGlyph	-	-	mid:libraryHelp	38	38	-	-	-	built	glyph 16 400
-ownGlyph-Finding	47	LB boxed 34 px	CardGlyph	-	-	mid:libraryHelp	-	34	-	-	-	built	word 15 400 8 10
-ownGlyph2-Finding	48	RB boxed 34 px	CardGlyph	-	after:ownGlyph-Finding:10	mid:libraryHelp	-	34	-	-	-	built	word 15 400 8 10
-ownGlyph-More	49	X ringed 38 px	CardGlyph	-	-	mid:libraryHelp	38	38	-	-	-	built	glyph 16 400
-ownGlyph-List	50	SELECT boxed 34 px	CardGlyph	-	-	mid:libraryHelp	-	34	-	-	-	built	word 15 400 8 10
-ownGlyph-Apply…	51	START boxed 34 px	CardGlyph	-	-	mid:libraryHelp	-	34	-	-	-	built	word 15 400 8 10
+libraryHelp	44	help bar	Kit.HelpBar	HelpBar	96	mid:libraryFooter	-	38	-	#FFD7D8DE	19	built	400 0 none
+ownGlyph-Hide…	45	A filled 34 px	TableHelpGlyph	-	in:libraryHelp:0	mid:libraryHelp	34	34	-	-	-	built	glyph 17 700
+ownGlyph-Mark	46	X ringed 38 px	TableHelpGlyph	-	-	mid:libraryHelp	38	38	-	-	-	built	glyph 16 400
+ownGlyph-Filter	47	LB RB boxed 34 px	TableHelpGlyph	-	-	mid:libraryHelp	-	34	-	-	-	built	word 14 400 9 10
+ownGlyph-Sort & jobs	48	VIEW boxed 34 px	TableHelpGlyph	-	-	mid:libraryHelp	-	34	-	-	-	built	word 14 400 9 10
+ownGlyph-Apply marked…	49	MENU boxed 34 px	TableHelpGlyph	-	-	mid:libraryHelp	-	34	-	-	-	built	word 14 400 9 10
+ownGlyph-Back	50	B ringed 38 px	TableHelpGlyph	-	-	mid:libraryHelp	38	38	-	-	-	built	glyph 16 400
 libraryCounter	53	focused index counter	view.counter	CardLine	-	mid:libraryFooter	right:96	-	-	Tokens.muted	21	built	400 0 none

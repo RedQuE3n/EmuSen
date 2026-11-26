@@ -27,23 +27,30 @@ cardRow.6	41	row 6 Game Options	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.5
 rowChevron.6	45	Game Options chevron	CardChevron	CardChevron	588	mid:cardRow.6	22	22	-	Tokens.textStrong	-	built	-
 cardRow.7	41	row 7 Leave	MenuRowEclipse	MenuRowEclipse	72	below:cardRow.6:6	560	66	-	-	-	built	-
 rowChevron.7	45	Leave chevron	CardChevron	CardChevron	588	mid:cardRow.7	22	22	-	Tokens.textStrong	-	built	-
-AdaptiveCardPane	51	floating save slots card	Rectangle	Rectangle	800	210	760	353.8	28	#F207080F	-	built	line 1 #615E647B
-PaneSlot1	51	Slot 1 thumbnail frame	Item	Item	836	246	210	158	-	-	-	built	-
-PaneSlotBox1	51	Slot 1 rounded box	Rectangle	Rectangle	836	246	210	158	14	Tokens.inputSurface	-	built	-
-PaneSlotBorder1	51	Slot 1 outer 2 px rule	Rectangle	Rectangle	834	244	214	162	16	-	-	built	line 2 #59F6E7D8
+AdaptiveCardPane	51	floating save slots card	Rectangle	Rectangle	800	210	760	396	28	#F207080F	-	built	line 1 #615E647B
+PaneSlotHeaderRow	51	slots header row	Item	Item	836	246	688	18	-	-	-	built	-
+PaneSlotHeader	51	"LOAD STATE PREVIEW · SLOTS 1–3 OF 8"	Pane.slotHeader	CardLine	836	mid:PaneSlotHeaderRow	-	-	-	-	13	built	600 0.16 upper
+PaneSlotHint	51	"◀ ▶ steps slot"	Pane.slotHint	CardLine	-	mid:PaneSlotHeaderRow	inright:AdaptiveCardPane:36	-	-	Tokens.muted	15	built	400 0 none
+PaneSlot1	51	Slot 1 thumbnail frame	Item	Item	836	below:PaneSlotHeaderRow:18	210	158	-	-	-	built	-
+PaneSlotBox1	51	Slot 1 rounded box	Rectangle	Rectangle	836	top:PaneSlot1:0	210	158	14	Tokens.inputSurface	-	built	-
+PaneSlotBorder1	51	Slot 1 hairline border	Rectangle	Rectangle	834	top:PaneSlot1:-2	214	162	16	-	-	built	line 1.5 #615E647B
 PaneSlotName1	51	"Slot 1"	PaneModel.name	CardLine	836	below:PaneSlot1:10	210	25	-	Tokens.textStrong	20	built	600 0 none
 PaneSlotWhen1	51	"8:40 PM"	PaneModel.when	CardLine	836	below:PaneSlotName1:10	210	22	-	Tokens.muted	18	built	400 0 none
-PaneSlot2	51	Slot 2 focused thumbnail frame	Item	Item	after:PaneSlot1:24	246	210	158	-	-	-	built	-
-PaneSlotBox2	51	Slot 2 rounded box	Rectangle	Rectangle	1070	246	210	158	14	Tokens.inputSurface	-	built	-
-PaneSlotRing2	51	Slot 2 double ring and glow	Kit.FocusRing	FocusRing	1070	246	210	158	14	-	-	built	ring 3 3 34 8 20 #73F0B4C4 #FF07080F #FFF6E7D8
+PaneSlot2	51	Slot 2 selected thumbnail frame	Item	Item	after:PaneSlot1:24	top:PaneSlot1:0	210	158	-	-	-	built	-
+PaneSlotBox2	51	Slot 2 rounded box	Rectangle	Rectangle	1070	top:PaneSlot2:0	210	158	14	Tokens.inputSurface	-	built	-
+PaneSlotSelected2	51	"SELECTED" corner pill	Rectangle	Rectangle	-	top:PaneSlot2:10	-	24	12	Tokens.accent	-	built	-
+PaneSlotSelectedLabel2	51	"SELECTED" badge label	Pane.selectedLabel	CardLine	-	mid:PaneSlotSelected2	-	-	-	Tokens.overAccent	11	built	700 0 none
+PaneSlotBorder2	51	Slot 2 crisp 2 px accent border	Rectangle	Rectangle	1068	top:PaneSlot2:-2	214	162	16	-	-	built	line 2 #FFF6E7D8
 PaneSlotName2	51	"Slot 2"	PaneModel.name	CardLine	1070	below:PaneSlot2:10	210	25	-	Tokens.textStrong	20	built	600 0 none
 PaneSlotWhen2	51	"8 November"	PaneModel.when	CardLine	1070	below:PaneSlotName2:10	210	22	-	Tokens.muted	18	built	400 0 none
-PaneSlot3	51	Slot 3 empty thumbnail frame	Item	Item	after:PaneSlot2:24	246	210	158	-	-	-	built	-
-PaneSlotBox3	51	Slot 3 empty dark surface	Rectangle	Rectangle	1304	246	210	158	14	Tokens.inputSurface	-	built	-
-PaneSlotBorder3	51	Slot 3 outer 2 px rule	Rectangle	Rectangle	1302	244	214	162	16	-	-	built	line 2 #59F6E7D8
-PaneSlotName3	51	"Slot 3"	PaneModel.name	CardLine	1304	below:PaneSlot3:10	210	25	-	Tokens.textStrong	20	built	600 0 none
+PaneSlot3	51	Slot 3 empty thumbnail frame	Item	Item	after:PaneSlot2:24	top:PaneSlot1:0	210	158	-	-	-	built	-
+PaneSlotBox3	51	Slot 3 empty dark surface	Rectangle	Rectangle	1304	top:PaneSlot3:0	210	158	14	Tokens.surface	-	built	-
+PaneSlotBorder3	51	Slot 3 outer 1.5 px rule	Rectangle	Rectangle	1302	top:PaneSlot3:-2	214	162	16	-	-	built	line 1.5 #D95E647B
+PaneSlotName3	51	"Slot 3"	PaneModel.name	CardLine	1304	below:PaneSlot3:10	210	25	-	Tokens.muted	20	built	600 0 none
 PaneSlotWhen3	51	"Empty"	PaneModel.when	CardLine	1304	below:PaneSlotName3:10	210	22	-	Tokens.muted	18	built	400 0 none
-PaneSentence	51	"A loads Slot 2."	PaneModel.sentence	CardLine	836	below:PaneSlotWhen1:22	688	34.8	-	Tokens.textStrong	24	built	400 0 none
+PaneSlotFootRule	51	slots footer divider	Rectangle	Rectangle	836	below:PaneSlotWhen1:18	688	1	-	#615E647B	-	built	-
+PaneSentence	51	"Press A to load Slot 2 immediately."	PaneModel.sentence	CardLine	836	below:PaneSlotFootRule:18	-	26	-	Tokens.textStrong	18	built	400 0 none
+PaneSlotOccupied	51	"2 of 8 slots occupied"	Pane.slotOccupied	CardLine	-	mid:PaneSentence	inright:AdaptiveCardPane:36	-	-	Tokens.muted	14	built	400 0 none
 cardStatus	53	top-right status pill	Rectangle	Rectangle	-	48	right:200	56	28	#D107080F	-	built	-
 cardBattery	54	"82%"	Words.percent	CardLine	in:cardStatus:22	mid:cardStatus	-	27	-	Tokens.textStrong	22	built	400 0 none
 cardClock	54	"9:41 PM"	Clock.shortTime	CardLine	after:cardBattery:22	mid:cardStatus	inright:cardStatus:22	27	-	Tokens.textStrong	22	built	600 0 none

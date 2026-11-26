@@ -232,12 +232,16 @@ fn hold_cores_board(scene: &mut Scene<'_>, differences: &mut Vec<String>) {
             ("viewLabel", "Get cores for 2 more consoles", false),
             ("asideEyebrow", "SONY · 88 GAMES", true),
             ("asideHeading", "PlayStation", false),
+            ("asideInstalledHeading", "ON THIS MACHINE · 2", true),
             ("asideCoreName.0", "Diamond", false),
             ("asideCoreName.1", "Beetle PSX HW", false),
+            ("asideYouHave.1", "28 Oct", false),
+            ("asideNewer.1", "9 Nov · 3.1 MB", false),
+            ("asideAvailableHeading", "MORE FROM LIBRETRO · 2 AVAILABLE", true),
             ("asideAvailName.0", "SwanStation", false),
             ("asideAvailDesc.0", "Fast, with upscaling", false),
             ("asideAvailSize.0", "4.8 MB", false),
-            ("coresSummary", "PlayStation · 2 cores here, 2 more to get", false),
+            ("coresSummary", "PlayStation · 2 of 4", false),
         ];
         for (name, want, upper) in expected_words {
             let have = read(&tree, name, "text");
@@ -247,12 +251,12 @@ fn hold_cores_board(scene: &mut Scene<'_>, differences: &mut Vec<String>) {
             }
         }
         let help = words_under(&tree, "coresHelp");
-        let want_help = ["Update", "Use for this console", "Remove", "Update all · 2", "Back"];
+        let want_help = ["Update…", "Use for console", "Remove…", "Filter", "Update all · 2", "Back"];
         if help != want_help {
             differences.push(format!("{at}: coresHelp says {help:?} where the board says {want_help:?}"));
         }
         let glyphs = glyphs_in(&tree, "coresHelp");
-        let want_glyphs = ["A", "X", "Y", "MENU", "B"];
+        let want_glyphs = ["A", "X", "Y", "LB", "MENU", "B"];
         if glyphs != want_glyphs {
             differences.push(format!("{at}: coresHelp glyphs read {glyphs:?} where the board draws {want_glyphs:?}"));
         }
@@ -360,6 +364,14 @@ pub fn cores(backend: &str) {
         let switched: Value = serde_json::from_str(&scene.property("coresModel", "eclipseCores")).unwrap();
         assert_eq!(switched["aside"]["installed"][0]["name"], "Beetle PSX HW");
         assert_eq!(switched["aside"]["installed"][0]["badge"], "Plays this console");
+        scene.pad(UiButton::PageDown);
+        scene.wait(120);
+        let filtered: Value = serde_json::from_str(&scene.property("coresModel", "eclipseCores")).unwrap();
+        assert_eq!(filtered["filters"][1]["active"], true, "RB steps Cores filter to newer builds");
+        scene.pad(UiButton::PageUp);
+        scene.wait(120);
+        let restored: Value = serde_json::from_str(&scene.property("coresModel", "eclipseCores")).unwrap();
+        assert_eq!(restored["filters"][0]["active"], true, "LB restores ready filter");
         scene.assert_quiet();
     }
 

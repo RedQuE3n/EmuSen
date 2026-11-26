@@ -323,11 +323,23 @@ fn record_play_origin(themed: bool, was: Shown, ask: &Ask) -> (bool, Option<Show
 /// Returns the screen `B` returns to from `Shown::Grid` based on how it was entered.
 fn grid_origin_for(was: Shown, ask: &Ask) -> Shown {
     match was {
-        Shown::Consoles => Shown::Consoles,
+        Shown::Consoles if !matches!(ask, Ask::Section(_)) => Shown::Consoles,
         Shown::Collections if !matches!(ask, Ask::Section(_)) => Shown::Collections,
         Shown::Home | Shown::HomeCard | Shown::Tools => Shown::Home,
         _ if matches!(ask, Ask::Section(_)) => Shown::Home,
         _ => Shown::Consoles,
+    }
+}
+
+fn next_grid_origin(was: Shown, shown: Shown, ask: &Ask, current: Option<Shown>) -> Option<Shown> {
+    let keep_origin = matches!(was, Shown::List | Shown::Search | Shown::SearchGrid | Shown::Game | Shown::Pause)
+        || (was == Shown::Page && *ask == Ask::Back);
+    if shown == Shown::Grid && was != Shown::Grid {
+        if keep_origin { current } else { Some(grid_origin_for(was, ask)) }
+    } else if matches!(shown, Shown::Grid | Shown::List | Shown::Search | Shown::SearchGrid | Shown::Page | Shown::Game | Shown::Pause) {
+        current
+    } else {
+        None
     }
 }
 
@@ -1010,14 +1022,7 @@ impl qobject::Screens {
         if tool_changed {
             self.as_mut().rust_mut().settings_tool = next_tool_q;
         }
-        let grid_origin = if shown == Shown::Grid && was != Shown::Grid {
-            Some(grid_origin_for(was, &ask))
-        } else if matches!(shown, Shown::Grid | Shown::List | Shown::Search | Shown::SearchGrid | Shown::Page) {
-            self.grid_origin
-        } else {
-            None
-        };
-        self.as_mut().rust_mut().grid_origin = grid_origin;
+        self.as_mut().rust_mut().grid_origin = next_grid_origin(was, shown, &ask, self.grid_origin);
         let search_origin = if shown == Shown::Search && !matches!(was, Shown::Search | Shown::SearchGrid | Shown::Page) {
             Some(was)
         } else if matches!(shown, Shown::Search | Shown::SearchGrid | Shown::Page) {
@@ -1206,8 +1211,21 @@ mod tests {
     #[test]
     fn library_back_origin_tracks_home_consoles_and_collections() {
         assert_eq!(grid_origin_for(Shown::Home, &Ask::Section("library".into())), Shown::Home);
-        assert_eq!(grid_origin_for(Shown::Consoles, &Ask::Section("library".into())), Shown::Consoles);
+        assert_eq!(grid_origin_for(Shown::Consoles, &Ask::Section("library".into())), Shown::Home);
+        assert_eq!(grid_origin_for(Shown::Consoles, &Ask::Open("snes".into())), Shown::Consoles);
         assert_eq!(grid_origin_for(Shown::Collections, &Ask::Open("favs".into())), Shown::Collections);
         assert_eq!(grid_origin_for(Shown::Tools, &Ask::Section("library".into())), Shown::Home);
+
+        // Preserve grid_origin across launch failure/cancel and clean return from Page, clearing once settled or exited.
+        let origin = next_grid_origin(Shown::Collections, Shown::Grid, &Ask::Open("favs".into()), None);
+        assert_eq!(origin, Some(Shown::Collections));
+        let in_game = next_grid_origin(Shown::Grid, Shown::Game, &Ask::Play, origin);
+        assert_eq!(in_game, Some(Shown::Collections));
+        let after_fail = next_grid_origin(Shown::Game, Shown::Grid, &Ask::Failed, in_game);
+        assert_eq!(after_fail, Some(Shown::Collections));
+        assert_eq!(next_grid_origin(Shown::Grid, Shown::Page, &Ask::GamePage("g".into()), origin), Some(Shown::Collections));
+        assert_eq!(next_grid_origin(Shown::Page, Shown::Grid, &Ask::Back, origin), Some(Shown::Collections));
+        assert_eq!(next_grid_origin(Shown::Page, Shown::Grid, &Ask::Open("snes".into()), origin), Some(Shown::Consoles));
+        assert_eq!(next_grid_origin(Shown::Game, Shown::Home, &Ask::Closed, in_game), None);
     }
 }

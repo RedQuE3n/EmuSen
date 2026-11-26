@@ -130,6 +130,16 @@ Window {
             settingsEclipseBindings.forceActiveFocus()
         } else if (settingsEclipseShaders.focus) {
             settingsEclipseShaders.forceActiveFocus()
+        } else if (pauseScreen.visible && program.pauseShown) {
+            pauseScreen.forceActiveFocus()
+        } else if (homeCardScreen.visible && screens.shown === Screens.HomeCard) {
+            homeCardScreen.forceActiveFocus()
+        } else if (pageScreen.visible && screens.shown === Screens.Page && !(program.themeHost?.pageDrawn ?? false)) {
+            pageScreen.forceActiveFocus()
+        } else if (collectionsEclipse.visible) {
+            collectionsEclipse.forceActiveFocus()
+        } else if (toolsEclipse.visible) {
+            toolsEclipse.forceActiveFocus()
         } else if (chosenTheme.active && chosenTheme.focus) {
             chosenTheme.forceActiveFocus()
         } else if (esdeLoader.focus) {
@@ -912,6 +922,7 @@ Window {
             anchors.fill: parent
             active: program.bigScreen && screens.shown === Screens.Themes
             focus: active
+            onActiveChanged: if (!active) program.settleFocus()
             onLoaded: if (focus) forceActiveFocus()
             sourceComponent: Item {
                 ThemesScreen {
@@ -933,6 +944,7 @@ Window {
             anchors.fill: parent
             active: program.bigScreen && screens.shown === Screens.Cores
             focus: active
+            onActiveChanged: if (!active) program.settleFocus()
             onLoaded: if (focus) forceActiveFocus()
             sourceComponent: Item {
                 ToolScreen {
@@ -960,6 +972,7 @@ Window {
             anchors.fill: parent
             active: program.bigScreen && screens.shown === Screens.Tool
             focus: active
+            onActiveChanged: if (!active) program.settleFocus()
             onLoaded: if (focus) forceActiveFocus()
             sourceComponent: Item {
                 ToolScreen {
@@ -997,6 +1010,7 @@ Window {
             value: Kit.Tokens.coronaRim > 0
         }
         CollectionsEclipse {
+            id: collectionsEclipse
             screens: screens
             library: library
             clock: clock
@@ -1006,6 +1020,7 @@ Window {
             bigScreen: program.bigScreen
         }
         ToolsEclipse {
+            id: toolsEclipse
             screens: screens
             library: library
             settings: settingsModel
@@ -1034,6 +1049,7 @@ Window {
             onSaid: (words) => program.said(words, true, false)
         }
         HomeCardScreen {
+            id: homeCardScreen
             screens: screens
             library: library
             session: player.session
@@ -1045,6 +1061,7 @@ Window {
             bigScreen: program.bigScreen
         }
         PauseScreen {
+            id: pauseScreen
             screens: screens
             library: library
             session: player.session

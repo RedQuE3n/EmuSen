@@ -19,6 +19,7 @@ Kit.NormalizedCanvas {
     property int battery: -1
     readonly property alias slide: card.slide
     visible: cardCanvas.bigScreen && (card.open || card.leaving)
+    onActiveFocusChanged: if (cardCanvas.activeFocus && card.open) card.forceActiveFocus()
     PauseCard {
         id: card
         anchors.fill: parent

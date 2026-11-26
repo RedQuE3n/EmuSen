@@ -30,7 +30,7 @@ ThemeScreen {
             property Item firstTile: null
             // The first button, read again whenever its Repeater's count moves.
             readonly property Item firstButton: buttons.count > 0 ? buttons.itemAt(0) : null
-            readonly property Item currentTile: tiles.count > 0 ? tiles.itemAtIndex(Math.min(root.current, tiles.count - 1)) : null
+            readonly property Item currentTile: tiles.currentItem
             readonly property bool resuming: Session.hasGame && root.currentTile !== null && root.currentTile.key === Session.key
             readonly property int helpKind: root.resuming ? Help.Continue : Help.Game
             Board {
@@ -423,6 +423,7 @@ ThemeScreen {
                                 highlightFollowsCurrentItem: false
                                 cacheBuffer: 0
                                 focus: tiles.count > 0
+                                onCurrentIndexChanged: if (tiles.currentIndex >= 0) root.current = tiles.currentIndex
                                 // Every game played, the suspended one first among them as the board puts it.
                                 model: Library.recent
                                 delegate: FocusScope {
@@ -460,10 +461,23 @@ ThemeScreen {
                                             if (!tile.activeFocus)
                                                 return
                                             root.current = slot.index
+                                            tiles.currentIndex = slot.index
                                             Actions.focus(slot.key)
                                         }
-                                        KeyNavigation.left: slot.index > 0 ? tiles.itemAtIndex(slot.index - 1) : null
-                                        KeyNavigation.right: tiles.count > slot.index + 1 ? tiles.itemAtIndex(slot.index + 1) : null
+                                        Keys.onLeftPressed: (event) => {
+                                            if (slot.index > 0) {
+                                                tiles.currentIndex = slot.index - 1
+                                                tiles.itemAtIndex(slot.index - 1)?.forceActiveFocus()
+                                            }
+                                            event.accepted = true
+                                        }
+                                        Keys.onRightPressed: (event) => {
+                                            if (slot.index + 1 < tiles.count) {
+                                                tiles.currentIndex = slot.index + 1
+                                                tiles.itemAtIndex(slot.index + 1)?.forceActiveFocus()
+                                            }
+                                            event.accepted = true
+                                        }
                                         KeyNavigation.up: root.firstButton ?? status.search
                                         // A resting tile's shadow (Main:83): 0 10 px 30 px rgba(0, 0, 0, 0.45); the focused one has its ring instead.
                                         Glow {

@@ -13,6 +13,7 @@ use cxx_qt_lib::QList;
 use emusen_qt_models::library::{LibraryView, FAVOURITES, RECENT};
 use emusen_qt_models::words;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -107,6 +108,7 @@ pub struct ThemeLibraryRust {
     /// Cached hues keyed by `(path, count)` with last scan generation and file mtime checked off the GUI thread.
     hues: HashMap<(String, usize), CachedHues>,
     reader: Option<std::sync::mpsc::Sender<AskHues>>,
+    url_filter: Option<Rc<dyn Fn(String) -> String>>,
 }
 
 struct CachedHues {
@@ -150,6 +152,7 @@ impl Default for ThemeLibraryRust {
             scan_gen: 1,
             hues: HashMap::new(),
             reader: None,
+            url_filter: None,
         }
     }
 }
@@ -160,6 +163,13 @@ fn fill(list: *mut ThemeRows, rows: Vec<Row>) {
     if let Some(list) = unsafe { list.as_mut() } {
         unsafe { Pin::new_unchecked(list) }.replace(rows);
     }
+}
+
+fn fill_games(list: *mut ThemeRows, mut rows: Vec<Row>, filter: Option<&dyn Fn(String) -> String>) {
+    if let Some(map) = filter {
+        view::map_game_urls(&mut rows, map);
+    }
+    fill(list, rows);
 }
 
 impl cxx_qt::Initialize for qobject::ThemeLibrary {
@@ -259,9 +269,16 @@ impl qobject::ThemeLibrary {
         list
     }
 
+    /// Installs a host URL filter applied to game cover and hero URLs in exposed rows.
+    pub fn set_url_filter(mut self: Pin<&mut Self>, filter: Option<Rc<dyn Fn(String) -> String>>) {
+        self.as_mut().rust_mut().url_filter = filter;
+    }
+
     /// The host's feed: the library's view and Home's lines as the library model publishes them (`homeLines`).
     pub fn show(mut self: Pin<&mut Self>, view: &LibraryView, home_lines: &str) {
         let now = words::now();
+        let filter_rc = self.url_filter.clone();
+        let filter = filter_rc.as_deref();
         fill(self.consoles, view::consoles(view));
         fill(self.cores, view::cores(view));
         let games = view::game_count(view);
@@ -272,18 +289,18 @@ impl qobject::ThemeLibrary {
         let lines = view::lines_of(home_lines);
         fill(self.places, view::places(view, &lines, &self.declined));
         fill(self.shelves, view::shelves(view));
-        fill(self.recent, view::games_of(view, RECENT, now));
-        fill(self.shelf, view::shelf(view, &self.suspended, now));
-        fill(self.favourites, view::games_of(view, FAVOURITES, now));
+        fill_games(self.recent, view::games_of(view, RECENT, now), filter);
+        fill_games(self.shelf, view::shelf(view, &self.suspended, now), filter);
+        fill_games(self.favourites, view::games_of(view, FAVOURITES, now), filter);
         // The own look's view reads no collections yet (§3.2 as built), so the list stays empty.
         fill(self.collections, Vec::new());
         for (id, list) in &self.games {
-            fill(*list, view::games_of(view, id, now));
+            fill_games(*list, view::games_of(view, id, now), filter);
         }
         for ((id, count), list) in &self.firsts {
-            fill(*list, view::first_of(view, id, *count, now));
+            fill_games(*list, view::first_of(view, id, *count, now), filter);
         }
-        fill(self.found, view::search(view, &self.words, now));
+        fill_games(self.found, view::search(view, &self.words, now), filter);
         for ((show, order, short), list) in &self.listed {
             fill(*list, view::consoles_listed(view, SHOWS[*show], ORDERS[*order], short));
         }
@@ -318,8 +335,9 @@ impl qobject::ThemeLibrary {
     /// The host's feed of the suspended game's file, which the shelf leaves out; empty for none.
     pub fn show_suspended(mut self: Pin<&mut Self>, key: &str) {
         if self.suspended != key {
+            let filter = self.url_filter.clone();
             self.as_mut().rust_mut().suspended = key.to_owned();
-            fill(self.shelf, view::shelf(&self.view, key, words::now()));
+            fill_games(self.shelf, view::shelf(&self.view, key, words::now()), filter.as_deref());
         }
     }
 
@@ -328,8 +346,9 @@ impl qobject::ThemeLibrary {
         if let Some(list) = self.games.get(&id) {
             return *list;
         }
+        let filter = self.url_filter.clone();
         let list = self.as_mut().made(&view::GAME_ROLES);
-        fill(list, view::games_of(&self.view, &id, words::now()));
+        fill_games(list, view::games_of(&self.view, &id, words::now()), filter.as_deref());
         self.as_mut().rust_mut().games.insert(id, list);
         list
     }
@@ -339,8 +358,9 @@ impl qobject::ThemeLibrary {
         if let Some(list) = self.firsts.get(&key) {
             return *list;
         }
+        let filter = self.url_filter.clone();
         let list = self.as_mut().made(&view::GAME_ROLES);
-        fill(list, view::first_of(&self.view, &key.0, key.1, words::now()));
+        fill_games(list, view::first_of(&self.view, &key.0, key.1, words::now()), filter.as_deref());
         self.as_mut().rust_mut().firsts.insert(key, list);
         list
     }
@@ -363,7 +383,8 @@ impl qobject::ThemeLibrary {
 
     pub fn search(mut self: Pin<&mut Self>, words: &QString) -> *mut ThemeRows {
         let words = words.to_string();
-        fill(self.found, view::search(&self.view, &words, words::now()));
+        let filter = self.url_filter.clone();
+        fill_games(self.found, view::search(&self.view, &words, words::now()), filter.as_deref());
         self.as_mut().rust_mut().words = words;
         self.found
     }

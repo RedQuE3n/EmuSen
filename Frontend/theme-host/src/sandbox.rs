@@ -9,10 +9,24 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 const THUMB_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "webp", "gif", "bmp"];
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ThumbKey {
+    path: PathBuf,
+    len: u64,
+    modified_ns: u128,
+}
+
+fn thumb_key(path: &Path) -> Option<ThumbKey> {
+    let meta = std::fs::metadata(path).ok()?;
+    let modified_ns = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos());
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    Some(ThumbKey { path: canonical, len: meta.len(), modified_ns })
+}
+
 #[derive(Default)]
 struct ThumbStore {
     next: u64,
-    by_path: HashMap<PathBuf, String>,
+    by_key: HashMap<ThumbKey, String>,
     by_id: HashMap<String, PathBuf>,
 }
 
@@ -21,21 +35,26 @@ struct ThumbStore {
 pub struct ThumbHandle(Arc<Mutex<ThumbStore>>);
 
 impl ThumbHandle {
-    /// Registers an existing regular image file and returns its `image://thumb/<id>` URL, reusing prior IDs.
+    /// Registers an existing regular image file and returns its `image://thumb/<id>` URL, rotating on change.
     pub fn allow(&self, path: &Path) -> Option<String> {
         let ext = path.extension().and_then(|e| e.to_str())?;
         if !THUMB_EXTENSIONS.iter().any(|allowed| ext.eq_ignore_ascii_case(allowed)) || !path.is_file() {
             return None;
         }
-        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let key = thumb_key(path)?;
         let mut store = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(id) = store.by_path.get(&canonical) {
+        if let Some(id) = store.by_key.get(&key) {
             return Some(format!("image://thumb/{id}"));
+        }
+        let obsolete: Vec<(ThumbKey, String)> = store.by_key.iter().filter(|(k, _)| k.path == key.path).map(|(k, v)| (k.clone(), v.clone())).collect();
+        for (old_key, old_id) in obsolete {
+            store.by_key.remove(&old_key);
+            store.by_id.remove(&old_id);
         }
         store.next += 1;
         let id = store.next.to_string();
-        store.by_path.insert(canonical.clone(), id.clone());
-        store.by_id.insert(id.clone(), canonical);
+        store.by_id.insert(id.clone(), key.path.clone());
+        store.by_key.insert(key, id.clone());
         Some(format!("image://thumb/{id}"))
     }
 

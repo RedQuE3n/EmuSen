@@ -17,6 +17,8 @@ Kit.NormalizedCanvas {
     signal acted(string key)
     // The focus as the help bar reads it: an action's index, else -1 and the content's index.
     readonly property int actionFocused: frame.actionView.activeFocus ? frame.actionView.currentIndex : -1
+    readonly property Item focusTarget: coverArt.focus ? coverArt : modalFrame.focus ? modalFrame : frame.focus ? frame : null
+    onActiveFocusChanged: if (screen.activeFocus && screen.focusTarget) screen.focusTarget.forceActiveFocus()
     // A card of Cover art: its words, its picture and whether it is in use, the model's roles.
     component CoverCardItem: Kit.Walkable {
         required property string label

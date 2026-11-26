@@ -171,9 +171,31 @@ fn sha1_hex(data: &[u8]) -> String {
     format!("{h0:08x}{h1:08x}{h2:08x}{h3:08x}{h4:08x}")
 }
 
+fn decode_text(bytes: &[u8]) -> String {
+    match bytes {
+        [0xFE, 0xFF, rest @ ..] => char::decode_utf16(rest.chunks_exact(2).map(|b| u16::from_be_bytes([b[0], b[1]])))
+            .map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+        [0xFF, 0xFE, 0, 0, rest @ ..] => rest
+            .chunks_exact(4)
+            .map(|b| char::from_u32(u32::from_le_bytes([b[0], b[1], b[2], b[3]])).unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+        [0xFF, 0xFE, rest @ ..] => char::decode_utf16(rest.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])))
+            .map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
+        [0, 0, 0xFE, 0xFF, rest @ ..] => rest
+            .chunks_exact(4)
+            .map(|b| char::from_u32(u32::from_be_bytes([b[0], b[1], b[2], b[3]])).unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+        _ => String::from_utf8_lossy(bytes).into_owned(),
+    }
+}
+
 /// Derives Galaxia's 8-hex-digit save key from `package.json`'s `patches` array (matching `emusen_galaxia::package::save_key_at`).
 pub fn package_save_key(folder: &Path) -> Option<String> {
-    let raw = std::fs::read_to_string(folder.join("package.json")).ok()?;
+    let bytes = std::fs::read(folder.join("package.json")).ok()?;
+    let raw = decode_text(&bytes);
     let doc: Value = serde_json::from_str(&strip_jsonc(&raw)).ok()?;
     let entries = doc.get("patches").and_then(Value::as_array).filter(|a| !a.is_empty())?;
     let mut lines = String::new();

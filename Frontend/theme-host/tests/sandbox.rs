@@ -115,5 +115,10 @@ fn fe_p0_03_thumb_registry_accepts_only_images_and_reuses_ids() {
     let id = first.trim_start_matches("image://thumb/");
     assert!(handle.resolve(id).is_some());
     assert!(handle.allow(&txt).is_none(), "non-image extensions are rejected");
+    std::fs::write(&img, b"\x89PNG\r\n\x1a\nupdated").unwrap();
+    let rotated = handle.allow(&img).expect("overwritten png receives fresh id");
+    assert_ne!(rotated, first);
+    assert!(handle.resolve(rotated.trim_start_matches("image://thumb/")).is_some());
+    assert!(handle.resolve(id).is_none(), "replaced thumbnail id is retired");
     let _ = std::fs::remove_dir_all(&dir);
 }

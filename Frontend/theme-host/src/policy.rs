@@ -140,11 +140,19 @@ pub fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Extracts and percent-decodes a filesystem path from a `file://` URL, stripping `localhost` and query/fragment.
+pub fn file_url_to_path(url: &str) -> Option<String> {
+    let after_scheme = url.strip_prefix("file://")?;
+    let after_host = after_scheme.strip_prefix("localhost").filter(|rest| rest.starts_with('/')).unwrap_or(after_scheme);
+    let clean = after_host.split(['?', '#']).next().unwrap_or(after_host);
+    Some(percent_decode(clean))
+}
+
 impl Policy {
     /// `folder` is the theme's folder as a URL (`file:` or `qrc:`); `covers` the cover stores on disk; `qt_qml` Qt's QML folder.
     pub fn new(folder: &str, covers: &[String], qt_qml: &str) -> Policy {
         let folder = format!("{}/", folder.trim_end_matches('/'));
-        let folder_path = folder.strip_prefix("file://").map(|p| real(Path::new(&percent_decode(p))));
+        let folder_path = file_url_to_path(&folder).map(|p| real(Path::new(&p)));
         let covers = covers.iter().filter(|c| !c.is_empty()).map(|c| real(Path::new(c))).collect();
         Policy { folder, folder_path, covers, qt_qml: real(Path::new(qt_qml)) }
     }
@@ -162,7 +170,7 @@ impl Policy {
     fn in_folder(&self, url: &str, local: &str) -> bool {
         match (&self.folder_path, local.is_empty()) {
             (Some(root), false) => real(Path::new(local)).starts_with(root),
-            (Some(root), true) => url.strip_prefix("file://").is_some_and(|p| real(Path::new(&percent_decode(p))).starts_with(root)),
+            (Some(root), true) => file_url_to_path(url).is_some_and(|p| real(Path::new(&p)).starts_with(root)),
             (None, true) => url.strip_prefix("qrc:").map(|p| format!("qrc:/{}", p.trim_start_matches('/'))).is_some_and(|u| u.starts_with(&self.folder)),
             _ => false,
         }
@@ -200,7 +208,7 @@ impl Policy {
     fn judge_file(&self, url: &str, local: &str, kind: Kind) -> String {
         let decoded;
         let raw = if local.is_empty() {
-            decoded = url.strip_prefix("file://").map(percent_decode).unwrap_or_default();
+            decoded = file_url_to_path(url).unwrap_or_default();
             decoded.as_str()
         } else {
             local

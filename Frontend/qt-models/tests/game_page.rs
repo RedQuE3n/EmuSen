@@ -1123,6 +1123,10 @@ fn fe_p0_02_and_be_p0_01_resume_pill_and_package_save_key() {
     )
     .unwrap();
     assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir).as_deref(), Some("9ef3842d"));
+    let mut bom = b"\xEF\xBB\xBF".to_vec();
+    bom.extend_from_slice(b"{\n  \"patches\": [{ \"format\": \"ips\", \"sha1\": \"ab\" }]\n}");
+    std::fs::write(dir.join("package.json"), &bom).unwrap();
+    assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir).as_deref(), Some("9ef3842d"));
     std::fs::write(dir.join("package.json"), r#"{ "patches": [{ "format": "bps", "file": "Patch.bps" }] }"#).unwrap();
     assert!(emusen_qt_models::game_page_source::package_save_key(&dir).is_some());
     std::fs::write(dir.join("package.json"), r#"{ "patches": [] }"#).unwrap();

@@ -30,12 +30,12 @@ Row {
     Binding {
         target: root.controller
         property: "sections"
-        value: root.keys
+        value: root.visible ? root.keys : []
     }
     Binding {
         target: root.controller
         property: "selectedSection"
-        value: Library.section
+        value: root.visible ? Library.section : ""
     }
     Connections {
         target: root.controller

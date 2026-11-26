@@ -3,13 +3,14 @@
 
 use crate::package::{self, Package};
 use emusen_theme_manifest::{DesktopScreen, Screen};
-use crate::policy::{percent_decode, Policy};
+use crate::policy::{file_url_to_path, Policy};
 use crate::sandbox::ffi::{sandbox_engine, sandbox_new, sandbox_place, sandbox_qt_qml, sandbox_read, sandbox_take_log, watch_alive, watch_new, Sandbox, Watch};
 use crate::sandbox::ThumbHandle;
 use core::pin::Pin;
 use cxx::UniquePtr;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QStringList, QUrl};
+use std::rc::Rc;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -198,6 +199,7 @@ impl qobject::ThemeHost {
         rust.sandbox = UniquePtr::null();
         rust.policy = None;
         rust.package = None;
+        rust.thumbs = ThumbHandle::default();
         rust.engines.retain(|w| watch_alive(w));
     }
 
@@ -283,23 +285,20 @@ impl qobject::ThemeHost {
 
     /// Registers an out-of-store regular image file or `file://` URL under `image://thumb/<id>`.
     pub fn allow_thumb(&self, path_or_url: &str) -> String {
-        if path_or_url.is_empty() || path_or_url.starts_with("qrc:") || path_or_url.starts_with("image:") {
-            return String::new();
-        }
-        let local = if path_or_url.starts_with("file:") {
-            let qt = QUrl::from(&QString::from(path_or_url)).to_local_file().map(|s| s.to_string()).unwrap_or_default();
-            if qt.is_empty() {
-                path_or_url.strip_prefix("file://").map(percent_decode).unwrap_or_default()
-            } else {
-                qt
+        allow_thumb_with(&self.thumbs, path_or_url)
+    }
+
+    /// Returns a URL filter that proxies out-of-store local media files into `image://thumb/<id>`.
+    pub fn media_filter(&self) -> Rc<dyn Fn(String) -> String> {
+        let policy = self.policy.as_deref().cloned();
+        let thumbs = self.thumbs.clone();
+        Rc::new(move |url| {
+            if url.is_empty() || url.starts_with("qrc:") || url.starts_with("image:") || policy.as_ref().is_some_and(|p| p.allows_local(&url)) {
+                return url;
             }
-        } else {
-            path_or_url.to_owned()
-        };
-        if local.is_empty() {
-            return String::new();
-        }
-        self.thumbs.allow(std::path::Path::new(&local)).unwrap_or_default()
+            let allowed = allow_thumb_with(&thumbs, &url);
+            if allowed.is_empty() { url } else { allowed }
+        })
     }
 
     /// Flushes sandbox runtime warnings and refusals into `warnings`.
@@ -316,9 +315,30 @@ impl qobject::ThemeHost {
         if lines.is_empty() {
             return;
         }
-        let before = self.warnings.to_string();
-        let all = if before.is_empty() { lines } else { format!("{before}\n{lines}") };
+        let mut out = self.warnings.to_string();
+        let all = if out.is_empty() { lines } else { format!("{out}\n{lines}") };
+        let _ = &mut out;
         self.as_mut().rust_mut().warnings = QString::from(all.as_str());
         self.as_mut().warnings_changed();
     }
+}
+
+fn allow_thumb_with(thumbs: &ThumbHandle, path_or_url: &str) -> String {
+    if path_or_url.is_empty() || path_or_url.starts_with("qrc:") || path_or_url.starts_with("image:") {
+        return String::new();
+    }
+    let local = if path_or_url.starts_with("file:") {
+        let qt = QUrl::from(&QString::from(path_or_url)).to_local_file().map(|s| s.to_string()).unwrap_or_default();
+        if qt.is_empty() {
+            file_url_to_path(path_or_url).unwrap_or_default()
+        } else {
+            qt
+        }
+    } else {
+        path_or_url.to_owned()
+    };
+    if local.is_empty() {
+        return String::new();
+    }
+    thumbs.allow(std::path::Path::new(&local)).unwrap_or_default()
 }

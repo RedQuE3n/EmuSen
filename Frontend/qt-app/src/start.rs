@@ -114,27 +114,38 @@ pub fn cover_stores_from(media: Option<&Path>, settings: &Value) -> Vec<String> 
     media.map(|m| m.to_string_lossy().into_owned()).into_iter().chain(set("ArtworkDirectory")).chain(set("EsdeMediaDirectory")).collect()
 }
 
-/// Configured `ArtworkDirectory` and `EsdeMediaDirectory` cover stores read from `appsettings.json` on save.
-pub fn setting_cover_stores(library: &Path) -> Vec<String> {
-    let settings = Platform::load(library).ok().and_then(|p| emusen_qt_models::clients::app_settings(&p).ok()).unwrap_or(Value::Null);
-    cover_stores_from(None, &settings)
+/// Base stores (`DIR_MEDIA`, `DIR_SCREENSHOTS`, `DIR_THEMES`) merged with configured artwork stores, deduplicated.
+pub fn all_cover_stores(platform: Option<&Platform>, settings: &Value) -> Vec<String> {
+    let media = platform.and_then(|p| p.directory(DIR_MEDIA).ok().flatten());
+    let mut stores = cover_stores_from(media.as_deref(), settings);
+    for key in [DIR_SCREENSHOTS, DIR_THEMES] {
+        if let Some(dir) = platform.and_then(|p| p.directory(key).ok().flatten()) {
+            stores.push(dir.to_string_lossy().into_owned());
+        }
+    }
+    let mut unique = Vec::with_capacity(stores.len());
+    for s in stores {
+        if !s.is_empty() && !unique.contains(&s) {
+            unique.push(s);
+        }
+    }
+    unique
+}
+
+/// Recomputes all cover stores from `appsettings.json` and Galaxia directories.
+pub fn cover_stores_for(library: &Path) -> Vec<String> {
+    let platform = Platform::load(library).ok();
+    let settings = platform.as_ref().and_then(|p| emusen_qt_models::clients::app_settings(p).ok()).unwrap_or(Value::Null);
+    all_cover_stores(platform.as_deref(), &settings)
 }
 
 /// The start read through the platform library at `library`; its settings unread (the defaults) when it cannot load.
 pub fn read(library: &Path) -> Start {
     let platform = Platform::load(library).ok();
     let settings = platform.as_ref().and_then(|p| emusen_qt_models::clients::app_settings(p).ok()).unwrap_or(Value::Null);
-    let media = platform.as_ref().and_then(|p| p.directory(DIR_MEDIA).ok().flatten());
-    let screenshots = platform.as_ref().and_then(|p| p.directory(DIR_SCREENSHOTS).ok().flatten());
-    let mut cover_stores = cover_stores_from(media.as_deref(), &settings);
-    if let Some(dir) = screenshots {
-        cover_stores.push(dir.to_string_lossy().into_owned());
-    }
+    let cover_stores = all_cover_stores(platform.as_deref(), &settings);
     let args: Vec<String> = std::env::args().collect();
     let store = platform.as_ref().and_then(|p| p.directory(DIR_THEMES).ok().flatten());
-    if let Some(dir) = &store {
-        cover_stores.push(dir.to_string_lossy().into_owned());
-    }
     let named = theme(&args, std::env::var("EMUSEN_THEME").ok());
     let (theme, theme_words) = if named.is_empty() { chosen_theme(&settings, store.as_deref()) } else { (named, String::new()) };
     let windowed = platform.clone().and_then(|p| Windowed::read(&ClientSettings::on(p)).ok().flatten());

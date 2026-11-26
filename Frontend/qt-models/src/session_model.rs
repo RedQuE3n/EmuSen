@@ -671,7 +671,7 @@ impl qobject::SessionModel {
         // A console started empty has no game to resume, so nothing is asked (Mistress's `StartConsole`).
         let from_state = from_state.filter(|_| matches!(opening, Opening::Game(_)));
         let setting = if matches!(opening, Opening::Game(_)) { self.as_mut().resume_setting() } else { resume::Setting::Never };
-        let holding = (from_state.is_none() && setting != resume::Setting::Never).then_some(setting);
+        let holding = holding_for(matches!(opening, Opening::Game(_)), from_state.is_some(), setting);
         self.as_mut().rust_mut().holding = holding;
         let held = holding.is_some() || from_state.is_some();
         self.as_mut().rust_mut().from_state = from_state;
@@ -701,19 +701,22 @@ impl qobject::SessionModel {
 
     /// Where the opened game was left off decides its start: from the beginning, there without asking, or the question.
     fn left_off(mut self: Pin<&mut Self>, session: u32) {
-        if let Some(state) = self.as_mut().rust_mut().from_state.take() {
-            if !self.paused {
-                self.as_mut().rust_mut().resume_waiting = true;
+        let from_state = self.as_mut().rust_mut().from_state.take();
+        let holding = self.as_mut().rust_mut().holding;
+        match left_off_step(from_state, holding, || {
+            self.runtime.as_ref().and_then(|r| r.state_slots(session).ok()).is_some_and(|slots| slots.iter().any(|s| s.slot == 0 && s.exists))
+        }) {
+            LeftOff::FromState(state) => {
+                if !self.paused {
+                    self.as_mut().rust_mut().resume_waiting = true;
+                }
+                self.as_mut().begin_play();
+                self.start_from(state);
             }
-            self.as_mut().begin_play();
-            return self.start_from(state);
-        }
-        let Some(setting) = self.as_mut().rust_mut().holding else { return };
-        let exists = self.runtime.as_ref().and_then(|r| r.state_slots(session).ok()).is_some_and(|slots| slots.iter().any(|s| s.slot == 0 && s.exists));
-        match resume::start(setting, exists) {
-            Start::Fresh => self.as_mut().let_go(false),
-            Start::Load => self.as_mut().let_go(true),
-            Start::Ask => self.as_mut().set_resume_asked(true),
+            LeftOff::Hold(Start::Fresh) => self.as_mut().let_go(false),
+            LeftOff::Hold(Start::Load) => self.as_mut().let_go(true),
+            LeftOff::Hold(Start::Ask) => self.as_mut().set_resume_asked(true),
+            LeftOff::BeginOnly => self.as_mut().begin_play(),
         }
     }
 
@@ -1596,6 +1599,27 @@ impl qobject::SessionModel {
     }
 }
 
+fn holding_for(opening_game: bool, has_from_state: bool, setting: resume::Setting) -> Option<resume::Setting> {
+    (opening_game && !has_from_state && setting != resume::Setting::Never).then_some(setting)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum LeftOff {
+    FromState(String),
+    Hold(Start),
+    BeginOnly,
+}
+
+fn left_off_step(from_state: Option<String>, holding: Option<resume::Setting>, slot0_exists: impl FnOnce() -> bool) -> LeftOff {
+    if let Some(state) = from_state {
+        return LeftOff::FromState(state);
+    }
+    match holding {
+        Some(setting) => LeftOff::Hold(resume::start(setting, slot0_exists())),
+        None => LeftOff::BeginOnly,
+    }
+}
+
 /// The running console's cards for Game Options ▸ Memory Cards: the card manager's list, the session's schema rows of
 /// the media's keys, and the values the console holds for them.
 fn card_facts(runtime: &Runtime, session: u32, console: &str) -> pause::CardFacts {
@@ -1606,4 +1630,42 @@ fn card_facts(runtime: &Runtime, session: u32, console: &str) -> pause::CardFact
     let schema: Vec<_> = schema.into_iter().filter(|r| media.iter().any(|m| r.key == m.mode_key || r.shown_with.as_ref().is_some_and(|w| w.key == m.mode_key))).collect();
     let values = schema.iter().filter_map(|r| Some((r.key.clone(), runtime.settings_get(session, Scope::Console, None, &r.key).ok().flatten()?))).collect();
     pause::CardFacts { console: console.to_owned(), media, schema, values }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resume_never_holds_nothing_and_still_begins_play() {
+        let setting = resume::Setting::read("Restart");
+        assert_eq!(setting, resume::Setting::Never);
+        let holding = holding_for(true, false, setting);
+        assert_eq!(holding, None);
+        assert_eq!(left_off_step(None, holding, || false), LeftOff::BeginOnly);
+
+        let dir = std::env::temp_dir().join(format!("emusen-session-never-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let qml = dir.join("Scene.qml");
+        std::fs::write(
+            &qml,
+            "import QtQuick\nimport EmuSen.Models\nWindow {\n    id: root\n    objectName: \"scene\"\n    property string startedGame: \"\"\n    property string playedGame: \"\"\n    SessionModel {\n        id: s\n        objectName: \"session\"\n        onStartedPlaying: (path) => root.startedGame = path\n        onPlayed: (path, seconds) => root.playedGame = path\n    }\n}\n",
+        )
+        .unwrap();
+        let mut harness = emusen_qt_test::Harness::new();
+        let mut scene = harness.load(&format!("file://{}", qml.display()), 320, 240);
+        let session_ptr = scene.object("session");
+        assert!(!session_ptr.is_null(), "session object");
+        let mut session = unsafe { Pin::new_unchecked(&mut *(session_ptr as *mut qobject::SessionModel)) };
+        session.as_mut().set_game(QString::from("/rom/Aurora.sfc"));
+        session.as_mut().set_running(true);
+        session.as_mut().rust_mut().holding = None;
+        session.as_mut().left_off(1);
+        assert!(session.playing.is_some(), "Resume = Never must still record playing start");
+        assert_eq!(scene.property("scene", "startedGame"), "/rom/Aurora.sfc");
+        session.as_mut().reported(Report::Closed);
+        assert_eq!(scene.property("scene", "playedGame"), "/rom/Aurora.sfc");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

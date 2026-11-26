@@ -173,7 +173,6 @@ pub mod qobject {
 pub struct BuiltInThemesRust {
     reference: QString,
     manifests: QStringList,
-    last_setting_stores: std::sync::Mutex<Option<Vec<String>>>,
 }
 
 impl Default for BuiltInThemesRust {
@@ -191,7 +190,6 @@ impl Default for BuiltInThemesRust {
         BuiltInThemesRust {
             reference: QString::from(crate::reference_theme().as_str()),
             manifests: QStringList::from(&manifests),
-            last_setting_stores: std::sync::Mutex::new(None),
         }
     }
 }
@@ -202,24 +200,9 @@ impl qobject::BuiltInThemes {
         if lib.is_empty() {
             return current.clone();
         }
-        let fresh = crate::start::setting_cover_stores(std::path::Path::new(&lib));
-        let mut cur: Vec<String> = current.iter().map(|s| s.to_string()).collect();
-        let mut last = self.last_setting_stores.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let unchanged = last.as_ref().is_some_and(|prev| *prev == fresh) && fresh.iter().all(|s| cur.contains(s));
-        if unchanged {
-            return current.clone();
-        }
-        if let Some(prev) = last.as_ref() {
-            cur.retain(|s| !prev.contains(s) || fresh.contains(s));
-        }
-        for s in &fresh {
-            if !cur.contains(s) {
-                cur.push(s.clone());
-            }
-        }
-        *last = Some(fresh);
+        let fresh = crate::start::cover_stores_for(std::path::Path::new(&lib));
         let mut out = QList::<QString>::default();
-        cur.iter().for_each(|s| out.append(QString::from(s.as_str())));
+        fresh.iter().for_each(|s| out.append(QString::from(s.as_str())));
         QStringList::from(&out)
     }
 }
@@ -629,7 +612,9 @@ impl qobject::ThemeFeed {
         self.library_gen.set(self.library_gen.get().wrapping_add(1));
         self.browse_key.borrow_mut().take();
         let (Some(library), Some(engine)) = (self.library(), self.engine()) else { return };
+        let filter = unsafe { self.host.as_ref() }.map(|h| h.media_filter());
         if let Some(mut view) = host::library(engine) {
+            view.as_mut().set_url_filter(filter);
             view.as_mut().show(library.view(), &library.home_lines().to_string());
         }
     }
@@ -696,13 +681,7 @@ impl qobject::ThemeFeed {
         if let Some(mut browse) = host::browse(engine) {
             if rebuild {
                 let mut rows = view::games(library.view(), games.rows(), self.at());
-                for row in &mut rows {
-                    for col in [2, 15] {
-                        if let Some(view::Cell::Text(u)) = row.get_mut(col) {
-                            *u = self.thumb_or_url(std::mem::take(u));
-                        }
-                    }
-                }
+                view::map_game_urls(&mut rows, &|u| self.thumb_or_url(u));
                 let (filters, letters) = (view::filters(games.choices()), view::letters(&letters));
                 browse.as_mut().show_games(rows);
                 browse.as_mut().show_listing(filters, letters);

@@ -54,7 +54,7 @@ pub mod qobject {
 
         fn seated_now(self: &PadReader) -> i32;
 
-        /// The seats or the pads connected changed, or a button went down or up on one (EmuSen_Input.md §8.9).
+        /// The seats, deadzone, or pads connected changed, or live input changed while not in active gameplay (EmuSen_Input.md §8.9).
         #[qsignal]
         fn seats_changed(self: Pin<&mut PadReader>);
 
@@ -188,9 +188,11 @@ impl qobject::PadReader {
             self.as_mut().rust_mut().connected = count;
             self.as_mut().connected_changed();
         }
-        if let Some(rx) = tick.right_x.filter(|v| (*v - self.right_stick_x).abs() >= 0.005) {
-            self.as_mut().rust_mut().right_stick_x = rx;
-            self.as_mut().right_stick_x_changed();
+        if !self.game.owned() {
+            if let Some(rx) = tick.right_x.filter(|v| (*v - self.right_stick_x).abs() >= 0.005) {
+                self.as_mut().rust_mut().right_stick_x = rx;
+                self.as_mut().right_stick_x_changed();
+            }
         }
         self.publish_problem(QString::default());
     }

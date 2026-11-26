@@ -38,11 +38,29 @@ Kit.Sheet {
     padding: 0
     background: null
     Overlay.modal: Item {}
-    onAboutToShow: choiceList.currentIndex = 0
-    onChosen: root.close()
+    QtObject {
+        id: state
+        property bool answered: false
+        signal pick(int index)
+        onPick: (index) => {
+            state.answered = true
+            root.chosen(index)
+            if (root.visible && root.opened) {
+                state.answered = false
+                choiceList.currentIndex = 0
+            }
+        }
+    }
+    onAboutToShow: {
+        choiceList.currentIndex = 0
+        state.answered = false
+    }
+    onChosen: state.answered = true
+    onClosed: if (!state.answered) state.pick(root.backIndex)
     Connections {
         target: root.controller
-        function onSheetDismissed() { root.chosen(root.backIndex) }
+        enabled: !state.answered
+        function onSheetDismissed() { state.pick(root.backIndex) }
     }
     Kit.NormalizedCanvas {
         id: canvas
@@ -148,7 +166,7 @@ Kit.Sheet {
                     labelFont: root.rowFont
                     focus: ListView.isCurrentItem
                     onActiveFocusChanged: choiceList.currentIndex = answer.activeFocus ? answer.index : choiceList.currentIndex
-                    onActivated: root.chosen(answer.index)
+                    onActivated: state.pick(answer.index)
                 }
             }
         }

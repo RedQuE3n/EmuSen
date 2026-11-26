@@ -83,6 +83,7 @@ struct State {
     asks: Vec<Ask>,
     players: Vec<Player>,
     connected: Vec<Connected>,
+    seat_keys: [Option<u64>; PLAYERS],
     stick_deadzone: f64,
     /// Settings waiting for the reader's next tick; the mirror as last settled.
     settings: Option<PadSettings>,
@@ -266,7 +267,7 @@ impl GamePads {
     }
 
     /// The reader's tick for the seats: the pads opened and closed seated, the asks done, the page's view brought up to
-    /// date; whether the view changed.
+    /// date; whether the topology changed, or live input changed while not in active gameplay.
     pub fn keep_seats(&self, pads: &Pads, events: &[PadEvent]) -> Result<bool> {
         let mut state = self.state();
         let mut came: Vec<Came> = Vec::new();
@@ -276,10 +277,18 @@ impl GamePads {
         for ask in std::mem::take(&mut state.asks) {
             state.seats.ask(pads.platform(), ask)?;
         }
+        let keys = state.seats.keys();
         let (players, connected) = (state.seats.players(), state.seats.connected(Some(pads))?);
         let deadzone = pads.setting(consts::SETTING_STICK_DEADZONE)?;
-        let changed = players != state.players || connected != state.connected || deadzone != state.stick_deadzone;
+        let topology = players != state.players
+            || deadzone != state.stick_deadzone
+            || keys != state.seat_keys
+            || state.connected.len() != connected.len()
+            || state.connected.iter().zip(&connected).any(|(a, b)| (a.key, &a.name, a.player) != (b.key, &b.name, b.player));
+        let gameplay = state.want.is_some() && state.owned;
+        let changed = topology || (!gameplay && connected != state.connected);
         state.stick_deadzone = deadzone;
+        state.seat_keys = keys;
         state.players = players;
         state.connected = connected;
         Ok(changed)

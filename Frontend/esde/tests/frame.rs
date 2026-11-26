@@ -2,6 +2,7 @@
 mod common;
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use common::*;
 use emusen_esde::check;
@@ -313,7 +314,7 @@ fn badges_lay_out_the_game_s_slots_and_status_shows_the_device() {
     let gamelist = "<badges name=\"b\"><pos>0 0</pos><size>0.4 0.1</size><slots>favorite controller</slots><itemsPerLine>2</itemsPerLine><lines>1</lines><itemMargin>0 0</itemMargin></badges>
         <systemstatus name=\"s\"/><rating name=\"r\"><pos>0 0.5</pos><size>0 0.1</size></rating>";
     let mut s = stage(&t, "", gamelist, "gamelist", 0);
-    s.current.data.systems[1].games[0].controller = Some("gamepad_nintendo_snes".into());
+    Arc::make_mut(&mut s.current.data.systems)[1].games[0].controller = Some("gamepad_nintendo_snes".into());
     let f = s.frame();
     let Paint::Badges(b) = &placed(&f, "b").paint else { panic!() };
     assert_eq!(b.slots.len(), 2);
@@ -362,7 +363,7 @@ fn a_held_list_shows_the_quick_scroll_letters_once_the_metadata_fades() {
     let t = Synth::new();
     let mut s = stage(&t, "", LIST, "gamelist", 0);
     s.current.data.scroll_overlay = true;
-    s.current.data.systems[1].favorites_on_top = true;
+    Arc::make_mut(&mut s.current.data.systems)[1].favorites_on_top = true;
     assert!(s.frame().overlay.is_none());
     s.current.press(1, 0, false);
     s.advance(ms(900.0));
@@ -431,7 +432,7 @@ fn selected(t: &Synth, selector: &str, seed: u64, prepare: impl Fn(&mut Data)) -
         .collect();
     let mut s = stage(t, &format!("{CAROUSEL}</carousel>{selector}{covers}<text name=\"title\"><metadata>name</metadata><gameselectorEntry>1</gameselectorEntry></text>"), "", "system", 0);
     let mut data = s.current.data.clone();
-    for system in &mut data.systems {
+    for system in Arc::make_mut(&mut data.systems) {
         for g in &mut system.games {
             g.media.insert("screenshot".into(), format!("/shots/{}.png", g.name));
         }
@@ -478,8 +479,9 @@ fn a_gameselector_gives_the_system_view_its_games_by_entry() {
     // The last played, newest first; the most played; an entry past gameCount clamps to its last.
     let last = "<gameselector name=\"pick\"><selection>lastplayed</selection><gameCount>2</gameCount></gameselector>";
     let f = selected(&t, last, 0, |d| {
-        d.systems[1].games[3].last_played = Some(DateTime::new(2026, 1, 2, 0, 0, 0));
-        d.systems[1].games[1].last_played = Some(DateTime::new(2026, 1, 1, 0, 0, 0));
+        let systems = Arc::make_mut(&mut d.systems);
+        systems[1].games[3].last_played = Some(DateTime::new(2026, 1, 2, 0, 0, 0));
+        systems[1].games[1].last_played = Some(DateTime::new(2026, 1, 1, 0, 0, 0));
     })
     .frame();
     assert_eq!(
@@ -496,13 +498,14 @@ fn a_gameselector_gives_the_system_view_its_games_by_entry() {
         ]
     );
     let most = "<gameselector name=\"pick\"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>";
-    let f = selected(&t, most, 0, |d| d.systems[1].games[4].play_count = 5).frame();
+    let f = selected(&t, most, 0, |d| Arc::make_mut(&mut d.systems)[1].games[4].play_count = 5).frame();
     assert_eq!(shown(&f), ["Ember Circuit"], "one played game: the other entries are not rendered");
     // A named selector, else the one whose name sorts first.
     let two = "<gameselector name=\"b\"><selection>mostplayed</selection></gameselector><gameselector name=\"a\"><selection>lastplayed</selection></gameselector>";
     let f = selected(&t, two, 0, |d| {
-        d.systems[1].games[4].play_count = 5;
-        d.systems[1].games[2].last_played = Some(DateTime::new(2026, 1, 1, 0, 0, 0));
+        let systems = Arc::make_mut(&mut d.systems);
+        systems[1].games[4].play_count = 5;
+        systems[1].games[2].last_played = Some(DateTime::new(2026, 1, 1, 0, 0, 0));
     })
     .frame();
     assert_eq!(shown(&f)[0], "Cobalt Harbor");
@@ -514,11 +517,11 @@ fn the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends(
     let t = Synth::new();
     let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
     let mut data = s.current.data.clone();
-    let game = &mut data.systems[1].games[0];
+    let game = &mut Arc::make_mut(&mut data.systems)[1].games[0];
     for kind in ["custom", "screenshot", "video", "cover", "marquee", "fanart"] {
         game.media.insert(kind.to_owned(), format!("/m/{kind}"));
     }
-    data.systems[1].games[1].folder = true;
+    Arc::make_mut(&mut data.systems)[1].games[1].folder = true;
     s.restart(data.clone(), "gamelist", 0);
     assert!(s.open_viewer());
     let v = s.viewer.clone().unwrap();
@@ -543,7 +546,7 @@ fn the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends(
     assert!(h.font.own, "ES-DE's own face");
     s.switch(0);
     assert!(s.viewer.is_none(), "leaving the gamelist closes it");
-    let no_video = &mut data.systems[1].games[0].media;
+    let no_video = &mut Arc::make_mut(&mut data.systems)[1].games[0].media;
     no_video.remove("video");
     no_video.insert("titlescreen".into(), "/m/titlescreen".into());
     no_video.insert("miximage".into(), "/m/miximage".into());
@@ -566,7 +569,7 @@ fn the_media_viewer_shows_a_game_s_pdf_manual_paged_zoomed_and_panned() {
     let t = Synth::new();
     let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
     let mut data = s.current.data.clone();
-    let game = &mut data.systems[1].games[0];
+    let game = &mut Arc::make_mut(&mut data.systems)[1].games[0];
     game.media.insert("screenshot".into(), "/m/shot".into());
     game.media.insert("manual".into(), "/m/manual.pdf".into());
     s.restart(data, "gamelist", 0);
@@ -636,7 +639,7 @@ fn the_media_viewer_follows_the_player_s_viewer_settings() {
     let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
     let mut data = s.current.data.clone();
     for kind in ["video", "screenshot"] {
-        data.systems[1].games[0].media.insert(kind.to_owned(), format!("/m/{kind}"));
+        Arc::make_mut(&mut data.systems)[1].games[0].media.insert(kind.to_owned(), format!("/m/{kind}"));
     }
     let open = |s: &mut Stage, data: &Data, settings: ViewerSettings| {
         let mut d = data.clone();
@@ -679,12 +682,13 @@ fn a_gameselector_picks_from_the_games_inside_folders_too() {
     let t = Synth::new();
     let random = "<gameselector name=\"pick\"><gameCount>8</gameCount></gameselector>";
     let inside = |d: &mut Data| {
+        let systems = Arc::make_mut(&mut d.systems);
         for name in ["Quartz Spire", "Rune Gate"] {
             let mut g = Game::new(name, &format!("{name}.nes"));
             g.media.insert("screenshot".into(), format!("/shots/{name}.png"));
-            d.systems[1].unlisted.push(g);
+            systems[1].unlisted.push(g);
         }
-        d.systems[1].games[1].folder = true;
+        systems[1].games[1].folder = true;
     };
     let names = shown(&selected(&t, random, 7, inside).frame());
     assert_eq!(names.len(), 7, "five games and the two inside, the folder never: {names:?}");
@@ -795,7 +799,7 @@ fn video_stage(t: &Synth, video: &str) -> Stage {
     t.asset("shot.png").asset("clip.mkv").asset("other.mkv");
     let mut s = stage(t, "", video, "gamelist", 0);
     let shot = t.path_of("shot.png");
-    for g in s.current.data.systems.iter_mut().flat_map(|sys| sys.games.iter_mut()) {
+    for g in Arc::make_mut(&mut s.current.data.systems).iter_mut().flat_map(|sys| sys.games.iter_mut()) {
         g.media.insert("screenshot".into(), shot.clone());
     }
     s

@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import EmuSen.Kit as Kit
 
 // The glow or shadow of the rounded box this item fills, outside the box only, as a CSS outer box-shadow draws it (EmuSen_Kit.md §7.113, §7.119).
@@ -34,59 +33,17 @@ Item {
         y: -root.reach
         width: root.width + 2 * root.reach
         height: root.height + 2 * root.reach
-        sourceComponent: Item {
-            id: lit
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                maskEnabled: true
-                maskInverted: true
-                maskSource: hole
-            }
-            // The box grown by the spread and moved by the offset, its corners grown with it, blurred by a Gaussian of half the
-            // blur radius, as CSS draws a box-shadow (CSS Backgrounds 3 §6.1.1, §6.1.2).
-            Item {
-                objectName: "glowShadow"
-                anchors.fill: parent
-                Item {
-                    id: grown
-                    x: root.reach - root.spread + root.offsetX
-                    y: root.reach - root.spread + root.offsetY
-                    width: root.width + 2 * root.spread
-                    height: root.height + 2 * root.spread
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: Math.min(root.radius, Math.min(root.width, root.height) / 2) + root.spread
-                        color: root.color
-                        antialiasing: true
-                    }
-                }
-                Loader {
-                    active: root.blur > 0
-                    sourceComponent: Component {
-                        Kit.GaussianBlur {
-                            source: grown
-                            deviation: root.blur / 2
-                            pixelScale: root.pixelScale
-                        }
-                    }
-                }
-            }
-            Item {
-                id: hole
-                anchors.fill: parent
-                visible: false
-                layer.enabled: true
-                Rectangle {
-                    x: root.reach
-                    y: root.reach
-                    width: root.width
-                    height: root.height
-                    radius: root.radius
-                    // Opaque: the mask reads only its alpha, a constant of the masking itself.
-                    color: Qt.rgba(0, 0, 0, 1)
-                    antialiasing: true
-                }
-            }
+        sourceComponent: ShaderEffect {
+            objectName: "glowShadow"
+            readonly property color color: root.color
+            readonly property vector2d boxSize: Qt.vector2d(root.width, root.height)
+            readonly property vector2d offset: Qt.vector2d(root.offsetX, root.offsetY)
+            readonly property real radius: root.radius
+            readonly property real spread: root.spread
+            readonly property real blur: root.blur
+            readonly property real reach: root.reach
+            readonly property real pixelScale: root.pixelScale
+            fragmentShader: "qrc:/qt/qml/EmuSen/Kit/shaders/glow.frag.qsb"
         }
     }
     Loader {

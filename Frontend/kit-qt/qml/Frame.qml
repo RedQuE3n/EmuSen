@@ -98,6 +98,11 @@ FocusScope {
         enabled: root.activeFocus || root.controller.sheetOpen
         function onPressed(button) { root.controller.offer(button) }
     }
+    Connections {
+        target: Kit.PadRouter
+        enabled: (root.activeFocus || root.controller.sheetOpen) && Kit.PadRouter.clockRunning
+        function onPendingChanged() { Kit.PadRouter.pump() }
+    }
     Timer {
         interval: 8
         repeat: true

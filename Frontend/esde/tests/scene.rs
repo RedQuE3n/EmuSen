@@ -2,6 +2,8 @@
 // (EmuSen_BigPicture.md §13.9, §14.6, §14.7, §16).
 mod common;
 
+use std::sync::Arc;
+
 use common::*;
 use emusen_esde::loader::{Choices, SystemKind, ThemeSystem};
 use emusen_esde::scene::motion::RepeatRule;
@@ -252,7 +254,7 @@ fn a_description_container_scrolls_by_the_themes_delays_and_the_measured_rate() 
     let text = "<text name=\"d\"><pos>0.5 0</pos><size>0.5 0.3</size><metadata>description</metadata><fontSize>0.06</fontSize><lineSpacing>1.5</lineSpacing>\
         <containerStartDelay>2</containerStartDelay><containerResetDelay>3</containerResetDelay><containerScrollSpeed>2</containerScrollSpeed><color>FFFFFF</color></text>";
     let mut games_with_text = data("", &(list("") + text), round(), "", 1, 1);
-    for system in &mut games_with_text.systems {
+    for system in Arc::make_mut(&mut games_with_text.systems) {
         for g in &mut system.games {
             g.description = Some(format!("{} is a game invented for EmuSen's tests.", g.name));
         }
@@ -457,7 +459,7 @@ fn the_grid_ends_are_es_de_s() {
     view.release(ms(51.0));
     assert_eq!(view.index(), 0);
     let mut shorter_data = data_sized("", &grid(""), Motion::esde(), "", 1, 0, 640.0, 400.0);
-    for s in &mut shorter_data.systems {
+    for s in Arc::make_mut(&mut shorter_data.systems) {
         s.games.truncate(10);
     }
     let mut shorter = SceneView::new(shorter_data, "gamelist", 0);
@@ -506,7 +508,7 @@ fn grid_item_sizes_are_in_es_de_s_units() {
 fn a_held_grid_direction_repeats_at_500_then_200_ms_with_no_faster_tier() {
     for vertical in [false, true] {
         let mut many = data_sized("", &grid(""), Motion::esde(), "", 1, 0, 640.0, 400.0);
-        for s in &mut many.systems {
+        for s in Arc::make_mut(&mut many.systems) {
             s.games = (0..200).map(|i| Game::new(&format!("G{i}"), &format!("/g/{i}.sfc"))).collect();
         }
         let mut view = SceneView::new(many, "gamelist", 0);

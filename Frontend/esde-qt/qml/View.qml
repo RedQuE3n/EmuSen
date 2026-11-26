@@ -40,7 +40,7 @@ Item {
         property NumberAnimation driver: NumberAnimation {
             target: clock
             property: "clockMs"
-            running: esde.moving
+            running: root.visible && esde.moving
             from: 0
             to: 1e9
             duration: 1e9
@@ -54,7 +54,7 @@ Item {
     }
     Timer {
         interval: Math.max(1, esde.nextChangeMs)
-        running: !esde.moving && esde.nextChangeMs > 0
+        running: root.visible && !esde.moving && esde.nextChangeMs > 0
         repeat: true
         onTriggered: esde.tick(interval)
     }

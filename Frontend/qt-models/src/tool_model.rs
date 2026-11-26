@@ -8,7 +8,7 @@ use crate::tools::cores::{Cores, Host};
 use crate::tools::{Source, Tool};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QList, QString, QStringList, QUrl};
+use cxx_qt_lib::{QList, QString, QStringList, QUrl, QVariant};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -21,6 +21,8 @@ pub mod qobject {
         type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qurl.h");
         type QUrl = cxx_qt_lib::QUrl;
+        include!("cxx-qt-lib/qvariant.h");
+        type QVariant = cxx_qt_lib::QVariant;
     }
 
     /// The tools a screen shows.
@@ -103,6 +105,15 @@ pub mod qobject {
         #[qproperty(QString, eclipse_cores, cxx_name = "eclipseCores", READ, NOTIFY)]
         #[qproperty(QString, eclipse_help, cxx_name = "eclipseHelp", READ, NOTIFY)]
         #[qproperty(i32, eclipse_screen, cxx_name = "eclipseScreen", READ, NOTIFY)]
+        #[qproperty(QVariant, eclipse_state, cxx_name = "eclipseState", READ, NOTIFY)]
+        #[qproperty(QString, eclipse_rows_json, cxx_name = "eclipseRowsJson", READ, NOTIFY)]
+        #[qproperty(QString, eclipse_aux_rows_json, cxx_name = "eclipseAuxRowsJson", READ, NOTIFY)]
+        #[qproperty(i32, eclipse_focused_index, cxx_name = "eclipseFocusedIndex", READ, NOTIFY)]
+        #[qproperty(i32, eclipse_focused_zone, cxx_name = "eclipseFocusedZone", READ, NOTIFY)]
+        #[qproperty(i32, eclipse_filter_index, cxx_name = "eclipseFilterIndex", READ, NOTIFY)]
+        #[qproperty(i32, eclipse_aux_index, cxx_name = "eclipseAuxIndex", READ, NOTIFY)]
+        #[qproperty(QString, eclipse_focused_key, cxx_name = "eclipseFocusedKey", READ, NOTIFY)]
+        #[qproperty(QString, eclipse_counter, cxx_name = "eclipseCounter", READ, NOTIFY)]
         #[qproperty(bool, file_catching, cxx_name = "fileCatching")]
         #[qproperty(bool, file_waiting, cxx_name = "fileWaiting", READ, NOTIFY)]
         #[qproperty(QString, file_asked, cxx_name = "fileAsked", READ, NOTIFY)]
@@ -305,6 +316,16 @@ pub struct ToolModelRust {
     eclipse_cores: QString,
     eclipse_help: QString,
     eclipse_screen: i32,
+    eclipse_state: QVariant,
+    eclipse_state_json: String,
+    eclipse_rows_json: QString,
+    eclipse_aux_rows_json: QString,
+    eclipse_focused_index: i32,
+    eclipse_focused_zone: i32,
+    eclipse_filter_index: i32,
+    eclipse_aux_index: i32,
+    eclipse_focused_key: QString,
+    eclipse_counter: QString,
     file_catching: bool,
     file_waiting: bool,
     file_asked: QString,
@@ -382,6 +403,16 @@ impl Default for ToolModelRust {
             eclipse_cores: QString::from("{}"),
             eclipse_help: QString::from("[]"),
             eclipse_screen: 0,
+            eclipse_state: crate::eclipse_list_model::json_to_variant("{}"),
+            eclipse_state_json: "{}".to_owned(),
+            eclipse_rows_json: QString::from("[]"),
+            eclipse_aux_rows_json: QString::from("[]"),
+            eclipse_focused_index: -1,
+            eclipse_focused_zone: 0,
+            eclipse_filter_index: 0,
+            eclipse_aux_index: -1,
+            eclipse_focused_key: QString::default(),
+            eclipse_counter: QString::default(),
             file_catching: false,
             file_waiting: false,
             file_asked: QString::default(),
@@ -909,6 +940,7 @@ impl qobject::ToolModel {
                 .as_str(),
         );
         let eclipse_screen = if !self.eclipse { 0 } else if self.tool == Shown::Cores { 1 } else { source.eclipse_screen_code() };
+        let split = split_eclipse_view(eclipse_screen, eclipse_view.as_ref());
         let question = tool.question().cloned();
         let busy = source.running();
         let changed_library = self.busy && !busy && source.changes_library();
@@ -950,6 +982,20 @@ impl qobject::ToolModel {
         put!(self, eclipse_cores, eclipse_cores, eclipse_cores_changed);
         put!(self, eclipse_help, eclipse_help, eclipse_help_changed);
         put!(self, eclipse_screen, eclipse_screen, eclipse_screen_changed);
+        if self.eclipse_state_json != split.state_json {
+            let next_state = crate::eclipse_list_model::json_to_variant(&split.state_json);
+            self.as_mut().rust_mut().eclipse_state_json = split.state_json;
+            self.as_mut().rust_mut().eclipse_state = next_state;
+            self.as_mut().eclipse_state_changed();
+        }
+        put!(self, eclipse_rows_json, QString::from(split.rows_json.as_str()), eclipse_rows_json_changed);
+        put!(self, eclipse_aux_rows_json, QString::from(split.aux_rows_json.as_str()), eclipse_aux_rows_json_changed);
+        put!(self, eclipse_focused_index, split.focused_index, eclipse_focused_index_changed);
+        put!(self, eclipse_focused_zone, split.focused_zone, eclipse_focused_zone_changed);
+        put!(self, eclipse_filter_index, split.filter_index, eclipse_filter_index_changed);
+        put!(self, eclipse_aux_index, split.aux_index, eclipse_aux_index_changed);
+        put!(self, eclipse_focused_key, QString::from(split.focused_key.as_str()), eclipse_focused_key_changed);
+        put!(self, eclipse_counter, QString::from(split.counter.as_str()), eclipse_counter_changed);
         let closed = self.card_open && card.is_none();
         put!(self, card_open, card.is_some(), card_open_changed);
         let closed_asking = self.asking && question.is_none();
@@ -976,4 +1022,184 @@ impl qobject::ToolModel {
             self.as_mut().library_changed();
         }
     }
+}
+
+struct SplitEclipseView {
+    state_json: String,
+    rows_json: String,
+    aux_rows_json: String,
+    focused_index: i32,
+    focused_zone: i32,
+    filter_index: i32,
+    aux_index: i32,
+    focused_key: String,
+    counter: String,
+}
+
+impl Default for SplitEclipseView {
+    fn default() -> Self {
+        SplitEclipseView {
+            state_json: "{}".to_owned(),
+            rows_json: "[]".to_owned(),
+            aux_rows_json: "[]".to_owned(),
+            focused_index: -1,
+            focused_zone: 0,
+            filter_index: 0,
+            aux_index: -1,
+            focused_key: String::new(),
+            counter: String::new(),
+        }
+    }
+}
+
+fn take_i32(map: &mut serde_json::Map<String, Value>, key: &str, fallback: i32) -> i32 {
+    map.remove(key).and_then(|v| v.as_i64()).map_or(fallback, |n| n as i32)
+}
+
+fn take_str(map: &mut serde_json::Map<String, Value>, key: &str) -> String {
+    map.remove(key).and_then(|v| match v { Value::String(s) => Some(s), _ => None }).unwrap_or_default()
+}
+
+fn strip_focused_rows(val: Option<Value>) -> Vec<Value> {
+    let Some(Value::Array(mut arr)) = val else { return Vec::new() };
+    for item in &mut arr {
+        if let Value::Object(ref mut obj) = item {
+            obj.remove("focused");
+        }
+    }
+    arr
+}
+
+fn split_eclipse_view(screen: i32, view: Option<&Value>) -> SplitEclipseView {
+    let mut out = SplitEclipseView::default();
+    let Some(Value::Object(src)) = view else { return out };
+    let mut map = src.clone();
+    map.remove("footerHelp");
+
+    match screen {
+        1 => {
+            let cards = map.remove("cards").unwrap_or_else(|| json!([]));
+            out.rows_json = cards.to_string();
+            out.focused_index = take_i32(&mut map, "focusedConsoleIndex", -1);
+            out.focused_zone = take_i32(&mut map, "focusZoneCode", 1);
+            out.filter_index = take_i32(&mut map, "focusedTopIndex", 0);
+            out.focused_key = take_str(&mut map, "focusedAsideKey");
+            map.remove("focusZone");
+            map.remove("focusedConsole");
+            map.remove("focusedAsideIndex");
+            map.remove("asideKeys");
+            let empty_installed = map.get("labels").and_then(|l| l.get("emptyInstalled")).and_then(Value::as_str).unwrap_or_default().to_owned();
+            let mut aux_rows: Vec<Value> = Vec::new();
+            if let Some(Value::Object(ref mut aside)) = map.get_mut("aside") {
+                out.counter = take_str(aside, "footerSummary");
+                let inst_h = take_str(aside, "installedHeading");
+                let avail_h = take_str(aside, "availableHeading");
+                let note = take_str(aside, "note");
+                let installed = match aside.remove("installed") { Some(Value::Array(a)) => a, _ => Vec::new() };
+                let available = match aside.remove("available") { Some(Value::Array(a)) => a, _ => Vec::new() };
+                if !inst_h.is_empty() {
+                    aux_rows.push(json!({ "kind": 0, "text": inst_h, "objectName": "asideInstalledHeading", "first": true }));
+                }
+                if installed.is_empty() && !empty_installed.is_empty() {
+                    aux_rows.push(json!({ "kind": 1, "text": empty_installed }));
+                }
+                for (i, mut row) in installed.into_iter().enumerate() {
+                    if let Value::Object(ref mut obj) = row {
+                        let key_match = obj.get("key").and_then(Value::as_str) == Some(out.focused_key.as_str());
+                        obj.insert("kind".into(), json!(2));
+                        obj.insert("coreIndex".into(), json!(i));
+                        obj.insert("objectName".into(), json!(format!("asideCore.{i}")));
+                        if out.focused_zone == 2 && key_match {
+                            out.aux_index = aux_rows.len() as i32;
+                        }
+                    }
+                    aux_rows.push(row);
+                }
+                if !avail_h.is_empty() {
+                    aux_rows.push(json!({ "kind": 0, "text": avail_h, "objectName": "asideAvailableHeading", "first": false }));
+                }
+                for (i, mut row) in available.into_iter().enumerate() {
+                    if let Value::Object(ref mut obj) = row {
+                        let key_match = obj.get("key").and_then(Value::as_str) == Some(out.focused_key.as_str());
+                        obj.insert("kind".into(), json!(3));
+                        obj.insert("availIndex".into(), json!(i));
+                        obj.insert("objectName".into(), json!(format!("asideAvail.{i}")));
+                        if out.focused_zone == 2 && key_match {
+                            out.aux_index = aux_rows.len() as i32;
+                        }
+                    }
+                    aux_rows.push(row);
+                }
+                if !note.is_empty() {
+                    aux_rows.push(json!({ "kind": 4, "text": note, "objectName": "asideNote" }));
+                }
+            }
+            out.aux_rows_json = Value::Array(aux_rows).to_string();
+            out.state_json = Value::Object(map).to_string();
+        }
+        2..=4 => {
+            let rows = strip_focused_rows(map.remove("rows"));
+            out.rows_json = Value::Array(rows).to_string();
+            out.focused_index = take_i32(&mut map, "focusedIndex", -1);
+            out.focused_zone = take_i32(&mut map, "focusedZone", 1);
+            out.filter_index = take_i32(&mut map, "focusedFilterIndex", 0);
+            out.aux_index = take_i32(&mut map, "focusedToggleIndex", 0);
+            out.focused_key = take_str(&mut map, "focusedAsideKey");
+            out.counter = take_str(&mut map, "counter");
+            out.state_json = Value::Object(map).to_string();
+        }
+        5 => {
+            let rows = strip_focused_rows(map.remove("rows"));
+            out.focused_index = take_i32(&mut map, "focusedIndex", -1);
+            out.focused_zone = take_i32(&mut map, "focusZone", 1);
+            out.counter = take_str(&mut map, "positionText");
+            if out.focused_index >= 0 {
+                if let Some(row) = rows.get(out.focused_index as usize) {
+                    out.focused_key = row.get("key").and_then(Value::as_str).unwrap_or_default().to_owned();
+                }
+            }
+            out.rows_json = Value::Array(rows).to_string();
+            out.state_json = Value::Object(map).to_string();
+        }
+        8 => {
+            let orig_idx = take_i32(&mut map, "focusedOrigIndex", -1);
+            map.remove("focusedVisualIndex");
+            map.remove("focusedRowY");
+            out.focused_zone = take_i32(&mut map, "zoneCode", 2);
+            out.aux_index = take_i32(&mut map, "browseCursor", 0);
+            out.counter = take_str(&mut map, "positionCounter");
+            out.focused_key = if orig_idx >= 0 { orig_idx.to_string() } else { String::new() };
+            map.remove("masterFocused");
+            if let Some(Value::Object(ref mut db)) = map.get_mut("dbCard") {
+                db.remove("browseFocused");
+                db.remove("updateFocused");
+            }
+            if let Some(Value::Object(ref mut add)) = map.get_mut("addCard") {
+                add.remove("focused");
+            }
+            let groups = match map.remove("groups") { Some(Value::Array(a)) => a, _ => Vec::new() };
+            let mut flat_rows: Vec<Value> = Vec::new();
+            for (gi, g) in groups.into_iter().enumerate() {
+                if let Value::Object(mut gobj) = g {
+                    let title = gobj.remove("title").unwrap_or_else(|| json!(""));
+                    let object_name = gobj.remove("objectName").unwrap_or_else(|| json!(""));
+                    flat_rows.push(json!({ "kind": 0, "title": title, "objectName": object_name, "first": gi == 0 }));
+                    for mut row in strip_focused_rows(gobj.remove("rows")) {
+                        if let Value::Object(ref mut robj) = row {
+                            robj.insert("kind".into(), json!(1));
+                            if robj.get("origIndex").and_then(Value::as_i64) == Some(i64::from(orig_idx)) {
+                                out.focused_index = flat_rows.len() as i32;
+                            }
+                        }
+                        flat_rows.push(row);
+                    }
+                }
+            }
+            out.rows_json = Value::Array(flat_rows).to_string();
+            out.aux_rows_json = Value::Array(strip_focused_rows(map.remove("browseRows"))).to_string();
+            out.state_json = Value::Object(map).to_string();
+        }
+        _ => {}
+    }
+    out
 }

@@ -114,14 +114,26 @@ fn push_png_chunk(out: &mut Vec<u8>, tag: [u8; 4], data: &[u8]) {
     out.extend_from_slice(&crc.to_be_bytes());
 }
 
+const CRC32_TABLE: [u32; 256] = {
+    let mut table = [0u32; 256];
+    let mut i = 0;
+    while i < 256 {
+        let mut c = i as u32;
+        let mut k = 0;
+        while k < 8 {
+            c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            k += 1;
+        }
+        table[i] = c;
+        i += 1;
+    }
+    table
+};
+
 fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     for &b in bytes {
-        crc ^= u32::from(b);
-        for _ in 0..8 {
-            let mask = (crc & 1).wrapping_neg();
-            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
-        }
+        crc = (crc >> 8) ^ CRC32_TABLE[((crc ^ u32::from(b)) & 0xFF) as usize];
     }
     !crc
 }
@@ -162,6 +174,7 @@ pub struct ShaderPreview {
     committed_preset: Vec<u8>,
     committed_uniforms: Vec<(String, f32)>,
     problem: String,
+    platform: Option<(String, std::sync::Arc<Platform>)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -173,25 +186,38 @@ pub struct PreviewTarget {
 
 impl Default for ShaderPreview {
     fn default() -> Self {
-        let card = synthetic_test_card();
-        let unfiltered_url = rgba_to_png_data_url(&card.0, card.1, card.2);
         ShaderPreview {
             host_feed: 0,
             feed: None,
             presets_dir: None,
             frame_serial: 1,
-            frame_rgba: card,
-            unfiltered_url,
+            frame_rgba: synthetic_test_card(),
+            unfiltered_url: String::new(),
             active_key: None,
             pending_target: None,
             committed_preset: Vec::new(),
             committed_uniforms: Vec::new(),
             problem: String::new(),
+            platform: None,
         }
     }
 }
 
 impl ShaderPreview {
+    fn ensure_platform(&mut self, platform_library: &str) -> Result<Option<std::sync::Arc<Platform>>, String> {
+        if platform_library.is_empty() {
+            return Ok(None);
+        }
+        if let Some((ref cached, ref platform)) = self.platform {
+            if cached == platform_library {
+                return Ok(Some(platform.clone()));
+            }
+        }
+        let loaded = Platform::load(platform_library).map_err(|e| e.to_string())?;
+        self.platform = Some((platform_library.to_owned(), loaded.clone()));
+        Ok(Some(loaded))
+    }
+
     /// Attaches to `host_feed`'s Vulkan device if non-zero and seeds the current source frame.
     pub fn attach(&mut self, host_feed: u64, platform_library: &str, paused_bytes: &[u8]) {
         self.set_source_frame(paused_bytes);
@@ -205,8 +231,10 @@ impl ShaderPreview {
             return;
         };
         let presets = host_handoff.presets().to_path_buf();
-        let initial = Platform::load(platform_library)
+        let initial = self
+            .ensure_platform(platform_library)
             .ok()
+            .flatten()
             .and_then(|p| serenity::filter_preset(&p, PLAIN, None, None, &presets.to_string_lossy()).ok())
             .unwrap_or_default();
         let feed = PictureFeed::new(device, initial.clone(), presets.clone());
@@ -230,7 +258,7 @@ impl ShaderPreview {
         let next = unpack_rgba(paused_bytes).unwrap_or_else(synthetic_test_card);
         if next != self.frame_rgba {
             self.frame_rgba = next;
-            self.unfiltered_url = rgba_to_png_data_url(&self.frame_rgba.0, self.frame_rgba.1, self.frame_rgba.2);
+            self.unfiltered_url.clear();
             self.frame_serial = self.frame_serial.wrapping_add(1);
             self.push_frame();
         }
@@ -253,7 +281,10 @@ impl ShaderPreview {
         self.feed.as_ref().map_or(0, |(f, _)| f.address())
     }
 
-    pub fn unfiltered_url(&self) -> &str {
+    pub fn unfiltered_url(&mut self) -> &str {
+        if self.unfiltered_url.is_empty() {
+            self.unfiltered_url = rgba_to_png_data_url(&self.frame_rgba.0, self.frame_rgba.1, self.frame_rgba.2);
+        }
         &self.unfiltered_url
     }
 
@@ -280,8 +311,14 @@ impl ShaderPreview {
 
     /// Commits any pending preset change through Serenity's preset reader onto the preview `PictureFeed`.
     pub fn commit(&mut self, platform_library: &str) -> bool {
+        let platform = self.ensure_platform(platform_library).ok().flatten();
+        self.commit_with_platform(platform.as_deref())
+    }
+
+    /// Commits any pending preset change using an already-loaded `Platform` handle.
+    pub fn commit_with_platform(&mut self, platform: Option<&Platform>) -> bool {
         let Some(target) = self.pending_target.take() else { return false };
-        let resolved = resolve_preset(platform_library, self.presets_dir.as_deref(), &target);
+        let resolved = resolve_preset_on(platform, self.presets_dir.as_deref(), &target);
         match resolved {
             Ok((preset, uniforms)) => {
                 self.problem.clear();
@@ -319,21 +356,22 @@ impl ShaderPreview {
     }
 }
 
-fn resolve_preset(platform_library: &str, presets_dir: Option<&std::path::Path>, target: &PreviewTarget) -> Result<(Vec<u8>, Vec<(String, f32)>), String> {
-    if platform_library.is_empty() {
+fn resolve_preset_on(platform: Option<&Platform>, presets_dir: Option<&std::path::Path>, target: &PreviewTarget) -> Result<(Vec<u8>, Vec<(String, f32)>), String> {
+    let Some(platform) = platform else {
         return Ok((Vec::new(), Vec::new()));
-    }
-    let platform = Platform::load(platform_library).map_err(|e| e.to_string())?;
+    };
     let uniforms: Vec<(String, f32)> = target.values.iter().map(|(k, v)| (k.clone(), *v)).collect();
     if let Some(pack_rel) = pack_preset(&target.stored) {
         let dir = platform.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).map_err(|e| e.to_string())?.ok_or("No shader pack folder.")?;
-        let preset = serenity::preset_document(&platform, &dir.join(pack_rel).to_string_lossy()).map_err(|e| e.to_string())?;
+        let preset = serenity::preset_document(platform, &dir.join(pack_rel).to_string_lossy()).map_err(|e| e.to_string())?;
         return Ok((preset, uniforms));
     }
-    let root = presets_dir.map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+    let root = presets_dir
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| std::env::temp_dir().join("emusen-shader-preview"));
     let chosen = serde_json::to_value(&target.values).ok();
     let key = if target.stored == "None" || target.stored.is_empty() { PLAIN } else { target.stored.as_str() };
-    let preset = serenity::filter_preset(&platform, key, target.console.as_deref(), chosen.as_ref(), &root).map_err(|e| e.to_string())?;
+    let preset = serenity::filter_preset(platform, key, target.console.as_deref(), chosen.as_ref(), &root.to_string_lossy()).map_err(|e| e.to_string())?;
     Ok((preset, uniforms))
 }
 
@@ -370,7 +408,9 @@ mod tests {
     fn debounce_schedule_and_software_fallback() {
         let mut preview = ShaderPreview::default();
         assert_eq!(preview.feed_address(), 0);
+        assert!(preview.unfiltered_url.is_empty(), "default constructor skips eager PNG encoding");
         assert!(preview.unfiltered_url().starts_with("data:image/png;base64,"));
+        assert!(!preview.unfiltered_url.is_empty());
         assert!(preview.schedule(PreviewTarget { stored: "CRT".into(), console: Some("SNES".into()), values: BTreeMap::new() }));
         assert!(preview.has_pending());
         assert!(preview.commit(""));

@@ -35,7 +35,19 @@ FocusScope {
         readonly property string clockText: outer.clockText
         readonly property bool inputs: outer.inputs
         readonly property real rightStickX: outer.rightStickX
-        readonly property var board: outer.settings.shadersBoard.length > 0 ? JSON.parse(outer.settings.shadersBoard) : ({})
+        readonly property var board: outer.settings.shadersMeta
+        EclipseListModel {
+            id: catsModel
+            rows: outer.settings.shadersCategoriesJson
+        }
+        EclipseListModel {
+            id: presetsModel
+            rows: outer.settings.shadersPresetsJson
+        }
+        EclipseListModel {
+            id: slidersModel
+            rows: outer.settings.shadersSlidersJson
+        }
         RowsModel {
             id: helpRows
             rows: outer.settings.shadersHelp
@@ -69,7 +81,7 @@ FocusScope {
                 readonly property bool isRs: sg.button === Kit.Pad.Random
                 readonly property bool pairedShoulders: sg.button === Kit.Pad.PageUp && sg.pair >= 0
                 readonly property bool named: sg.isRs ? true : baseGlyph.named
-                readonly property string word: sg.isRs ? (root.labels.rsGlyph ?? "") : baseGlyph.word
+                readonly property string word: sg.isRs ? (root.labels?.rsGlyph ?? "") : baseGlyph.word
                 readonly property string letter: sg.isRs ? "" : baseGlyph.letter
                 readonly property bool filled: sg.isRs ? false : baseGlyph.filled
                 readonly property real wordSize: sg.isRs ? 14 : baseGlyph.wordSize
@@ -96,7 +108,7 @@ FocusScope {
                         font.family: Kit.Tokens.faceText
                         font.pixelSize: 14
                         font.weight: Font.Normal
-                        text: root.labels.rsGlyph ?? ""
+                        text: root.labels?.rsGlyph ?? ""
                     }
                     Shape {
                         width: rsPill.width / root.px
@@ -163,21 +175,18 @@ FocusScope {
                 }
             }
             readonly property var model: canvas.board
-            readonly property var labels: root.model.labels ?? ({})
-            readonly property var sources: root.model.sources ?? []
-            readonly property var categories: root.model.categories ?? []
-            readonly property var pack: root.model.pack ?? ({})
-            readonly property var search: root.model.search ?? ({})
-            readonly property var presets: root.model.presets ?? []
-            readonly property var scopes: root.model.scopes ?? []
-            readonly property var preview: root.model.preview ?? ({})
-            readonly property var sliders: root.model.sliders ?? []
-            readonly property var allSettings: root.model.allSettings ?? ({})
-            readonly property real splitRatio: root.preview.split ?? 0.5
+            readonly property var labels: root.model?.labels ?? null
+            readonly property var sources: root.model?.sources ?? null
+            readonly property var pack: root.model?.pack ?? null
+            readonly property var search: root.model?.search ?? null
+            readonly property var scopes: root.model?.scopes ?? null
+            readonly property var preview: root.model?.preview ?? null
+            readonly property var allSettings: root.model?.allSettings ?? null
+            readonly property real splitRatio: canvas.settings.shadersSplit
             readonly property real splitPx: root.splitRatio * 820 * root.px
-            readonly property bool hasFiltered: root.preview.hasFiltered === true
-            readonly property bool confirmOpen: root.model.confirmOpen === true
-            readonly property int focusedPresetIdx: root.model.focusedPreset ?? 0
+            readonly property bool hasFiltered: !canvas.settings.shadersComparing && (root.preview?.hasShader === true)
+            readonly property bool confirmOpen: canvas.settings.shadersConfirmOpen
+            readonly property int focusedPresetIdx: canvas.settings.shadersFocusedPreset
             TapHandler {}
             FocusScope {
                 id: navScope
@@ -289,7 +298,7 @@ FocusScope {
                         size: 24
                         weight: Font.Normal
                         color: Kit.Tokens.muted
-                        text: root.labels.settings ?? ""
+                        text: root.labels?.settings ?? ""
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
@@ -306,12 +315,12 @@ FocusScope {
                         size: 24
                         weight: Font.Normal
                         color: ThemeInk.dim
-                        text: root.labels.slash ?? ""
+                        text: root.labels?.slash ?? ""
                     }
                     CardLine {
                         id: crumbPicture
                         objectName: "crumbPicture"
-                        visible: (root.labels.picture ?? "").length > 0
+                        visible: (root.labels?.picture ?? "").length > 0
                         x: crumbSlash0.x + crumbSlash0.width + 14 * root.px
                         y: (headerBar.height - crumbPicture.height) / 2
                         unit: root.px
@@ -319,7 +328,7 @@ FocusScope {
                         size: 24
                         weight: Font.Normal
                         color: Kit.Tokens.muted
-                        text: root.labels.picture ?? ""
+                        text: root.labels?.picture ?? ""
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
@@ -329,7 +338,7 @@ FocusScope {
                     CardLine {
                         id: crumbSlash1
                         objectName: "crumbSlash.1"
-                        visible: (root.labels.picture ?? "").length > 0
+                        visible: (root.labels?.picture ?? "").length > 0
                         x: crumbPicture.x + crumbPicture.width + 14 * root.px
                         y: (headerBar.height - crumbSlash1.height) / 2
                         unit: root.px
@@ -337,19 +346,19 @@ FocusScope {
                         size: 24
                         weight: Font.Normal
                         color: ThemeInk.dim
-                        text: root.labels.slash ?? ""
+                        text: root.labels?.slash ?? ""
                     }
                     CardLine {
                         id: crumbScreenFilter
                         objectName: "crumbScreenFilter"
-                        x: ((root.labels.picture ?? "").length > 0 ? crumbSlash1.x + crumbSlash1.width : crumbSlash0.x + crumbSlash0.width) + 14 * root.px
+                        x: ((root.labels?.picture ?? "").length > 0 ? crumbSlash1.x + crumbSlash1.width : crumbSlash0.x + crumbSlash0.width) + 14 * root.px
                         y: (headerBar.height - crumbScreenFilter.height) / 2
                         unit: root.px
                         boardLine: true
                         size: 24
                         weight: Font.DemiBold
                         color: Kit.Tokens.text
-                        text: root.labels.filter ?? ""
+                        text: root.labels?.filter ?? ""
                     }
                 }
                 Item {
@@ -400,8 +409,8 @@ FocusScope {
                         id: srcTab
                         required property int index
                         required property var modelData
-                        readonly property bool isActive: srcTab.modelData.active === true
-                        readonly property bool isFocused: srcTab.modelData.focused === true
+                        readonly property bool isActive: canvas.settings.shadersSourceIdx === srcTab.index
+                        readonly property bool isFocused: canvas.settings.shadersFocusZone === 0 && canvas.settings.shadersSourceIdx === srcTab.index
                         objectName: srcTab.modelData.pillName ?? ""
                         x: (6 + srcTab.index * 194) * root.px
                         y: 6 * root.px
@@ -451,20 +460,21 @@ FocusScope {
                 width: 400 * root.px
                 spacing: 4 * root.px
                 Repeater {
-                    model: root.categories
+                    model: catsModel
                     Rectangle {
                         id: catRow
                         required property int index
-                        required property var modelData
-                        readonly property bool isActive: catRow.modelData.active === true
-                        readonly property bool isFocused: catRow.modelData.focused === true
-                        objectName: catRow.modelData.rowName ?? ""
+                        required property var model
+                        readonly property var itemData: catRow.model.item
+                        readonly property bool isActive: catRow.itemData.active === true
+                        readonly property bool isFocused: canvas.settings.shadersFocusZone === 1 && canvas.settings.shadersCategoryIdx === catRow.index
+                        objectName: catRow.itemData.rowName ?? ""
                         width: 400 * root.px
                         height: 60 * root.px
                         radius: 14 * root.px
                         color: catRow.isActive ? Kit.Tokens.accent : (catRow.isFocused ? Kit.Tokens.surfaceRaised : "transparent")
                         Kit.FocusRing {
-                            objectName: catRow.modelData.ringName ?? ""
+                            objectName: catRow.itemData.ringName ?? ""
                             visible: catRow.isFocused
                             anchors.fill: parent
                             radius: 14 * root.px
@@ -478,7 +488,7 @@ FocusScope {
                         }
                         CardLine {
                             id: catName
-                            objectName: catRow.modelData.nameName ?? ""
+                            objectName: catRow.itemData.nameName ?? ""
                             x: 18 * root.px
                             y: (catRow.height - catName.height) / 2
                             width: catRow.width - 54 * root.px - catCount.width
@@ -488,11 +498,11 @@ FocusScope {
                             weight: catRow.isActive ? Font.DemiBold : Font.Normal
                             color: catRow.isActive ? Kit.Tokens.overAccent : ThemeInk.body
                             elide: Text.ElideRight
-                            text: catRow.modelData.name ?? ""
+                            text: catRow.itemData.name ?? ""
                         }
                         CardLine {
                             id: catCount
-                            objectName: catRow.modelData.countName ?? ""
+                            objectName: catRow.itemData.countName ?? ""
                             x: catRow.width - 18 * root.px - catCount.width
                             y: (catRow.height - catCount.height) / 2
                             unit: root.px
@@ -500,12 +510,12 @@ FocusScope {
                             size: 17
                             weight: Font.Normal
                             color: catRow.isActive ? Kit.Tokens.overAccent : ThemeInk.body
-                            text: catRow.modelData.count ?? ""
+                            text: catRow.itemData.count ?? ""
                         }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: canvas.settings.shadersCategory(catRow.modelData.index ?? catRow.index)
+                            onClicked: canvas.settings.shadersCategory(catRow.itemData.index ?? catRow.index)
                         }
                     }
                 }
@@ -536,7 +546,7 @@ FocusScope {
                         size: 20
                         weight: Font.DemiBold
                         color: Kit.Tokens.text
-                        text: root.labels.packTitle ?? ""
+                        text: root.labels?.packTitle ?? ""
                     }
                     CardLine {
                         objectName: "packStatus"
@@ -548,19 +558,19 @@ FocusScope {
                         weight: Font.Normal
                         color: ThemeInk.body
                         wrapMode: Text.WordWrap
-                        text: root.pack.status ?? ""
+                        text: root.pack?.status ?? ""
                     }
                     Rectangle {
                         id: removeBtn
                         objectName: "removePackButton"
-                        visible: root.pack.installed === true
+                        visible: root.pack?.installed === true
                         width: removeText.width + 32 * root.px
                         height: 46 * root.px
                         radius: 23 * root.px
                         color: "transparent"
                         border.width: 2 * root.px
                         border.color: removeBtn.isFocused ? Kit.Tokens.accent : ThemeInk.pillBorder
-                        readonly property bool isFocused: root.pack.removeFocused === true
+                        readonly property bool isFocused: canvas.settings.shadersFocusZone === 2
                         Kit.FocusRing {
                             objectName: "removePackRing"
                             visible: removeBtn.isFocused
@@ -584,7 +594,7 @@ FocusScope {
                             size: 17
                             weight: Font.Normal
                             color: ThemeInk.body
-                            text: root.labels.removePack ?? ""
+                            text: root.labels?.removePack ?? ""
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -606,7 +616,7 @@ FocusScope {
                 color: Kit.Tokens.inputSurface
                 border.width: 1 * root.px
                 border.color: ThemeInk.hairline
-                readonly property bool isFocused: root.search.focused === true
+                readonly property bool isFocused: canvas.settings.shadersFocusZone === 3
                 Kit.FocusRing {
                     objectName: "searchRing"
                     visible: searchPill.isFocused
@@ -650,9 +660,9 @@ FocusScope {
                     boardLine: true
                     size: 19
                     weight: Font.Normal
-                    color: (root.search.hasText === true) ? Kit.Tokens.text : Kit.Tokens.muted
+                    color: (root.search?.hasText === true) ? Kit.Tokens.text : Kit.Tokens.muted
                     elide: Text.ElideRight
-                    text: (root.search.hasText === true) ? (root.search.text ?? "") : (root.search.placeholder ?? "")
+                    text: (root.search?.hasText === true) ? (root.search?.text ?? "") : (root.search?.placeholder ?? "")
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -661,173 +671,175 @@ FocusScope {
                 }
             }
             // Middle column: preset list (x 536, y 202, w 430, row h 88, gap 8).
-            Flickable {
+            ListView {
                 id: presetFlick
                 objectName: "presetList"
                 x: 536 * root.px - root.reach
                 y: 202 * root.px - root.reach
                 width: 430 * root.px + 2 * root.reach
                 height: 860 * root.px + 2 * root.reach
+                topMargin: root.reach
+                bottomMargin: root.reach
+                spacing: 8 * root.px
                 clip: true
-                interactive: presetCol.height + 2 * root.reach > presetFlick.height
-                contentWidth: presetFlick.width
-                contentHeight: Math.max(presetFlick.height, presetCol.height + 2 * root.reach)
-                contentY: Math.max(0, Math.min(Math.max(0, presetFlick.contentHeight - presetFlick.height), (root.focusedPresetIdx - 8) * 96 * root.px))
+                reuseItems: true
+                boundsBehavior: Flickable.StopAtBounds
+                interactive: presetFlick.contentHeight + 2 * root.reach > presetFlick.height
+                model: presetsModel
+                contentY: Math.max(0, Math.min(Math.max(0, presetFlick.contentHeight + 2 * root.reach - presetFlick.height), (root.focusedPresetIdx - 8) * 96 * root.px)) - root.reach
                 Behavior on contentY {
                     enabled: !Kit.Tokens.reducedMotion
                     NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
                 }
-                Column {
-                    id: presetCol
-                    x: root.reach
-                    y: root.reach
-                    width: 430 * root.px
-                    spacing: 8 * root.px
-                    Repeater {
-                        model: root.presets
-                        Rectangle {
-                            id: presetRow
-                            required property int index
-                            required property var modelData
-                            readonly property bool isFocused: presetRow.modelData.focused === true
-                            readonly property bool isSelected: presetRow.modelData.selected === true
-                            readonly property bool isFav: presetRow.modelData.favourite === true
-                            readonly property bool drawScan: presetRow.modelData.scanlines === true
-                            objectName: presetRow.modelData.rowName ?? ""
-                            width: 430 * root.px
-                            height: 88 * root.px
+                delegate: Item {
+                    id: presetSlot
+                    required property int index
+                    required property var model
+                    readonly property var itemData: presetSlot.model.item
+                    width: presetFlick.width
+                    height: 88 * root.px
+                    Rectangle {
+                        id: presetRow
+                        readonly property bool isFocused: canvas.settings.shadersFocusZone === 4 && canvas.settings.shadersFocusedPreset === presetSlot.index
+                        readonly property bool isSelected: presetSlot.itemData.selected === true
+                        readonly property bool isFav: presetSlot.itemData.favourite === true
+                        readonly property bool drawScan: presetSlot.itemData.scanlines === true
+                        objectName: presetSlot.itemData.rowName ?? ""
+                        x: root.reach
+                        y: 0
+                        width: 430 * root.px
+                        height: 88 * root.px
+                        radius: 16 * root.px
+                        color: presetRow.isFocused ? Kit.Tokens.surfaceRaised : "transparent"
+                        border.width: (!presetRow.isFocused && presetRow.isSelected) ? 1 * root.px : 0
+                        border.color: ThemeInk.pillBorder
+                        Kit.FocusRing {
+                            objectName: presetSlot.itemData.ringName ?? ""
+                            visible: presetRow.isFocused
+                            anchors.fill: parent
                             radius: 16 * root.px
-                            color: presetRow.isFocused ? Kit.Tokens.surfaceRaised : "transparent"
-                            border.width: (!presetRow.isFocused && presetRow.isSelected) ? 1 * root.px : 0
-                            border.color: ThemeInk.pillBorder
-                            Kit.FocusRing {
-                                objectName: presetRow.modelData.ringName ?? ""
-                                visible: presetRow.isFocused
-                                anchors.fill: parent
-                                radius: 16 * root.px
-                                gap: 3 * root.px
-                                thickness: 3 * root.px
-                                bandRadius: 22 * root.px
-                                glowColor: Kit.Tokens.glowColor
-                                glowBlur: 34 * root.px
-                                glowSpread: 8 * root.px
-                                pixelScale: canvas.unit
+                            gap: 3 * root.px
+                            thickness: 3 * root.px
+                            bandRadius: 22 * root.px
+                            glowColor: Kit.Tokens.glowColor
+                            glowBlur: 34 * root.px
+                            glowSpread: 8 * root.px
+                            pixelScale: canvas.unit
+                        }
+                        Rectangle {
+                            id: swatchBox
+                            x: 14 * root.px
+                            y: 13 * root.px
+                            width: 84 * root.px
+                            height: 62 * root.px
+                            radius: 8 * root.px
+                            color: Kit.Tokens.inputSurface
+                            clip: true
+                            Rectangle {
+                                x: 52 * root.px
+                                y: 8 * root.px
+                                width: 18 * root.px
+                                height: 18 * root.px
+                                color: Kit.Tokens.accent
                             }
                             Rectangle {
-                                id: swatchBox
-                                x: 14 * root.px
-                                y: 13 * root.px
-                                width: 84 * root.px
-                                height: 62 * root.px
-                                radius: 8 * root.px
-                                color: Kit.Tokens.inputSurface
-                                clip: true
+                                x: 0
+                                y: 38 * root.px
+                                width: swatchBox.width
+                                height: 24 * root.px
+                                color: Kit.Tokens.success
+                            }
+                            Repeater {
+                                model: presetRow.drawScan ? 10 : 0
                                 Rectangle {
-                                    x: 52 * root.px
-                                    y: 8 * root.px
-                                    width: 18 * root.px
-                                    height: 18 * root.px
-                                    color: Kit.Tokens.accent
-                                }
-                                Rectangle {
+                                    id: scanBar
+                                    required property int index
                                     x: 0
-                                    y: 38 * root.px
+                                    y: scanBar.index * 6 * root.px
                                     width: swatchBox.width
-                                    height: 24 * root.px
-                                    color: Kit.Tokens.success
-                                }
-                                Repeater {
-                                    model: presetRow.drawScan ? 10 : 0
-                                    Rectangle {
-                                        id: scanBar
-                                        required property int index
-                                        x: 0
-                                        y: scanBar.index * 6 * root.px
-                                        width: swatchBox.width
-                                        height: 2 * root.px
-                                        color: ThemeInk.shadowSoft
-                                    }
+                                    height: 2 * root.px
+                                    color: ThemeInk.shadowSoft
                                 }
                             }
-                            CardLine {
-                                id: pName
-                                objectName: presetRow.modelData.nameName ?? ""
-                                x: 114 * root.px
-                                y: 18.5 * root.px
-                                width: (presetRow.isFav ? 262 : 296) * root.px
-                                unit: root.px
-                                boardLine: true
-                                size: 21
-                                weight: Font.DemiBold
-                                color: Kit.Tokens.text
-                                elide: Text.ElideRight
-                                text: presetRow.modelData.name ?? ""
-                            }
-                            CardLine {
-                                id: pMeta
-                                objectName: presetRow.modelData.metaName ?? ""
-                                x: 114 * root.px
-                                y: 48.5 * root.px
-                                width: (presetRow.isFav ? 262 : 296) * root.px
-                                unit: root.px
-                                boardLine: true
-                                size: 16
-                                weight: Font.Normal
-                                color: Kit.Tokens.muted
-                                elide: Text.ElideRight
-                                text: presetRow.modelData.meta ?? ""
+                        }
+                        CardLine {
+                            id: pName
+                            objectName: presetSlot.itemData.nameName ?? ""
+                            x: 114 * root.px
+                            y: 18.5 * root.px
+                            width: (presetRow.isFav ? 262 : 296) * root.px
+                            unit: root.px
+                            boardLine: true
+                            size: 21
+                            weight: Font.DemiBold
+                            color: Kit.Tokens.text
+                            elide: Text.ElideRight
+                            text: presetSlot.itemData.name ?? ""
+                        }
+                        CardLine {
+                            id: pMeta
+                            objectName: presetSlot.itemData.metaName ?? ""
+                            x: 114 * root.px
+                            y: 48.5 * root.px
+                            width: (presetRow.isFav ? 262 : 296) * root.px
+                            unit: root.px
+                            boardLine: true
+                            size: 16
+                            weight: Font.Normal
+                            color: Kit.Tokens.muted
+                            elide: Text.ElideRight
+                            text: presetSlot.itemData.meta ?? ""
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: canvas.settings.shadersFocusPreset(presetSlot.itemData.index ?? presetSlot.index, true)
+                        }
+                        Item {
+                            id: starBtn
+                            objectName: presetSlot.itemData.starName ?? ""
+                            visible: presetRow.isFav || presetRow.isFocused
+                            x: 392 * root.px
+                            y: 32 * root.px
+                            width: 24 * root.px
+                            height: 24 * root.px
+                            Shape {
+                                id: starShape
+                                readonly property real box: 24
+                                width: starShape.box
+                                height: starShape.box
+                                scale: (24 * root.px) / starShape.box
+                                transformOrigin: Item.TopLeft
+                                preferredRendererType: Shape.CurveRenderer
+                                ShapePath {
+                                    fillColor: presetRow.isFav ? ThemeInk.rose : "transparent"
+                                    strokeColor: presetRow.isFav ? ThemeInk.rose : ThemeInk.pillBorder
+                                    strokeWidth: 1.4
+                                    joinStyle: ShapePath.RoundJoin
+                                    startX: 12; startY: 3
+                                    PathLine { x: 14.6; y: 8.6 }
+                                    PathLine { x: 20.6; y: 9.3 }
+                                    PathLine { x: 16.1; y: 13.4 }
+                                    PathLine { x: 17.4; y: 19.4 }
+                                    PathLine { x: 12; y: 16.4 }
+                                    PathLine { x: 6.6; y: 19.4 }
+                                    PathLine { x: 7.9; y: 13.4 }
+                                    PathLine { x: 3.4; y: 9.3 }
+                                    PathLine { x: 9.4; y: 8.6 }
+                                    PathLine { x: 12; y: 3 }
+                                }
                             }
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: canvas.settings.shadersFocusPreset(presetRow.modelData.index ?? presetRow.index, true)
-                            }
-                            Item {
-                                id: starBtn
-                                objectName: presetRow.modelData.starName ?? ""
-                                visible: presetRow.isFav || presetRow.isFocused
-                                x: 392 * root.px
-                                y: 32 * root.px
-                                width: 24 * root.px
-                                height: 24 * root.px
-                                Shape {
-                                    id: starShape
-                                    readonly property real box: 24
-                                    width: starShape.box
-                                    height: starShape.box
-                                    scale: (24 * root.px) / starShape.box
-                                    transformOrigin: Item.TopLeft
-                                    preferredRendererType: Shape.CurveRenderer
-                                    ShapePath {
-                                        fillColor: presetRow.isFav ? ThemeInk.rose : "transparent"
-                                        strokeColor: presetRow.isFav ? ThemeInk.rose : ThemeInk.pillBorder
-                                        strokeWidth: 1.4
-                                        joinStyle: ShapePath.RoundJoin
-                                        startX: 12; startY: 3
-                                        PathLine { x: 14.6; y: 8.6 }
-                                        PathLine { x: 20.6; y: 9.3 }
-                                        PathLine { x: 16.1; y: 13.4 }
-                                        PathLine { x: 17.4; y: 19.4 }
-                                        PathLine { x: 12; y: 16.4 }
-                                        PathLine { x: 6.6; y: 19.4 }
-                                        PathLine { x: 7.9; y: 13.4 }
-                                        PathLine { x: 3.4; y: 9.3 }
-                                        PathLine { x: 9.4; y: 8.6 }
-                                        PathLine { x: 12; y: 3 }
-                                    }
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: canvas.settings.shadersToggleFavourite(presetRow.modelData.index ?? presetRow.index)
-                                }
+                                onClicked: canvas.settings.shadersToggleFavourite(presetSlot.itemData.index ?? presetSlot.index)
                             }
                         }
                     }
                 }
                 CardLine {
                     objectName: "presetEmptyText"
-                    visible: root.presets.length === 0
+                    visible: presetsModel.count === 0
                     x: root.reach + 16 * root.px
                     y: root.reach + 24 * root.px
                     width: 398 * root.px
@@ -837,7 +849,7 @@ FocusScope {
                     weight: Font.Normal
                     color: Kit.Tokens.muted
                     wrapMode: Text.WordWrap
-                    text: root.model.emptyListText ?? ""
+                    text: root.model?.emptyListText ?? ""
                 }
             }
             // Right column: scope switch (x 1004, y 130, w 820, h 60).
@@ -858,8 +870,8 @@ FocusScope {
                         id: scpTab
                         required property int index
                         required property var modelData
-                        readonly property bool isActive: scpTab.modelData.active === true
-                        readonly property bool isFocused: scpTab.modelData.focused === true
+                        readonly property bool isActive: canvas.settings.shadersScopeIdx === scpTab.index
+                        readonly property bool isFocused: canvas.settings.shadersFocusZone === 5 && canvas.settings.shadersScopeIdx === scpTab.index
                         objectName: scpTab.modelData.pillName ?? ""
                         x: (6 + scpTab.index * 404) * root.px
                         y: 6 * root.px
@@ -1070,7 +1082,7 @@ FocusScope {
                         size: 17
                         weight: Font.Normal
                         color: Kit.Tokens.text
-                        text: root.labels.noFilter ?? ""
+                        text: root.labels?.noFilter ?? ""
                     }
                 }
                 Rectangle {
@@ -1092,13 +1104,13 @@ FocusScope {
                         size: 17
                         weight: Font.DemiBold
                         color: Kit.Tokens.overAccent
-                        text: root.preview.afterLabel ?? ""
+                        text: (canvas.settings.shadersComparing || !(root.preview?.hasShader === true)) ? (root.labels?.noFilter ?? "") : (root.preview?.activeHeading ?? "")
                     }
                 }
                 Rectangle {
                     id: scrubBadge
                     objectName: "previewScrubPill"
-                    visible: (root.preview.splitHint ?? "").length > 0
+                    visible: (root.preview?.splitHint ?? "").length > 0
                     x: previewBox.width - 16 * root.px - scrubBadge.width
                     y: previewBox.height - 16 * root.px - scrubBadge.height
                     width: scrubWords.width + 28 * root.px
@@ -1118,7 +1130,7 @@ FocusScope {
                         size: 14
                         weight: Font.Normal
                         color: Kit.Tokens.muted
-                        text: root.preview.splitHint ?? ""
+                        text: root.preview?.splitHint ?? ""
                     }
                 }
                 MouseArea {
@@ -1149,7 +1161,7 @@ FocusScope {
                     weight: Font.DemiBold
                     color: Kit.Tokens.text
                     elide: Text.ElideRight
-                    text: root.preview.heading ?? ""
+                    text: root.preview?.heading ?? ""
                 }
                 CardLine {
                     id: subtitleLine
@@ -1163,29 +1175,30 @@ FocusScope {
                     weight: Font.Normal
                     color: ThemeInk.body
                     elide: Text.ElideRight
-                    text: root.preview.subtitle ?? ""
+                    text: root.preview?.subtitle ?? ""
                 }
                 Row {
                     id: slidersRow
                     objectName: "slidersRow"
-                    visible: root.sliders.length > 0
+                    visible: slidersModel.count > 0
                     x: 0
                     y: 91 * root.px
                     width: asideArea.width
                     spacing: 26 * root.px
                     Repeater {
-                        model: root.sliders
+                        model: slidersModel
                         Item {
                             id: slCol
                             required property int index
-                            required property var modelData
-                            readonly property bool isFocused: slCol.modelData.focused === true
-                            readonly property real fillNorm: slCol.modelData.ratio ?? 0
-                            objectName: slCol.modelData.boxName ?? ""
+                            required property var model
+                            readonly property var itemData: slCol.model.item
+                            readonly property bool isFocused: canvas.settings.shadersFocusZone === 6 && canvas.settings.shadersFocusedSlider === slCol.index
+                            readonly property real fillNorm: slCol.itemData.ratio ?? 0
+                            objectName: slCol.itemData.boxName ?? ""
                             width: 256 * root.px
                             height: 50 * root.px
                             Kit.FocusRing {
-                                objectName: slCol.modelData.ringName ?? ""
+                                objectName: slCol.itemData.ringName ?? ""
                                 visible: slCol.isFocused
                                 x: -8 * root.px
                                 y: -6 * root.px
@@ -1202,7 +1215,7 @@ FocusScope {
                             }
                             CardLine {
                                 id: slLabel
-                                objectName: slCol.modelData.labelName ?? ""
+                                objectName: slCol.itemData.labelName ?? ""
                                 x: 0
                                 y: 0
                                 width: slCol.width - slVal.width - 10 * root.px
@@ -1212,11 +1225,11 @@ FocusScope {
                                 weight: Font.Normal
                                 color: Kit.Tokens.text
                                 elide: Text.ElideRight
-                                text: slCol.modelData.label ?? ""
+                                text: slCol.itemData.label ?? ""
                             }
                             CardLine {
                                 id: slVal
-                                objectName: slCol.modelData.valName ?? ""
+                                objectName: slCol.itemData.valName ?? ""
                                 x: slCol.width - slVal.width
                                 y: 0
                                 unit: root.px
@@ -1224,7 +1237,7 @@ FocusScope {
                                 size: 18
                                 weight: Font.Normal
                                 color: ThemeInk.body
-                                text: slCol.modelData.value ?? ""
+                                text: slCol.itemData.value ?? ""
                             }
                             Rectangle {
                                 id: slTrack
@@ -1243,7 +1256,7 @@ FocusScope {
                                     color: Kit.Tokens.accent
                                 }
                                 Rectangle {
-                                    objectName: slCol.modelData.knobName ?? ""
+                                    objectName: slCol.itemData.knobName ?? ""
                                     x: slTrack.width * slCol.fillNorm - 13 * root.px
                                     y: -9 * root.px
                                     width: 26 * root.px
@@ -1261,8 +1274,8 @@ FocusScope {
                                 width: slCol.width
                                 height: 38 * root.px
                                 cursorShape: Qt.PointingHandCursor
-                                onPressed: (mouse) => canvas.settings.shadersSlideSlider(slCol.modelData.slot ?? slCol.index, mouse.x / slTrack.width)
-                                onPositionChanged: (mouse) => { if (sliderMouse.pressed) canvas.settings.shadersSlideSlider(slCol.modelData.slot ?? slCol.index, mouse.x / slTrack.width) }
+                                onPressed: (mouse) => canvas.settings.shadersSlideSlider(slCol.itemData.slot ?? slCol.index, mouse.x / slTrack.width)
+                                onPositionChanged: (mouse) => { if (sliderMouse.pressed) canvas.settings.shadersSlideSlider(slCol.itemData.slot ?? slCol.index, mouse.x / slTrack.width) }
                             }
                         }
                     }
@@ -1270,10 +1283,10 @@ FocusScope {
                 Item {
                     id: allLink
                     objectName: "allSettingsLink"
-                    visible: root.allSettings.visible === true
-                    readonly property bool isFocused: root.allSettings.focused === true
+                    visible: root.allSettings?.visible === true
+                    readonly property bool isFocused: canvas.settings.shadersFocusZone === 7
                     x: 0
-                    y: (root.sliders.length > 0 ? 149 : 91) * root.px
+                    y: (slidersModel.count > 0 ? 149 : 91) * root.px
                     width: allWords.width
                     height: allWords.height
                     Kit.FocusRing {
@@ -1300,7 +1313,7 @@ FocusScope {
                         size: 18
                         weight: Font.Normal
                         color: Kit.Tokens.accent
-                        text: root.allSettings.text ?? ""
+                        text: root.allSettings?.text ?? ""
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -1363,7 +1376,7 @@ FocusScope {
                     weight: Font.Normal
                     family: Kit.Tokens.faceCode
                     color: Kit.Tokens.muted
-                    text: root.model.counter ?? ""
+                    text: canvas.settings.shadersCounter
                 }
             }
             // Pack removal confirm (#14) over the board.
@@ -1379,9 +1392,9 @@ FocusScope {
                     id: removeConfirm
                     objectName: "removeConfirm"
                     controller: confirmFrame.controller
-                    title: root.labels.confirmTitle ?? ""
-                    message: root.labels.confirmMessage ?? ""
-                    choices: root.labels.confirmChoices ?? []
+                    title: root.labels?.confirmTitle ?? ""
+                    message: root.labels?.confirmMessage ?? ""
+                    choices: root.labels?.confirmChoices ?? null
                     backIndex: 0
                     padFamily: canvas.padFamily
                     titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })

@@ -6,7 +6,7 @@ use crate::search_eclipse::{cover_swatch, genre_groups, grid_step, handle_grid_k
 use crate::words::games;
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QString, QStringList};
+use cxx_qt_lib::{QString, QStringList, QVariant};
 use emusen_kit_core::input::UiButton;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -60,6 +60,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
+        include!("cxx-qt-lib/qvariant.h");
+        type QVariant = cxx_qt_lib::QVariant;
         include!("emusen-qt-models/src/library_model.cxxqt.h");
         type LibraryModel = crate::library_model::qobject::LibraryModel;
         include!("emusen-qt-models/src/screens.cxxqt.h");
@@ -73,6 +75,10 @@ pub mod qobject {
         #[qproperty(*mut Screens, screens)]
         #[qproperty(i32, focused)]
         #[qproperty(QString, view, READ, NOTIFY)]
+        #[qproperty(QVariant, meta, READ, NOTIFY)]
+        #[qproperty(QString, cards_json, cxx_name = "cardsJson", READ, NOTIFY)]
+        #[qproperty(QString, footer_right, cxx_name = "footerRight", READ, NOTIFY)]
+        #[qproperty(i32, total_count, cxx_name = "totalCount", READ, NOTIFY)]
         #[qproperty(QString, footer_help, cxx_name = "footerHelp", READ, NOTIFY)]
         #[qproperty(QString, dialog_title, cxx_name = "dialogTitle", READ, NOTIFY)]
         #[qproperty(QString, dialog_message, cxx_name = "dialogMessage", READ, NOTIFY)]
@@ -138,6 +144,10 @@ pub struct CollectionsEclipseModelRust {
     screens: *mut qobject::Screens,
     focused: i32,
     view: QString,
+    meta: QVariant,
+    cards_json: QString,
+    footer_right: QString,
+    total_count: i32,
     footer_help: QString,
     dialog_title: QString,
     dialog_message: QString,
@@ -163,6 +173,10 @@ impl Default for CollectionsEclipseModelRust {
             screens: std::ptr::null_mut(),
             focused: 0,
             view: QString::from("{}"),
+            meta: crate::eclipse_list_model::json_to_variant("{}"),
+            cards_json: QString::from("[]"),
+            footer_right: QString::default(),
+            total_count: 0,
             footer_help: QString::from("[]"),
             dialog_title: QString::default(),
             dialog_message: QString::default(),
@@ -257,10 +271,11 @@ impl qobject::CollectionsEclipseModel {
             }
         }
         let mut card_meta = Vec::with_capacity(total);
-        let mut cards_json = Vec::with_capacity(total);
+        let mut cards_json = Vec::with_capacity(total + 1);
         for (i, (meta, covers)) in built.into_iter().enumerate() {
             let group_label = if meta.collection_id >= 0 || meta.key == crate::library::FAVOURITES { "yours" } else { "kept by EmuSen" };
             cards_json.push(json!({
+                "kind": 0,
                 "index": i,
                 "key": meta.key,
                 "collectionId": meta.collection_id,
@@ -272,9 +287,15 @@ impl qobject::CollectionsEclipseModel {
             }));
             card_meta.push(meta);
         }
+        cards_json.push(json!({
+            "kind": 1,
+            "index": total,
+            "name": "New collection",
+            "plusIcon": PLUS_ICON,
+            "objectName": "newCollectionCard",
+        }));
         let payload = json!({
             "navSections": nav_sections("collections"),
-            "cards": cards_json,
             "yoursCount": yours_count,
             "keptCount": kept_count,
             "totalCount": total,
@@ -288,14 +309,28 @@ impl qobject::CollectionsEclipseModel {
             "actionLines": "previous PageUp\nnext PageDown\nmanage Screensaver\n",
             "typingActionLines": "space Search\ndone Screensaver\n",
         });
+        let meta_str = payload.to_string();
+        let cards_str = QString::from(Value::Array(cards_json).to_string().as_str());
         self.as_mut().rust_mut().cards = card_meta;
         if self.focused != next_focus {
             self.as_mut().rust_mut().focused = next_focus;
             self.as_mut().focused_changed();
         }
-        let view_str = QString::from(payload.to_string().as_str());
+        let total_i32 = total as i32;
+        if self.total_count != total_i32 {
+            self.as_mut().rust_mut().total_count = total_i32;
+            self.as_mut().total_count_changed();
+        }
+        if self.cards_json != cards_str {
+            self.as_mut().rust_mut().cards_json = cards_str;
+            self.as_mut().cards_json_changed();
+        }
+        let view_str = QString::from(meta_str.as_str());
         if self.view != view_str {
             self.as_mut().rust_mut().view = view_str;
+            let meta_val = crate::eclipse_list_model::json_to_variant(&meta_str);
+            self.as_mut().rust_mut().meta = meta_val;
+            self.as_mut().meta_changed();
             self.as_mut().view_changed();
         }
         self.sync_footer();
@@ -318,14 +353,11 @@ impl qobject::CollectionsEclipseModel {
             help_entry(UiButton::Screensaver, "Rename or remove", can_manage),
             help_entry(UiButton::Back, "Back", true),
         ];
-        let mut parsed: Value = serde_json::from_str(&self.view.to_string()).unwrap_or_else(|_| json!({}));
-        parsed["footerRight"] = Value::String(footer_right);
-        parsed["focused"] = json!(focused);
-        let view_str = QString::from(parsed.to_string().as_str());
+        let right_str = QString::from(footer_right.as_str());
         let help_str = QString::from(Value::Array(help).to_string().as_str());
-        if self.view != view_str {
-            self.as_mut().rust_mut().view = view_str;
-            self.as_mut().view_changed();
+        if self.footer_right != right_str {
+            self.as_mut().rust_mut().footer_right = right_str;
+            self.as_mut().footer_right_changed();
         }
         if self.footer_help != help_str {
             self.as_mut().rust_mut().footer_help = help_str;

@@ -675,6 +675,39 @@ pub enum ShadersOutcome {
     RemoveConfirmed,
 }
 
+/// Background-collected shader pack scan, favourites, and preset metadata for `ShadersBoard`.
+#[derive(Clone, Debug, Default)]
+pub struct ShadersOpenData {
+    pub favourites: Option<Vec<String>>,
+    pub pack_dir: Option<std::path::PathBuf>,
+    pub pack_bytes: u64,
+    pub pack_date: String,
+    pub meta_cache: std::collections::BTreeMap<String, PresetMeta>,
+}
+
+/// Decoupled `ShadersEclipse.qml` payload splitting virtualized arrays from fast focus/scrub scalars.
+#[derive(Clone, Debug)]
+pub struct ShadersParts {
+    pub presets_json: String,
+    pub categories_json: String,
+    pub sliders_json: String,
+    pub meta: Value,
+    pub board: Value,
+}
+
+const PACK_SUBDIR: &str = "pack";
+
+/// True when a `DIR_SHADERS`-relative path belongs to the managed libretro pack folder.
+pub fn is_managed_pack_rel(rel: &str) -> bool {
+    let trimmed = rel.trim_start_matches(['/', '\\']);
+    trimmed.starts_with("pack/") || trimmed.starts_with("pack\\")
+}
+
+/// True when a stored filter reference points inside the managed libretro pack folder.
+pub fn is_managed_pack_stored(stored: &str) -> bool {
+    pack_preset(stored).is_some_and(is_managed_pack_rel)
+}
+
 /// Interactive state for Eclipse board #20 (`ShadersEclipse.qml`).
 #[derive(Clone, Debug)]
 pub struct ShadersBoard {
@@ -701,7 +734,8 @@ pub struct ShadersBoard {
 }
 
 impl ShadersBoard {
-    pub fn open(view: &SettingsView, platform_library: &str, return_row: usize) -> Self {
+    /// Zero-I/O in-memory initialization so `#20 Shaders` opens immediately on the GUI thread.
+    pub fn open_immediate(view: &SettingsView, return_row: usize) -> Self {
         let consoles: Vec<(String, String)> = view
             .consoles("every")
             .into_iter()
@@ -720,8 +754,6 @@ impl ShadersBoard {
             .get(console_index)
             .map(|(c, _)| view.shader_of(c))
             .unwrap_or_default();
-        let favourites = load_favourites(platform_library);
-        let (pack_dir, pack_bytes, pack_date) = scan_pack_dir(platform_library);
         let has_pack = !view.read.pack.is_empty();
         let source = if pack_preset(&active).is_some() || (active == "None" && has_pack) { 1 } else { 0 };
         let category = default_category(view, source, &active);
@@ -740,10 +772,10 @@ impl ShadersBoard {
             split: 0.5,
             comparing: false,
             confirm_remove: false,
-            favourites,
-            pack_dir,
-            pack_bytes,
-            pack_date,
+            favourites: Vec::new(),
+            pack_dir: None,
+            pack_bytes: 0,
+            pack_date: String::new(),
             meta_cache: std::collections::BTreeMap::new(),
             preview_stored: None,
         };
@@ -751,7 +783,71 @@ impl ShadersBoard {
         if let Some(pos) = list.iter().position(|i| i.stored == active) {
             board.focused_preset = pos;
         }
-        board.sync_preview_stored(view, platform_library);
+        board.sync_preview_stored_in_memory(view);
+        board
+    }
+
+    /// Reads favourites, `DIR_SHADERS/pack/` disk info, and visible preset metadata on a worker thread.
+    pub fn collect_open_data(
+        platform: Option<&emusen_platform_client::Platform>,
+        view: &SettingsView,
+        board: &ShadersBoard,
+        include_scan: bool,
+    ) -> ShadersOpenData {
+        let mut data = ShadersOpenData::default();
+        let Some(p) = platform else { return data };
+        if include_scan {
+            data.favourites = Some(load_favourites_on(p));
+            let (dir, bytes, date) = scan_pack_dir_on(p);
+            data.pack_dir = dir;
+            data.pack_bytes = bytes;
+            data.pack_date = date;
+        }
+        let items = board.visible_items(view);
+        for item in items.iter().take(24) {
+            if item.builtin_key.is_none() && !board.meta_cache.contains_key(&item.stored) {
+                if let Some(meta) = read_meta_for(view, p, &item.stored) {
+                    data.meta_cache.insert(item.stored.clone(), meta);
+                }
+            }
+        }
+        if let Some(target) = items.get(board.focused_preset) {
+            if target.builtin_key.is_none() && !board.meta_cache.contains_key(&target.stored) && !data.meta_cache.contains_key(&target.stored) {
+                if let Some(meta) = read_meta_for(view, p, &target.stored) {
+                    data.meta_cache.insert(target.stored.clone(), meta);
+                }
+            }
+        }
+        data
+    }
+
+    /// Merges background-loaded pack scan and preset metadata into `self`.
+    pub fn apply_open_data(&mut self, data: ShadersOpenData, view: &SettingsView) {
+        if let Some(favs) = data.favourites {
+            if self.favourites.is_empty() {
+                self.favourites = favs;
+            }
+        }
+        if data.pack_dir.is_some() {
+            self.pack_dir = data.pack_dir;
+            self.pack_bytes = data.pack_bytes;
+            self.pack_date = data.pack_date;
+        }
+        self.meta_cache.extend(data.meta_cache);
+        self.sync_preview_stored_in_memory(view);
+    }
+
+    /// Opens `#20 Shaders` synchronously (loading `Platform` once) for direct model tests.
+    pub fn open(view: &SettingsView, platform_library: &str, return_row: usize) -> Self {
+        let mut board = Self::open_immediate(view, return_row);
+        if !platform_library.is_empty() {
+            if let Ok(p) = emusen_platform_client::Platform::load(platform_library) {
+                let data = Self::collect_open_data(Some(&p), view, &board, true);
+                board.apply_open_data(data, view);
+                return board;
+            }
+        }
+        board.sync_preview_stored_in_memory(view);
         board
     }
 
@@ -849,6 +945,28 @@ impl ShadersBoard {
         list.get(self.focused_preset.min(list.len().saturating_sub(1))).cloned()
     }
 
+    /// Updates focus and `preview_stored` strictly from in-memory/cached metadata without disk I/O.
+    pub fn sync_preview_stored_in_memory(&mut self, view: &SettingsView) {
+        let items = self.visible_items(view);
+        if items.is_empty() {
+            self.focused_preset = 0;
+            self.preview_stored = None;
+            return;
+        }
+        self.focused_preset = self.focused_preset.min(items.len() - 1);
+        let target = &items[self.focused_preset];
+        self.preview_stored = Some(target.stored.clone());
+        let slider_len = self.sliders_in_memory(view).len();
+        self.focused_slider = if slider_len == 0 { 0 } else { self.focused_slider.min(slider_len - 1) };
+    }
+
+    /// True if any visible pack preset or focused preset lacks cached metadata.
+    pub fn needs_visible_meta(&self, view: &SettingsView) -> bool {
+        let items = self.visible_items(view);
+        items.iter().take(24).any(|i| i.builtin_key.is_none() && !self.meta_cache.contains_key(&i.stored))
+            || items.get(self.focused_preset).is_some_and(|i| i.builtin_key.is_none() && !self.meta_cache.contains_key(&i.stored))
+    }
+
     pub fn sync_preview_stored(&mut self, view: &SettingsView, platform_library: &str) {
         let items = self.visible_items(view);
         if items.is_empty() {
@@ -857,45 +975,57 @@ impl ShadersBoard {
             return;
         }
         self.focused_preset = self.focused_preset.min(items.len() - 1);
-        for item in items.iter().take(24) {
-            if item.builtin_key.is_none() {
-                self.ensure_meta(view, platform_library, &item.stored);
+        if !platform_library.is_empty() {
+            if let Ok(p) = emusen_platform_client::Platform::load(platform_library) {
+                for item in items.iter().take(24) {
+                    if item.builtin_key.is_none() {
+                        self.ensure_meta_on(view, Some(&p), platform_library, &item.stored);
+                    }
+                }
+                if let Some(target) = items.get(self.focused_preset) {
+                    if target.builtin_key.is_none() {
+                        self.ensure_meta_on(view, Some(&p), platform_library, &target.stored);
+                    }
+                }
             }
         }
-        let target = &items[self.focused_preset];
-        if target.builtin_key.is_none() {
-            self.ensure_meta(view, platform_library, &target.stored);
-        }
-        self.preview_stored = Some(target.stored.clone());
-        let slider_len = self.sliders(view, platform_library).len();
-        if slider_len == 0 {
-            self.focused_slider = 0;
-        } else {
-            self.focused_slider = self.focused_slider.min(slider_len - 1);
-        }
+        self.sync_preview_stored_in_memory(view);
     }
 
-    pub fn ensure_meta(&mut self, view: &SettingsView, platform_library: &str, stored: &str) {
+    pub fn ensure_meta_on(&mut self, view: &SettingsView, platform: Option<&emusen_platform_client::Platform>, platform_library: &str, stored: &str) {
         if self.meta_cache.contains_key(stored) {
             return;
         }
         let Some(pack_rel) = pack_preset(stored) else { return };
-        if let Some(Ok(raw_params)) = view.read.levers.get(stored) {
-            let passes = read_pack_passes(platform_library, pack_rel);
-            self.meta_cache.insert(stored.to_owned(), PresetMeta { passes, levers: levers_from_json(raw_params), error: None });
-            return;
+        let loaded;
+        let p = match platform {
+            Some(p) => p,
+            None if !platform_library.is_empty() => {
+                let Ok(p) = emusen_platform_client::Platform::load(platform_library) else { return };
+                loaded = p;
+                &loaded
+            }
+            None => return,
+        };
+        if let Some(meta) = read_meta_for(view, p, stored) {
+            let _ = pack_rel;
+            self.meta_cache.insert(stored.to_owned(), meta);
         }
-        if platform_library.is_empty() {
-            return;
-        }
-        let meta = read_pack_meta(platform_library, pack_rel);
-        self.meta_cache.insert(stored.to_owned(), meta);
     }
 
-    fn levers_for(&mut self, view: &SettingsView, platform_library: &str, stored: &str, console: &str) -> (Option<usize>, Vec<Lever>) {
+    pub fn ensure_meta(&mut self, view: &SettingsView, platform_library: &str, stored: &str) {
+        self.ensure_meta_on(view, None, platform_library, stored);
+    }
+
+    fn levers_in_memory(&self, view: &SettingsView, stored: &str, console: &str) -> (Option<usize>, Vec<Lever>) {
         if pack_preset(stored).is_some() {
-            self.ensure_meta(view, platform_library, stored);
-            return self.meta_cache.get(stored).map_or((None, Vec::new()), |m| (m.passes, m.levers.clone()));
+            if let Some(m) = self.meta_cache.get(stored) {
+                return (m.passes, m.levers.clone());
+            }
+            if let Some(Ok(raw_params)) = view.read.levers.get(stored) {
+                return (None, levers_from_json(raw_params));
+            }
+            return (None, Vec::new());
         }
         let Some(filter) = view.builtin(console, stored) else {
             let any_console = view.read.catalogue["filters"].as_array().and_then(|fs| fs.iter().find(|f| f["name"] == stored || f["key"] == stored));
@@ -910,6 +1040,13 @@ impl ShadersBoard {
         (passes, list)
     }
 
+    fn levers_for(&mut self, view: &SettingsView, platform_library: &str, stored: &str, console: &str) -> (Option<usize>, Vec<Lever>) {
+        if pack_preset(stored).is_some() {
+            self.ensure_meta(view, platform_library, stored);
+        }
+        self.levers_in_memory(view, stored, console)
+    }
+
     fn current_console(&self) -> &str {
         self.active_console().unwrap_or("SNES")
     }
@@ -922,19 +1059,44 @@ impl ShadersBoard {
         stored_lever_value(&view.read.graphics, console, stored, lever)
     }
 
-    pub fn sliders(&mut self, view: &SettingsView, platform_library: &str) -> Vec<(Lever, f64)> {
-        let stored = self.current_stored(view);
-        let console = self.current_console().to_owned();
-        let (_, levers) = self.levers_for(view, platform_library, &stored, &console);
+    fn sliders_from_levers(&self, view: &SettingsView, console: &str, stored: &str, levers: Vec<Lever>) -> Vec<(Lever, f64)> {
         levers
             .into_iter()
             .filter(|l| !l.heading && l.choices.is_empty() && l.range.maximum > l.range.minimum)
             .take(3)
             .map(|l| {
-                let v = self.stored_value(view, &console, &stored, &l);
+                let v = self.stored_value(view, console, stored, &l);
                 (l, v)
             })
             .collect()
+    }
+
+    /// Returns up to three preview sliders using only cached/in-memory metadata.
+    pub fn sliders_in_memory(&self, view: &SettingsView) -> Vec<(Lever, f64)> {
+        let stored = self.current_stored(view);
+        let console = self.current_console().to_owned();
+        let (_, levers) = self.levers_in_memory(view, &stored, &console);
+        self.sliders_from_levers(view, &console, &stored, levers)
+    }
+
+    pub fn sliders(&mut self, view: &SettingsView, platform_library: &str) -> Vec<(Lever, f64)> {
+        let stored = self.current_stored(view);
+        let console = self.current_console().to_owned();
+        let (_, levers) = self.levers_for(view, platform_library, &stored, &console);
+        self.sliders_from_levers(view, &console, &stored, levers)
+    }
+
+    pub fn preview_target_in_memory(&self, view: &SettingsView) -> crate::shader_preview::PreviewTarget {
+        let stored = self.current_stored(view);
+        let console = self.current_console().to_owned();
+        let (_, levers) = self.levers_in_memory(view, &stored, &console);
+        let mut values = std::collections::BTreeMap::new();
+        for l in &levers {
+            if !l.heading {
+                values.insert(l.id.clone(), self.stored_value(view, &console, &stored, l) as f32);
+            }
+        }
+        crate::shader_preview::PreviewTarget { stored, console: (self.scope == 1).then_some(console), values }
     }
 
     pub fn preview_target(&mut self, view: &SettingsView, platform_library: &str) -> crate::shader_preview::PreviewTarget {
@@ -950,17 +1112,22 @@ impl ShadersBoard {
         crate::shader_preview::PreviewTarget { stored, console: (self.scope == 1).then_some(console), values }
     }
 
-    pub fn nav(&mut self, view: &SettingsView, platform_library: &str, dx: i32, dy: i32) -> ShadersOutcome {
-        let sliders_len = self.sliders(view, platform_library).len();
+    pub fn nav(&mut self, view: &SettingsView, _platform_library: &str, dx: i32, dy: i32) -> ShadersOutcome {
+        self.nav_in_memory(view, dx, dy)
+    }
+
+    /// Moves focus using only cached metadata so GUI navigation never blocks on shader file I/O.
+    pub fn nav_in_memory(&mut self, view: &SettingsView, dx: i32, dy: i32) -> ShadersOutcome {
+        let sliders_len = self.sliders_in_memory(view).len();
         let visible_len = self.visible_items(view).len();
         let stored = self.current_stored(view);
         let console = self.current_console().to_owned();
-        let total_settings = self.levers_for(view, platform_library, &stored, &console).1.iter().filter(|l| !l.heading).count();
-        let has_remove = !view.read.pack.is_empty();
+        let total_settings = self.levers_in_memory(view, &stored, &console).1.iter().filter(|l| !l.heading).count();
+        let has_remove = self.has_managed_pack(view);
         match self.focus_zone {
             0 => {
                 if dx != 0 {
-                    self.set_source(view, platform_library, 1 - self.source);
+                    self.set_source_in_memory(view, 1 - self.source);
                     return ShadersOutcome::Changed;
                 }
                 if dy > 0 {
@@ -971,7 +1138,7 @@ impl ShadersBoard {
             1 => {
                 if dy < 0 {
                     if self.category > 0 {
-                        self.set_category(view, platform_library, self.category - 1);
+                        self.set_category_in_memory(view, self.category - 1);
                     } else {
                         self.focus_zone = 0;
                     }
@@ -979,7 +1146,7 @@ impl ShadersBoard {
                 }
                 if dy > 0 {
                     if self.category + 1 < SHADER_CATEGORIES.len() {
-                        self.set_category(view, platform_library, self.category + 1);
+                        self.set_category_in_memory(view, self.category + 1);
                     } else if has_remove {
                         self.focus_zone = 2;
                     }
@@ -1018,7 +1185,7 @@ impl ShadersBoard {
                 if dy < 0 {
                     if self.focused_preset > 0 {
                         self.focused_preset -= 1;
-                        self.sync_preview_stored(view, platform_library);
+                        self.sync_preview_stored_in_memory(view);
                     } else {
                         self.focus_zone = 3;
                     }
@@ -1026,7 +1193,7 @@ impl ShadersBoard {
                 }
                 if dy > 0 && self.focused_preset + 1 < visible_len {
                     self.focused_preset += 1;
-                    self.sync_preview_stored(view, platform_library);
+                    self.sync_preview_stored_in_memory(view);
                     return ShadersOutcome::Changed;
                 }
                 if dx < 0 {
@@ -1049,7 +1216,7 @@ impl ShadersBoard {
                 if dx != 0 {
                     let next = if dx > 0 { (self.scope + 1).min(1) } else { self.scope.saturating_sub(1) };
                     if next != self.scope {
-                        self.set_scope(view, platform_library, next);
+                        self.set_scope_in_memory(view, next);
                         return ShadersOutcome::Changed;
                     }
                     if dx < 0 {
@@ -1107,10 +1274,22 @@ impl ShadersBoard {
         ShadersOutcome::None
     }
 
+    pub fn set_source_in_memory(&mut self, view: &SettingsView, source: usize) {
+        self.source = source.min(1);
+        self.focused_preset = 0;
+        self.sync_preview_stored_in_memory(view);
+    }
+
     pub fn set_source(&mut self, view: &SettingsView, platform_library: &str, source: usize) {
         self.source = source.min(1);
         self.focused_preset = 0;
         self.sync_preview_stored(view, platform_library);
+    }
+
+    pub fn set_category_in_memory(&mut self, view: &SettingsView, cat: usize) {
+        self.category = cat.min(SHADER_CATEGORIES.len() - 1);
+        self.focused_preset = 0;
+        self.sync_preview_stored_in_memory(view);
     }
 
     pub fn set_category(&mut self, view: &SettingsView, platform_library: &str, cat: usize) {
@@ -1119,9 +1298,24 @@ impl ShadersBoard {
         self.sync_preview_stored(view, platform_library);
     }
 
+    pub fn set_scope_in_memory(&mut self, view: &SettingsView, scope: usize) {
+        self.scope = scope.min(1);
+        self.sync_preview_stored_in_memory(view);
+    }
+
     pub fn set_scope(&mut self, view: &SettingsView, platform_library: &str, scope: usize) {
         self.scope = scope.min(1);
         self.sync_preview_stored(view, platform_library);
+    }
+
+    pub fn step_console_in_memory(&mut self, view: &SettingsView, by: i32) -> bool {
+        if self.consoles.len() < 2 {
+            return false;
+        }
+        self.console_index = wrapped(self.console_index, by, self.consoles.len());
+        self.scope = 1;
+        self.sync_preview_stored_in_memory(view);
+        true
     }
 
     pub fn step_console(&mut self, view: &SettingsView, platform_library: &str, by: i32) -> bool {
@@ -1155,9 +1349,14 @@ impl ShadersBoard {
         if all.is_empty() { saved } else { Outcome::All(vec![saved, Outcome::Reread]) }
     }
 
+    /// True when the managed libretro pack directory holds files or entries under `pack/`.
+    pub fn has_managed_pack(&self, view: &SettingsView) -> bool {
+        self.pack_bytes > 0 || view.read.pack.iter().any(|p| is_managed_pack_rel(p))
+    }
+
     pub fn accept(&mut self, view: &mut SettingsView, _platform_library: &str) -> ShadersOutcome {
         match self.focus_zone {
-            2 if !view.read.pack.is_empty() => {
+            2 if self.has_managed_pack(view) => {
                 self.confirm_remove = true;
                 ShadersOutcome::Changed
             }
@@ -1190,9 +1389,25 @@ impl ShadersBoard {
         } else {
             self.favourites.push(stored);
         }
-        save_favourites(platform_library, &self.favourites);
+        if !platform_library.is_empty() {
+            if let Ok(p) = emusen_platform_client::Platform::load(platform_library) {
+                save_favourites_on(&p, &self.favourites);
+            }
+        }
         self.sync_preview_stored(view, platform_library);
         true
+    }
+
+    /// Toggles favourite state in memory and returns the updated list for background persistence.
+    pub fn toggle_favourite_in_memory(&mut self, view: &SettingsView) -> Option<Vec<String>> {
+        let stored = self.preview_stored.clone()?;
+        if let Some(pos) = self.favourites.iter().position(|f| f == &stored) {
+            self.favourites.remove(pos);
+        } else {
+            self.favourites.push(stored);
+        }
+        self.sync_preview_stored_in_memory(view);
+        Some(self.favourites.clone())
     }
 
     pub fn step_split(&mut self, delta: f64) -> bool {
@@ -1216,6 +1431,13 @@ impl ShadersBoard {
         true
     }
 
+    pub fn step_slider_in_memory(&mut self, view: &mut SettingsView, slot: usize, by: i32) -> Option<(String, f32, Outcome)> {
+        let sliders = self.sliders_in_memory(view);
+        let (lever, now) = sliders.get(slot)?;
+        let next = lever.range.stepped(*now, by);
+        self.commit_slider(view, lever, next)
+    }
+
     pub fn step_slider(&mut self, view: &mut SettingsView, platform_library: &str, slot: usize, by: i32) -> Option<(String, f32, Outcome)> {
         let sliders = self.sliders(view, platform_library);
         let (lever, now) = sliders.get(slot)?;
@@ -1223,11 +1445,10 @@ impl ShadersBoard {
         self.commit_slider(view, lever, next)
     }
 
-    pub fn slide_slider(&mut self, view: &mut SettingsView, platform_library: &str, slot: usize, norm: f64) -> Option<(String, f32, Outcome)> {
+    fn commit_slid_norm(&self, view: &mut SettingsView, sliders: Vec<(Lever, f64)>, slot: usize, norm: f64) -> Option<(String, f32, Outcome)> {
         if !norm.is_finite() {
             return None;
         }
-        let sliders = self.sliders(view, platform_library);
         let (lever, _) = sliders.get(slot)?;
         let (low, high) = (lever.range.minimum.min(lever.range.maximum), lever.range.minimum.max(lever.range.maximum));
         let raw = low + norm.clamp(0.0, 1.0) * (high - low);
@@ -1238,6 +1459,16 @@ impl ShadersBoard {
             raw.clamp(low, high)
         };
         self.commit_slider(view, lever, next)
+    }
+
+    pub fn slide_slider_in_memory(&mut self, view: &mut SettingsView, slot: usize, norm: f64) -> Option<(String, f32, Outcome)> {
+        let sliders = self.sliders_in_memory(view);
+        self.commit_slid_norm(view, sliders, slot, norm)
+    }
+
+    pub fn slide_slider(&mut self, view: &mut SettingsView, platform_library: &str, slot: usize, norm: f64) -> Option<(String, f32, Outcome)> {
+        let sliders = self.sliders(view, platform_library);
+        self.commit_slid_norm(view, sliders, slot, norm)
     }
 
     fn commit_slider(&self, view: &mut SettingsView, lever: &Lever, value: f64) -> Option<(String, f32, Outcome)> {
@@ -1263,27 +1494,46 @@ impl ShadersBoard {
         Some((lever.id.clone(), value as f32, Outcome::All(all)))
     }
 
-    pub fn remove_pack(&mut self, view: &mut SettingsView, platform_library: &str) -> Result<(), String> {
-        let Some(dir) = self.pack_dir.clone() else {
-            self.confirm_remove = false;
-            return Ok(());
-        };
-        if dir.is_dir() {
-            for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.filter_map(Result::ok) {
-                let path = entry.path();
-                if path.is_dir() {
-                    std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
-                } else {
-                    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
-                }
-            }
+    /// Removes only the managed `DIR_SHADERS/pack/` subtree on a background worker thread.
+    pub fn remove_pack_dir(dir: &std::path::Path) -> Result<(), String> {
+        if dir.is_dir() && dir.file_name().and_then(|n| n.to_str()) == Some(PACK_SUBDIR) {
+            std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
         }
-        view.read.pack.clear();
-        self.meta_cache.clear();
+        Ok(())
+    }
+
+    /// Prunes managed `slang:pack/...` entries from memory, favourites, and graphics config; returns whether `graphics` changed.
+    pub fn finish_remove_pack(&mut self, view: &mut SettingsView) -> bool {
+        view.read.pack.retain(|p| !is_managed_pack_rel(p));
+        view.read.levers.retain(|k, _| !is_managed_pack_stored(k));
+        self.meta_cache.retain(|k, _| !is_managed_pack_stored(k));
+        self.favourites.retain(|s| !is_managed_pack_stored(s));
+        let dirty = clear_managed_pack_graphics(&mut view.read.graphics);
         self.pack_bytes = 0;
         self.pack_date.clear();
         self.confirm_remove = false;
-        self.set_source(view, platform_library, 0);
+        self.set_source_in_memory(view, 0);
+        dirty
+    }
+
+    /// Deletes only `DIR_SHADERS/pack/` and clears dangling `slang:pack/...` references synchronously for tests.
+    pub fn remove_pack(&mut self, view: &mut SettingsView, platform_library: &str) -> Result<(), String> {
+        let loaded = (!platform_library.is_empty()).then(|| emusen_platform_client::Platform::load(platform_library)).transpose().map_err(|e| e.to_string())?;
+        let dir = self.pack_dir.clone().or_else(|| loaded.as_ref().and_then(|p| scan_pack_dir_on(p).0));
+        if let Some(dir) = dir {
+            Self::remove_pack_dir(&dir)?;
+        }
+        let dirty = self.finish_remove_pack(view);
+        if let Some(p) = loaded.as_ref() {
+            save_favourites_on(p, &self.favourites);
+            if dirty {
+                if let Ok(file) = p.file(emusen_platform_client::galaxia::consts::FILE_GRAPHICS) {
+                    if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
+                        let _ = p.model_save(emusen_platform_client::galaxia::consts::MODEL_GRAPHICS_CONFIG, None, name, &view.read.graphics);
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -1305,9 +1555,12 @@ impl ShadersBoard {
         format!("Search {} {tag} filters", crate::words::grouped(cat_count))
     }
 
-    pub fn to_json(&mut self, view: &SettingsView, platform_library: &str, comparing: bool) -> Value {
+    /// Builds decoupled virtualized list JSON strings and lightweight metadata purely from cached memory.
+    pub fn to_parts_in_memory(&self, view: &SettingsView, comparing: bool, include_board: bool) -> ShadersParts {
         let emusen_total = self.source_items(view, 0).len();
-        let libretro_total = self.source_items(view, 1).len();
+        let pack_items = self.source_items(view, 1);
+        let libretro_total = pack_items.len();
+        let managed_total = view.read.pack.iter().filter(|p| is_managed_pack_rel(p)).count();
         let counts = self.category_counts(view);
         let visible = self.visible_items(view);
         let active_console = self.current_console().to_owned();
@@ -1315,13 +1568,13 @@ impl ShadersBoard {
         let stored = self.current_stored(view);
         let is_none = stored == "None" || stored == crate::display::PLAIN;
         let is_pack = pack_preset(&stored).is_some();
-        let (_, all_levers) = self.levers_for(view, platform_library, &stored, &active_console);
+        let (_, all_levers) = self.levers_in_memory(view, &stored, &active_console);
         let passes = visible
             .get(self.focused_preset)
             .and_then(|i| i.passes)
             .or_else(|| self.meta_cache.get(&stored).and_then(|m| m.passes));
         let total_settings = all_levers.iter().filter(|l| !l.heading).count();
-        let sliders_vec = self.sliders(view, platform_library);
+        let sliders_vec = self.sliders_in_memory(view);
         let display_name = if visible.is_empty() { "No filter".to_owned() } else { SettingsView::shader_name(&stored) };
         let source_words = if is_pack { "From libretro's pack" } else { "Built into EmuSen" };
         let pass_words = passes.map(|p| crate::words::counted(p, "pass", "passes")).unwrap_or_default();
@@ -1331,9 +1584,9 @@ impl ShadersBoard {
         } else {
             format!("{source_words} · {pass_words} · {settings_words}")
         };
-        let pack_installed = !view.read.pack.is_empty();
+        let pack_installed = self.has_managed_pack(view);
         let pack_status = if pack_installed {
-            let filters_words = crate::words::counted(libretro_total, "filter", "filters");
+            let filters_words = crate::words::counted(managed_total.max(libretro_total), "filter", "filters");
             let size_words = format_bytes(self.pack_bytes);
             if self.pack_date.is_empty() {
                 format!("{size_words} on disk · {filters_words}.")
@@ -1341,31 +1594,27 @@ impl ShadersBoard {
                 format!("Yours is from {}, {size_words} on disk · {filters_words}.", self.pack_date)
             }
         } else {
-            "No shader pack installed in Shaders/.".to_owned()
+            "No shader pack installed in Shaders/pack/.".to_owned()
         };
-        let sliders_json: Vec<Value> = sliders_vec
-            .iter()
-            .enumerate()
-            .map(|(i, (lever, val))| {
-                let (low, high) = (lever.range.minimum.min(lever.range.maximum), lever.range.minimum.max(lever.range.maximum));
-                let ratio = if high > low { ((val - low) / (high - low)).clamp(0.0, 1.0) } else { 0.0 };
-                let shown = if is_pack { format_param_value(lever, *val) } else { format_crt_value(lever, *val) };
-                json!({
-                    "slot": i,
-                    "id": lever.id,
-                    "label": lever.label,
-                    "value": shown,
-                    "ratio": ratio,
-                    "focused": self.focus_zone == 6 && self.focused_slider == i,
-                    "boxName": format!("shaderSlider.{i}"),
-                    "ringName": format!("shaderSliderRing.{i}"),
-                    "labelName": format!("shaderSliderName.{i}"),
-                    "valName": format!("shaderSliderVal.{i}"),
-                    "knobName": format!("shaderSliderKnob.{i}"),
-                })
+        let slider_base = |i: usize, lever: &Lever, val: f64| {
+            let (low, high) = (lever.range.minimum.min(lever.range.maximum), lever.range.minimum.max(lever.range.maximum));
+            let ratio = if high > low { ((val - low) / (high - low)).clamp(0.0, 1.0) } else { 0.0 };
+            let shown = if is_pack { format_param_value(lever, val) } else { format_crt_value(lever, val) };
+            json!({
+                "slot": i,
+                "id": lever.id,
+                "label": lever.label,
+                "value": shown,
+                "ratio": ratio,
+                "boxName": format!("shaderSlider.{i}"),
+                "ringName": format!("shaderSliderRing.{i}"),
+                "labelName": format!("shaderSliderName.{i}"),
+                "valName": format!("shaderSliderVal.{i}"),
+                "knobName": format!("shaderSliderKnob.{i}"),
             })
-            .collect();
-        let categories_json: Vec<Value> = SHADER_CATEGORIES
+        };
+        let sliders_rows: Vec<Value> = sliders_vec.iter().enumerate().map(|(i, (l, v))| slider_base(i, l, *v)).collect();
+        let categories_rows: Vec<Value> = SHADER_CATEGORIES
             .iter()
             .enumerate()
             .map(|(i, (key, label))| {
@@ -1375,7 +1624,6 @@ impl ShadersBoard {
                     "name": label,
                     "count": crate::words::grouped(counts[i]),
                     "active": self.category == i,
-                    "focused": self.focus_zone == 1 && self.category == i,
                     "rowName": format!("shaderCat.{i}"),
                     "ringName": format!("shaderCatRing.{i}"),
                     "nameName": format!("shaderCatName.{i}"),
@@ -1383,7 +1631,7 @@ impl ShadersBoard {
                 })
             })
             .collect();
-        let presets_json: Vec<Value> = visible
+        let presets_rows: Vec<Value> = visible
             .iter()
             .enumerate()
             .map(|(i, item)| {
@@ -1396,7 +1644,6 @@ impl ShadersBoard {
                     "favourite": self.is_favourite(&item.stored),
                     "selected": item.stored == chosen,
                     "scanlines": item.stored != "None" && item.stored != crate::display::PLAIN,
-                    "focused": self.focus_zone == 4 && self.focused_preset == i,
                     "rowName": format!("shaderRow.{i}"),
                     "ringName": format!("shaderRowRing.{i}"),
                     "nameName": format!("shaderRowName.{i}"),
@@ -1418,97 +1665,178 @@ impl ShadersBoard {
             json!({ "button": emusen_kit_core::input::UiButton::PageUp.index() as i32, "label": "Step split", "pair": emusen_kit_core::input::UiButton::PageDown.index() as i32 }),
             json!({ "button": emusen_kit_core::input::UiButton::Back.index() as i32, "label": "Back", "pair": -1 }),
         ];
-        json!({
-            "focusZone": self.focus_zone,
-            "labels": {
-                "settings": "Tools",
-                "slash": "/",
-                "picture": "",
-                "filter": "Shaders",
-                "packTitle": "libretro's shader pack",
-                "removePack": "Remove the pack",
-                "noFilter": "No filter",
-                "rsGlyph": "RS",
-                "confirmTitle": "Remove libretro's shader pack?",
-                "confirmMessage": "Removes the pack files in your Shaders folder. Built-in EmuSen filters stay.",
-                "confirmCancel": "Cancel",
-                "confirmOk": "Remove",
-                "confirmChoices": ["Cancel", "Remove"],
+        let labels = json!({
+            "settings": "Tools",
+            "slash": "/",
+            "picture": "",
+            "filter": "Shaders",
+            "packTitle": "libretro's shader pack",
+            "removePack": "Remove the pack",
+            "noFilter": "No filter",
+            "rsGlyph": "RS",
+            "confirmTitle": "Remove libretro's shader pack?",
+            "confirmMessage": "Removes the pack files in your Shaders folder. Built-in EmuSen filters stay.",
+            "confirmCancel": "Cancel",
+            "confirmOk": "Remove",
+            "confirmChoices": ["Cancel", "Remove"],
+        });
+        let sources_meta = json!([
+            {
+                "index": 0,
+                "text": format!("EmuSen's · {}", crate::words::grouped(emusen_total)),
+                "pillName": "sourceTab.0",
+                "ringName": "sourceRing.0",
+                "textName": "sourceWords.0",
             },
-            "focusedPreset": self.focused_preset,
-            "sources": [
-                {
-                    "index": 0,
-                    "text": format!("EmuSen's · {}", crate::words::grouped(emusen_total)),
-                    "active": self.source == 0,
-                    "focused": self.focus_zone == 0 && self.source == 0,
-                    "pillName": "sourceTab.0",
-                    "ringName": "sourceRing.0",
-                    "textName": "sourceWords.0",
-                },
-                {
-                    "index": 1,
-                    "text": format!("libretro · {}", crate::words::grouped(libretro_total)),
-                    "active": self.source == 1,
-                    "focused": self.focus_zone == 0 && self.source == 1,
-                    "pillName": "sourceTab.1",
-                    "ringName": "sourceRing.1",
-                    "textName": "sourceWords.1",
-                },
-            ],
-            "categories": categories_json,
+            {
+                "index": 1,
+                "text": format!("libretro · {}", crate::words::grouped(libretro_total)),
+                "pillName": "sourceTab.1",
+                "ringName": "sourceRing.1",
+                "textName": "sourceWords.1",
+            },
+        ]);
+        let scopes_meta = json!([
+            {
+                "index": 0,
+                "text": "Every console",
+                "pillName": "scopeTab.0",
+                "ringName": "scopeRing.0",
+                "textName": "scopeWords.0",
+            },
+            {
+                "index": 1,
+                "text": self.active_console_name(),
+                "pillName": "scopeTab.1",
+                "ringName": "scopeRing.1",
+                "textName": "scopeWords.1",
+            },
+        ]);
+        let empty_list_text = if !visible.is_empty() {
+            ""
+        } else if self.category == 0 {
+            "No favourite shaders yet. Press Y on any filter."
+        } else if !self.search.is_empty() {
+            "No matching filters."
+        } else {
+            "No filters in this category."
+        };
+        let meta = json!({
+            "labels": labels,
+            "sources": sources_meta,
             "pack": {
                 "installed": pack_installed,
                 "status": pack_status,
-                "removeFocused": self.focus_zone == 2,
             },
             "search": {
                 "text": self.search,
                 "placeholder": self.search_placeholder(view),
                 "hasText": !self.search.is_empty(),
-                "focused": self.focus_zone == 3,
             },
-            "presets": presets_json,
-            "emptyListText": if !visible.is_empty() { "" } else if self.category == 0 { "No favourite shaders yet. Press Y on any filter." } else if !self.search.is_empty() { "No matching filters." } else { "No filters in this category." },
-            "scopes": [
-                {
-                    "index": 0,
-                    "text": "Every console",
-                    "active": self.scope == 0,
-                    "focused": self.focus_zone == 5 && self.scope == 0,
-                    "pillName": "scopeTab.0",
-                    "ringName": "scopeRing.0",
-                    "textName": "scopeWords.0",
-                },
-                {
-                    "index": 1,
-                    "text": self.active_console_name(),
-                    "active": self.scope == 1,
-                    "focused": self.focus_zone == 5 && self.scope == 1,
-                    "pillName": "scopeTab.1",
-                    "ringName": "scopeRing.1",
-                    "textName": "scopeWords.1",
-                },
-            ],
+            "emptyListText": empty_list_text,
+            "scopes": scopes_meta,
             "preview": {
-                "split": self.split,
-                "comparing": comparing,
-                "afterLabel": if comparing || is_none || visible.is_empty() { "No filter".to_owned() } else { display_name.clone() },
+                "activeHeading": display_name,
                 "heading": display_name,
                 "subtitle": subtitle,
                 "splitHint": "RS or LB / RB moves split",
-                "hasFiltered": !comparing && !is_none && !visible.is_empty(),
+                "hasShader": !is_none && !visible.is_empty(),
             },
-            "sliders": sliders_json,
             "allSettings": {
                 "visible": total_settings > 0 && !visible.is_empty(),
                 "text": format!("All {} parameters \u{203A}", crate::words::grouped(total_settings)),
-                "focused": self.focus_zone == 7,
             },
-            "counter": counter,
-            "confirmOpen": self.confirm_remove,
             "footerHelp": footer_help,
-        })
+        });
+        let board = if include_board {
+            let mut sliders_board = sliders_rows.clone();
+            for (i, row) in sliders_board.iter_mut().enumerate() {
+                row["focused"] = json!(self.focus_zone == 6 && self.focused_slider == i);
+            }
+            let mut categories_board = categories_rows.clone();
+            for (i, row) in categories_board.iter_mut().enumerate() {
+                row["focused"] = json!(self.focus_zone == 1 && self.category == i);
+            }
+            let mut presets_board = presets_rows.clone();
+            for (i, row) in presets_board.iter_mut().enumerate() {
+                row["focused"] = json!(self.focus_zone == 4 && self.focused_preset == i);
+            }
+            let mut sources_board = sources_meta.clone();
+            sources_board[0]["active"] = json!(self.source == 0);
+            sources_board[0]["focused"] = json!(self.focus_zone == 0 && self.source == 0);
+            sources_board[1]["active"] = json!(self.source == 1);
+            sources_board[1]["focused"] = json!(self.focus_zone == 0 && self.source == 1);
+            let mut scopes_board = scopes_meta.clone();
+            scopes_board[0]["active"] = json!(self.scope == 0);
+            scopes_board[0]["focused"] = json!(self.focus_zone == 5 && self.scope == 0);
+            scopes_board[1]["active"] = json!(self.scope == 1);
+            scopes_board[1]["focused"] = json!(self.focus_zone == 5 && self.scope == 1);
+            json!({
+                "focusZone": self.focus_zone,
+                "labels": labels,
+                "focusedPreset": self.focused_preset,
+                "sources": sources_board,
+                "categories": categories_board,
+                "pack": {
+                    "installed": pack_installed,
+                    "status": pack_status,
+                    "removeFocused": self.focus_zone == 2,
+                },
+                "search": {
+                    "text": self.search,
+                    "placeholder": self.search_placeholder(view),
+                    "hasText": !self.search.is_empty(),
+                    "focused": self.focus_zone == 3,
+                },
+                "presets": presets_board,
+                "emptyListText": empty_list_text,
+                "scopes": scopes_board,
+                "preview": {
+                    "split": self.split,
+                    "comparing": comparing,
+                    "afterLabel": if comparing || is_none || visible.is_empty() { "No filter".to_owned() } else { display_name.clone() },
+                    "heading": display_name,
+                    "subtitle": subtitle,
+                    "splitHint": "RS or LB / RB moves split",
+                    "hasFiltered": !comparing && !is_none && !visible.is_empty(),
+                },
+                "sliders": sliders_board,
+                "allSettings": {
+                    "visible": total_settings > 0 && !visible.is_empty(),
+                    "text": format!("All {} parameters \u{203A}", crate::words::grouped(total_settings)),
+                    "focused": self.focus_zone == 7,
+                },
+                "counter": counter,
+                "confirmOpen": self.confirm_remove,
+                "footerHelp": footer_help,
+            })
+        } else {
+            Value::Null
+        };
+        ShadersParts {
+            presets_json: Value::Array(presets_rows).to_string(),
+            categories_json: Value::Array(categories_rows).to_string(),
+            sliders_json: Value::Array(sliders_rows).to_string(),
+            meta,
+            board,
+        }
+    }
+
+    pub fn to_json(&mut self, view: &SettingsView, platform_library: &str, comparing: bool) -> Value {
+        if !platform_library.is_empty() {
+            if let Ok(p) = emusen_platform_client::Platform::load(platform_library) {
+                for item in self.visible_items(view).iter().take(24) {
+                    if item.builtin_key.is_none() {
+                        self.ensure_meta_on(view, Some(&p), platform_library, &item.stored);
+                    }
+                }
+                let stored = self.current_stored(view);
+                if pack_preset(&stored).is_some() {
+                    self.ensure_meta_on(view, Some(&p), platform_library, &stored);
+                }
+            }
+        }
+        self.to_parts_in_memory(view, comparing, true).board
     }
 }
 
@@ -1638,24 +1966,55 @@ fn levers_from_json(raw: &[Value]) -> Vec<Lever> {
         .collect()
 }
 
-fn read_pack_passes(platform_library: &str, pack_rel: &str) -> Option<usize> {
-    if platform_library.is_empty() {
-        return None;
+fn clear_managed_pack_graphics(graphics: &mut Value) -> bool {
+    let mut dirty = false;
+    if let Some(consoles) = graphics.get_mut("Consoles").and_then(Value::as_object_mut) {
+        for c_val in consoles.values_mut() {
+            if c_val.get("ScreenFilter").and_then(Value::as_str).is_some_and(is_managed_pack_stored) {
+                c_val["ScreenFilter"] = json!("None");
+                dirty = true;
+            }
+        }
     }
-    let p = emusen_platform_client::Platform::load(platform_library).ok()?;
+    if let Some(recent) = graphics.get_mut("RecentShaders").and_then(Value::as_object_mut) {
+        for arr_val in recent.values_mut() {
+            if let Some(arr) = arr_val.as_array_mut() {
+                let before = arr.len();
+                arr.retain(|v| !v.as_str().is_some_and(is_managed_pack_stored));
+                if arr.len() != before {
+                    dirty = true;
+                }
+            }
+        }
+    }
+    if let Some(params) = graphics.get_mut("ShaderParameters").and_then(Value::as_object_mut) {
+        params.retain(|_, c_val| {
+            let Some(obj) = c_val.as_object_mut() else { return true };
+            let before = obj.len();
+            obj.retain(|k, _| !is_managed_pack_stored(k));
+            if obj.len() != before {
+                dirty = true;
+            }
+            !obj.is_empty()
+        });
+    }
+    if graphics.get("ShaderParameters").and_then(Value::as_object).is_some_and(Map::is_empty) {
+        graphics.as_object_mut().map(|g| g.remove("ShaderParameters"));
+    }
+    dirty
+}
+
+fn read_pack_passes_on(p: &emusen_platform_client::Platform, pack_rel: &str) -> Option<usize> {
     let root = p.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).ok().flatten()?;
-    let preset = emusen_platform_client::serenity::preset_load(&p, &root.join(pack_rel).to_string_lossy()).ok()?;
+    let preset = emusen_platform_client::serenity::preset_load(p, &root.join(pack_rel).to_string_lossy()).ok()?;
     preset["passes"].as_array().map(Vec::len)
 }
 
-fn read_pack_meta(platform_library: &str, pack_rel: &str) -> PresetMeta {
-    let Ok(p) = emusen_platform_client::Platform::load(platform_library) else {
-        return PresetMeta::default();
-    };
+fn read_pack_meta_on(p: &emusen_platform_client::Platform, pack_rel: &str) -> PresetMeta {
     let Ok(Some(root)) = p.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS) else {
         return PresetMeta::default();
     };
-    let Ok(preset) = emusen_platform_client::serenity::preset_load(&p, &root.join(pack_rel).to_string_lossy()) else {
+    let Ok(preset) = emusen_platform_client::serenity::preset_load(p, &root.join(pack_rel).to_string_lossy()) else {
         return PresetMeta { error: Some("Could not read preset".to_owned()), ..Default::default() };
     };
     if let Some(msg) = preset.get("message").and_then(Value::as_str).filter(|_| preset.get("fail").is_some()) {
@@ -1664,28 +2023,33 @@ fn read_pack_meta(platform_library: &str, pack_rel: &str) -> PresetMeta {
     let passes = preset["passes"].as_array().map(Vec::len);
     let mut sources = Vec::new();
     for pass in preset["passes"].as_array().into_iter().flatten() {
-        if let Ok(source) = emusen_platform_client::serenity::source_load(&p, &text_of(&pass["shader"])) {
+        if let Ok(source) = emusen_platform_client::serenity::source_load(p, &text_of(&pass["shader"])) {
             if source.get("fail").is_none() {
                 sources.push(source["parameters"].clone());
             }
         }
     }
-    let merged = emusen_platform_client::serenity::parameters_merge(&p, &json!({ "sources": sources, "overrides": preset["parameters"] })).unwrap_or(Value::Null);
+    let merged = emusen_platform_client::serenity::parameters_merge(p, &json!({ "sources": sources, "overrides": preset["parameters"] })).unwrap_or(Value::Null);
     let levers = merged.as_array().map(|a| levers_from_json(a)).unwrap_or_default();
     PresetMeta { passes, levers, error: None }
 }
 
-fn favourites_file(platform_library: &str) -> Option<std::path::PathBuf> {
-    if platform_library.is_empty() {
-        return None;
+fn read_meta_for(view: &SettingsView, p: &emusen_platform_client::Platform, stored: &str) -> Option<PresetMeta> {
+    let pack_rel = pack_preset(stored)?;
+    if let Some(Ok(raw_params)) = view.read.levers.get(stored) {
+        let passes = read_pack_passes_on(p, pack_rel);
+        return Some(PresetMeta { passes, levers: levers_from_json(raw_params), error: None });
     }
-    let p = emusen_platform_client::Platform::load(platform_library).ok()?;
+    Some(read_pack_meta_on(p, pack_rel))
+}
+
+fn favourites_file_on(p: &emusen_platform_client::Platform) -> Option<std::path::PathBuf> {
     let graphics = p.file(emusen_platform_client::galaxia::consts::FILE_GRAPHICS).ok()?;
     Some(graphics.parent()?.join("shader_favourites.json"))
 }
 
-fn load_favourites(platform_library: &str) -> Vec<String> {
-    let Some(path) = favourites_file(platform_library) else { return Vec::new() };
+pub fn load_favourites_on(p: &emusen_platform_client::Platform) -> Vec<String> {
+    let Some(path) = favourites_file_on(p) else { return Vec::new() };
     let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
     serde_json::from_str::<Value>(&text)
         .ok()
@@ -1693,8 +2057,8 @@ fn load_favourites(platform_library: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn save_favourites(platform_library: &str, favourites: &[String]) {
-    let Some(path) = favourites_file(platform_library) else { return };
+pub fn save_favourites_on(p: &emusen_platform_client::Platform, favourites: &[String]) {
+    let Some(path) = favourites_file_on(p) else { return };
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -1705,17 +2069,16 @@ fn save_favourites(platform_library: &str, favourites: &[String]) {
     }
 }
 
-fn scan_pack_dir(platform_library: &str) -> (Option<std::path::PathBuf>, u64, String) {
-    if platform_library.is_empty() {
-        return (None, 0, String::new());
-    }
-    let Ok(p) = emusen_platform_client::Platform::load(platform_library) else { return (None, 0, String::new()) };
+pub fn scan_pack_dir_on(p: &emusen_platform_client::Platform) -> (Option<std::path::PathBuf>, u64, String) {
     let Ok(Some(root)) = p.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS) else { return (None, 0, String::new()) };
+    let pack_root = root.join(PACK_SUBDIR);
     let mut bytes = 0u64;
     let mut newest = 0i64;
-    walk_pack(&root, &mut bytes, &mut newest);
+    if pack_root.is_dir() {
+        walk_pack(&pack_root, &mut bytes, &mut newest);
+    }
     let date = format_day_month(newest);
-    (Some(root), bytes, date)
+    (Some(pack_root), bytes, date)
 }
 
 fn walk_pack(dir: &std::path::Path, bytes: &mut u64, newest: &mut i64) {

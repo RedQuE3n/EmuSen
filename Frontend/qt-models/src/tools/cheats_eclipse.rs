@@ -61,6 +61,7 @@ pub struct EclipseGame {
     pub explicit_codec: Option<String>,
     pub db_file: Option<(String, String, String)>,
     pub cht_entries: Vec<ChtEntry>,
+    pub cht_loaded: bool,
     pub list: Option<List>,
     pub list_path_display: String,
 }
@@ -183,30 +184,62 @@ impl Default for State {
     }
 }
 
-/// Reads library cheat games, lists, `.cht` entries, metadata, covers, and active core names for Eclipse `#21`.
+/// Reads library cheat games for Eclipse `#21`, filtering to `requested_game` when provided and deferring `.cht` decoding in overview mode.
 pub fn read_eclipse(source: &ClientSource, found: &super::cheats::Found) -> Result<EclipseRead, String> {
+    read_eclipse_for(source, found, None)
+}
+
+/// Reads library cheat games for Eclipse `#21`, optionally filtered to a single `requested_game`.
+pub fn read_eclipse_for(source: &ClientSource, found: &super::cheats::Found, requested_game: Option<&str>) -> Result<EclipseRead, String> {
+    let target = requested_game.map(str::trim).filter(|s| !s.is_empty());
     let codecs = source.runtime.cheat_codec_list().unwrap_or_default();
     let systems = source.systems().unwrap_or_default();
-    let games = source.games().unwrap_or_default();
+    let all_games = source.games().unwrap_or_default();
+    let candidates: Vec<_> = all_games
+        .into_iter()
+        .filter_map(|game| {
+            if target.is_some_and(|req| game.path != req) {
+                return None;
+            }
+            let system = systems.iter().find(|s| Some(&s.id) == game.system.as_ref()).filter(|s| !s.cheat_systems.is_empty())?.clone();
+            Some((game, system))
+        })
+        .collect();
+    if candidates.is_empty() {
+        return Ok(EclipseRead {
+            directory: found.directory.clone(),
+            exists: found.exists,
+            attribution: found.attribution.clone(),
+            files: found.files,
+            newest: found.newest,
+            codecs,
+            games: Vec::new(),
+        });
+    }
+    let query_games: Vec<_> = candidates.iter().map(|(g, _)| g.clone()).collect();
+    #[cfg(test)]
+    test_counters::record_query(query_games.len());
     let engines: HashMap<String, _> = source.engines(&systems).unwrap_or_default().into_iter().collect();
-    let names: HashMap<String, String> = source.names(&games).unwrap_or_default().into_iter().collect();
-    let covers: HashMap<String, String> = source.media(&systems, &games, &[COVER]).unwrap_or_default().into_iter().collect();
+    let names: HashMap<String, String> = source.names(&query_games).unwrap_or_default().into_iter().collect();
+    let covers: HashMap<String, String> = source.media(&systems, &query_games, &[COVER]).unwrap_or_default().into_iter().collect();
 
     let db = if found.exists { CheatsDatabase::open(&source.platform, &found.directory).ok() } else { None };
     let db_entries = db.as_ref().and_then(|d| d.entries().ok()).unwrap_or_default();
 
-    let mut out_games = Vec::new();
-    for game in &games {
-        let Some(system) = systems.iter().find(|s| Some(&s.id) == game.system.as_ref()).filter(|s| !s.cheat_systems.is_empty()) else {
-            continue;
-        };
+    let mut out_games = Vec::with_capacity(candidates.len());
+    for (game, system) in &candidates {
         let stem = Path::new(&game.path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let title = names.get(&game.path).filter(|t| !t.is_empty()).cloned().unwrap_or_else(|| title_of(&game.path));
         let db_file = db.as_ref().and_then(|d| find_db_match(d, &db_entries, &stem, &system.cheat_systems));
-        let cht_entries = db_file
-            .as_ref()
-            .map(|(_, _, cht_path)| load_cht_entries(&source.platform, &source.runtime, &system.id, cht_path, &codecs))
-            .unwrap_or_default();
+        let (cht_entries, cht_loaded) = if target.is_some() {
+            let loaded = db_file
+                .as_ref()
+                .map(|(_, _, cht_path)| load_cht_entries(&source.platform, &source.runtime, &system.id, cht_path, &codecs))
+                .unwrap_or_default();
+            (loaded, true)
+        } else {
+            (Vec::new(), false)
+        };
         let list = List::of(&source.platform, &system.console, &game.path).ok().flatten();
         let list_path_display = list.as_ref().map(|l| format!("cheats/{}.json", l.name)).unwrap_or_else(|| format!("cheats/{stem}.json"));
         let engine = engines.get(&system.id);
@@ -239,6 +272,7 @@ pub fn read_eclipse(source: &ClientSource, found: &super::cheats::Found) -> Resu
             explicit_codec,
             db_file,
             cht_entries,
+            cht_loaded,
             list,
             list_path_display,
         });
@@ -256,6 +290,30 @@ pub fn read_eclipse(source: &ClientSource, found: &super::cheats::Found) -> Resu
         codecs,
         games: out_games,
     })
+}
+
+/// Decodes `.cht` entries only for the first selected overview game off the GUI thread.
+pub fn ensure_initial_cht(source: &ClientSource, read: &mut EclipseRead) {
+    if read.games.is_empty() {
+        return;
+    }
+    let idx = read
+        .games
+        .iter()
+        .position(|g| g.list.as_ref().is_some_and(|l| !l.entries().is_empty()))
+        .or_else(|| read.games.iter().position(|g| g.db_file.is_some()))
+        .unwrap_or(0);
+    load_game_cht(source, &read.codecs, &mut read.games[idx]);
+}
+
+fn load_game_cht(source: &ClientSource, codecs: &CheatCodecs, game: &mut EclipseGame) {
+    if game.cht_loaded {
+        return;
+    }
+    if let Some((_, _, cht_path)) = game.db_file.as_ref() {
+        game.cht_entries = load_cht_entries(&source.platform, &source.runtime, &game.console_id, cht_path, codecs);
+    }
+    game.cht_loaded = true;
 }
 
 fn find_db_match(db: &CheatsDatabase, entries: &[(String, String, String)], stem: &str, cheat_systems: &[String]) -> Option<(String, String, String)> {
@@ -282,6 +340,8 @@ fn build_codecs_summary(codecs: &CheatCodecs, auto_id: Option<&str>, explicit_id
 }
 
 fn load_cht_entries(platform: &Platform, runtime: &emusen_crystal_client::Runtime, system_id: &str, cht_path: &str, codecs: &CheatCodecs) -> Vec<ChtEntry> {
+    #[cfg(test)]
+    test_counters::record_cht_decode(cht_path);
     let raw_codes = std::fs::read_to_string(cht_path).map(|text| parse_cht_raw_codes(&text)).unwrap_or_default();
     let Ok(parsed) = platform.cheats_parse(&json!({ "path": cht_path, "system": system_id })) else {
         return Vec::new();
@@ -571,6 +631,17 @@ impl State {
         self.read = Some(read);
         self.apply_requested_game();
         self.clamp_focus();
+    }
+
+    pub fn ensure_current_cht(&mut self, source: &ClientSource) {
+        let Some(read) = self.read.as_mut() else { return };
+        if let Some(game) = read.games.get_mut(self.selected_game) {
+            load_game_cht(source, &read.codecs, game);
+        }
+    }
+
+    pub fn needs_refresh(&self) -> bool {
+        !self.requested_game.is_empty() && self.read.as_ref().is_some_and(|r| !r.games.iter().any(|g| g.path == self.requested_game))
     }
 
     fn apply_requested_game(&mut self) {
@@ -1484,7 +1555,19 @@ impl State {
             "addCard": add_card,
             "positionCounter": position_counter,
         });
+        let zone_code = match self.zone {
+            Zone::Master => 0i32,
+            Zone::Filters => 1,
+            Zone::Rows => 2,
+            Zone::DbBrowse => 3,
+            Zone::DbUpdate => 4,
+            Zone::AddCard => 5,
+        };
         let obj = out.as_object_mut().expect("object");
+        obj.insert("zoneCode".into(), Value::from(zone_code));
+        obj.insert("focusedOrigIndex".into(), Value::from(focused_orig.map_or(-1i32, |i| i as i32)));
+        obj.insert("focusedVisualIndex".into(), Value::from(focused_pos.map_or(-1i32, |i| i as i32)));
+        obj.insert("browseCursor".into(), Value::from(self.browse_cursor as i32));
         obj.insert("overlayOpen".into(), Value::Bool(self.browse_open || self.editor_open));
         obj.insert("browseOpen".into(), Value::Bool(self.browse_open));
         obj.insert("browseTitle".into(), Value::String(game.db_file.as_ref().map(|(_, n, _)| format!("{n}.cht")).unwrap_or_else(|| "Database file".to_owned())));
@@ -1569,6 +1652,32 @@ fn format_epoch_date(secs: i64) -> String {
 }
 
 #[cfg(test)]
+mod test_counters {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex;
+
+    static QUERIED_GAMES: AtomicUsize = AtomicUsize::new(0);
+    static DECODED_CHTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+    pub fn reset() {
+        QUERIED_GAMES.store(0, Ordering::SeqCst);
+        DECODED_CHTS.lock().unwrap().clear();
+    }
+
+    pub fn record_query(n: usize) {
+        QUERIED_GAMES.fetch_add(n, Ordering::SeqCst);
+    }
+
+    pub fn record_cht_decode(path: &str) {
+        DECODED_CHTS.lock().unwrap().push(path.to_owned());
+    }
+
+    pub fn snapshot() -> (usize, Vec<String>) {
+        (QUERIED_GAMES.load(Ordering::SeqCst), DECODED_CHTS.lock().unwrap().clone())
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1630,6 +1739,7 @@ mod tests {
                     ]
                 }),
             }),
+            cht_loaded: true,
             list_path_display: "cheats/Chrono Trigger.json".to_owned(),
         }
     }
@@ -1706,5 +1816,69 @@ mod tests {
         assert!(ok.is_some());
         assert!(parse_explicit_colon_code(&game, "Bad", "ZZZZ:04").is_none());
         assert!(parse_explicit_colon_code(&game, "Bad", "notacode").is_none());
+    }
+
+    #[test]
+    fn single_game_cheat_open_skips_unrelated_cht_files_and_overview_lazy_loads() {
+        use emusen_client_fixture::cheats::{CHT, SNES};
+        use emusen_client_fixture::{library, World};
+        use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
+        use emusen_platform_client::Platform;
+
+        let world = World::new("models-cheats-eclipse-single-game");
+        let target_rom = world.dir("Roms/snes").join("Alpha Quest.sfc");
+        let other_rom = world.dir("Roms/snes").join("Beta Voyage.sfc");
+        std::fs::write(&target_rom, vec![0u8; 4096]).unwrap();
+        std::fs::write(&other_rom, vec![0u8; 4096]).unwrap();
+
+        let platform = Platform::load(library()).unwrap();
+        let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
+        settings["RomDirectory"] = json!(world.dir("Roms").to_str().unwrap());
+        settings["OpenEmuFallback"] = json!(false);
+        platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+
+        let status = emusen_qt_models_db_dir(&platform);
+        let db_dir = Path::new(&status).join(SNES);
+        std::fs::create_dir_all(&db_dir).unwrap();
+        let target_cht = db_dir.join("Alpha Quest.cht");
+        let other_cht = db_dir.join("Beta Voyage.cht");
+        std::fs::write(&target_cht, CHT).unwrap();
+        std::fs::write(&other_cht, CHT).unwrap();
+
+        let source = crate::clients::source_for(library().to_str().unwrap(), "").unwrap();
+        let found = crate::tools::cheats::read(&source).unwrap();
+        assert!(found.exists);
+
+        test_counters::reset();
+        let target_str = target_rom.to_string_lossy().into_owned();
+        let single = read_eclipse_for(&source, &found, Some(&target_str)).unwrap();
+        let (queried, decoded) = test_counters::snapshot();
+        assert_eq!(single.games.len(), 1);
+        assert_eq!(single.games[0].path, target_str);
+        assert!(single.games[0].cht_loaded);
+        assert_eq!(single.games[0].cht_entries.len(), 2);
+        assert_eq!(queried, 1);
+        assert_eq!(decoded, vec![target_cht.to_string_lossy().into_owned()]);
+
+        test_counters::reset();
+        let overview = read_eclipse_for(&source, &found, None).unwrap();
+        let (queried_all, decoded_none) = test_counters::snapshot();
+        assert_eq!(overview.games.len(), 2);
+        assert!(overview.games.iter().all(|g| !g.cht_loaded && g.cht_entries.is_empty()));
+        assert_eq!(queried_all, 2);
+        assert!(decoded_none.is_empty(), "overview mode must defer .cht decoding");
+
+        let mut state = State::default();
+        state.take_read(overview);
+        state.ensure_current_cht(&source);
+        let (_, decoded_one) = test_counters::snapshot();
+        assert_eq!(decoded_one.len(), 1);
+        assert_eq!(decoded_one[0], target_cht.to_string_lossy().into_owned());
+    }
+
+    fn emusen_qt_models_db_dir(platform: &Platform) -> String {
+        let source = crate::clients::source_for(platform.path().to_str().unwrap(), "").unwrap();
+        let found = crate::tools::cheats::read(&source).unwrap();
+        found.directory
     }
 }

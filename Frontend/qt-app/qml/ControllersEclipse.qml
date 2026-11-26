@@ -22,7 +22,15 @@ FocusScope {
         readonly property int battery: outer.battery
         readonly property string clockText: outer.clockText
         readonly property bool inputs: outer.inputs
-        readonly property var pad: outer.settings.bindingsPad.length > 0 ? JSON.parse(outer.settings.bindingsPad) : ({})
+        readonly property var pad: outer.settings.padMeta
+        EclipseListModel {
+            id: padLeftModel
+            rows: outer.settings.padLeftRows
+        }
+        EclipseListModel {
+            id: padRightModel
+            rows: outer.settings.padRightRows
+        }
     component LeaderPass: Repeater {
         required property bool leftSide
         required property bool focusPass
@@ -30,15 +38,20 @@ FocusScope {
         required property real offsetX
         required property real scrollPx
         required property real diagramWidth
+        required property int focusedControl
+        required property int headerFocus
+        required property bool isKeys
         id: leaderRep
         Shape {
             id: leaderShape
             required property int index
-            required property var modelData
-            readonly property real cardMid: (leaderShape.modelData.y ?? 0) + 28 - leaderRep.scrollPx
+            required property var model
+            readonly property var itemData: leaderShape.model.item
+            readonly property bool focusedCard: (leaderRep.isKeys || leaderRep.headerFocus < 0) && leaderShape.itemData.index === leaderRep.focusedControl
+            readonly property real cardMid: (leaderShape.itemData.y ?? 0) + 28 - leaderRep.scrollPx
             readonly property bool inView: leaderShape.cardMid >= 24 && leaderShape.cardMid <= 496
-            objectName: leaderRep.focusPass ? (leaderShape.modelData.leaderFocusedName ?? "") : (leaderShape.modelData.leaderName ?? "")
-            visible: leaderShape.inView && (leaderShape.modelData.focused === true) === leaderRep.focusPass
+            objectName: leaderRep.focusPass ? (leaderShape.itemData.leaderFocusedName ?? "") : (leaderShape.itemData.leaderName ?? "")
+            visible: leaderShape.inView && leaderShape.focusedCard === leaderRep.focusPass
             anchors.fill: parent
             ShapePath {
                 fillColor: "transparent"
@@ -46,99 +59,154 @@ FocusScope {
                 strokeWidth: (leaderRep.focusPass ? 2.5 : 1.5) * leaderRep.px
                 capStyle: ShapePath.RoundCap
                 joinStyle: ShapePath.RoundJoin
-                startX: ((leaderShape.modelData.ax ?? 0) + leaderRep.offsetX) * leaderRep.px
-                startY: (leaderShape.modelData.ay ?? 0) * leaderRep.px
-                PathLine { x: ((leaderShape.modelData.elbowX ?? 0) + leaderRep.offsetX) * leaderRep.px; y: (leaderShape.modelData.ay ?? 0) * leaderRep.px }
-                PathLine { x: ((leaderShape.modelData.elbowX ?? 0) + leaderRep.offsetX) * leaderRep.px; y: leaderShape.cardMid * leaderRep.px }
+                startX: ((leaderShape.itemData.ax ?? 0) + leaderRep.offsetX) * leaderRep.px
+                startY: (leaderShape.itemData.ay ?? 0) * leaderRep.px
+                PathLine { x: ((leaderShape.itemData.elbowX ?? 0) + leaderRep.offsetX) * leaderRep.px; y: (leaderShape.itemData.ay ?? 0) * leaderRep.px }
+                PathLine { x: ((leaderShape.itemData.elbowX ?? 0) + leaderRep.offsetX) * leaderRep.px; y: leaderShape.cardMid * leaderRep.px }
                 PathLine { x: leaderRep.leftSide ? 0 : leaderRep.diagramWidth; y: leaderShape.cardMid * leaderRep.px }
             }
         }
     }
-    component CalloutColumn: Flickable {
+    component CalloutCard: Item {
+        id: card
+        required property int rowIndex
+        required property var itemData
+        required property bool leftSide
+        required property real px
+        required property int focusedControl
+        required property int headerFocus
+        required property bool isKeys
+        required property SettingsModel modelSettings
+        readonly property bool focusedCard: (card.isKeys || card.headerFocus < 0) && card.itemData.index === card.focusedControl
+        objectName: card.itemData.cardName ?? ""
+        width: 344 * card.px
+        height: 56 * card.px
+        Kit.FocusRing {
+            objectName: card.itemData.ringName ?? ""
+            visible: card.focusedCard
+            anchors.fill: parent
+            radius: 14 * card.px
+            gap: 3 * card.px
+            thickness: 3 * card.px
+            bandRadius: 20 * card.px
+            glowColor: Kit.Tokens.glowColor
+            glowBlur: 34 * card.px
+            glowSpread: 8 * card.px
+            pixelScale: canvas.unit
+        }
+        Rectangle {
+            objectName: card.itemData.fillName ?? ""
+            anchors.fill: parent
+            radius: 14 * card.px
+            color: card.focusedCard ? Kit.Tokens.surfaceRaised : ThemeInk.rowSurface
+            border.width: card.focusedCard ? 0 : 1 * card.px
+            border.color: ThemeInk.hairline
+        }
+        CardLine {
+            id: leftText
+            objectName: card.itemData.leftName ?? ""
+            x: 16 * card.px
+            y: (card.height - leftText.height) / 2
+            width: card.leftSide ? Math.min(implicitWidth, Math.max(0, card.width - 32 * card.px - 12 * card.px - rightText.width)) : implicitWidth
+            unit: card.px
+            boardLine: true
+            size: card.leftSide ? 16 : 19
+            weight: card.leftSide ? Font.Normal : Font.DemiBold
+            color: card.leftSide ? Kit.Tokens.muted : Kit.Tokens.text
+            elide: card.leftSide ? Text.ElideRight : Text.ElideNone
+            text: card.itemData.left ?? ""
+        }
+        CardLine {
+            id: rightText
+            objectName: card.itemData.rightName ?? ""
+            x: card.width - rightText.width - 16 * card.px
+            y: (card.height - rightText.height) / 2
+            width: card.leftSide ? implicitWidth : Math.min(implicitWidth, Math.max(0, card.width - 32 * card.px - 12 * card.px - leftText.width))
+            horizontalAlignment: Text.AlignRight
+            unit: card.px
+            boardLine: true
+            size: card.leftSide ? 19 : 16
+            weight: card.leftSide ? Font.DemiBold : Font.Normal
+            color: card.leftSide ? Kit.Tokens.text : Kit.Tokens.muted
+            elide: card.leftSide ? Text.ElideNone : Text.ElideRight
+            text: card.itemData.right ?? ""
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: card.modelSettings.bindingFocus(card.itemData.index ?? card.rowIndex)
+        }
+    }
+    component CalloutColumn: Item {
         id: col
         required property bool leftSide
         required property real px
         required property real reach
         required property bool scrolls
         required property real scrollTarget
-        required property real contentH
         required property var cards
+        required property int focusedControl
+        required property int headerFocus
+        required property bool isKeys
         required property SettingsModel modelSettings
+        readonly property real scrollY: col.scrolls ? (colList.contentY + 4 * col.px) : 0
         clip: col.scrolls
-        interactive: col.scrolls
-        contentWidth: col.width
-        contentHeight: col.scrolls ? col.contentH * col.px : col.height
-        contentY: col.scrolls ? col.scrollTarget * col.px : 0
-        Behavior on contentY {
-            enabled: col.scrolls && !Kit.Tokens.reducedMotion
-            NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+        Item {
+            anchors.fill: parent
+            visible: !col.scrolls
+            Repeater {
+                model: col.scrolls ? null : col.cards
+                CalloutCard {
+                    id: flatCard
+                    required property int index
+                    required property var model
+                    rowIndex: flatCard.index
+                    itemData: flatCard.model.item
+                    leftSide: col.leftSide
+                    px: col.px
+                    focusedControl: col.focusedControl
+                    headerFocus: col.headerFocus
+                    isKeys: col.isKeys
+                    modelSettings: col.modelSettings
+                    x: col.reach
+                    y: ((flatCard.itemData.y ?? 0) + 48) * col.px
+                }
+            }
         }
-        Repeater {
-            model: col.cards
-            Item {
-                id: card
+        ListView {
+            id: colList
+            anchors.fill: parent
+            visible: col.scrolls
+            interactive: col.scrolls
+            clip: true
+            reuseItems: true
+            boundsBehavior: Flickable.StopAtBounds
+            topMargin: 4 * col.px
+            bottomMargin: 4 * col.px
+            spacing: 6 * col.px
+            model: col.scrolls ? col.cards : null
+            contentY: col.scrollTarget * col.px - 4 * col.px
+            Behavior on contentY {
+                enabled: col.scrolls && !Kit.Tokens.reducedMotion
+                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+            delegate: Item {
+                id: scrollSlot
                 required property int index
-                required property var modelData
-                readonly property bool focusedCard: card.modelData.focused === true
-                objectName: card.modelData.cardName ?? ""
-                x: col.reach
-                y: ((card.modelData.y ?? 0) + (col.scrolls ? 0 : 48)) * col.px
-                width: 344 * col.px
+                required property var model
+                width: colList.width
                 height: 56 * col.px
-                Kit.FocusRing {
-                    objectName: card.modelData.ringName ?? ""
-                    visible: card.focusedCard
-                    anchors.fill: parent
-                    radius: 14 * col.px
-                    gap: 3 * col.px
-                    thickness: 3 * col.px
-                    bandRadius: 20 * col.px
-                    glowColor: Kit.Tokens.glowColor
-                    glowBlur: 34 * col.px
-                    glowSpread: 8 * col.px
-                    pixelScale: canvas.unit
-                }
-                Rectangle {
-                    objectName: card.modelData.fillName ?? ""
-                    anchors.fill: parent
-                    radius: 14 * col.px
-                    color: card.focusedCard ? Kit.Tokens.surfaceRaised : ThemeInk.rowSurface
-                    border.width: card.focusedCard ? 0 : 1 * col.px
-                    border.color: ThemeInk.hairline
-                }
-                CardLine {
-                    id: leftText
-                    objectName: card.modelData.leftName ?? ""
-                    x: 16 * col.px
-                    y: (card.height - leftText.height) / 2
-                    width: col.leftSide ? Math.min(implicitWidth, Math.max(0, card.width - 32 * col.px - 12 * col.px - rightText.width)) : implicitWidth
-                    unit: col.px
-                    boardLine: true
-                    size: col.leftSide ? 16 : 19
-                    weight: col.leftSide ? Font.Normal : Font.DemiBold
-                    color: col.leftSide ? Kit.Tokens.muted : Kit.Tokens.text
-                    elide: col.leftSide ? Text.ElideRight : Text.ElideNone
-                    text: card.modelData.left ?? ""
-                }
-                CardLine {
-                    id: rightText
-                    objectName: card.modelData.rightName ?? ""
-                    x: card.width - rightText.width - 16 * col.px
-                    y: (card.height - rightText.height) / 2
-                    width: col.leftSide ? implicitWidth : Math.min(implicitWidth, Math.max(0, card.width - 32 * col.px - 12 * col.px - leftText.width))
-                    horizontalAlignment: Text.AlignRight
-                    unit: col.px
-                    boardLine: true
-                    size: col.leftSide ? 19 : 16
-                    weight: col.leftSide ? Font.DemiBold : Font.Normal
-                    color: col.leftSide ? Kit.Tokens.text : Kit.Tokens.muted
-                    elide: col.leftSide ? Text.ElideNone : Text.ElideRight
-                    text: card.modelData.right ?? ""
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: col.modelSettings.bindingFocus(card.modelData.index ?? card.index)
+                CalloutCard {
+                    rowIndex: scrollSlot.index
+                    itemData: scrollSlot.model.item
+                    leftSide: col.leftSide
+                    px: col.px
+                    focusedControl: col.focusedControl
+                    headerFocus: col.headerFocus
+                    isKeys: col.isKeys
+                    modelSettings: col.modelSettings
+                    x: col.reach
+                    y: 0
                 }
             }
         }
@@ -152,9 +220,10 @@ FocusScope {
         readonly property real px: canvas.designHeight / root.boardHeight
         readonly property real reach: 48 * root.px
         readonly property var model: canvas.pad
-        readonly property bool isKeys: root.model.keys === true
-        readonly property bool fromCard: root.model.fromCard === true
-        readonly property int headerFocus: root.model.headerFocus ?? -1
+        readonly property bool isKeys: root.model?.keys === true
+        readonly property bool fromCard: root.model?.fromCard === true
+        readonly property int focusedControl: canvas.settings.padFocus
+        readonly property int headerFocus: root.isKeys ? -1 : canvas.settings.padHeaderFocus
         TapHandler {}
         HelpModel {
             id: helpModel
@@ -292,7 +361,7 @@ FocusScope {
                     size: 24
                     weight: Font.Normal
                     color: Kit.Tokens.muted
-                    text: root.model.crumbSettings ?? ""
+                    text: root.model?.crumbSettings ?? ""
                     MouseArea {
                         anchors.fill: parent
                         enabled: !root.fromCard
@@ -310,7 +379,7 @@ FocusScope {
                     size: 24
                     weight: Font.Normal
                     color: ThemeInk.dim
-                    text: root.model.crumbSlash ?? ""
+                    text: root.model?.crumbSlash ?? ""
                 }
                 CardLine {
                     id: crumbCtrl
@@ -322,7 +391,7 @@ FocusScope {
                     size: 24
                     weight: Font.DemiBold
                     color: Kit.Tokens.text
-                    text: root.model.crumbControllers ?? ""
+                    text: root.model?.crumbControllers ?? ""
                 }
             }
             Item {
@@ -367,12 +436,12 @@ FocusScope {
             height: 42 * root.px
             spacing: 36 * root.px
             Repeater {
-                model: root.model.navTabs ?? []
+                model: root.model?.navTabs ?? null
                 Item {
                     id: tabItem
                     required property int index
                     required property string modelData
-                    readonly property bool active: tabItem.index === (root.model.navActive ?? 1)
+                    readonly property bool active: tabItem.index === (root.model?.navActive ?? 1)
                     objectName: "navTab." + tabItem.index
                     width: tabLabel.width
                     height: 42 * root.px
@@ -418,7 +487,7 @@ FocusScope {
                 height: parent.height
                 spacing: 12 * root.px
                 Repeater {
-                    model: root.model.players ?? []
+                    model: root.model?.players ?? null
                     Rectangle {
                         id: playerPill
                         required property int index
@@ -481,11 +550,11 @@ FocusScope {
                     size: 20
                     weight: Font.Normal
                     color: ThemeInk.body
-                    text: root.model.forWord ?? ""
+                    text: root.model?.forWord ?? ""
                 }
                 Rectangle {
                     id: consoleDrop
-                    readonly property int myIndex: (root.model.players ?? []).length
+                    readonly property int myIndex: root.model?.players ? root.model?.players.length : 0
                     readonly property bool pillFocused: root.headerFocus === consoleDrop.myIndex
                     objectName: "consolePill"
                     x: profilePreItem.x - consoleDrop.width - 12 * root.px
@@ -519,7 +588,7 @@ FocusScope {
                         size: 20
                         weight: Font.Normal
                         color: Kit.Tokens.text
-                        text: root.model.console ?? ""
+                        text: root.model?.console ?? ""
                     }
                     Shape {
                         id: consoleChev
@@ -555,7 +624,7 @@ FocusScope {
                     size: 20
                     weight: Font.Normal
                     color: ThemeInk.body
-                    text: root.model.profilePre ?? ""
+                    text: root.model?.profilePre ?? ""
                 }
                 CardLine {
                     id: profileNameItem
@@ -567,7 +636,7 @@ FocusScope {
                     size: 20
                     weight: Font.DemiBold
                     color: Kit.Tokens.text
-                    text: root.model.profile ?? ""
+                    text: root.model?.profile ?? ""
                 }
             }
             Item {
@@ -596,11 +665,11 @@ FocusScope {
                             size: 20
                             weight: Font.DemiBold
                             color: Kit.Tokens.overAccent
-                            text: root.model.keyboardLabel ?? ""
+                            text: root.model?.keyboardLabel ?? ""
                         }
                     }
                     Repeater {
-                        model: root.model.consolePills ?? []
+                        model: root.model?.consolePills ?? null
                         Rectangle {
                             id: keyConsolePill
                             required property int index
@@ -646,7 +715,7 @@ FocusScope {
                     size: 20
                     weight: Font.Normal
                     color: Kit.Tokens.muted
-                    text: root.model.caption ?? ""
+                    text: root.model?.caption ?? ""
                 }
             }
         }
@@ -659,52 +728,64 @@ FocusScope {
             width: root.width - 2 * (96 + 344) * root.px
             height: 520 * root.px
             readonly property real padOffsetX: (diagram.width / root.px - 1040) / 2
-            readonly property real leftScrollPx: leftFlick.contentY / root.px
-            readonly property real rightScrollPx: rightFlick.contentY / root.px
+            readonly property real leftScrollPx: leftFlick.scrollY / root.px
+            readonly property real rightScrollPx: rightFlick.scrollY / root.px
             LeaderPass {
-                model: root.model.left ?? []
+                model: padLeftModel
                 leftSide: true
                 focusPass: false
                 px: root.px
                 offsetX: diagram.padOffsetX
                 scrollPx: diagram.leftScrollPx
                 diagramWidth: diagram.width
+                focusedControl: root.focusedControl
+                headerFocus: root.headerFocus
+                isKeys: root.isKeys
             }
             LeaderPass {
-                model: root.model.right ?? []
+                model: padRightModel
                 leftSide: false
                 focusPass: false
                 px: root.px
                 offsetX: diagram.padOffsetX
                 scrollPx: diagram.rightScrollPx
                 diagramWidth: diagram.width
+                focusedControl: root.focusedControl
+                headerFocus: root.headerFocus
+                isKeys: root.isKeys
             }
             LeaderPass {
-                model: root.model.left ?? []
+                model: padLeftModel
                 leftSide: true
                 focusPass: true
                 px: root.px
                 offsetX: diagram.padOffsetX
                 scrollPx: diagram.leftScrollPx
                 diagramWidth: diagram.width
+                focusedControl: root.focusedControl
+                headerFocus: root.headerFocus
+                isKeys: root.isKeys
             }
             LeaderPass {
-                model: root.model.right ?? []
+                model: padRightModel
                 leftSide: false
                 focusPass: true
                 px: root.px
                 offsetX: diagram.padOffsetX
                 scrollPx: diagram.rightScrollPx
                 diagramWidth: diagram.width
+                focusedControl: root.focusedControl
+                headerFocus: root.headerFocus
+                isKeys: root.isKeys
             }
             Image {
                 id: padPicture
                 objectName: "padPicture"
-                x: ((root.model.padX ?? 200) + diagram.padOffsetX) * root.px
-                y: (root.model.padY ?? 40) * root.px
-                width: (root.model.padW ?? 640) * root.px
-                height: (root.model.padH ?? 440) * root.px
-                source: root.model.svg ?? ""
+                x: ((root.model?.padX ?? 200) + diagram.padOffsetX) * root.px
+                y: (root.model?.padY ?? 40) * root.px
+                width: (root.model?.padW ?? 640) * root.px
+                height: (root.model?.padH ?? 440) * root.px
+                source: canvas.settings.padSvg
                 fillMode: Image.PreserveAspectFit
                 sourceSize: drawnPixels.pixels
                 Kit.DrawnPixels {
@@ -719,10 +800,12 @@ FocusScope {
             leftSide: true
             px: root.px
             reach: root.reach
-            scrolls: root.model.leftScroll === true
-            scrollTarget: root.model.leftScrollY ?? 0
-            contentH: root.model.leftContentHeight ?? 520
-            cards: root.model.left ?? []
+            scrolls: root.model?.leftScroll === true
+            scrollTarget: canvas.settings.padLeftScrollY
+            cards: padLeftModel
+            focusedControl: root.focusedControl
+            headerFocus: root.headerFocus
+            isKeys: root.isKeys
             modelSettings: canvas.settings
             x: 96 * root.px - root.reach
             y: 270 * root.px - (leftFlick.scrolls ? 0 : root.reach)
@@ -735,10 +818,12 @@ FocusScope {
             leftSide: false
             px: root.px
             reach: root.reach
-            scrolls: root.model.rightScroll === true
-            scrollTarget: root.model.rightScrollY ?? 0
-            contentH: root.model.rightContentHeight ?? 520
-            cards: root.model.right ?? []
+            scrolls: root.model?.rightScroll === true
+            scrollTarget: canvas.settings.padRightScrollY
+            cards: padRightModel
+            focusedControl: root.focusedControl
+            headerFocus: root.headerFocus
+            isKeys: root.isKeys
             modelSettings: canvas.settings
             x: root.width - 96 * root.px - 344 * root.px - root.reach
             y: 270 * root.px - (rightFlick.scrolls ? 0 : root.reach)
@@ -795,11 +880,11 @@ FocusScope {
                     weight: Font.DemiBold
                     color: Kit.Tokens.text
                     elide: Text.ElideRight
-                    text: root.model.detailHeading ?? ""
+                    text: root.model?.detailHeading ?? ""
                 }
                 CardLine {
                     objectName: "detailSubline"
-                    visible: (root.model.detailSubline ?? "").length > 0
+                    visible: (root.model?.detailSubline ?? "").length > 0
                     width: parent.width
                     unit: root.px
                     boardLine: true
@@ -807,13 +892,13 @@ FocusScope {
                     weight: Font.Normal
                     color: ThemeInk.body
                     wrapMode: Text.WordWrap
-                    text: root.model.detailSubline ?? ""
+                    text: root.model?.detailSubline ?? ""
                 }
             }
             CardLine {
                 id: counterLine
                 objectName: "detailCounter"
-                visible: !root.isKeys && (root.model.detailCounter ?? "").length > 0
+                visible: !root.isKeys && (root.model?.detailCounter ?? "").length > 0
                 x: detailBox.width - counterLine.width - 28 * root.px
                 y: (detailBox.height - counterLine.height) / 2
                 unit: root.px
@@ -821,7 +906,7 @@ FocusScope {
                 size: 18
                 weight: Font.Normal
                 color: Kit.Tokens.muted
-                text: root.model.detailCounter ?? ""
+                text: root.model?.detailCounter ?? ""
             }
             Column {
                 id: keysDetailCol
@@ -838,7 +923,7 @@ FocusScope {
                     size: 26
                     weight: Font.DemiBold
                     color: Kit.Tokens.text
-                    text: root.model.detailHeading ?? ""
+                    text: root.model?.detailHeading ?? ""
                 }
                 CardLine {
                     objectName: "keysLine1"
@@ -849,7 +934,7 @@ FocusScope {
                     size: 21
                     weight: Font.Normal
                     color: ThemeInk.body
-                    text: root.model.detailLine1 ?? ""
+                    text: root.model?.detailLine1 ?? ""
                 }
                 CardLine {
                     objectName: "keysLine2"
@@ -860,11 +945,11 @@ FocusScope {
                     size: 19
                     weight: Font.Normal
                     color: canvas.settings.listening ? Kit.Tokens.accent : ThemeInk.body
-                    text: root.model.detailLine2 ?? ""
+                    text: root.model?.detailLine2 ?? ""
                 }
                 CardLine {
                     objectName: "keysMuted"
-                    visible: (root.model.detailMuted ?? "").length > 0
+                    visible: (root.model?.detailMuted ?? "").length > 0
                     width: parent.width
                     unit: root.px
                     boardLine: true
@@ -873,11 +958,11 @@ FocusScope {
                     weight: Font.Normal
                     color: Kit.Tokens.muted
                     wrapMode: Text.WordWrap
-                    text: root.model.detailMuted ?? ""
+                    text: root.model?.detailMuted ?? ""
                 }
                 CardLine {
                     objectName: "keysConflict"
-                    visible: (root.model.detailConflict ?? "").length > 0
+                    visible: (root.model?.detailConflict ?? "").length > 0
                     width: parent.width
                     unit: root.px
                     boardLine: true
@@ -886,7 +971,7 @@ FocusScope {
                     weight: Font.Normal
                     color: ThemeInk.rose
                     wrapMode: Text.WordWrap
-                    text: root.model.detailConflict ?? ""
+                    text: root.model?.detailConflict ?? ""
                 }
             }
         }
@@ -901,7 +986,7 @@ FocusScope {
             height: 84 * root.px
             spacing: 16 * root.px
             Repeater {
-                model: root.model.whole ?? []
+                model: root.model?.whole ?? null
                 Rectangle {
                     id: wholeCard
                     required property int index

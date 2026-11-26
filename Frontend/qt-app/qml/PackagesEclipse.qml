@@ -19,9 +19,13 @@ FocusScope {
     readonly property real boardHeight: 1200
     readonly property real unit: Kit.CanvasUnits.designHeight / root.boardHeight
     readonly property var controller: frame.controller
-    readonly property string rawCores: root.tool ? root.tool.eclipseCores : ""
-    readonly property var view: root.rawCores.length > 0 ? JSON.parse(root.rawCores) : null
+    readonly property var view: root.tool && root.tool.eclipseScreen === 5 ? root.tool.eclipseState : null
     readonly property string emptyText: ""
+
+    EclipseListModel {
+        id: rowsModel
+        rows: root.tool && root.tool.eclipseScreen === 5 ? root.tool.eclipseRowsJson : ""
+    }
 
     readonly property color groundColor: Kit.Tokens.surface
     readonly property color surfaceColor: Kit.Tokens.inputSurface
@@ -449,7 +453,7 @@ FocusScope {
                     required property int index
                     required property var modelData
                     readonly property bool selected: modelData.selected === true
-                    readonly property bool zoneFocused: (root.view.focusZone ?? 1) === 0 && selected
+                    readonly property bool zoneFocused: (root.tool ? root.tool.eclipseFocusedZone : 1) === 0 && selected
 
                     objectName: "filterRow." + filterItem.modelData.key
                     width: 304 * root.unit
@@ -732,7 +736,7 @@ FocusScope {
 
         CardLine {
             objectName: "emptyStateLabel"
-            visible: !(root.view?.rows && root.view.rows.length > 0)
+            visible: rowsModel.count === 0
             anchors.centerIn: parent
             unit: root.unit
             boardLine: true
@@ -749,22 +753,25 @@ FocusScope {
             width: parent.width
             height: parent.height - 34 * root.unit
             spacing: 10 * root.unit
+            reuseItems: true
             clip: gamesList.contentHeight > gamesList.height
             interactive: gamesList.contentHeight > gamesList.height
             boundsBehavior: Flickable.StopAtBounds
-            currentIndex: root.view?.focusedIndex ?? -1
+            currentIndex: root.tool && root.tool.eclipseScreen === 5 ? root.tool.eclipseFocusedIndex : -1
             highlightFollowsCurrentItem: true
             highlightMoveDuration: 0
             preferredHighlightBegin: 84 * root.unit
             preferredHighlightEnd: height - 84 * root.unit
             highlightRangeMode: ListView.ApplyRange
-            model: root.view?.rows
+            model: rowsModel
 
             delegate: Item {
                 id: gameRow
                 required property int index
-                required property var modelData
-                readonly property bool isFocused: gameRow.modelData.focused === true && (root.view?.focusZone ?? 1) === 1
+                required property var model
+                readonly property var modelData: gameRow.model.item
+                readonly property bool isRowFocused: root.tool && root.tool.eclipseScreen === 5 && gameRow.index === root.tool.eclipseFocusedIndex
+                readonly property bool isFocused: gameRow.isRowFocused && root.tool.eclipseFocusedZone === 1
                 readonly property int badgeKind: gameRow.modelData.badgeKind ?? 0
 
                 objectName: "packageRow." + gameRow.index
@@ -788,7 +795,7 @@ FocusScope {
                 Rectangle {
                     anchors.fill: parent
                     radius: 18 * root.unit
-                    color: gameRow.modelData.focused === true ? root.raisedColor : root.surfaceColor
+                    color: gameRow.isRowFocused ? root.raisedColor : root.surfaceColor
                     border.width: 1 * root.unit
                     border.color: root.hairlineColor
 
@@ -1338,7 +1345,7 @@ FocusScope {
                 weight: Font.Normal
                 family: Kit.Tokens.faceCode
                 color: root.mutedColor
-                text: root.view?.positionText ?? ""
+                text: root.tool && root.tool.eclipseScreen === 5 ? root.tool.eclipseCounter : ""
             }
         }
     }

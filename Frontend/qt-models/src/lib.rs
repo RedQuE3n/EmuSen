@@ -12,6 +12,7 @@ pub mod clients;
 pub mod clock;
 pub mod collections_eclipse;
 pub mod display;
+pub mod eclipse_list_model;
 pub mod edits;
 pub mod console_list;
 pub mod consoles;

@@ -11,9 +11,12 @@
 set -eu
 root=$1; bins=$2
 here=$(cd "$(dirname "$0")" && pwd)
-tree=${TREE:-$here/../../out/linux-x64/Mistress}
+tree=${TREE:-${PUBLISHED:-$here/../../out/linux-x64/Mistress}}
 roms=${ROMS:-/home/red/Documents/Roms}
+[ -f "$bins/emusen-qt" ] || { echo "missing $bins/emusen-qt" >&2; exit 1; }
 [ -d "$tree/lib/EmuSen" ] || { echo "no published tree at $tree" >&2; exit 1; }
+[ ! -e "$tree/lib/EmuSen/EmuSen.Mistress.dll" ] || { echo "$tree contains retired C# EmuSen.Mistress; pass TREE=<staged Rust/Qt bundle>" >&2; exit 1; }
+[ -f "$tree/lib/EmuSen/libemusen_platform.so" ] || { echo "missing $tree/lib/EmuSen/libemusen_platform.so" >&2; exit 1; }
 [ -e "$root" ] && { echo "$root exists" >&2; exit 1; }
 mkdir -p "$root/lib" "$root/home/etc/EmuSen" "$root/hh/config" "$root/hh/data" "$root/hh/cache"
 cp -a --reflink=auto "$tree/lib/EmuSen" "$root/lib/EmuSen"

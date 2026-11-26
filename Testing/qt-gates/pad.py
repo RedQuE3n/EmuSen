@@ -6,6 +6,9 @@ x y l r select start guide up down left right. "ready" is printed once the progr
 
 Usage: pad.py <fifo> <step>...
 """
+import errno
+import fcntl
+import os
 import sys
 import time
 
@@ -35,7 +38,18 @@ def settle(tsv, still):
     print(f"{time.time():.3f} {step} (stopped waiting)", flush=True)
 
 
-fifo = open(sys.argv[1], "w", buffering=1)  # blocks until the program's pad thread opens it
+deadline = time.monotonic() + 15.0
+while True:
+    try:
+        fd = os.open(sys.argv[1], os.O_WRONLY | os.O_NONBLOCK)
+        break
+    except OSError as exc:
+        if exc.errno not in (errno.ENXIO, errno.ENOENT) or time.monotonic() >= deadline:
+            raise SystemExit(f"pad.py: no reader opened {sys.argv[1]} within 15 s: {exc}")
+        time.sleep(0.05)
+flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+fcntl.fcntl(fd, fcntl.F_SETFL, flags & ~os.O_NONBLOCK)
+fifo = os.fdopen(fd, "w", buffering=1)
 print("ready", flush=True)
 
 

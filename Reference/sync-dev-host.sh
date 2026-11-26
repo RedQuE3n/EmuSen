@@ -129,7 +129,7 @@ if [ "$WANT_ROMS" -eq 1 ]; then
 fi
 
 echo
-echo "Done. Dumps discover themselves off the filesystem, so the differential"
+echo "Done. Dumps discover themselves off the filesystem, so the core differential"
 echo "tests pick them up with no configuration:"
-echo "  dotnet test EmuSen.WiseMan --filter ReferenceDumpTests"
+echo "  cargo test --profile test-checked"
 [ "$WANT_ROMS" -eq 1 ] || echo "Pass --roms to bring the library across as well."

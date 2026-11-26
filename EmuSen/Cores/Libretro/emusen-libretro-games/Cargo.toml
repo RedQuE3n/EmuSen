@@ -35,3 +35,14 @@ name = "ring"
 
 [profile.release]
 panic = "abort"
+
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true
+
+[profile.test-fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = false
+overflow-checks = true

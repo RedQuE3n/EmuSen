@@ -9,7 +9,13 @@
 set -eu
 out=$(realpath -m "$1")
 root=$(cd "$(dirname "$0")/../.." && pwd)
-published=${PUBLISHED:-/home/red/Projects/EmuSen Project/out/linux-x64/Mistress}
+published=${PUBLISHED:-"$root/out/linux-x64/Mistress"}
+[ -f "$root/Frontend/target/release/emusen-qt" ] || { echo "missing Frontend/target/release/emusen-qt" >&2; exit 1; }
+[ -f "$root/Platform/target/test-fast/libemusen_platform.so" ] || { echo "missing Platform/target/test-fast/libemusen_platform.so" >&2; exit 1; }
+[ -f "$root/Platform/target/test-fast/examples/libcrystal_test_core.so" ] || { echo "missing Platform/target/test-fast/examples/libcrystal_test_core.so" >&2; exit 1; }
+[ -d "$published/lib/EmuSen" ] || { echo "no published tree at $published" >&2; exit 1; }
+[ ! -e "$published/lib/EmuSen/EmuSen.Mistress.dll" ] || { echo "$published contains retired C# EmuSen.Mistress; pass PUBLISHED=<staged Rust/Qt bundle>" >&2; exit 1; }
+[ -f "$published/lib/EmuSen/libemusen_platform.so" ] || { echo "missing $published/lib/EmuSen/libemusen_platform.so" >&2; exit 1; }
 newest() { ls -t "$root"/Frontend/target/debug/deps/"$1"-* | grep -v '\.d$' | head -1; }
 stage=$(mktemp -d "${TMPDIR:-/tmp}/hh-pack.XXXXXX")
 trap 'rm -rf "$stage"' EXIT

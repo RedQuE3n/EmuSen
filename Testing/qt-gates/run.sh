@@ -35,42 +35,64 @@ Description=every window fullscreen
 fullscreen=true
 fullscreenrule=2
 EOF
+q_xdg=""
+q_here=""
+q_run=""
+q_launch=""
+printf -v q_xdg '%q' "${XDG_CONFIG_HOME:-$HOME/.config}"
+printf -v q_here '%q' "$here"
+printf -v q_run '%q' "$run"
+printf -v q_launch '%q' "$run/launch.sh"
+
 printf '%q ' "$@" > "$run/command"
 cat > "$run/launch.sh" <<EOF
 #!/bin/bash
-export XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
+set -u
+export XDG_CONFIG_HOME=$q_xdg
 if [ -z "\${DESK:-}" ]; then
-  python3 -I "$here/grab.py" "$run/grabs" $((seconds + 2)) \${INTERVAL:-35} "\${BOX:-0-255,0-255,0-255}" > "$run/grabs.tsv" 2> "$run/grab.err" &
+  python3 -I $q_here/grab.py $q_run/grabs $((seconds + 2)) \${INTERVAL:-35} "\${BOX:-0-255,0-255,0-255}" > $q_run/grabs.tsv 2> $q_run/grab.err &
   grabber=\$!
 fi
-if [ -n "\${PAD:-}" ] && [ -z "\${UINPUT_PAD:-}" ]; then rm -f "$run/pad.fifo"; mkfifo "$run/pad.fifo"; export EMUSEN_GATE_PAD="$run/pad.fifo"; fi
-date +%s.%N > "$run/start"
+if [ -n "\${PAD:-}" ] && [ -z "\${UINPUT_PAD:-}" ]; then rm -f $q_run/pad.fifo; mkfifo $q_run/pad.fifo; export EMUSEN_GATE_PAD=$q_run/pad.fifo; fi
+date +%s.%N > $q_run/start
 end=\$((\$(date +%s%N) + $seconds * 1000000000))
-$(cat "$run/command") > "$run/program.log" 2>&1 &
+$(cat "$run/command") > $q_run/program.log 2>&1 &
 program=\$!
 if [ -n "\${RSS:-}" ]; then
-  python3 -I "$here/rss.py" "$run/rss.tsv" \$program \${RSS} &
+  python3 -I $q_here/rss.py $q_run/rss.tsv \$program "\${RSS}" &
   rsser=\$!
 fi
 if [ -n "\${PAD:-}" ]; then
-  if [ -n "\${DESK:-}" ]; then for i in \$(seq 150); do [ -e "$run/active" ] && break; sleep 0.1; done; fi
-  if [ -z "\${DESK:-}" ] || [ -e "$run/active" ]; then
+  if [ -n "\${DESK:-}" ]; then for i in \$(seq 150); do [ -e $q_run/active ] && break; sleep 0.1; done; fi
+  if [ -z "\${DESK:-}" ] || [ -e $q_run/active ]; then
+    mapfile -d '' -t pad_steps < <(python3 -I -c 'import os, shlex, sys; sys.stdout.buffer.write(b"\0".join(s.encode() for s in shlex.split(os.environ.get("PAD",""))) + b"\0")')
     if [ -n "\${UINPUT_PAD:-}" ]; then
-      python3 -I "\$UINPUT_PAD" \$PAD > "$run/pad.log" 2>&1 & pad=\$!
+      python3 -I "\${UINPUT_PAD}" "\${pad_steps[@]}" > $q_run/pad.log 2>&1 & pad=\$!
     else
-      python3 -I "$here/pad.py" "$run/pad.fifo" \$PAD > "$run/pad.log" 2>&1 & pad=\$!
+      python3 -I $q_here/pad.py $q_run/pad.fifo "\${pad_steps[@]}" > $q_run/pad.log 2>&1 & pad=\$!
     fi
   else
-    echo "no pad: the program never held the focus" > "$run/pad.log"
+    echo "no pad: the program never held the focus" > $q_run/pad.log
   fi
 fi
-left=\$(( (end - \$(date +%s%N)) / 1000000 ))
-[ \$left -gt 0 ] && sleep \$((left / 1000)).\$(printf %03d \$((left % 1000)))
-kill \$program 2>/dev/null; sleep 1; kill -9 \$program 2>/dev/null
-[ -n "\${pad:-}" ] && kill \$pad 2>/dev/null && wait \$pad
-[ -n "\${rsser:-}" ] && kill \$rsser 2>/dev/null
-[ -n "\${grabber:-}" ] && wait \$grabber
-true
+prog_rc=0
+timed_out=0
+while kill -0 \$program 2>/dev/null; do
+  if [ \$(date +%s%N) -ge \$end ]; then timed_out=1; break; fi
+  sleep 0.2
+done
+if [ \$timed_out -eq 1 ]; then
+  kill \$program 2>/dev/null || true
+  sleep 1
+  kill -9 \$program 2>/dev/null || true
+  wait \$program 2>/dev/null || true
+else
+  wait \$program || prog_rc=\$?
+fi
+[ -n "\${pad:-}" ] && kill \$pad 2>/dev/null && wait \$pad || true
+[ -n "\${rsser:-}" ] && kill \$rsser 2>/dev/null || true
+[ -n "\${grabber:-}" ] && wait \$grabber || true
+exit \$prog_rc
 EOF
 if [ -n "${DESK:-}" ]; then
   export WAYLAND_DISPLAY=${DESK_WAYLAND:-wayland-0} DISPLAY=${DESK_DISPLAY:-:0} XDG_RUNTIME_DIR=${DESK_RUNTIME:-/run/user/$(id -u)}
@@ -91,11 +113,14 @@ else
   GATE_RUN="$run" XDG_CONFIG_HOME="$run/kwin-config" KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1 KWIN_COMPOSE=O2 \
     timeout -k 5 $((seconds + 40)) env -u DISPLAY -u WAYLAND_DISPLAY dbus-run-session -- \
     kwin_wayland --virtual $([ "${XWAYLAND:-1}" = 0 ] || echo --xwayland) --no-lockscreen --no-global-shortcuts --no-kactivities --socket "$socket" \
-    --width ${WIDTH:-1920} --height ${HEIGHT:-1200} --exit-with-session "/bin/bash $run/launch.sh" > "$run/kwin.log" 2>&1
+    --width ${WIDTH:-1920} --height ${HEIGHT:-1200} --exit-with-session "/bin/bash $q_launch" > "$run/kwin.log" 2>&1
   echo "run ended: $?" >> "$run/kwin.log"
 fi
 # Services the session activated (the desktop portal, ksecretd) are started by systemd and outlive it; each carries
 # GATE_RUN, so this run's are stopped.
-for p in $(pgrep -u "$USER" .); do grep -qaz "^GATE_RUN=$run$" /proc/$p/environ 2>/dev/null && kill $p && echo "stopped: $p $(cat /proc/$p/comm 2>/dev/null)" >> "$run/kwin.log"; done
+for p in $(pgrep -u "$USER" .); do
+  [ "$p" = "$$" ] || [ "$p" = "$PPID" ] && continue
+  grep -qaz "^GATE_RUN=$run$" /proc/$p/environ 2>/dev/null && kill "$p" && echo "stopped: $p $(cat /proc/$p/comm 2>/dev/null)" >> "$run/kwin.log"
+done
 # The pad lives inside the program, or a uinput pad only while its steps run; one of that name left behind would be a fault.
 grep -c "gate pad" /proc/bus/input/devices | sed 's/^/input devices named gate pad: /' >> "$run/kwin.log"

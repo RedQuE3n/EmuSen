@@ -79,8 +79,8 @@ jobs:
             *) lib=libv1_test_core.so ;;
           esac
           py=$(command -v python3 || command -v python)
-          "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/test-checked/examples/$lib
-          "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/test-checked/examples/${lib/test_core/plain_core}
+          "$py" "$dir/abi/v1/export_check.py" "$dir/abi/v1/baseline.txt" "$dir/target/test-checked/examples/$lib"
+          "$py" "$dir/abi/v1/export_check.py" "$dir/abi/v1/baseline.txt" "$dir/target/test-checked/examples/${lib/test_core/plain_core}"
 
       # The two test cores, for the WiseMan job's tests of the v1 adapter on the same platform.
       - uses: actions/upload-artifact@v4
@@ -149,7 +149,11 @@ jobs:
         working-directory: EmuSen/Cores/Shared/emusen-core-abi-check
         run: |
           cargo test --profile test-checked
-          cargo run --profile test-checked -- --check $AGAINST
+          if [ -n "${AGAINST:-}" ]; then
+            cargo run --profile test-checked -- --check $AGAINST
+          else
+            cargo run --profile test-checked -- --check
+          fi
       # DianaSh's host API and module ABI, stable from S3: the headers against the Rust, the facts against their baseline, and the base branch's baseline against this one (EmuSen_DianaSh.md §11.4, §13.7).
       - name: DianaSh's surfaces
         shell: bash
@@ -472,125 +476,3 @@ jobs:
           name: ${{ matrix.name }}-${{ matrix.rid }}
           path: library/
           if-no-files-found: error
-
-  # WiseMan, the front ends' tests, run on each platform against the libraries the job above ships.
-  wiseman:
-    name: WiseMan ${{ matrix.rid }}
-    needs: [plan, library, reuse, shared]
-    # A library job or a reuse job with nothing to do is skipped, and every library is still there (EmuSen_RustPlatform.md §28).
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.shared.result == 'success' && needs.library.result != 'failure' && needs.reuse.result != 'failure' }}
-    # Apple Silicon jobs of a working branch run on the project's Mac mini; main, tags and EMUSEN_MAC_RUNNER=off take GitHub's (EmuSen_RustPlatform.md §29).
-    runs-on: ${{ matrix.os == 'macos-latest' && vars.EMUSEN_MAC_RUNNER != 'off' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') && fromJSON('["self-hosted", "macOS", "ARM64", "emusen-mac"]') || matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # linux-x64 on 24.04, not the library job's 22.04: the tests load SDL3's prebuilt native library, which needs glibc 2.38 (22.04 has 2.35). Windows and macOS only with EMUSEN_ALL_PLATFORMS=on (EmuSen_RustPlatform.md §31).
-        include: ${{ fromJSON(vars.EMUSEN_ALL_PLATFORMS == 'on' && '[{"rid":"linux-x64","os":"ubuntu-24.04"},{"rid":"win-x64","os":"windows-latest"},{"rid":"osx-arm64","os":"macos-latest"}]' || '[{"rid":"linux-x64","os":"ubuntu-24.04"}]') }}
-    steps:
-      # LunaP.props takes the toolkit from the sibling checkout, so both are checked out side by side.
-      - uses: actions/checkout@v4
-        with:
-          path: EmuSen-Project
-
-      - uses: actions/checkout@v4
-        with:
-          repository: RedQuE3n/EmuSen.LunaP
-          ref: openemu-library
-          path: EmuSen.LunaP
-
-      # What the runner has, printed and never failing, so what a job asks of it is read from the runner itself (EmuSen_RustPlatform.md section 31.1).
-      - name: What this runner has
-        if: runner.os == 'Linux'
-        uses: ./EmuSen-Project/.github/actions/runner-facts
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      # Every library this run shipped for the platform, under the plan's names; the platform library is absent when its job failed, and the tests that need it then say so.
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: '*-${{ matrix.rid }}'
-          path: native
-          merge-multiple: true
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: v1-test-cores-${{ runner.os }}
-          path: native
-
-      # EmuSenNative=false: cargo stays out of this build, and the tests load the shipped libraries.
-      - name: Build
-        working-directory: EmuSen-Project
-        run: dotnet build EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release -p:EmuSenNative=false
-
-      - name: The libraries beside the tests
-        shell: bash
-        run: |
-          out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
-          # The test cores' artefact keeps its two crates' folders, since it holds the kit's runner too; every file goes beside the tests.
-          find native -type f -exec cp {} "$out/" \;
-          chmod +x "$out"/emusen-core-conform* "$out"/emusen-core-host* || true
-          # The installation's manifest the local build writes beside the cores, written here from the libraries placed (EmuSen_Backend.md §27.5).
-          py=$(command -v python3 || command -v python)
-          "$py" -c "import hashlib, os, sys; d = sys.argv[1]; libs = sorted(f[:-10] for f in os.listdir(d) if f.endswith('.core.json') and os.path.isfile(os.path.join(d, f[:-10]))); open(os.path.join(d, 'cores.manifest'), 'w', newline='\\n').write(''.join(hashlib.sha256(open(os.path.join(d, l), 'rb').read()).hexdigest() + '  ' + l + '\\n' for l in libs))" "$out"
-          cat "$out/cores.manifest"
-          # The shell's shipped program goes where the shell looks for it, dianash/ beside the tests (EmuSen_DianaSh.md §7).
-          mkdir -p "$out/dianash"
-          for f in native/nano native/nano.exe native/nano.dianash.json; do if [ -f "$f" ]; then mv "$f" "$out/dianash/"; rm -f "$out/$(basename "$f")"; fi; done
-          chmod +x "$out/dianash/nano" 2>/dev/null || true
-          for name in $("$py" EmuSen-Project/.github/scripts/library_key.py ci | awk -F'\t' '$3 == "core" {print $1}') v1_test_core v1_plain_core; do ls -la "$out"/*"$name"* || exit 1; done
-          ls -la "$out"/*emusen_platform*
-
-      # The front ends' tests over the Rust cores; the cores' own tests are the cargo jobs above, since the C# core host was retired (EmuSen_Backend.md §40.10).
-      - name: Test the front ends over the Rust cores
-        working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRt|FullyQualifiedName~VenusRt|FullyQualifiedName~Diamond|FullyQualifiedName~Sapphire|FullyQualifiedName~HostedCore" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
-
-      # The platform's steps run whatever the cores' comparison above found, since neither depends on the other (EmuSen_RustPlatform.md §27.3).
-      # Galaxia's tests, on the platform library, its only half since 2026-11-04 (EmuSen_Backend.md §40.2); still reporting, as on Windows and macOS they began at step 2a.
-      - name: Test Galaxia on the platform library
-        if: ${{ !cancelled() }}
-        working-directory: EmuSen-Project
-        continue-on-error: true
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaShSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
-
-      # Endymion's tests, on the platform library, its only half since 2026-11-05, with the parity classes held to the C#'s recorded answers (EmuSen_Backend.md §40.3).
-      - name: Test Endymion on the platform library
-        if: ${{ !cancelled() }}
-        working-directory: EmuSen-Project
-        continue-on-error: true
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Audio.|FullyQualifiedName~EmuSen.WiseMan.Input.|FullyQualifiedName~EmuSen.WiseMan.Endymion.|FullyQualifiedName~AudioProperties" --logger "console;verbosity=normal" --logger "trx;LogFileName=endymion-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
-
-      # Serenity's slang half and built-in filters on the platform library, with the parity classes that hold it to the answers recorded from the C# before it was deleted (EmuSen_Backend.md §40.6).
-      - name: Test Serenity's slang half on the platform library
-        if: ${{ !cancelled() }}
-        working-directory: EmuSen-Project
-        continue-on-error: true
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Serenity.Slang|FullyQualifiedName~EmuSen.WiseMan.Serenity.Spirv|FullyQualifiedName~SerenityParityTests|FullyQualifiedName~SerenityChainParityTests|FullyQualifiedName~FilterPresetParityTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=serenity-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
-
-      # DianaSh on the Rust shell, its only implementation since 2026-11-06 (EmuSen_Backend.md §40.7), with the text tools
-      # and EmuSen's command modules linked into the platform library: the golden corpus and the shell's tests, on each
-      # system. The log says which shell ran (EmuSen_DianaSh.md §13.10, §13.11).
-      - name: Test DianaSh on the Rust shell
-        if: ${{ !cancelled() }}
-        working-directory: EmuSen-Project
-        continue-on-error: true
-        env:
-          EMUSEN_DIANASH_EXPECT: rust
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.DianaSh.|FullyQualifiedName~SessionHeaderTests" --logger "console;verbosity=detailed" --logger "trx;LogFileName=dianash-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
-
-      # The frontend API through the binding: the header against the binding, the contract layer's shape and the
-      # frontends' reference (EmuSen_Backend.md §14; its C# implementation deleted, §40.8).
-      - name: Test the frontend API
-        if: ${{ !cancelled() }}
-        working-directory: EmuSen-Project
-        continue-on-error: true
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~CrystalHeaderTests|FullyQualifiedName~ContractShapeTests|FullyQualifiedName~FrontendDefectTests|FullyQualifiedName~FrontendReferenceTests|FullyQualifiedName~HotaruOnTheApiTests|FullyQualifiedName~StateRefusalTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=crystal-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: wiseman-${{ matrix.rid }}
-          path: results
-          if-no-files-found: ignore

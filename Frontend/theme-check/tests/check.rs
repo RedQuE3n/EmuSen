@@ -207,3 +207,107 @@ fn qt_3_7_each_state_fixture_keeps_the_static_rules_so_its_one_fault_is_its_stat
         assert_eq!(check(name), ("ok\n".to_owned(), 0), "{name}");
     }
 }
+
+#[test]
+fn schema_2_valid_package_with_desktop_screens_and_tokens_passes() {
+    let root = std::env::temp_dir().join(format!("theme-check-v2-valid-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("screens/desktop")).unwrap();
+    let json = r##"{
+  "schema": 2,
+  "api": "1.22",
+  "name": "Dual",
+  "author": "The EmuSen project",
+  "licence": "GPL-3.0-or-later",
+  "variants": ["dark"],
+  "faces": {
+    "bigPicture": ["home"],
+    "desktop": ["library", "table", "playing", "settings"]
+  },
+  "tokens": {
+    "dark": {
+      "surface": "#07080F",
+      "accent": "#F6E7D8",
+      "rowHeight": 56.0,
+      "desktop": {
+        "rowHeight": 38.0,
+        "fontRow": 13.5,
+        "tileRadius": 14.0
+      }
+    }
+  }
+}
+"##;
+    std::fs::write(root.join("theme.json"), json).unwrap();
+    std::fs::write(root.join("screens/Home.qml"), "import QtQuick\nimport EmuSen.Theme\nThemeScreen { role: ThemeScreen.Home }\n").unwrap();
+    for (name, role) in [("Library", "DesktopLibrary"), ("Table", "DesktopTable"), ("Playing", "DesktopPlaying"), ("Settings", "DesktopSettings")] {
+        std::fs::write(root.join(format!("screens/desktop/{name}.qml")), format!("import QtQuick\nimport EmuSen.Theme\nThemeScreen {{ role: ThemeScreen.{role} }}\n")).unwrap();
+    }
+    let ran = run(&["theme-check".into(), "--static".into(), root.display().to_string()], plain).unwrap();
+    assert_eq!(ran, ("ok\n".to_owned(), 0));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn schema_2_reports_missing_and_unlisted_desktop_screens_and_qml_rules() {
+    let root = std::env::temp_dir().join(format!("theme-check-v2-screens-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("screens/desktop")).unwrap();
+    let json = r##"{
+  "schema": 2,
+  "api": "1.22",
+  "name": "Dual",
+  "author": "A",
+  "licence": "L",
+  "variants": ["dark"],
+  "faces": { "bigPicture": [], "desktop": ["library", "table"] }
+}
+"##;
+    std::fs::write(root.join("theme.json"), json).unwrap();
+    std::fs::write(root.join("screens/desktop/Library.qml"), "import QtQuick\nimport EmuSen.Theme\nimport QtMultimedia\nThemeScreen { role: ThemeScreen.DesktopLibrary }\n").unwrap();
+    std::fs::write(root.join("screens/desktop/Playing.qml"), "import QtQuick\nimport EmuSen.Theme\nThemeScreen { role: ThemeScreen.DesktopPlaying }\n").unwrap();
+    let (out, status) = run(&["theme-check".into(), "--static".into(), root.display().to_string()], plain).unwrap();
+    assert_eq!(status, 1, "{out}");
+    assert!(out.contains("theme.json:1 screen table is listed and screens/desktop/Table.qml is missing"), "{out}");
+    assert!(out.contains("theme.json:1 screen screens/desktop/Playing.qml is not listed in faces.desktop, so it never loads"), "{out}");
+    assert!(out.contains("screens/desktop/Library.qml:3 import QtMultimedia"), "{out}");
+    assert!(out.ends_with("\n3 findings\n"), "{out}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn schema_2_validates_desktop_token_names_types_and_layered_contrast() {
+    let root = std::env::temp_dir().join(format!("theme-check-v2-tokens-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let json = r##"{
+  "schema": 2,
+  "api": "1.22",
+  "name": "Dual",
+  "author": "A",
+  "licence": "L",
+  "variants": ["dark"],
+  "faces": { "bigPicture": [], "desktop": [] },
+  "tokens": {
+    "dark": {
+      "surface": "#07080F",
+      "text": "#F4F1EC",
+      "desktop": {
+        "ribbonHeight": 52,
+        "rowHeight": "tall",
+        "surface": "#EEEEEE"
+      }
+    }
+  }
+}
+"##;
+    std::fs::write(root.join("theme.json"), json).unwrap();
+    let (out, status) = run(&["theme-check".into(), "--static".into(), root.display().to_string()], plain).unwrap();
+    assert_eq!(status, 1, "{out}");
+    let tail: Vec<String> = out.lines().map(|l| l.rsplit_once("theme.json:").map_or(l.to_owned(), |(_, t)| t.to_owned())).collect();
+    assert!(tail.contains(&"14 token ribbonHeight is not a token of the kit".to_owned()), "{out}");
+    assert!(tail.contains(&"15 token rowHeight is a number".to_owned()), "{out}");
+    assert!(tail.iter().any(|l| l.starts_with("16 contrast text on surface is ") && l.contains("(dark, desktop)")), "{out}");
+    assert!(!out.contains("(dark)"), "base surface passes, only desktop fails: {out}");
+    let _ = std::fs::remove_dir_all(&root);
+}

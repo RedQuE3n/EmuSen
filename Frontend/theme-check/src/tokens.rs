@@ -110,6 +110,32 @@ fn holds(t: TokenType, value: &TokenValue) -> bool {
     }
 }
 
+fn validate_overrides<'a>(
+    overrides: &'a [TokenOverride],
+    known: &[(String, TokenType)],
+    file: &str,
+    findings: &mut Vec<Finding>,
+) -> Vec<&'a TokenOverride> {
+    let mut typed = Vec::new();
+    for o in overrides {
+        match known.iter().find(|(name, _)| *name == o.name) {
+            None => findings.push(Finding::new(file, o.line, "token", format!("{} is not a token of the kit", o.name))),
+            Some((_, t)) if !holds(*t, &o.value) => {
+                findings.push(Finding::new(file, o.line, "token", format!("{} is {}", o.name, type_words(*t))));
+            }
+            Some(_) => typed.push(o),
+        }
+    }
+    typed
+}
+
+fn given_in(overrides: &[&TokenOverride], variant: Variant, token: ColourToken) -> Option<(Colour, usize)> {
+    overrides.iter().find(|o| o.variant == variant && o.name == property_of(token)).and_then(|o| match &o.value {
+        TokenValue::Text(s) => parse_colour(s).map(|c| (c, o.line)),
+        _ => None,
+    })
+}
+
 /// Every override's name and type, the text scales, and each variant's contrast pairs with the overrides applied.
 pub fn check(manifest: &Manifest, file: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -124,48 +150,57 @@ pub fn check(manifest: &Manifest, file: &str) -> Vec<Finding> {
             ));
         }
     }
-    let mut typed = Vec::new();
-    for o in &manifest.tokens {
-        match known.iter().find(|(name, _)| *name == o.name) {
-            None => findings.push(Finding::new(file, o.line, "token", format!("{} is not a token of the kit", o.name))),
-            Some((_, t)) if !holds(*t, &o.value) => {
-                findings.push(Finding::new(file, o.line, "token", format!("{} is {}", o.name, type_words(*t))));
-            }
-            Some(_) => typed.push(o),
-        }
-    }
+    let typed = validate_overrides(&manifest.tokens, &known, file, &mut findings);
+    let desktop_typed = validate_overrides(&manifest.desktop_tokens, &known, file, &mut findings);
     for variant in manifest.variants.iter().copied() {
-        findings.extend(contrast(&typed, variant, file));
+        let (base_findings, base_failed) = contrast_layer(&typed, None, &[], variant, file);
+        findings.extend(base_findings);
+        if desktop_typed.iter().any(|o| o.variant == variant && ColourToken::named(&o.name).is_some()) {
+            findings.extend(contrast_layer(&typed, Some(&desktop_typed), &base_failed, variant, file).0);
+        }
     }
     findings
 }
 
-fn contrast(overrides: &[&TokenOverride], variant: Variant, file: &str) -> Vec<Finding> {
+fn contrast_layer(
+    base: &[&TokenOverride],
+    desktop: Option<&[&TokenOverride]>,
+    skip_unchanged: &[(ColourToken, ColourToken)],
+    variant: Variant,
+    file: &str,
+) -> (Vec<Finding>, Vec<(ColourToken, ColourToken)>) {
     let kit = kit_variant(variant);
-    let given = |token: ColourToken| {
-        overrides.iter().find(|o| o.variant == variant && o.name == property_of(token)).and_then(|o| match &o.value {
-            TokenValue::Text(s) => parse_colour(s).map(|c| (c, o.line)),
-            _ => None,
-        })
+    let primary = desktop.unwrap_or(base);
+    let value = |token: ColourToken| {
+        given_in(primary, variant, token)
+            .or_else(|| desktop.and_then(|_| given_in(base, variant, token)))
+            .map_or(colour(kit, token), |(c, _)| c)
     };
-    let value = |token: ColourToken| given(token).map_or(colour(kit, token), |(c, _)| c);
+    let surface_primary = given_in(primary, variant, ColourToken::Surface);
     let screen = value(ColourToken::Surface).over(colour(kit, ColourToken::Void));
+    let label = if desktop.is_some() { format!("{}, desktop", variant.name()) } else { variant.name().to_owned() };
     let mut findings = Vec::new();
+    let mut failed = Vec::new();
     for pair in contrast_pairs().into_iter().filter(|p| p.variant == kit) {
-        let (fore_given, back_given) = (given(pair.fore), given(pair.back));
-        let Some(line) = fore_given.or(back_given).map(|(_, line)| line) else { continue };
+        let (fore_p, back_p) = (given_in(primary, variant, pair.fore), given_in(primary, variant, pair.back));
+        let line = match fore_p.or(back_p) {
+            Some((_, line)) => line,
+            None => match surface_primary.filter(|_| desktop.is_some() && !skip_unchanged.contains(&(pair.fore, pair.back))) {
+                Some((_, line)) => line,
+                None => continue,
+            },
+        };
         let back = if pair.back == ColourToken::Surface { screen } else { value(pair.back).over(screen) };
         let ratio = value(pair.fore).over(back).contrast(back);
         if ratio < pair.floor {
-            let words = format!(
-                "{} on {} is {ratio:.2}:1, under the {}:1 floor ({})",
-                property_of(pair.fore),
-                property_of(pair.back),
-                pair.floor,
-                variant.name()
-            );
-            findings.push(Finding::new(file, line, "contrast", words));
+            failed.push((pair.fore, pair.back));
+            findings.push(Finding::new(
+                file,
+                line,
+                "contrast",
+                format!("{} on {} is {ratio:.2}:1, under the {}:1 floor ({label})", property_of(pair.fore), property_of(pair.back), pair.floor),
+            ));
         }
     }
-    findings
+    (findings, failed)
 }

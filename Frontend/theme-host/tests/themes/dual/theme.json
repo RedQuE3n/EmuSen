@@ -1,0 +1,21 @@
+{
+    "schema": 2,
+    "api": "1.22",
+    "name": "Dual",
+    "author": "The EmuSen project",
+    "licence": "GPL-3.0-or-later",
+    "variants": ["dark"],
+    "faces": {
+        "bigPicture": ["home"],
+        "desktop": ["library"]
+    },
+    "tokens": {
+        "dark": {
+            "accent": "#F6E7D8",
+            "rowHeight": 56.0,
+            "desktop": {
+                "rowHeight": 38.0
+            }
+        }
+    }
+}

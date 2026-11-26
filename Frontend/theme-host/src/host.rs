@@ -2,7 +2,7 @@
 //! sandboxed engine, destroying the one before; `place` creates a screen the theme provides into a slot of the program's scene.
 
 use crate::package::{self, Package};
-use emusen_theme_manifest::Screen;
+use emusen_theme_manifest::{DesktopScreen, Screen};
 use crate::policy::Policy;
 use crate::sandbox::ffi::{sandbox_engine, sandbox_new, sandbox_place, sandbox_qt_qml, sandbox_read, sandbox_take_log, watch_alive, watch_new, Sandbox, Watch};
 use core::pin::Pin;
@@ -30,6 +30,10 @@ pub mod qobject {
         Splash,
         Settings,
         Game,
+        DesktopLibrary,
+        DesktopTable,
+        DesktopPlaying,
+        DesktopSettings,
     }
 
     extern "RustQt" {
@@ -57,6 +61,10 @@ pub mod qobject {
         /// Creates the role's screen in the theme's engine as a child of `slot`, filling it; false, with `failed` set, if it fails.
         #[qinvokable]
         unsafe fn place(self: Pin<&mut ThemeHost>, role: Role, slot: *mut QQuickItem) -> bool;
+        /// Whether the loaded package declares at least one desktop screen.
+        #[qinvokable]
+        #[cxx_name = "hasDesktopFace"]
+        fn has_desktop_face(self: &ThemeHost) -> bool;
     }
 }
 
@@ -96,15 +104,24 @@ impl Default for ThemeHostRust {
     }
 }
 
-/// The manifest's screen for a role.
-fn screen(role: qobject::Role) -> Screen {
+enum FaceScreen {
+    BigPicture(Screen),
+    Desktop(DesktopScreen),
+}
+
+fn face_screen(role: qobject::Role) -> Option<FaceScreen> {
     match role {
-        qobject::Role::Consoles => Screen::Consoles,
-        qobject::Role::Games => Screen::Games,
-        qobject::Role::Splash => Screen::Splash,
-        qobject::Role::Settings => Screen::Settings,
-        qobject::Role::Game => Screen::Game,
-        _ => Screen::Home,
+        qobject::Role::Home => Some(FaceScreen::BigPicture(Screen::Home)),
+        qobject::Role::Consoles => Some(FaceScreen::BigPicture(Screen::Consoles)),
+        qobject::Role::Games => Some(FaceScreen::BigPicture(Screen::Games)),
+        qobject::Role::Splash => Some(FaceScreen::BigPicture(Screen::Splash)),
+        qobject::Role::Settings => Some(FaceScreen::BigPicture(Screen::Settings)),
+        qobject::Role::Game => Some(FaceScreen::BigPicture(Screen::Game)),
+        qobject::Role::DesktopLibrary => Some(FaceScreen::Desktop(DesktopScreen::Library)),
+        qobject::Role::DesktopTable => Some(FaceScreen::Desktop(DesktopScreen::Table)),
+        qobject::Role::DesktopPlaying => Some(FaceScreen::Desktop(DesktopScreen::Playing)),
+        qobject::Role::DesktopSettings => Some(FaceScreen::Desktop(DesktopScreen::Settings)),
+        _ => None,
     }
 }
 
@@ -208,8 +225,22 @@ impl qobject::ThemeHost {
         self.package.as_ref().map(Package::overrides).unwrap_or_default()
     }
 
+    /// The package's desktop token overrides, as `Package::desktop_overrides` gives them; none while no package is loaded.
+    pub fn desktop_overrides(&self) -> Vec<(bool, String, String)> {
+        self.package.as_ref().map(Package::desktop_overrides).unwrap_or_default()
+    }
+
+    pub fn has_desktop_face(&self) -> bool {
+        self.package.as_ref().is_some_and(|p| !p.desktop_screens.is_empty())
+    }
+
     pub fn provides(&self, role: qobject::Role) -> bool {
-        self.package.as_ref().is_some_and(|p| p.screens.contains(&screen(role)))
+        let Some(p) = self.package.as_ref() else { return false };
+        match face_screen(role) {
+            Some(FaceScreen::BigPicture(s)) => p.screens.contains(&s),
+            Some(FaceScreen::Desktop(s)) => p.desktop_screens.contains(&s),
+            None => false,
+        }
     }
 
     /// # Safety
@@ -218,10 +249,16 @@ impl qobject::ThemeHost {
         if !self.provides(role) {
             return false;
         }
+        let Some(file) = face_screen(role).map(|f| match f {
+            FaceScreen::BigPicture(s) => s.file(),
+            FaceScreen::Desktop(s) => s.file(),
+        }) else {
+            return false;
+        };
         let Some(policy) = self.policy.as_ref() else {
             return false;
         };
-        let url = QString::from(format!("{}{}", policy.folder(), screen(role).file()).as_str());
+        let url = QString::from(format!("{}{file}", policy.folder()).as_str());
         let placed = match self.as_mut().rust_mut().sandbox.as_mut() {
             Some(sandbox) => unsafe { sandbox_place(sandbox, &url, slot) },
             None => false,

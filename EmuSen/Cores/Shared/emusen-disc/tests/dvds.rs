@@ -3,6 +3,8 @@
 //! every form over borrowed bytes as over owned, and (with chdman named) the same images as DVD CHDs, clean and
 //! damaged.
 
+mod common;
+
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -184,12 +186,8 @@ fn the_medium_is_chosen_when_an_image_is_opened() {
     assert_eq!(kind(&big, Kind::Cd, Lone::Detect), Ok(Kind::Cd));
 }
 
-fn chdman() -> Option<String> {
-    let c = std::env::var("EMUSEN_DISC_CHDMAN").ok();
-    if c.is_none() {
-        eprintln!("skipped: EMUSEN_DISC_CHDMAN names no chdman");
-    }
-    c
+fn chdman() -> String {
+    common::chdman()
 }
 
 fn create_dvd(chdman: &str, iso: &[u8], name: &str, extra: &[&str]) -> Vec<u8> {
@@ -210,7 +208,7 @@ fn create_dvd(chdman: &str, iso: &[u8], name: &str, extra: &[&str]) -> Vec<u8> {
 /// hunks. Opt in with `EMUSEN_DISC_CHDMAN`.
 #[test]
 fn a_dvd_chd_reads_as_its_image() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     for (name, img, extra) in [("single", image(300, 300, None), &[][..]), ("dual", dual(), &[][..]), ("plain", dual(), &["-c", "none"][..])] {
         let packed = create_dvd(&chdman, &img, name, extra);
         let mut from_chd = Dvd::from_image(&packed[..]).unwrap();
@@ -227,7 +225,7 @@ fn a_dvd_chd_reads_as_its_image() {
 /// silently otherwise and none a panic (the checks of EmuSen_Disc.md §13 on a DVD's codecs).
 #[test]
 fn a_damaged_dvd_chd_is_refused_in_words() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let mut noisy = image(600, 600, None);
     let mut x = 0x1234_5678u32;
     for b in noisy[40 * USER..300 * USER].iter_mut() {

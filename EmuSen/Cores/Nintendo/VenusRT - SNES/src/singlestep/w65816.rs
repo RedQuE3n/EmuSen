@@ -379,11 +379,9 @@ mod tests {
 
     // Coverage: the whole suite read, and the replay passing every case, is what says the harness reads it right.
     #[test]
+    #[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
     fn the_replay_passes_every_case_of_the_suite() {
-        let Some(dir) = suite_dir("SingleStepTests-65816") else {
-            eprintln!("EMUSEN_VENUSRT_CORPUS unset, not run");
-            return;
-        };
+        let dir = suite_dir("SingleStepTests-65816").expect("EMUSEN_VENUSRT_CORPUS SingleStepTests-65816 corpus required");
         let files = suite_files(&dir);
         assert_eq!(files.len(), 512);
         let reports = run_suite(&files, threads(), |p| run_file(p, usize::MAX, |w| Replay::new(w, Spoil::None)));
@@ -397,11 +395,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
     fn every_spoiling_is_caught_on_every_case_it_applies_to() {
-        let Some(dir) = suite_dir("SingleStepTests-65816") else {
-            eprintln!("EMUSEN_VENUSRT_CORPUS unset, not run");
-            return;
-        };
+        let dir = suite_dir("SingleStepTests-65816").expect("EMUSEN_VENUSRT_CORPUS SingleStepTests-65816 corpus required");
         let files: Vec<_> = suite_files(&dir).into_iter().step_by(8).collect();
         for spoil in [Spoil::DropLastCycle, Spoil::FlipWrittenBit, Spoil::FlipCarry, Spoil::FlipMPin] {
             let reports = run_suite(&files, threads(), |p| {

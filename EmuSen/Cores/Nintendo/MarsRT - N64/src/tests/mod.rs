@@ -31,8 +31,9 @@ const FINISHED: &str = "Base: Failed ";
 
 /// `n64-systemtest` through the IS-Viewer, as `MarsCorpusTests` runs it: the interpreter alone, 400M steps at most.
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_CORPUS corpus"]
 fn the_corpus_reports_what_the_csharp_core_reports() {
-    let Ok(path) = std::env::var("EMUSEN_MARSRT_CORPUS") else { return };
+    let path = std::env::var("EMUSEN_MARSRT_CORPUS").expect("EMUSEN_MARSRT_CORPUS corpus required");
     let image = RomImage::from_image(&std::fs::read(path).unwrap()).unwrap();
     let mut machine = Machine::boot(Arc::new(image), true);
     let started = std::time::Instant::now();

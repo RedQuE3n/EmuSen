@@ -299,8 +299,9 @@ mod tests {
 
     /// The harness loads, answers and records as the suite's environment did (BlackMoon_R3000.md §3.1).
     #[test]
+    #[ignore = "needs EMUSEN_BLACKMOON_CORPUS corpus"]
     fn the_replay_control_passes_every_case() {
-        let Some(files) = corpus() else { return };
+        let files = corpus().unwrap_or_else(|| panic!("{CORPUS_VARIABLE} does not hold {SUITE}"));
         let reports = run_suite(&files, None, replay);
         let t = total(&reports);
         eprintln!("{SUITE}: replay {} of {} in {} files", t.passed, t.cases, reports.len());
@@ -310,8 +311,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs EMUSEN_BLACKMOON_CORPUS corpus"]
     fn spoiled_replays_pass_nothing() {
-        let Some(files) = corpus() else { return };
+        let files = corpus().unwrap_or_else(|| panic!("{CORPUS_VARIABLE} does not hold {SUITE}"));
         for (name, spoil) in [("hi", spoiled_hi as fn(&Value, &mut FlatBus) -> Recorded), ("last cycle", spoiled_cycle)] {
             let t = total(&run_suite(&files, None, spoil));
             eprintln!("{SUITE}: spoiled ({name}) {} of {}", t.passed, t.cases);
@@ -321,12 +323,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs EMUSEN_BLACKMOON_CORPUS corpus"]
     fn the_processor_against_the_suite() {
-        let Some(files) = corpus() else { return };
-        if !crate::BUILT {
-            eprintln!("{SUITE}: the processor is not built: not run");
-            return;
-        }
+        let files = corpus().unwrap_or_else(|| panic!("{CORPUS_VARIABLE} does not hold {SUITE}"));
         let reports = run_suite(&files, None, processor);
         let t = total(&reports);
         eprintln!("{SUITE}: {} of {} (registers {}, cycles {})", t.passed, t.cases, t.registers, t.cycles);
@@ -339,8 +338,9 @@ mod tests {
     /// D-1's cases: as the suite records them the cycles differ in every one (a read's value then has no recorded
     /// cycle to come from), and in D-1's form each passes.
     #[test]
+    #[ignore = "needs EMUSEN_BLACKMOON_CORPUS corpus"]
     fn d1_cases_differ_from_the_suite_only_in_the_split_access() {
-        let Some(files) = corpus() else { return };
+        let files = corpus().unwrap_or_else(|| panic!("{CORPUS_VARIABLE} does not hold {SUITE}"));
         let (mut n, mut by_file) = (0, std::collections::BTreeMap::new());
         for path in &files {
             for case in read_cases(path).iter().filter(|c| dispute(c) == Some("D-1")) {
@@ -371,8 +371,9 @@ mod tests {
     /// `emusen-mips` over every opcode the suite holds: each decodes to its file's instruction, and its disassembly
     /// assembles to a word that agrees on every field the instruction uses and is zero elsewhere.
     #[test]
+    #[ignore = "needs EMUSEN_BLACKMOON_CORPUS corpus"]
     fn every_suite_opcode_decodes_to_its_file_and_round_trips_through_the_assembler() {
-        let Some(files) = corpus() else { return };
+        let files = corpus().unwrap_or_else(|| panic!("{CORPUS_VARIABLE} does not hold {SUITE}"));
         let dialect = crate::dialect(None);
         let mut n = 0;
         for path in &files {

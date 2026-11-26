@@ -79,11 +79,9 @@ mod tests {
 
     // The suite through the SPC700, by group; the counts are VenusRT_Native.md §21's.
     #[test]
+    #[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
     fn the_spc700_suite_with_cycles() {
-        let Some(dir) = suite_dir("SingleStepTests-spc700") else {
-            eprintln!("EMUSEN_VENUSRT_CORPUS unset, not run");
-            return;
-        };
+        let dir = suite_dir("SingleStepTests-spc700").expect("EMUSEN_VENUSRT_CORPUS SingleStepTests-spc700 corpus required");
         let files = suite_files(&dir);
         let reports = run_suite(&files, threads(), |p| s::run_file(p, usize::MAX, |_| Spc700::default()));
         let mut by: BTreeMap<&str, (usize, usize, usize, usize)> = BTreeMap::new();

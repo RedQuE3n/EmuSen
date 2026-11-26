@@ -249,18 +249,15 @@ mod tests {
         assert!(grade(&c, &mut processor).passed(), "the processor fails the inline case");
     }
 
-    fn corpus() -> Option<Vec<PathBuf>> {
-        let files = suite_files();
-        if files.is_none() {
-            eprintln!("{CORPUS_VARIABLE} does not hold {SUITE}: not run");
-        }
-        files
+    fn corpus() -> Vec<PathBuf> {
+        suite_files().unwrap_or_else(|| panic!("{CORPUS_VARIABLE} does not hold {SUITE}"))
     }
 
     /// The harness loads, answers and records as the suite's environment did (Beryl_Z80.md §3.1).
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_CORPUS corpus"]
     fn the_replay_control_passes_every_case() {
-        let Some(files) = corpus() else { return };
+        let files = corpus();
         let reports = run_suite(&files, None, replay);
         let t = total(&reports);
         eprintln!("{SUITE}: replay {} of {} in {} files", t.passed, t.cases, reports.len());
@@ -269,8 +266,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_CORPUS corpus"]
     fn spoiled_replays_pass_nothing() {
-        let Some(files) = corpus() else { return };
+        let files = corpus();
         let sample: Vec<PathBuf> = files.iter().step_by(8).cloned().collect();
         let carry = |c: &Value, b: &mut FlatBus| {
             let mut r = replay(c, b);
@@ -290,8 +288,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_CORPUS corpus"]
     fn the_processor_against_the_suite() {
-        let Some(files) = corpus() else { return };
+        let files = corpus();
         let reports = run_suite(&files, None, processor);
         let t = total(&reports);
         eprintln!("{SUITE}: {} of {} (registers {}, memory {}, cycles {})", t.passed, t.cases, t.registers, t.memory, t.cycles);

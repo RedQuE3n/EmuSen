@@ -98,11 +98,9 @@ mod tests {
     // The whole suite through the CPU: the tally by group and mode, and every failure a named exception of the
     // disputes log, each failing where the log says and nowhere else (VenusRT_Native.md §11.3).
     #[test]
+    #[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
     fn the_cpu_through_the_whole_suite() {
-        let Some(dir) = suite_dir("SingleStepTests-65816") else {
-            eprintln!("EMUSEN_VENUSRT_CORPUS unset, not run");
-            return;
-        };
+        let dir = suite_dir("SingleStepTests-65816").expect("EMUSEN_VENUSRT_CORPUS SingleStepTests-65816 corpus required");
         let reports = run_suite(&suite_files(&dir), threads(), |p| run_file(p, usize::MAX, |_| Cpu::default()));
         let mut groups: BTreeMap<(&str, char), (usize, usize, usize, usize, usize)> = BTreeMap::new();
         let mut report = String::new();

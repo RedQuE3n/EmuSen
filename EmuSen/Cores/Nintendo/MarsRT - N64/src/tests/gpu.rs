@@ -25,26 +25,16 @@ const GAMMA_ON: u32 = 1 << 3;
 const DIVOT_ON: u32 = 1 << 4;
 const DITHER_FILTER: u32 = 1 << 16;
 
-/// The devices a test runs on: the first the loader ranks, which by standing instruction is the discrete card, or every one with
-/// `EMUSEN_MARS_GPU_TEST_DEVICES=all`; none without Vulkan, when the test says so and stands down.
+/// The Vulkan devices a GPU test runs on (first ranked device, or all when `EMUSEN_MARS_GPU_TEST_DEVICES=all`).
 fn devices() -> Vec<String> {
     let names = GpuDevice::device_names();
-    if names.is_empty() {
-        eprintln!("no Vulkan device: the CPU path's machine");
-        return names;
-    }
+    assert!(!names.is_empty(), "Vulkan hardware device required");
     if std::env::var("EMUSEN_MARS_GPU_TEST_DEVICES").is_ok_and(|v| v == "all") { names } else { names[..1].to_vec() }
 }
 
-fn rasteriser(name: &str, scale: usize) -> Option<GpuRasteriser> {
+fn rasteriser(name: &str, scale: usize) -> GpuRasteriser {
     let device = GpuDevice::try_create(Some(name)).unwrap_or_else(|report| panic!("{report}"));
-    match GpuRasteriser::try_create(device, RDRAM_SIZE * scale * scale) {
-        Ok(gpu) => Some(gpu),
-        Err((_, report)) => {
-            eprintln!("not run: {report}");
-            None
-        }
-    }
+    GpuRasteriser::try_create(device, RDRAM_SIZE * scale * scale).unwrap_or_else(|(_, report)| panic!("{report}"))
 }
 
 fn next(state: &mut u32) -> u32 {
@@ -473,101 +463,6 @@ fn assert_identical(cpu: &(Vec<u8>, Vec<u8>), device: &(Vec<u8>, Vec<u8>), where
     }
 }
 
-/// `Fills_on_the_device_are_the_fills_on_the_cpu_byte_for_byte`.
-#[test]
-fn fills_on_the_device_are_the_fills_on_the_processor_byte_for_byte() {
-    for name in devices() {
-        for scale in [2usize, 3, 4] {
-            let Some(mut gpu) = rasteriser(&name, scale) else { continue };
-            for seed in [1u32, 2, 3] {
-                gpu.clear();
-                let list = fills(seed, WIDTH * 4);
-                let cpu = on_the_cpu(&list, scale);
-                assert!(cpu.0.iter().any(|&b| b != 0));
-                assert_identical(&cpu, &on_the_device(&mut gpu, &list, scale), &format!("seed {seed} at {scale}x on {name}"));
-            }
-            assert_eq!(gpu.counters.columns_past_the_width, 0);
-            assert_eq!(gpu.counters.primitives_not_shaded, 0);
-            assert!(gpu.counters.flushes >= 12, "four images a list should end four batches a list, and {} were flushed", gpu.counters.flushes);
-            eprintln!("{name} at {scale}x: {} rows in {} flushes", gpu.counters.rows_shaded, gpu.counters.flushes);
-        }
-    }
-}
-
-/// `Shaded_depth_tested_triangles_on_the_device_are_the_cpus_byte_for_byte`: one and two cycles, sixteen and thirty-two bits, keyed.
-#[test]
-fn shaded_depth_tested_triangles_on_the_device_are_the_processor_s_byte_for_byte() {
-    for name in devices() {
-        for scale in [2usize, 3, 4] {
-            let Some(mut gpu) = rasteriser(&name, scale) else { continue };
-            for (seed, size, keyed, two_cycle) in [
-                (0x1111_2222u32, 2u64, false, false),
-                (0x3333_4444, 3, false, false),
-                (0x5555_6666, 2, false, false),
-                (0x7777_8888, 2, true, false),
-                (0x9999_AAAA, 3, true, false),
-                (0xBBBB_CCCC, 2, false, true),
-                (0xDDDD_EEEE, 3, false, true),
-                (0x1357_9BDF, 2, false, true),
-            ] {
-                gpu.clear();
-                let list = shaded(seed, size, keyed, two_cycle);
-                let cpu = on_the_cpu(&list, scale);
-                assert_identical(&cpu, &on_the_device(&mut gpu, &list, scale), &format!("seed {seed:08X}, {}-bit, {} cycle, at {scale}x on {name}", if size == 2 { 16 } else { 32 }, if two_cycle { "two" } else { "one" }));
-            }
-            assert_eq!(gpu.counters.primitives_not_shaded, 0);
-            assert_eq!(gpu.counters.columns_past_the_width, 0);
-            eprintln!("{name} at {scale}x: {} rows in {} flushes", gpu.counters.rows_shaded, gpu.counters.flushes);
-        }
-    }
-}
-
-/// `Point_sampled_textures_on_the_device_are_the_cpus_byte_for_byte`: no perspective, the divider in its range, and at its edges.
-#[test]
-fn textures_on_the_device_are_the_processor_s_byte_for_byte() {
-    for name in devices() {
-        for scale in [2usize, 3, 4] {
-            let Some(mut gpu) = rasteriser(&name, scale) else { continue };
-            for (seed, mode, two_cycle) in [(0x0BAD_F00Du32, 0, false), (0x1234_ABCD, 1, false), (0x5EED_1234, 2, false), (0x2468_ACE0, 1, false), (0x0FED_CBA9, 0, true), (0x7531_ECA8, 1, true), (0xFACE_B00C, 2, true)] {
-                gpu.clear();
-                let list = textured(seed, mode, two_cycle);
-                let cpu = on_the_cpu(&list, scale);
-                assert!(cpu.0[FRAMEBUFFER as usize * scale * scale..].iter().take(WIDTH as usize * ROWS as usize * 2 * scale * scale).any(|&b| b != 0x21));
-                assert_identical(&cpu, &on_the_device(&mut gpu, &list, scale), &format!("seed {seed:08X}, mode {mode}, {} cycle, at {scale}x on {name}", if two_cycle { "two" } else { "one" }));
-            }
-            assert_eq!(gpu.counters.primitives_not_shaded, 0);
-            eprintln!("{name} at {scale}x: {} rows in {} flushes", gpu.counters.rows_shaded, gpu.counters.flushes);
-        }
-    }
-}
-
-/// `Copy_mode_rectangles_on_the_device_are_the_cpus_byte_for_byte`.
-#[test]
-fn copy_mode_rectangles_on_the_device_are_the_processor_s_byte_for_byte() {
-    for name in devices() {
-        for scale in [2usize, 3, 4] {
-            let Some(mut gpu) = rasteriser(&name, scale) else { continue };
-            for seed in [0xC0B1_0001u32, 0xC0B1_0002, 0xC0B1_0003] {
-                gpu.clear();
-                let list = copied(seed);
-                let cpu = on_the_cpu(&list, scale);
-                assert_identical(&cpu, &on_the_device(&mut gpu, &list, scale), &format!("seed {seed:08X} at {scale}x on {name}"));
-            }
-            assert_eq!(gpu.counters.primitives_not_shaded, 0);
-            eprintln!("{name} at {scale}x: {} rows in {} flushes", gpu.counters.rows_shaded, gpu.counters.flushes);
-        }
-    }
-}
-
-/// `A_scissor_wider_than_the_image_is_clipped_on_the_device_and_counted`: the CPU path lets a span run into the next row's bytes; the device clips it and says how much.
-#[test]
-fn a_scissor_wider_than_the_image_is_clipped_on_the_device_and_counted() {
-    let Some(name) = devices().into_iter().next() else { return };
-    let Some(mut gpu) = rasteriser(&name, 2) else { return };
-    on_the_device(&mut gpu, &fills(4, (WIDTH + 16) * 4), 2);
-    assert!(gpu.counters.columns_past_the_width > 0);
-}
-
 /// `The_device_is_never_given_the_machines_own_picture`: only a processor at a multiple shades on the device.
 #[test]
 fn the_device_is_never_given_the_machine_s_own_picture() {
@@ -586,6 +481,23 @@ fn the_shaders_are_the_csharp_path_s_files_byte_for_byte() {
         let on_disk = std::fs::read(format!("{folder}/{name}.spv")).unwrap_or_else(|e| panic!("{name}.spv: {e}"));
         assert!(on_disk == bytes, "{name}.spv differs from the binary this library carries");
     }
+}
+
+/// `At_one_the_device_setting_changes_nothing_and_holds_no_device`.
+#[test]
+fn at_one_the_device_setting_changes_nothing_and_holds_no_device() {
+    let through = |gpu: bool| {
+        let mut m = machine(1, gpu, 1);
+        hand(&mut m, &shaded(0x5151_0101, 2, false, false), 0x0010_0000);
+        (m.bus.rdram.to_vec(), m.bus.rdram_hidden.to_vec(), m.bus.dp.gpu_report().to_string(), m.bus.dp.multiple.can_scan_out())
+    };
+    let off = through(false);
+    let on = through(true);
+    assert_eq!(off.2, "off");
+    assert_eq!(on.2, "off at one");
+    assert!(!on.3);
+    assert!(off.0 == on.0, "the machine's own memory changed with the device setting at one");
+    assert!(off.1 == on.1);
 }
 
 // Through the interface, as a game reaches the device.
@@ -621,49 +533,125 @@ fn shadow(m: &mut Machine) -> (Vec<u8>, Vec<u8>) {
     (m.bus.dp.multiple.rdram.to_vec(), m.bus.dp.multiple.hidden.to_vec())
 }
 
-/// `The_interface_draws_the_multiple_on_the_device_as_it_does_on_the_cpu`: the same lists through the interface with the device on and off leave the same shadow, threaded or not.
-#[test]
-fn the_interface_draws_the_multiple_on_the_device_as_it_does_on_the_processor() {
-    // Without a device the asking is refused with a reason and the processor draws, which is the CI runner's case.
-    let no_device = devices().is_empty();
-    for (scale, workers) in [(2, 1), (2, 3), (3, 4), (4, 1)] {
-        let through = |gpu: bool| {
-            let mut m = machine(scale, gpu, workers);
-            for list in [shaded(0x2222_7777, 2, false, false), textured(0x3333_8888, 1, false), shaded(0x4444_9999, 2, false, true), copied(0xC0B1_0007)] {
-                hand(&mut m, &list, 0x0010_0000);
-            }
-            assert!(m.bus.dp.scaled_drawn(), "nothing was drawn at the multiple");
-            let report = m.bus.dp.gpu_report().to_string();
-            (shadow(&mut m), report)
-        };
-        let (cpu, _) = through(false);
-        let (device, report) = through(true);
-        if no_device {
-            assert!(report.starts_with("Vulkan is not available") || report.starts_with("no Vulkan device"), "{report}");
-        } else {
-            assert!(!report.contains("Vulkan"), "{report}");
-        }
-        assert_identical(&cpu, &device, &format!("{scale}x with {workers} workers on {report}"));
-        eprintln!("{scale}x with {workers} workers on {report}: identical");
-    }
-}
+mod vulkan_gpu {
+    use super::*;
 
-/// `At_one_the_device_setting_changes_nothing_and_holds_no_device`.
-#[test]
-fn at_one_the_device_setting_changes_nothing_and_holds_no_device() {
-    let through = |gpu: bool| {
-        let mut m = machine(1, gpu, 1);
-        hand(&mut m, &shaded(0x5151_0101, 2, false, false), 0x0010_0000);
-        (m.bus.rdram.to_vec(), m.bus.rdram_hidden.to_vec(), m.bus.dp.gpu_report().to_string(), m.bus.dp.multiple.can_scan_out())
-    };
-    let off = through(false);
-    let on = through(true);
-    assert_eq!(off.2, "off");
-    assert_eq!(on.2, "off at one");
-    assert!(!on.3);
-    assert!(off.0 == on.0, "the machine's own memory changed with the device setting at one");
-    assert!(off.1 == on.1);
-}
+    /// `Fills_on_the_device_are_the_fills_on_the_cpu_byte_for_byte`.
+    #[test]
+    fn fills_on_the_device_are_the_fills_on_the_processor_byte_for_byte() {
+        for name in devices() {
+            for scale in [2usize, 3, 4] {
+                let mut gpu = rasteriser(&name, scale);
+                for seed in [1u32, 2, 3] {
+                    gpu.clear();
+                    let list = fills(seed, WIDTH * 4);
+                    let cpu = on_the_cpu(&list, scale);
+                    assert!(cpu.0.iter().any(|&b| b != 0));
+                    assert_identical(&cpu, &on_the_device(&mut gpu, &list, scale), &format!("seed {seed} at {scale}x on {name}"));
+                }
+                assert_eq!(gpu.counters.columns_past_the_width, 0);
+                assert_eq!(gpu.counters.primitives_not_shaded, 0);
+                assert!(gpu.counters.flushes >= 12, "four images a list should end four batches a list, and {} were flushed", gpu.counters.flushes);
+                eprintln!("{name} at {scale}x: {} rows in {} flushes", gpu.counters.rows_shaded, gpu.counters.flushes);
+            }
+        }
+    }
+
+    /// `Shaded_depth_tested_triangles_on_the_device_are_the_cpus_byte_for_byte`: one and two cycles, sixteen and thirty-two bits, keyed.
+    #[test]
+    fn shaded_depth_tested_triangles_on_the_device_are_the_processor_s_byte_for_byte() {
+        for name in devices() {
+            for scale in [2usize, 3, 4] {
+                let mut gpu = rasteriser(&name, scale);
+                for (seed, size, keyed, two_cycle) in [
+                    (0x1111_2222u32, 2u64, false, false),
+                    (0x3333_4444, 3, false, false),
+                    (0x5555_6666, 2, false, false),
+                    (0x7777_8888, 2, true, false),
+                    (0x9999_AAAA, 3, true, false),
+                    (0xBBBB_CCCC, 2, false, true),
+                    (0xDDDD_EEEE, 3, false, true),
+                    (0x1357_9BDF, 2, false, true),
+                ] {
+                    gpu.clear();
+                    let list = shaded(seed, size, keyed, two_cycle);
+                    let cpu = on_the_cpu(&list, scale);
+                    assert_identical(&cpu, &on_the_device(&mut gpu, &list, scale), &format!("seed {seed:08X}, {}-bit, {} cycle, at {scale}x on {name}", if size == 2 { 16 } else { 32 }, if two_cycle { "two" } else { "one" }));
+                }
+                assert_eq!(gpu.counters.primitives_not_shaded, 0);
+                assert_eq!(gpu.counters.columns_past_the_width, 0);
+                eprintln!("{name} at {scale}x: {} rows in {} flushes", gpu.counters.rows_shaded, gpu.counters.flushes);
+            }
+        }
+    }
+
+    /// `Point_sampled_textures_on_the_device_are_the_cpus_byte_for_byte`: no perspective, the divider in its range, and at its edges.
+    #[test]
+    fn textures_on_the_device_are_the_processor_s_byte_for_byte() {
+        for name in devices() {
+            for scale in [2usize, 3, 4] {
+                let mut gpu = rasteriser(&name, scale);
+                for (seed, mode, two_cycle) in [(0x0BAD_F00Du32, 0, false), (0x1234_ABCD, 1, false), (0x5EED_1234, 2, false), (0x2468_ACE0, 1, false), (0x0FED_CBA9, 0, true), (0x7531_ECA8, 1, true), (0xFACE_B00C, 2, true)] {
+                    gpu.clear();
+                    let list = textured(seed, mode, two_cycle);
+                    let cpu = on_the_cpu(&list, scale);
+                    assert!(cpu.0[FRAMEBUFFER as usize * scale * scale..].iter().take(WIDTH as usize * ROWS as usize * 2 * scale * scale).any(|&b| b != 0x21));
+                    assert_identical(&cpu, &on_the_device(&mut gpu, &list, scale), &format!("seed {seed:08X}, mode {mode}, {} cycle, at {scale}x on {name}", if two_cycle { "two" } else { "one" }));
+                }
+                assert_eq!(gpu.counters.primitives_not_shaded, 0);
+                eprintln!("{name} at {scale}x: {} rows in {} flushes", gpu.counters.rows_shaded, gpu.counters.flushes);
+            }
+        }
+    }
+
+    /// `Copy_mode_rectangles_on_the_device_are_the_cpus_byte_for_byte`.
+    #[test]
+    fn copy_mode_rectangles_on_the_device_are_the_processor_s_byte_for_byte() {
+        for name in devices() {
+            for scale in [2usize, 3, 4] {
+                let mut gpu = rasteriser(&name, scale);
+                for seed in [0xC0B1_0001u32, 0xC0B1_0002, 0xC0B1_0003] {
+                    gpu.clear();
+                    let list = copied(seed);
+                    let cpu = on_the_cpu(&list, scale);
+                    assert_identical(&cpu, &on_the_device(&mut gpu, &list, scale), &format!("seed {seed:08X} at {scale}x on {name}"));
+                }
+                assert_eq!(gpu.counters.primitives_not_shaded, 0);
+                eprintln!("{name} at {scale}x: {} rows in {} flushes", gpu.counters.rows_shaded, gpu.counters.flushes);
+            }
+        }
+    }
+
+    /// `A_scissor_wider_than_the_image_is_clipped_on_the_device_and_counted`: the CPU path lets a span run into the next row's bytes; the device clips it and says how much.
+    #[test]
+    fn a_scissor_wider_than_the_image_is_clipped_on_the_device_and_counted() {
+        let name = devices().into_iter().next().expect("Vulkan hardware device required");
+        let mut gpu = rasteriser(&name, 2);
+        on_the_device(&mut gpu, &fills(4, (WIDTH + 16) * 4), 2);
+        assert!(gpu.counters.columns_past_the_width > 0);
+    }
+
+    /// `The_interface_draws_the_multiple_on_the_device_as_it_does_on_the_cpu`: the same lists through the interface with the device on and off leave the same shadow, threaded or not.
+    #[test]
+    fn the_interface_draws_the_multiple_on_the_device_as_it_does_on_the_processor() {
+        assert!(!devices().is_empty(), "Vulkan hardware device required");
+        for (scale, workers) in [(2, 1), (2, 3), (3, 4), (4, 1)] {
+            let through = |gpu: bool| {
+                let mut m = machine(scale, gpu, workers);
+                for list in [shaded(0x2222_7777, 2, false, false), textured(0x3333_8888, 1, false), shaded(0x4444_9999, 2, false, true), copied(0xC0B1_0007)] {
+                    hand(&mut m, &list, 0x0010_0000);
+                }
+                assert!(m.bus.dp.scaled_drawn(), "nothing was drawn at the multiple");
+                let report = m.bus.dp.gpu_report().to_string();
+                (shadow(&mut m), report)
+            };
+            let (cpu, _) = through(false);
+            let (device, report) = through(true);
+            assert!(!report.contains("Vulkan"), "{report}");
+            assert_identical(&cpu, &device, &format!("{scale}x with {workers} workers on {report}"));
+            eprintln!("{scale}x with {workers} workers on {report}: identical");
+        }
+    }
 
 #[allow(clippy::too_many_arguments)]
 fn vi_registers(kind: u32, antialias: u32, width: u32, step_x: u32, step_y: u32, left: u32, columns: u32, top: u32, rows: u32, bias_x: u32, bias_y: u32) -> [u32; 14] {
@@ -712,9 +700,7 @@ fn assert_same_frame(cpu: &[u8], device: &[u8], where_: &str) {
 /// `The_scan_out_on_the_device_is_the_cpus_byte_for_byte`: every filter the VI has, over sixteen- and thirty-two-bit frame buffers, at once and deferred.
 #[test]
 fn the_scan_out_on_the_device_is_the_processor_s_byte_for_byte() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let modes: [([u32; 14], u64); 13] = [
         (vi_registers(3, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), 3),
         (vi_registers(3, 1, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), 3),
@@ -756,9 +742,7 @@ fn the_scan_out_on_the_device_is_the_processor_s_byte_for_byte() {
 /// `Averaging_on_the_device_is_the_cpus_scan_after_scan`: the average over a raster the device keeps, through borders, fades, blanks, fields and repeats (Mars_Gpu.md §15).
 #[test]
 fn averaging_on_the_device_is_the_processor_s_scan_after_scan() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let bordered = with(vi_registers(2, 0, 320, 0x200, 0x400, 124, 600, 34, 240, 0, 0), DITHER_FILTER | DIVOT_ON, 525);
     let shorter = with(vi_registers(2, 0, 320, 0x200, 0x400, 124, 600, 34, 200, 0, 0), DITHER_FILTER | DIVOT_ON, 525);
     let interlaced = with(vi_registers(2, 1, 320, 0x200, 0x200, 108, 640, 34, 240, 0, 0), SERRATED | DIVOT_ON, 525);
@@ -833,9 +817,7 @@ fn averaging_on_the_device_is_the_processor_s_scan_after_scan() {
 /// `Averaging_moved_onto_the_device_keeps_the_raster_the_processor_made`: turned on between interlaced fields, the device's raster starts as the processor's.
 #[test]
 fn averaging_moved_onto_the_device_keeps_the_raster_the_processor_made() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let interlaced = with(vi_registers(2, 1, 320, 0x200, 0x200, 108, 640, 34, 240, 0, 0), SERRATED | DIVOT_ON, 525);
     let covered = |seed: u32| {
         let mut list = vec![FILL_CYCLE, color_image(FRAMEBUFFER, 2, WIDTH), scissor(0, 0, WIDTH * 4, ROWS * 4), fill_color(0x2468_1357), fill_rectangle(0, 0, WIDTH * 4 - 4, ROWS * 4 - 4)];
@@ -875,9 +857,7 @@ fn averaging_moved_onto_the_device_keeps_the_raster_the_processor_made() {
 /// `A_walk_left_pending_shows_the_frame_it_captured`: what reaches the device after the capture, a frame or a state read, must not reach the picture the walk shows (Mars_Gpu.md §14).
 #[test]
 fn a_walk_left_pending_shows_the_frame_it_captured() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     for scale in [2, 4] {
         for (state_read_between, workers) in [(false, 1), (true, 1), (false, 3), (true, 3)] {
             let through = |gpu: bool| {
@@ -907,9 +887,7 @@ fn a_walk_left_pending_shows_the_frame_it_captured() {
 /// `A_repeated_capture_walked_again_on_the_device_is_the_cpus`: with every scan walked, a repeat reuses the device's picture only while nothing has replaced it.
 #[test]
 fn a_repeated_capture_walked_again_on_the_device_is_the_processor_s() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     for scale in [2, 4] {
         for (scanned_between, workers) in [(false, 1), (true, 1), (false, 3), (true, 3)] {
             let through = |gpu: bool| {
@@ -941,9 +919,7 @@ fn a_repeated_capture_walked_again_on_the_device_is_the_processor_s() {
 /// `After_a_state_is_read_the_device_holds_what_the_cpu_path_holds`: a state read empties the memory at the multiple on the device as in the shadow (Mars_Gpu.md §14.3).
 #[test]
 fn after_a_state_is_read_the_device_holds_what_the_processor_path_holds() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     for (shaded_before_the_state, workers) in [(false, 1), (true, 1), (false, 3), (true, 3)] {
         let through = |gpu: bool| {
             let mut m = machine(2, gpu, if gpu { workers } else { 1 });
@@ -985,9 +961,7 @@ fn whole_picture(scale: u32) -> crate::rdp::gpu::ScanParameters {
 /// once does: the words and the scan are handed over while the workers stand, so none has run when the scan is asked for.
 #[test]
 fn the_leader_runs_a_scan_after_the_words_handed_before_it_and_before_those_handed_after() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     // The last word before the scan fills one rectangle and the first after it another, in the same colour, over a cleared picture.
     let before = [FILL_CYCLE, color_image(FRAMEBUFFER, 2, WIDTH), scissor(0, 0, WIDTH * 4, ROWS * 4), fill_color(0x0843_0843), fill_rectangle(0, 0, WIDTH * 4 - 4, ROWS * 4 - 4), fill_color(0xF83F_F83F), fill_rectangle(40 * 4, 30 * 4, 120 * 4, 90 * 4)];
     let after = [fill_rectangle(160 * 4, 120 * 4, 240 * 4, 180 * 4)];
@@ -1035,9 +1009,7 @@ fn let_go_later(m: &Machine, millis: u64) -> std::thread::JoinHandle<()> {
 /// of its device work for fifty milliseconds while the machine's thread, or the presenter, reads the picture.
 #[test]
 fn a_picture_read_before_the_leader_has_run_its_scan_waits_for_the_scan() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let registers = with(vi_registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), DITHER_FILTER | DIVOT_ON, 525);
     for (scale, deferred, average) in [(2, true, 1), (2, false, 1), (4, true, 1), (4, true, 2), (4, false, 4)] {
         let through = |workers: usize| {
@@ -1064,9 +1036,7 @@ fn a_picture_read_before_the_leader_has_run_its_scan_waits_for_the_scan() {
 /// out shows it. The leader is held short of it for a hundred milliseconds while the machine's thread makes the change.
 #[test]
 fn a_drain_stopped_while_its_leader_owes_a_scan_runs_the_scan_first() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let registers = with(vi_registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), DITHER_FILTER | DIVOT_ON, 525);
     for change in ["unthreaded", "two workers", "a state read"] {
         let through = |workers: usize| {
@@ -1099,9 +1069,7 @@ fn a_drain_stopped_while_its_leader_owes_a_scan_runs_the_scan_first() {
 /// or the two threads meet in the device; an equality cannot see that, ThreadSanitizer can (Mars_Native.md §6.15).
 #[test]
 fn a_read_back_straight_after_a_scan_waits_for_the_leader_s_scan() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let registers = with(vi_registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), DITHER_FILTER | DIVOT_ON, 525);
     let through = |workers: usize| {
         let mut m = machine(2, true, workers);
@@ -1127,9 +1095,7 @@ fn a_read_back_straight_after_a_scan_waits_for_the_leader_s_scan() {
 /// leader is held short of the scan while the join is asked, with no word left to run, and the device's own count of scans is read.
 #[test]
 fn a_join_waits_for_the_scans_handed_to_the_leader() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let mut m = machine(2, true, 3);
     hand(&mut m, &shaded(0x7E57_5CA2, 2, false, false), 0x0010_0000);
     let scans = |m: &Machine| m.bus.dp.multiple.gpu.as_ref().expect("a device").counters.scans;
@@ -1170,9 +1136,7 @@ fn behind(m: &Machine) -> i64 {
 /// the processor stores over it too: its loads, replayed from the native ones', are what the list at once loaded.
 #[test]
 fn the_device_s_processor_behind_replays_the_loads_the_native_ones_read() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let mut list = textured(0x3333_8888, 1, false);
     list.extend([FILL_CYCLE, color_image(TEXTURE_SOURCE, 2, 64), scissor(0, 0, 64 * 4, 32 * 4), fill_color(0x1234_5678), fill_rectangle(0, 0, 63 * 4, 31 * 4)]);
     list.extend(textured(0x4444_9999, 1, false));
@@ -1199,9 +1163,7 @@ fn the_device_s_processor_behind_replays_the_loads_the_native_ones_read() {
 /// hundred milliseconds, it is still behind when the read returns, and the read sees the fill.
 #[test]
 fn a_read_of_what_the_native_processors_drew_does_not_wait_for_the_device_s_processor() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let mut m = drained(2, 3);
     let released = let_behind_go_later(&m, 300);
     hand_only(&mut m, &cleared(2), 0x0010_0000);
@@ -1220,9 +1182,7 @@ fn a_read_of_what_the_native_processors_drew_does_not_wait_for_the_device_s_proc
 /// each the words are all its, and the picture is the list at once's.
 #[test]
 fn a_join_a_stop_and_a_state_wait_for_the_device_s_processor_behind() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let list = shaded(0x7E57_5CA2, 2, false, false);
     let at_once = {
         let mut m = machine(2, true, 1);
@@ -1249,9 +1209,7 @@ fn a_join_a_stop_and_a_state_wait_for_the_device_s_processor_behind() {
 /// for it rather than overwrite a load it has not replayed, and its picture is the list at once's.
 #[test]
 fn the_leader_waits_for_the_device_s_processor_when_every_kept_load_is_unread() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     // One clear, then ten lists' loads and triangles over each other, so that every load's texels can reach the picture.
     let mut list = cleared(2);
     for seed in 0..10u32 {
@@ -1273,9 +1231,7 @@ fn the_leader_waits_for_the_device_s_processor_when_every_kept_load_is_unread() 
 /// run is overwritten, and its picture is the list at once's.
 #[test]
 fn the_ring_waits_for_the_device_s_processor_behind() {
-    if devices().is_empty() {
-        return;
-    }
+    let _ = devices();
     let mut s = 0x0BAD_F11Du32;
     let mut list = cleared(2);
     while list.len() < (1 << 16) + 4096 {
@@ -1297,13 +1253,11 @@ fn the_ring_waits_for_the_device_s_processor_behind() {
 
 /// The stop-or-go measurement of Mars_Gpu.md §6.5 on MarsRT, by hand with `EMUSEN_MARS_GPU_BENCH=1`: not a test of anything.
 #[test]
+#[ignore = "manual GPU benchmark; run with EMUSEN_MARS_GPU_BENCH=1"]
 fn bench_shading_at_a_multiple_on_the_processor_and_on_the_device() {
-    if !std::env::var("EMUSEN_MARS_GPU_BENCH").is_ok_and(|v| v == "1") {
-        return;
-    }
-    let Some(name) = devices().into_iter().next() else { return };
+    let name = devices().into_iter().next().expect("Vulkan hardware device required");
     for scale in [2usize, 4] {
-        let Some(mut gpu) = rasteriser(&name, scale) else { continue };
+        let mut gpu = rasteriser(&name, scale);
         for (what, list) in [("72 large", shaded(0x1111_2222, 2, false, false)), ("2000 small", small(0x2222_3333, 2000))] {
             let (mut cpu, mut total) = (Vec::new(), Vec::new());
             for _ in 0..9 {
@@ -1356,7 +1310,7 @@ fn recorded_in_turn(gpu: &mut GpuRasteriser, lists: &[Vec<u64>], scale: usize, s
 fn a_flush_returns_while_the_device_shades_and_the_picture_is_the_processor_s() {
     for name in devices() {
         let scale = 4;
-        let Some(mut gpu) = rasteriser(&name, scale) else { continue };
+        let mut gpu = rasteriser(&name, scale);
         let lists: Vec<Vec<u64>> = (0..12u32).map(|i| if i % 3 == 2 { textured(0x7100 + i, 1, false) } else { shaded(0x6100 + i, 2, false, i % 2 == 1) }).collect();
         let (device, returned_early) = recorded_in_turn(&mut gpu, &lists, scale, 0);
         assert!(returned_early > 0, "on {name} every flush had finished when it returned, so the flush waited for the device");
@@ -1410,7 +1364,7 @@ fn recorded_in_steps(gpu: &mut GpuRasteriser, steps: &[(Vec<u64>, End)], scale: 
 fn a_slot_is_staged_again_only_once_the_submissions_that_read_it_have_finished() {
     for name in devices() {
         for scale in [2usize, 4] {
-            let Some(mut gpu) = rasteriser(&name, scale) else { continue };
+            let mut gpu = rasteriser(&name, scale);
             for (case, ends) in [[End::Scan, End::Flush, End::Flush], [End::Flush, End::Scan, End::Flush], [End::Raster, End::Flush, End::Flush], [End::Flush, End::Raster, End::Flush]].iter().enumerate() {
                 gpu.clear();
                 let steps: Vec<(Vec<u64>, End)> = (0..4u32)
@@ -1425,4 +1379,5 @@ fn a_slot_is_staged_again_only_once_the_submissions_that_read_it_have_finished()
             }
         }
     }
+}
 }

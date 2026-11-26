@@ -283,10 +283,7 @@ fn frames() -> u64 {
 }
 
 fn each_game(mode: Mode, how: Compare) {
-    let Ok(folder) = std::env::var("EMUSEN_MARSRT_STATES") else {
-        eprintln!("EMUSEN_MARSRT_STATES unset, not run");
-        return;
-    };
+    let folder = std::env::var("EMUSEN_MARSRT_STATES").expect("EMUSEN_MARSRT_STATES corpus required");
     let only = std::env::var("EMUSEN_MARSRT_GAME").ok();
     for (rom, state) in GAMES {
         if only.as_deref().is_some_and(|g| !rom.starts_with(g)) || !std::path::Path::new(&format!("{folder}/{rom}")).exists() {
@@ -299,26 +296,31 @@ fn each_game(mode: Mode, how: Compare) {
 }
 
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_threaded_machine_joined_every_frame_is_the_machine_at_once() {
     each_game(Mode { threaded: true, ..Mode::PLAIN }, Compare::Join);
 }
 
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_threaded_machine_snapshot_every_frame_is_the_machine_at_once() {
     each_game(Mode { threaded: true, ..Mode::PLAIN }, Compare::Snapshot);
 }
 
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_deferred_picture_is_the_immediate_picture_of_the_frame_before() {
     each_game(Mode { deferred: true, ..Mode::PLAIN }, Compare::Join);
 }
 
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_threaded_and_deferred_machine_is_the_machine_at_once_a_picture_late() {
     each_game(Mode { threaded: true, deferred: true, ..Mode::PLAIN }, Compare::Snapshot);
 }
 
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_machine_whose_list_several_processors_share_is_the_machine_at_once() {
     let counts = std::env::var("EMUSEN_MARSRT_WORKERS").unwrap_or_else(|_| "2,3,4".into());
     for workers in counts.split(',').filter_map(|n| n.trim().parse().ok()) {
@@ -326,65 +328,57 @@ fn a_machine_whose_list_several_processors_share_is_the_machine_at_once() {
     }
 }
 
-/// At two and at four: the split with four workers, deferred, against the machine at once at the same multiple, picture for picture, and
-/// the machine at one in state (Mars_Native.md §6.4).
+/// At two and at four: the split with four workers, deferred, against the machine at once at the same multiple, picture for picture, and the machine at one in state (Mars_Native.md §6.4).
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_machine_at_a_multiple_split_and_deferred_is_the_machine_at_once_at_that_multiple() {
     for scale in [2, 4] {
         each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
     }
 }
 
-/// At two and at four on the device, split, deferred and at once, against the processor at once at the same multiple: the device's frames
-/// are the processor's, picture for picture, on real games (Mars_Gpu.md §11, Mars_Native.md §6.4), with the scans run by the drain's
-/// leader (§6.15). Stands down without a Vulkan device.
-#[test]
-fn a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor() {
-    if crate::rdp::gpu::GpuDevice::device_names().is_empty() {
-        eprintln!("no Vulkan device: not run");
-        return;
+mod vulkan_gpu {
+    use super::*;
+
+    #[test]
+    #[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
+    fn a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor() {
+        assert!(!crate::rdp::gpu::GpuDevice::device_names().is_empty(), "Vulkan hardware device required");
+        for (scale, deferred) in [(2, true), (4, true), (2, false), (4, false)] {
+            each_game(Mode { threaded: true, deferred, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
+        }
     }
-    for (scale, deferred) in [(2, true), (4, true), (2, false), (4, false)] {
-        each_game(Mode { threaded: true, deferred, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
+
+    #[test]
+    #[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
+    fn a_machine_averaged_on_the_device_split_and_deferred_is_the_device_at_once() {
+        assert!(!crate::rdp::gpu::GpuDevice::device_names().is_empty(), "Vulkan hardware device required");
+        for (scale, average) in [(4, 2), (4, 4), (2, 2)] {
+            each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
+        }
     }
 }
 
-/// Averaged on the device, split and deferred, against the device at once at the same multiple and averaging: exact, since the two
-/// decline the same primitives; the processor at once is compared too, and must agree while nothing has been declined (Mars_Gpu.md §15).
+/// The vector unit in host vectors against the element-by-element unit, the reference's (Mars_Native.md §6.10).
 #[test]
-fn a_machine_averaged_on_the_device_split_and_deferred_is_the_device_at_once() {
-    if crate::rdp::gpu::GpuDevice::device_names().is_empty() {
-        eprintln!("no Vulkan device: not run");
-        return;
-    }
-    for (scale, average) in [(4, 2), (4, 4), (2, 2)] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
-    }
-}
-
-/// The vector unit in host vectors against the element-by-element unit, the reference's: unthreaded, and on four workers deferred
-/// through the blocks (Mars_Native.md §6.10). Stands down on a host without the SIMD path.
-#[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_machine_whose_vector_unit_runs_in_host_vectors_is_the_machine_element_by_element() {
-    if !crate::rsp::simd_supported() {
-        eprintln!("no SIMD path on this host: not run");
-        return;
-    }
+    assert!(crate::rsp::simd_supported(), "SIMD path required on this host");
     each_game(Mode { rsp_simd: Some(true), ..Mode::PLAIN }, Compare::Join);
     each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, rsp_simd: Some(true), ..Mode::PLAIN }, Compare::Snapshot);
 }
 
-/// The signal processor through its decoded table against the interpreter, the reference's: unthreaded, and on four workers deferred
-/// through the blocks (Mars_Native.md §6.12).
+/// The signal processor through its decoded table against the interpreter, the reference's (Mars_Native.md §6.12).
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_machine_whose_signal_processor_runs_decoded_is_the_machine_interpreted() {
     each_game(Mode { rsp_blocks: Some(true), ..Mode::PLAIN }, Compare::Join);
     each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, rsp_blocks: Some(true), ..Mode::PLAIN }, Compare::Snapshot);
 }
 
-/// The deferred walk in two, three and eight bands, beside the default's four, on four workers through the blocks: the picture a frame late is
-/// the immediate one-band picture, and the state is the machine's at once (Mars_Native.md §6.11).
+/// The deferred walk in two, three and eight bands, beside the default's four, on four workers through the blocks (Mars_Native.md §6.11).
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_deferred_walk_in_bands_is_the_immediate_walk_a_picture_late() {
     for bands in [2, 3, 8] {
         each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, bands, ..Mode::PLAIN }, Compare::Snapshot);
@@ -392,32 +386,30 @@ fn a_deferred_walk_in_bands_is_the_immediate_walk_a_picture_late() {
 }
 
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_recompiled_machine_is_the_interpreted_machine() {
     each_game(Mode { blocks: true, ..Mode::PLAIN }, Compare::Join);
 }
 
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_recompiled_machine_on_four_workers_deferred_is_the_interpreted_machine_a_picture_late() {
     each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
 }
 
-/// Every debugger table armed and nothing halting, unthreaded and on four workers deferred: the observed loop leaves what the plain
-/// one leaves in state, picture and sound, every frame (Mars_Native.md §6.5).
+/// Every debugger table armed and nothing halting, unthreaded and on four workers deferred (Mars_Native.md §6.5).
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn an_observed_machine_with_every_table_armed_is_the_machine_plain() {
     each_game(Mode { observed: true, ..Mode::PLAIN }, Compare::Join);
     each_game(Mode { threaded: true, deferred: true, workers: 4, observed: true, ..Mode::PLAIN }, Compare::Snapshot);
 }
 
-/// A breakpoint at the general exception vector on every third frame, halted at and resumed, the frames between run plain through the
-/// blocks: against the same game run through unstopped, the state is one at every halt's instruction count and state, picture and
-/// sound are one at every frame's end. Unthreaded, then four workers deferred.
+/// A breakpoint at the general exception vector on every third frame, halted at and resumed (Mars_Native.md §6.5).
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through() {
-    let Ok(folder) = std::env::var("EMUSEN_MARSRT_STATES") else {
-        eprintln!("EMUSEN_MARSRT_STATES unset, not run");
-        return;
-    };
+    let folder = std::env::var("EMUSEN_MARSRT_STATES").expect("EMUSEN_MARSRT_STATES corpus required");
     let frames = frames();
     for threaded in [false, true] {
         let mode = Mode { threaded, deferred: threaded, workers: if threaded { 4 } else { 1 }, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 };
@@ -476,14 +468,11 @@ fn a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through() {
     }
 }
 
-/// A run that carries a history of blocks against one started from its state, which has none: `Mars_Recompiler.md` §13's
-/// asymmetry, which is how the C# core's stale shape was found. Both machines recompile, and both must agree.
+/// A run that carries a history of blocks against one started from its state (`Mars_Recompiler.md` §13).
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_STATES corpus"]
 fn a_run_that_carries_its_blocks_and_one_loaded_from_its_state_agree() {
-    let Ok(folder) = std::env::var("EMUSEN_MARSRT_STATES") else {
-        eprintln!("EMUSEN_MARSRT_STATES unset, not run");
-        return;
-    };
+    let folder = std::env::var("EMUSEN_MARSRT_STATES").expect("EMUSEN_MARSRT_STATES corpus required");
     let frames = frames();
     let mode = Mode { blocks: true, ..Mode::PLAIN };
     for (rom, state) in GAMES {

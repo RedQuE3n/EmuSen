@@ -169,14 +169,11 @@ mod tests {
         assert_eq!(dis(&[0x4AFC]), None);
     }
 
-    /// Every opcode: the processor decodes it exactly when the map lists it, and the disassembler names it as the map
-    /// does. Unrun without the corpus.
+    /// Every opcode decodes and disassembles as `680x0/map` in `EMUSEN_BERYL_CORPUS`.
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_CORPUS corpus"]
     fn every_opcode_against_the_map() {
-        let Some(map) = map() else {
-            eprintln!("{} does not hold 680x0/map: not run", crate::singlestep::CORPUS_VARIABLE);
-            return;
-        };
+        let map = map().unwrap_or_else(|| panic!("{} does not hold 680x0/map", crate::singlestep::CORPUS_VARIABLE));
         let (mut decode_wrong, mut text_wrong) = (Vec::new(), Vec::new());
         for op in 0..=0xFFFFu16 {
             let want = map.get(&op).cloned().flatten();

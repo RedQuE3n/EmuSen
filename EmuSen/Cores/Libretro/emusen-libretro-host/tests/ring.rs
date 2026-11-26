@@ -43,17 +43,13 @@ fn make(settings: &str) -> Machine {
     Machine::create(library(), &c).unwrap_or_else(|r| panic!("{r:?}"))
 }
 
-/// The host's device, or `None` (the test then passes without running) where no card can make a ring.
-fn host() -> Option<Device> {
+/// The host's Vulkan device with ring support, panicking when absent.
+fn host() -> Device {
     let wanted = std::env::var("EMUSEN_GPU_DEVICE").ok();
     let validate = std::env::var("EMUSEN_VALIDATE").is_ok_and(|v| v == "1");
-    match Device::create(wanted.as_deref(), validate) {
-        Ok(d) if d.rings() => Some(d),
-        Ok(_) | Err(_) => {
-            eprintln!("skipped: no Vulkan device here can make a ring");
-            None
-        }
-    }
+    let d = Device::create(wanted.as_deref(), validate).expect("Vulkan hardware device required");
+    assert!(d.rings(), "Vulkan hardware device with ring support required");
+    d
 }
 
 /// The ABI's lend of a ring, its images kept alive beside it.
@@ -94,10 +90,13 @@ fn ring_run(hw: &str, frames: usize, want: &[(i32, i32, Vec<u8>)], gpu: &Device)
     m.ring_lend(None).unwrap();
 }
 
-#[test]
-fn a_vulkan_picture_reaches_the_ring_as_the_software_picture_rgba_by_copy_and_bgra_by_blit() {
-    let _t = turn();
-    let Some(gpu) = host() else { return };
+mod vulkan_gpu {
+    use super::*;
+
+    #[test]
+    fn a_vulkan_picture_reaches_the_ring_as_the_software_picture_rgba_by_copy_and_bgra_by_blit() {
+        let _t = turn();
+        let gpu = host();
     let want = software(6);
     ring_run("vulkan", 6, &want, &gpu);
     ring_run("vulkan_bgra", 6, &want, &gpu);
@@ -108,7 +107,7 @@ fn a_vulkan_picture_reaches_the_ring_as_the_software_picture_rgba_by_copy_and_bg
 #[test]
 fn a_core_negotiating_v1_reaches_the_ring_through_the_hosts_vk_create_device() {
     let _t = turn();
-    let Some(gpu) = host() else { return };
+    let gpu = host();
     let want = software(6);
     ring_run("vulkan_v1", 6, &want, &gpu);
 }
@@ -117,7 +116,7 @@ fn a_core_negotiating_v1_reaches_the_ring_through_the_hosts_vk_create_device() {
 #[test]
 fn a_v1_core_that_bypasses_the_hosts_vk_create_device_is_read_back_and_says_why() {
     let _t = turn();
-    let Some(gpu) = host() else { return };
+    let gpu = host();
     let want = software(3);
     let mut m = make("tc_hw=vulkan_v1_loader");
     let ring = gpu.create_ring(640, 480, 3).unwrap();
@@ -143,7 +142,7 @@ fn a_v1_core_that_bypasses_the_hosts_vk_create_device_is_read_back_and_says_why(
 #[test]
 fn a_vulkan_cores_frames_land_in_whatever_format_it_declared_and_the_host_accepts() {
     let _t = turn();
-    let Some(gpu) = host() else { return };
+    let gpu = host();
     let want = software(2);
     for format in ["xrgb8888", "rgb565", "0rgb1555"] {
         for mask in [0b001u64, 0b011, 0b101, 0b111] {
@@ -186,7 +185,7 @@ fn a_vulkan_cores_frames_land_in_whatever_format_it_declared_and_the_host_accept
 #[test]
 fn a_ringed_frames_picture_is_read_back_when_frame_copy_asks_as_a_screenshot_does() {
     let _t = turn();
-    let Some(gpu) = host() else { return };
+    let gpu = host();
     let want = software(6);
     for hw in ["vulkan", "vulkan_bgra"] {
         let ring = gpu.create_ring(640, 480, 3).unwrap();
@@ -217,7 +216,7 @@ fn a_ringed_frames_picture_is_read_back_when_frame_copy_asks_as_a_screenshot_doe
 #[test]
 fn with_no_ring_the_picture_is_read_back_and_a_ring_on_another_card_is_refused() {
     let _t = turn();
-    let Some(gpu) = host() else { return };
+    let gpu = host();
     let want = software(3);
     let mut m = make("tc_hw=vulkan");
     let ring = gpu.create_ring(640, 480, 3).unwrap();
@@ -239,7 +238,7 @@ fn with_no_ring_the_picture_is_read_back_and_a_ring_on_another_card_is_refused()
 #[test]
 fn a_picture_larger_than_the_ring_is_held_and_copied_into_the_next_ring_that_holds_it() {
     let _t = turn();
-    let Some(gpu) = host() else { return };
+    let gpu = host();
     let want = software(1);
     let mut m = make("tc_hw=vulkan");
     let small = gpu.create_ring(256, 200, 3).unwrap();
@@ -257,61 +256,7 @@ fn a_picture_larger_than_the_ring_is_held_and_copied_into_the_next_ring_that_hol
     m.ring_lend(None).unwrap();
 }
 
-/// The measurement of §10f: per frame, the cost on the host's emulation thread (advance, then frame_ring or
-/// frame_copy) and the delay from set_buttons to the picture on the host's side (the ring read on the host's device,
-/// the copy in host memory otherwise), for software, the read-back and the ring. Run with --ignored --nocapture.
-#[test]
-#[ignore]
-fn measure_the_ring_against_the_read_back_and_software() {
-    let _t = turn();
-    let Some(gpu) = host() else { return };
-    let frames = 600usize;
-    let stats = |v: &mut Vec<f64>| {
-        v.sort_by(f64::total_cmp);
-        (v.iter().sum::<f64>() / v.len() as f64, v[v.len() / 2], v[v.len() * 99 / 100])
-    };
-    for (name, settings) in [("software", ""), ("read-back", "tc_hw=vulkan"), ("ring", "tc_hw=vulkan")] {
-        let mut m = make(settings);
-        let ring = gpu.create_ring(640, 480, 3).unwrap();
-        let (lend, _keep) = lend_of(&ring);
-        if name == "ring" {
-            m.ring_lend(Some(&lend)).unwrap();
-        }
-        let mut copy = vec![0u8; 640 * 480 * 4];
-        let (mut cost, mut delay) = (Vec::new(), Vec::new());
-        for n in 0..frames {
-            let press = n % 10 == 5;
-            let t0 = std::time::Instant::now();
-            if press || n % 10 == 6 {
-                m.set_buttons(0, if press { 1 } else { 0 }, 1).unwrap();
-            }
-            let t1 = std::time::Instant::now();
-            m.advance().unwrap();
-            let shown = if name == "ring" { m.frame_ring().unwrap() } else { None };
-            if name != "ring" {
-                m.frame_copy(&mut copy).unwrap();
-            }
-            let spent = t1.elapsed();
-            if let Some(f) = shown {
-                ring.read(f.slot as usize, f.value, f.width as u32, f.height as u32).unwrap();
-            }
-            if n >= 60 {
-                cost.push(spent.as_secs_f64() * 1e3);
-                if press {
-                    delay.push(t0.elapsed().as_secs_f64() * 1e3);
-                }
-            }
-        }
-        let (c, d) = (stats(&mut cost), stats(&mut delay));
-        println!("{name:9}: emulation thread mean {:.3} median {:.3} p99 {:.3} ms; set_buttons to picture mean {:.3} median {:.3} p99 {:.3} ms", c.0, c.1, c.2, d.0, d.1, d.2);
-        if name == "ring" {
-            m.ring_lend(None).unwrap();
-        }
-    }
-}
-
-/// emusen-native's test core painting the libretro test core's picture on a lent device, this crate's example
-/// `device_test_core`, built first (`cargo build --example device_test_core`).
+/// emusen-native's test core painting the libretro test core's picture on a lent device (`cargo build --example device_test_core`).
 fn device_core() -> &'static Library {
     DEVICE_CORE.get_or_init(|| {
         let suffix = emusen_core_entry::library_suffix();
@@ -355,7 +300,7 @@ fn press(n: usize) -> Option<u32> {
 #[test]
 fn the_v1_test_cores_device_picture_is_the_libretro_test_cores_software_picture() {
     let _t = turn();
-    let Some(gpu) = host() else { return };
+    let gpu = host();
     let lend = Lend::new(&gpu).unwrap();
     let lent = device_lend_of(&lend);
     let image = painted_image();
@@ -384,69 +329,4 @@ fn the_v1_test_cores_device_picture_is_the_libretro_test_cores_software_picture(
     }
     lend.settle().unwrap();
 }
-
-/// The acceptance measurement of stage 3 (§10f): the ring against DEVICE_PICTURE on one picture, the libretro test
-/// core's 320 by 240, for the emulation thread's cost (advance and the sound drained, then frame_ring, or frame_device
-/// and the lend's take)
-/// and the delay from set_buttons to the picture in host memory (Ring::read, or the lend's read). Run with --ignored
-/// --nocapture.
-#[test]
-#[ignore]
-fn measure_the_ring_against_device_picture() {
-    let _t = turn();
-    let Some(gpu) = host() else { return };
-    let frames = 600usize;
-    let stats = |v: &mut Vec<f64>| {
-        v.sort_by(f64::total_cmp);
-        (v.iter().sum::<f64>() / v.len() as f64, v[v.len() / 2], v[v.len() * 99 / 100])
-    };
-    for name in ["ring", "device picture"] {
-        let ring = gpu.create_ring(640, 480, 3).unwrap();
-        let (rlend, _keep) = lend_of(&ring);
-        let lend = Lend::new(&gpu).unwrap();
-        let lent = device_lend_of(&lend);
-        let image = painted_image();
-        let mut m = if name == "ring" {
-            let mut m = make("tc_hw=vulkan");
-            m.ring_lend(Some(&rlend)).unwrap();
-            m
-        } else {
-            Machine::create(device_core(), &Create { device: Some(&lent), ..Create::new(&image) }).unwrap()
-        };
-        let (mut cost, mut delay, mut sound) = (Vec::new(), Vec::new(), vec![0i16; 8192]);
-        for n in 0..frames {
-            let pressed = n % 10 == 5;
-            let t0 = std::time::Instant::now();
-            if pressed || n % 10 == 6 {
-                m.set_buttons(0, if pressed { 1 } else { 0 }, 1).unwrap();
-            }
-            let t1 = std::time::Instant::now();
-            m.advance().unwrap();
-            m.audio_drain(&mut sound).unwrap();
-            let shown = if name == "ring" { m.frame_ring().unwrap() } else { None };
-            if name != "ring" {
-                take(&mut m, &lend);
-            }
-            let spent = t1.elapsed();
-            if let Some(f) = shown {
-                ring.read(f.slot as usize, f.value, f.width as u32, f.height as u32).unwrap();
-            } else {
-                let taken = lend.claim(0).unwrap();
-                lend.read(&taken).unwrap();
-                lend.release();
-            }
-            if n >= 60 {
-                cost.push(spent.as_secs_f64() * 1e3);
-                if pressed {
-                    delay.push(t0.elapsed().as_secs_f64() * 1e3);
-                }
-            }
-        }
-        let (c, d) = (stats(&mut cost), stats(&mut delay));
-        println!("{name:14}: emulation thread mean {:.3} median {:.3} p99 {:.3} ms; set_buttons to picture mean {:.3} median {:.3} p99 {:.3} ms", c.0, c.1, c.2, d.0, d.1, d.2);
-        if name == "ring" {
-            m.ring_lend(None).unwrap();
-        }
-        lend.settle().unwrap();
-    }
 }

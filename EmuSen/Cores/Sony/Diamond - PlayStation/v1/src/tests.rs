@@ -61,49 +61,6 @@ fn the_four_enhancements_are_offered_at_the_hardwares_values() {
     assert_eq!((video.max_width, video.max_height), (640 * 4, 576 * 4), "the largest picture of the largest scale");
 }
 
-/// §42.1: each enhancement, and all four, turned on and off between frames changes the picture alone: the machine's
-/// state and sound are those of a machine that never had them; at 4x the frame is four times the display.
-#[test]
-fn turned_on_and_off_between_frames_they_change_only_the_picture() {
-    let all = [(PRECISION_KEY, "true"), (RESOLUTION_KEY, "4"), (COLOUR_KEY, "true"), (FILTERING_KEY, "all")];
-    let cases: Vec<Vec<(&str, &str)>> = vec![vec![all[0]], vec![all[1]], vec![all[2]], vec![all[3]], all.to_vec()];
-    let off = [(PRECISION_KEY, "false"), (RESOLUTION_KEY, "1"), (COLOUR_KEY, "false"), (FILTERING_KEY, "off")];
-    for case in cases {
-        let (mut plain, mut d) = (create(&[]), create(&[]));
-        let (mut pa, mut pb) = (vec![0i16; 8192], vec![0i16; 8192]);
-        let mut differed = 0;
-        for f in 0..12 {
-            if f == 3 {
-                d.set_settings(&Settings::from_pairs(case.iter().map(|&(k, v)| (k.into(), v.into())).collect())).unwrap();
-                if d.renderer_ref().is_none() {
-                    eprintln!("no Vulkan device: {:?}", d.setting_notes());
-                    return;
-                }
-            }
-            if f == 9 {
-                d.set_settings(&Settings::from_pairs(off.iter().map(|&(k, v)| (k.into(), v.into())).collect())).unwrap();
-                assert!(d.renderer_ref().is_none() && d.setting_notes().is_empty());
-            }
-            Core::advance(&mut plain, &mut 0).unwrap();
-            Core::advance(&mut d, &mut 0).unwrap();
-            let (na, nb) = (plain.drain_audio(&mut pa, usize::MAX), d.drain_audio(&mut pb, usize::MAX));
-            assert!(pa[..na] == pb[..nb], "{case:?} frame {f}: the sound differs");
-            assert!(accurate(&mut plain) == accurate(&mut d), "{case:?} frame {f}: the machine differs");
-            let fi = d.frame_info();
-            assert_eq!(d.frame().len(), (fi.width * fi.height * 4) as usize);
-            if (4..9).contains(&f) && case.contains(&(RESOLUTION_KEY, "4")) {
-                assert_eq!((fi.width, fi.height), (4 * plain.frame_info().width, 4 * plain.frame_info().height), "{case:?} frame {f}");
-            }
-            if d.frame() != plain.frame() {
-                differed += 1;
-                assert!((3..10).contains(&f), "{case:?} frame {f}: the picture differs with the settings off");
-            }
-        }
-        // The program's triangle is untextured, which filtering alone leaves as the console draws it.
-        assert!(differed > 0 || case == [(FILTERING_KEY, "all")], "{case:?}: the picture never differed");
-    }
-}
-
 /// §24.2, §42.1: where the renderer cannot be made, the settings are accepted, the machine runs as with them off, and
 /// each one set has the note saying why; turned off, the notes go.
 #[test]
@@ -121,76 +78,111 @@ fn with_no_usable_device_the_settings_are_noted_and_the_console_picture_shown() 
     assert!(d.setting_notes().is_empty());
 }
 
-/// §52: with every enhancement on the state is the machine's, the bytes a machine with them off saves at the same frame,
-/// and loads both ways, a state of the kept form among them; machine info states the bound of settling pictures, 0 with
-/// the machine's own picture.
-#[test]
-fn a_state_with_the_settings_on_is_the_machines_and_machine_info_states_the_bound() {
-    let mut on = create(&[(PRECISION_KEY, "true"), (RESOLUTION_KEY, "2"), (COLOUR_KEY, "true"), (FILTERING_KEY, "3d")]);
-    let mut off = create(&[]);
-    assert_eq!(Core::picture_settles(&off), 0);
-    if on.renderer_ref().is_none() {
-        eprintln!("no Vulkan device: {:?}", on.setting_notes());
-        assert_eq!(Core::picture_settles(&on), 0, "the console's own picture is shown");
-        return;
-    }
-    assert_eq!(Core::picture_settles(&on), SETTLES_TRUE_COLOUR);
-    on.choose(Chosen { options: Options { colour: false, ..on.chosen.options }, ..on.chosen });
-    assert_eq!(Core::picture_settles(&on), SETTLES);
-    for _ in 0..5 {
-        Core::advance(&mut on, &mut 0).unwrap();
-        Core::advance(&mut off, &mut 0).unwrap();
-    }
-    let s = state(&mut on);
-    assert!(s == state(&mut off), "{} bytes against {}", s.len(), state(&mut off).len());
-    off.load_state(&s).unwrap();
-    on.load_state(&state(&mut off)).unwrap();
-    for _ in 0..3 {
-        Core::advance(&mut on, &mut 0).unwrap();
-        Core::advance(&mut off, &mut 0).unwrap();
-    }
-    assert!(state(&mut on) == state(&mut off));
-    // A state of the kept form (§47) ends in PREC and RNDR blocks, skipped by their lengths (§4, §52.3).
-    let mut kept = state(&mut off);
-    for (tag, len) in [(b"PREC", 2_623_132u32), (b"RNDR", 18_481_672)] {
-        kept.extend_from_slice(tag);
-        kept.extend_from_slice(&len.to_le_bytes());
-        kept.extend(std::iter::repeat_n(0x5A, len as usize));
-    }
-    on.load_state(&kept).unwrap();
-    off.load_state(&kept).unwrap();
-    Core::advance(&mut on, &mut 0).unwrap();
-    Core::advance(&mut off, &mut 0).unwrap();
-    assert!(state(&mut on) == state(&mut off), "a state of the kept form loads and the machine continues");
-}
+mod vulkan_gpu {
+    use super::*;
 
-/// Diamond_Native.md §27: the reset button with every enhancement on keeps the renderer, and the machine runs on as a
-/// fresh one does, its state and sound alike frame for frame and its picture once settled as after a load; RESET is
-/// claimed.
-#[test]
-fn reset_with_the_settings_on_keeps_the_renderer_and_runs_on_as_a_fresh_machine() {
-    assert_eq!(Diamond::CAPABILITIES & caps::RESET, caps::RESET);
-    let on = [(PRECISION_KEY, "true"), (RESOLUTION_KEY, "2"), (COLOUR_KEY, "true"), (FILTERING_KEY, "3d")];
-    let (mut a, mut b) = (create(&on), create(&on));
-    for _ in 0..8 {
-        Core::advance(&mut a, &mut 0).unwrap();
-    }
-    a.drain_audio(&mut vec![0; 1 << 16], usize::MAX);
-    let drawn = a.renderer_ref().is_some();
-    Core::reset(&mut a).unwrap();
-    assert_eq!(a.renderer_ref().is_some(), drawn, "the renderer is kept");
-    let settles = Core::picture_settles(&a) as usize;
-    let (mut pa, mut pb) = (vec![0i16; 1 << 14], vec![0i16; 1 << 14]);
-    for f in 0..settles + 10 {
-        Core::advance(&mut a, &mut 0).unwrap();
-        Core::advance(&mut b, &mut 0).unwrap();
-        let (na, nb) = (a.drain_audio(&mut pa, usize::MAX), b.drain_audio(&mut pb, usize::MAX));
-        assert!(pa[..na] == pb[..nb], "frame {f} after the reset: the sound differs");
-        let (sa, sb) = (accurate(&mut a), accurate(&mut b));
-        assert!(sa[..8] == sb[..8] && sa[16..] == sb[16..], "frame {f} after the reset: the machine differs");
-        if f >= settles {
-            assert!(a.frame() == b.frame(), "frame {f} after the reset: the picture has not settled");
+    /// §42.1: toggling enhancements between frames leaves state/sound unchanged and scales 4x output.
+    #[test]
+    fn turned_on_and_off_between_frames_they_change_only_the_picture() {
+        let all = [(PRECISION_KEY, "true"), (RESOLUTION_KEY, "4"), (COLOUR_KEY, "true"), (FILTERING_KEY, "all")];
+        let cases: Vec<Vec<(&str, &str)>> = vec![vec![all[0]], vec![all[1]], vec![all[2]], vec![all[3]], all.to_vec()];
+        let off = [(PRECISION_KEY, "false"), (RESOLUTION_KEY, "1"), (COLOUR_KEY, "false"), (FILTERING_KEY, "off")];
+        for case in cases {
+            let (mut plain, mut d) = (create(&[]), create(&[]));
+            let (mut pa, mut pb) = (vec![0i16; 8192], vec![0i16; 8192]);
+            let mut differed = 0;
+            for f in 0..12 {
+                if f == 3 {
+                    d.set_settings(&Settings::from_pairs(case.iter().map(|&(k, v)| (k.into(), v.into())).collect())).unwrap();
+                    assert!(d.renderer_ref().is_some(), "Vulkan hardware device required: {:?}", d.setting_notes());
+                }
+                if f == 9 {
+                    d.set_settings(&Settings::from_pairs(off.iter().map(|&(k, v)| (k.into(), v.into())).collect())).unwrap();
+                    assert!(d.renderer_ref().is_none() && d.setting_notes().is_empty());
+                }
+                Core::advance(&mut plain, &mut 0).unwrap();
+                Core::advance(&mut d, &mut 0).unwrap();
+                let (na, nb) = (plain.drain_audio(&mut pa, usize::MAX), d.drain_audio(&mut pb, usize::MAX));
+                assert!(pa[..na] == pb[..nb], "{case:?} frame {f}: the sound differs");
+                assert!(accurate(&mut plain) == accurate(&mut d), "{case:?} frame {f}: the machine differs");
+                let fi = d.frame_info();
+                assert_eq!(d.frame().len(), (fi.width * fi.height * 4) as usize);
+                if (4..9).contains(&f) && case.contains(&(RESOLUTION_KEY, "4")) {
+                    assert_eq!((fi.width, fi.height), (4 * plain.frame_info().width, 4 * plain.frame_info().height), "{case:?} frame {f}");
+                }
+                if d.frame() != plain.frame() {
+                    differed += 1;
+                    assert!((3..10).contains(&f), "{case:?} frame {f}: the picture differs with the settings off");
+                }
+            }
+            // The program's triangle is untextured, which filtering alone leaves as the console draws it.
+            assert!(differed > 0 || case == [(FILTERING_KEY, "all")], "{case:?}: the picture never differed");
         }
     }
-    assert_eq!(Core::frame_count(&a), (8 + settles + 10) as i64);
+
+    /// §52: with every enhancement on the state is the machine's, the bytes a machine with them off saves at the same frame.
+    #[test]
+    fn a_state_with_the_settings_on_is_the_machines_and_machine_info_states_the_bound() {
+        let mut on = create(&[(PRECISION_KEY, "true"), (RESOLUTION_KEY, "2"), (COLOUR_KEY, "true"), (FILTERING_KEY, "3d")]);
+        let mut off = create(&[]);
+        assert_eq!(Core::picture_settles(&off), 0);
+        assert!(on.renderer_ref().is_some(), "Vulkan hardware device required: {:?}", on.setting_notes());
+        assert_eq!(Core::picture_settles(&on), SETTLES_TRUE_COLOUR);
+        on.choose(Chosen { options: Options { colour: false, ..on.chosen.options }, ..on.chosen });
+        assert_eq!(Core::picture_settles(&on), SETTLES);
+        for _ in 0..5 {
+            Core::advance(&mut on, &mut 0).unwrap();
+            Core::advance(&mut off, &mut 0).unwrap();
+        }
+        let s = state(&mut on);
+        assert!(s == state(&mut off), "{} bytes against {}", s.len(), state(&mut off).len());
+        off.load_state(&s).unwrap();
+        on.load_state(&state(&mut off)).unwrap();
+        for _ in 0..3 {
+            Core::advance(&mut on, &mut 0).unwrap();
+            Core::advance(&mut off, &mut 0).unwrap();
+        }
+        assert!(state(&mut on) == state(&mut off));
+        // A state of the kept form (§47) ends in PREC and RNDR blocks, skipped by their lengths (§4, §52.3).
+        let mut kept = state(&mut off);
+        for (tag, len) in [(b"PREC", 2_623_132u32), (b"RNDR", 18_481_672)] {
+            kept.extend_from_slice(tag);
+            kept.extend_from_slice(&len.to_le_bytes());
+            kept.extend(std::iter::repeat_n(0x5A, len as usize));
+        }
+        on.load_state(&kept).unwrap();
+        off.load_state(&kept).unwrap();
+        Core::advance(&mut on, &mut 0).unwrap();
+        Core::advance(&mut off, &mut 0).unwrap();
+        assert!(state(&mut on) == state(&mut off), "a state of the kept form loads and the machine continues");
+    }
+
+    /// Diamond_Native.md §27: the reset button with every enhancement on keeps the renderer, and the machine runs on cleanly.
+    #[test]
+    fn reset_with_the_settings_on_keeps_the_renderer_and_runs_on_as_a_fresh_machine() {
+        assert_eq!(Diamond::CAPABILITIES & caps::RESET, caps::RESET);
+        let on = [(PRECISION_KEY, "true"), (RESOLUTION_KEY, "2"), (COLOUR_KEY, "true"), (FILTERING_KEY, "3d")];
+        let (mut a, mut b) = (create(&on), create(&on));
+        for _ in 0..8 {
+            Core::advance(&mut a, &mut 0).unwrap();
+        }
+        a.drain_audio(&mut vec![0; 1 << 16], usize::MAX);
+        assert!(a.renderer_ref().is_some(), "Vulkan hardware device required");
+        Core::reset(&mut a).unwrap();
+        assert!(a.renderer_ref().is_some(), "the renderer is kept");
+        let settles = Core::picture_settles(&a) as usize;
+        let (mut pa, mut pb) = (vec![0i16; 1 << 14], vec![0i16; 1 << 14]);
+        for f in 0..settles + 10 {
+            Core::advance(&mut a, &mut 0).unwrap();
+            Core::advance(&mut b, &mut 0).unwrap();
+            let (na, nb) = (a.drain_audio(&mut pa, usize::MAX), b.drain_audio(&mut pb, usize::MAX));
+            assert!(pa[..na] == pb[..nb], "frame {f} after the reset: the sound differs");
+            let (sa, sb) = (accurate(&mut a), accurate(&mut b));
+            assert!(sa[..8] == sb[..8] && sa[16..] == sb[16..], "frame {f} after the reset: the machine differs");
+            if f >= settles {
+                assert!(a.frame() == b.frame(), "frame {f} after the reset: the picture has not settled");
+            }
+        }
+        assert_eq!(Core::frame_count(&a), (8 + settles + 10) as i64);
+    }
 }

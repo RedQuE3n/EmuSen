@@ -2,6 +2,8 @@
 //! changed at each stored hunk's first byte and 5 and 200 bytes into it, each read whole through this crate in a child
 //! process, so that a panic is counted as one rather than ending the run. Opt in with `EMUSEN_DISC_CHDMAN`.
 
+mod common;
+
 use emusen_disc::ecma130::{self, RAW};
 use emusen_disc::{Disc, IsoForm, Sector};
 use std::path::{Path, PathBuf};
@@ -145,10 +147,7 @@ fn every_damaged_hunk_is_refused_without_a_panic() {
     if let Ok(path) = std::env::var(CASE) {
         return child(&path);
     }
-    let Ok(chdman) = std::env::var("EMUSEN_DISC_CHDMAN") else {
-        eprintln!("skipped: EMUSEN_DISC_CHDMAN names no chdman");
-        return;
-    };
+    let chdman = common::chdman();
     let dir = scratch("damage");
     let d: Vec<u8> = (0..DATA).flat_map(data_sector).collect();
     let a: Vec<u8> = (0..AUDIO).flat_map(audio_sector).collect();
@@ -200,10 +199,7 @@ first byte: {flags_said}", lines.join("\n"));
 /// its sheet's, the self-references followed and their CRC taken from the hunk they name (§13.2).
 #[test]
 fn a_chd_of_repeated_hunks_reads_whole() {
-    let Ok(chdman) = std::env::var("EMUSEN_DISC_CHDMAN") else {
-        eprintln!("skipped: EMUSEN_DISC_CHDMAN names no chdman");
-        return;
-    };
+    let chdman = common::chdman();
     let dir = scratch("repeated");
     let d: Vec<u8> = (0..DATA).flat_map(data_sector).collect();
     let a: Vec<u8> = [vec![0u8; 64 * RAW], (0..16).flat_map(audio_sector).collect(), vec![0u8; 64 * RAW]].concat();
@@ -227,10 +223,7 @@ fn a_chd_of_repeated_hunks_reads_whole() {
 /// by its block's bounds, which an uncompressed map's want of a CRC leaves as the only check (§13.2).
 #[test]
 fn a_truncated_chd_refuses_the_hunk_past_its_end() {
-    let Ok(chdman) = std::env::var("EMUSEN_DISC_CHDMAN") else {
-        eprintln!("skipped: EMUSEN_DISC_CHDMAN names no chdman");
-        return;
-    };
+    let chdman = common::chdman();
     let dir = scratch("truncated");
     let d: Vec<u8> = (0..DATA).flat_map(data_sector).collect();
     let a: Vec<u8> = (0..AUDIO).flat_map(audio_sector).collect();

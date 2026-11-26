@@ -315,8 +315,8 @@ pub fn oracle_gpu() {
         let right_pt = (1650.0, 328.0);
         let cols = scene.colours_at(&[left_pt, right_pt]);
         let (left, right) = (cols[0].expect("left pixel"), cols[1].expect("right pixel"));
-        assert!(left.b > left.r + 30, "unfiltered sky blue on left: {left:?}");
-        assert!(right.r > left.r + 40 && right.r > right.g + 30, "filtered tint shifted toward magenta on right: left={left:?} right={right:?}");
+        assert!(i16::from(left.b) > i16::from(left.r) + 30, "unfiltered sky blue on left: {left:?}");
+        assert!(i16::from(right.r) > i16::from(left.r) + 40 && i16::from(right.r) > i16::from(right.g) + 30, "filtered tint shifted toward magenta on right: left={left:?} right={right:?}");
 
         // Move split line left via LB so mid_pt flips from unfiltered to tinted.
         let mid_before = scene.colours_at(&[mid_pt])[0].expect("mid before");
@@ -325,13 +325,13 @@ pub fn oracle_gpu() {
         }
         scene.wait(250);
         let mid_after = scene.colours_at(&[mid_pt])[0].expect("mid after");
-        assert!(mid_after.r > mid_before.r + 40, "LB moved split boundary past mid_pt: before={mid_before:?} after={mid_after:?}");
+        assert!(i16::from(mid_after.r) > i16::from(mid_before.r) + 40, "LB moved split boundary past mid_pt: before={mid_before:?} after={mid_after:?}");
 
         // Smooth right-stick tilt right scrubs divider back past mid_pt while leaving right_pt tinted.
         sdl.axis(pad, 2, 16000);
         until(scene, "RS right scrubs divider past mid_pt", |s| {
             let col = s.colours_at(&[mid_pt])[0].expect("mid restored");
-            col.b > col.r + 30 && col.r < mid_after.r - 40
+            i16::from(col.b) > i16::from(col.r) + 30 && i16::from(col.r) < i16::from(mid_after.r) - 40
         });
         sdl.axis(pad, 2, 0);
         scene.wait(100);
@@ -344,7 +344,7 @@ pub fn oracle_gpu() {
         sdl.press(pad, west, true);
         scene.wait(200);
         let held_right = scene.colours_at(&[right_pt])[0].expect("right while X held");
-        assert!(held_right.b > held_right.r + 30 && held_right.r < right.r - 40, "X hold shows unfiltered: held={held_right:?} vs filtered={right:?}");
+        assert!(i16::from(held_right.b) > i16::from(held_right.r) + 30 && i16::from(held_right.r) < i16::from(right.r) - 40, "X hold shows unfiltered: held={held_right:?} vs filtered={right:?}");
         sdl.press(pad, west, false);
         scene.wait(200);
     });

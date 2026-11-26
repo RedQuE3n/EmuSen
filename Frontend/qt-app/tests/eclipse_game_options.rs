@@ -6,7 +6,7 @@ mod eclipse_board;
 mod game;
 
 use emusen_kit_core::input::UiButton;
-use game::{add_options, board_states, centre, focused, open_page, open_tab, program_with, until, words_under, world};
+use game::{add_media, add_options, board_states, centre, focused, open_page, open_tab, program_with, until, words_under, world};
 
 const TABLE: &str = include_str!("eclipse/game_options.tsv");
 
@@ -16,7 +16,8 @@ fn qt_3_4_12_eclipse_s_game_options_is_its_board_and_every_row_steps_resets_and_
     let states = board_states();
     let w = world("qt-app-eclipse-game-options", &states, true, true);
     let cores = add_options(&w);
-    let mut scene = program_with(&mut harness, None, Some(&cores));
+    let media = add_media(&mut harness, &w, &["covers"]);
+    let mut scene = program_with(&mut harness, Some(&media), Some(&cores));
     open_page(&mut scene, &w);
     open_tab(&mut scene, 4);
     assert_eq!(focused(&mut scene), "pageRow.0", "focus starts on Core");

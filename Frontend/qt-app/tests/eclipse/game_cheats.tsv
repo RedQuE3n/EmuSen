@@ -33,10 +33,12 @@ pill.0	47	Resume, quiet outlined dark pill while Cheats holds focus	Page.pills, 
 pillLine.0	47	its dark raised fill and 1.5 px cream hairline at rest	Tokens.surfaceRaised	Rectangle	in:pill.0:0	foot:pill.0	fit:pill.0:0	72	36	Tokens.surfaceRaised	-	built	line 1.5 #8CF6E7D8
 buttonPlayMark.0	47	the quiet play mark	Eclipse's Pill	Shape	in:pill.0:27.5	mid:pill.0	12	14	-	-	-	built	-
 buttonLabel.0	47	"Resume"	the pill's label	Text	after:buttonPlayMark.0:12	mid:pill.0	-	-	-	Tokens.text	26	built	600 0 none
-gameHeroCard	42	upper-right cover and facts card	Page.kicker, Page.title, Page.facts	Rectangle	1148	150	676	-	22	Tokens.inputSurface	-	built	line 1 #FF262A3A
-gameHeroKicker	42	the game's kicker	Page.kicker	Line	in:gameHeroCard:24	-	inright:gameHeroCard:24	-	-	#FFF3C9D2	13	built	600 0.16 upper
-gameHeroTitle	42	the game's title	Page.title	Text	in:gameHeroCard:24	below:gameHeroKicker:8	inright:gameHeroCard:24	-	-	Tokens.textStrong	28	built	600 0 none
-gameHeroMeta	42	the game's facts	Page.facts	Text	in:gameHeroCard:24	below:gameHeroTitle:8	inright:gameHeroCard:24	-	-	Tokens.muted	18	built	300 0 none
+gameHeroCard	42	upper-right cover and facts card	Page.cover, Page.kicker, Page.title, Page.facts	Rectangle	1148	150	676	288	22	Tokens.inputSurface	-	built	line 1 #FF262A3A
+gameHeroCover	42	the cover box, 196 by 244	Page.cover	Item	in:gameHeroCard:24	top:gameHeroCard:22	196	244	-	-	-	built	-
+gameHeroPicture	42	the cover at radius 16	the kit's RoundPicture	RoundPicture	in:gameHeroCover:0	top:gameHeroCover:0	196	244	16	-	-	built	-
+gameHeroKicker	42	the game's kicker	Page.kicker	Line	after:gameHeroCover:22	-	inright:gameHeroCard:24	-	-	#FFF3C9D2	13	built	600 0.16 upper
+gameHeroTitle	42	the game's title	Page.title	Text	after:gameHeroCover:22	below:gameHeroKicker:8	inright:gameHeroCard:24	-	-	Tokens.textStrong	28	built	600 0 none
+gameHeroMeta	42	the game's facts	Page.facts	Text	after:gameHeroCover:22	below:gameHeroTitle:8	inright:gameHeroCard:24	-	-	Tokens.muted	18	built	300 0 none
 pill.1	48	"Start from the beginning", outlined	Page.pills, the second	WordPill	after:pill.0:16	foot:pill.0	fit:pillLabel.1:32	72	-	-	-	built	-
 pillLine.1	48	its 2 px line	Ink.pillLine	Rectangle	in:pill.1:0	foot:pill.1	fit:pill.1:0	72	36	-	-	built	line 2 #FF5A6076
 pillLabel.1	48	"Start from the beginning"	the pill's label	Text	in:pill.1:32	mid:pill.1	-	-	-	Tokens.text	24	built	400 0 none

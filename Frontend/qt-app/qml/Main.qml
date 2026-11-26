@@ -445,16 +445,18 @@ Window {
         }
         Connections {
             target: program
-            function onBigScreenChanged() { desktopModel.refresh() }
+            function onBigScreenChanged() { if (!program.bigScreen) desktopModel.refresh() }
         }
         Connections {
             target: library
+            enabled: !program.bigScreen
             function onLoadingChanged() { desktopModel.refresh() }
             function onHomeLinesChanged() { desktopModel.refresh() }
             function onMetadataChanged() { desktopModel.refresh() }
         }
         Connections {
             target: settingsModel
+            enabled: !program.bigScreen
             function onReadyChanged() { desktopModel.refresh() }
             function onSectionChanged() { desktopModel.refresh() }
             function onTrailChanged() { desktopModel.refresh() }
@@ -479,7 +481,10 @@ Window {
             visible: active
             focus: active && !(program.themeHost?.takesFocus ?? false) && !(desktopModel.gameShown && !desktopModel.drawerOpen) && !settingsModel.bindingsShown && !settingsModel.shadersShown
             onFocusChanged: program.settleFocus()
-            onLoaded: program.settleFocus()
+            onLoaded: {
+                desktopModel.refresh()
+                program.settleFocus()
+            }
             onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: DesktopShell {
                 model: desktopModel
@@ -584,6 +589,9 @@ Window {
             active: program.esdeWanted
             visible: program.bigScreen && program.esdeLook && !program.gameShown && !program.pauseShown
             focus: program.bigScreen && program.esdeLook && screens.shown === Screens.Esde && !program.splashShown
+            onFocusChanged: program.settleFocus()
+            onLoaded: program.settleFocus()
+            onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: Esde.View {
                 settings: library.esdeSettings
                 shelves: library.esdeShelves
@@ -717,11 +725,13 @@ Window {
             // The chosen theme's Settings stands in its place where the theme draws one (EmuSen_Qt.md §3.2, `Settings`).
             active: program.bigScreen && screens.shown === Screens.Settings && !(program.themeHost?.settings ?? false)
             focus: active
+            onActiveChanged: if (!active) program.settleFocus()
             // Opened again on the row it was left on, which the model holds, before the frame's own row is written back.
             onLoaded: {
                 const shown = settingsSlot.item as SettingsScreen
                 shown.layout.focusRow(settingsModel.focused)
                 shown.placed = true
+                program.settleFocus()
             }
             sourceComponent: SettingsScreen {
                 settings: settingsModel

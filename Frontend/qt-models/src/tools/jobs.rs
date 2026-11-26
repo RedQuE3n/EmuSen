@@ -5,6 +5,7 @@
 
 use super::cores::backend::Job;
 use super::library_eclipse::{EclipseLibrary, FindingKind, APPLY_BATCH, HIDE_ONE};
+use super::packages_eclipse::EclipsePackages;
 use super::{Action, Bar, Column, Effect, Item, Mark, Pane, Source, Tone, Words};
 use crate::card::{Pane as CardPane, Row as CardRow};
 use crate::question::confirm;
@@ -18,6 +19,7 @@ const TOOLS: &str = include_str!("jobs.json");
 pub const START: &str = "start";
 pub const STOP: &str = "stop";
 pub const LIBRARY_TOOL: &str = "library";
+pub const PACKAGES_TOOL: &str = "packages";
 
 /// One job of a tool: its row's key and name, what it does, the word its progress is said with, the request it starts,
 /// the question asked first (none for a job that only reads), and the states whose lines are not kept.
@@ -183,6 +185,7 @@ pub struct Jobs {
     last: Option<String>,
     acted: Option<String>,
     eclipse: EclipseLibrary,
+    packages: EclipsePackages,
 }
 
 impl Jobs {
@@ -201,12 +204,14 @@ impl Jobs {
             last: None,
             acted: None,
             eclipse: EclipseLibrary::default(),
+            packages: EclipsePackages::new(),
         })
     }
 
-    /// Attaches client library/scraper/package access when opened for Library Manager.
+    /// Attaches client library/scraper/package access when opened for Library Manager or Packages.
     pub fn attach_client(&mut self, platform_library: &str, cores: &str) {
         self.eclipse.attach(platform_library, cores);
+        self.packages.attach(platform_library, cores);
     }
 
     fn spec(&self, key: &str) -> Option<&Spec> {
@@ -309,6 +314,9 @@ impl Source for Jobs {
     }
 
     fn action(&self, key: &str) -> Option<Action> {
+        if self.is_eclipse_packages() {
+            return self.packages.action();
+        }
         self.spec(key).map(|s| Action::new(START, if s.ask.is_empty() { "Start" } else { "Start…" }))
     }
 
@@ -341,6 +349,11 @@ impl Source for Jobs {
     }
 
     fn act(&mut self, action: &str, key: Option<&str>, _section: &str) -> Effect {
+        if self.is_eclipse_packages() {
+            let eff = self.packages.act(action, key);
+            self.pump_packages_queue();
+            return eff;
+        }
         if self.is_eclipse_library() {
             match (action, key) {
                 ("toggle-mark", Some(rk)) => {
@@ -412,6 +425,11 @@ impl Source for Jobs {
     }
 
     fn answer(&mut self, asked: &str, yes: bool) {
+        if self.is_eclipse_packages() {
+            self.packages.answer(asked, yes);
+            self.pump_packages_queue();
+            return;
+        }
         if !yes {
             self.eclipse.pending_single = None;
             return;
@@ -432,11 +450,15 @@ impl Source for Jobs {
         }
     }
 
-    /// Nothing is read until a job runs; Eclipse Library Manager starts check then dups.
+    /// Nothing is read until a job runs; Eclipse Library Manager starts check then dups, Packages runs pkg-ls.
     fn refresh(&mut self) {
         if self.is_eclipse_library() {
             self.eclipse.reload_metadata();
             self.ensure_initial_check();
+        } else if self.is_eclipse_packages() {
+            self.packages.refresh_disk_free();
+            self.packages.queue_scan();
+            self.pump_packages_queue();
         }
     }
 
@@ -445,6 +467,34 @@ impl Source for Jobs {
         let quiet = self.spec(&key).map(|s| s.quiet.clone()).unwrap_or_default();
         let mut events = Vec::new();
         let ended = job.drain(&mut events);
+        if self.is_eclipse_packages() {
+            let mut end_error = None;
+            for event in &events {
+                if let Some(exec) = self.packages.active_exec.clone() {
+                    self.packages.ingest_event(&exec, event);
+                }
+                if event.get("event").and_then(Value::as_str) == Some("end") {
+                    if let Some(err) = event.get("error").and_then(Value::as_str) {
+                        end_error = Some(err.to_owned());
+                    }
+                }
+            }
+            let finished_err = match ended {
+                Ok(false) => {
+                    self.running = Some((key, job));
+                    return !events.is_empty();
+                }
+                Ok(true) => end_error,
+                Err(words) => Some(words),
+            };
+            if let Some(exec) = self.packages.active_exec.clone() {
+                if let Some(q) = self.packages.finish_exec(exec, finished_err) {
+                    self.packages.set_notice(&q.sentences.join(" "));
+                }
+            }
+            self.pump_packages_queue();
+            return true;
+        }
         let eclipse_library = self.is_eclipse_library();
         let run = self.runs.entry(key.clone()).or_default();
         for event in &events {
@@ -480,9 +530,14 @@ impl Source for Jobs {
 
     fn set_eclipse(&mut self, eclipse: bool) {
         self.eclipse.enabled = eclipse;
+        self.packages.enabled = eclipse;
         if self.is_eclipse_library() {
             self.eclipse.reload_metadata();
             self.ensure_initial_check();
+        } else if self.is_eclipse_packages() {
+            self.packages.refresh_disk_free();
+            self.packages.queue_scan();
+            self.pump_packages_queue();
         }
     }
 
@@ -501,22 +556,56 @@ impl Source for Jobs {
     }
 
     fn eclipse_view(&self) -> Option<Value> {
+        if self.is_eclipse_packages() {
+            return Some(self.packages.projection(self.running()));
+        }
         self.is_eclipse_library().then(|| self.eclipse.projection(self.running()))
     }
 
     fn eclipse_choose_filter(&mut self, key: &str) {
-        if self.is_eclipse_library() {
+        if self.is_eclipse_packages() {
+            self.packages.choose_filter(key);
+        } else if self.is_eclipse_library() {
             self.eclipse.choose_filter(key);
         }
     }
 
     fn eclipse_focus_zone_code(&mut self, code: i32) {
-        if self.is_eclipse_library() {
+        if self.is_eclipse_packages() {
+            self.packages.focus_zone = code.clamp(0, 2) as usize;
+        } else if self.is_eclipse_library() {
             self.eclipse.focus_zone = (code.clamp(0, 1)) as usize;
         }
     }
 
+    fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> Effect {
+        if self.is_eclipse_packages() {
+            let eff = self.packages.act(action, key);
+            self.pump_packages_queue();
+            return eff;
+        }
+        Effect::Done
+    }
+
     fn eclipse_act_code(&mut self, code: i32, key: Option<&str>) -> Effect {
+        if self.is_eclipse_packages() {
+            let eff = match code {
+                0 => self.packages.act("open-page", key),
+                1 => self.packages.act("open-layers", key),
+                2 => self.packages.act("review-batch", key),
+                3 => self.packages.act("focus-row", key),
+                4 => self.packages.act("step-console", key),
+                5 => self.packages.act("toggle-tile", key),
+                6 => self.packages.act("focus-layers-pkg", key),
+                7 => self.packages.act("focus-stack", key),
+                8 => self.packages.act("layers-action", key),
+                9 => self.packages.act("focus-page-action", key),
+                10 => self.packages.act("page-action", key),
+                _ => Effect::Done,
+            };
+            self.pump_packages_queue();
+            return eff;
+        }
         if !self.is_eclipse_library() {
             return Effect::Done;
         }
@@ -541,6 +630,11 @@ impl Source for Jobs {
     }
 
     fn eclipse_action_key(&mut self, key: &str) -> Effect {
+        if self.is_eclipse_packages() {
+            let eff = self.packages.action_key(key);
+            self.pump_packages_queue();
+            return eff;
+        }
         match key {
             "more" => self.eclipse_act_code(0, None),
             "list" => self.eclipse_act_code(1, None),
@@ -557,10 +651,16 @@ impl Source for Jobs {
         }
     }
 
-    fn eclipse_nav(&mut self, code: i32) -> Effect {
-        if !self.is_eclipse_library() {
-            return Effect::Done;
+    fn eclipse_navigate(&mut self, dir: &str) -> Effect {
+        if self.is_eclipse_packages() {
+            let eff = self.packages.navigate(dir);
+            self.pump_packages_queue();
+            return eff;
         }
+        Effect::Done
+    }
+
+    fn eclipse_nav(&mut self, code: i32) -> Effect {
         let dir = match code {
             0 => "up",
             1 => "down",
@@ -569,30 +669,103 @@ impl Source for Jobs {
             4 => "accept",
             5 => "prevFilter",
             6 => "nextFilter",
+            7 => "back",
+            8 => "prevConsole",
+            9 => "nextConsole",
             _ => return Effect::Done,
         };
+        if self.is_eclipse_packages() {
+            let eff = self.packages.navigate(dir);
+            self.pump_packages_queue();
+            return eff;
+        }
+        if !self.is_eclipse_library() {
+            return Effect::Done;
+        }
         self.eclipse.navigate(dir)
     }
 
     fn set_eclipse_search(&mut self, words: &str) {
-        if self.is_eclipse_library() {
+        if self.is_eclipse_packages() {
+            self.packages.search = words.to_owned();
+            self.packages.ensure_selections();
+        } else if self.is_eclipse_library() {
             self.eclipse.search = words.to_owned();
             self.eclipse.ensure_focus();
         }
     }
 
     fn take_library_changed(&mut self) -> bool {
-        std::mem::take(&mut self.eclipse.library_changed)
+        let lib = std::mem::take(&mut self.eclipse.library_changed);
+        let pkg = std::mem::take(&mut self.packages.library_changed);
+        lib || pkg
     }
 
     fn eclipse_screen_code(&self) -> i32 {
-        if self.is_eclipse_library() { 4 } else { 0 }
+        if self.is_eclipse_library() {
+            4
+        } else if self.is_eclipse_packages() {
+            self.packages.screen_code()
+        } else {
+            0
+        }
+    }
+
+    fn eclipse_patch_chosen(&mut self, path: Option<&str>) {
+        if !self.is_eclipse_packages() {
+            return;
+        }
+        match path {
+            Some(p) => self.packages.supply_patch_file(p),
+            None => self.packages.cancel_patch_file(),
+        }
+        self.pump_packages_queue();
+    }
+
+    fn eclipse_patch_dialog(&self) -> Option<(String, Vec<String>)> {
+        self.is_eclipse_packages()
+            .then(|| (self.packages.dialog_folder.clone(), self.packages.dialog_name_filters()))
+    }
+
+    fn eclipse_action_lines(&self) -> Option<String> {
+        if !self.is_eclipse_packages() {
+            return None;
+        }
+        let lines = match self.packages.screen_code() {
+            6 => "more Screensaver\nmark Search\nprevFilter PageUp\nnextFilter PageDown\nprevConsole First\nnextConsole Last\n",
+            7 => "apply Menu\n",
+            _ => "more Screensaver\nmark Search\nopenSearch Options\napply Menu\nprevFilter PageUp\nnextFilter PageDown\nprevConsole First\nnextConsole Last\n",
+        };
+        Some(lines.to_owned())
     }
 }
 
 impl Jobs {
     fn is_eclipse_library(&self) -> bool {
         self.eclipse.enabled && self.tool_key == LIBRARY_TOOL
+    }
+
+    fn is_eclipse_packages(&self) -> bool {
+        self.eclipse.enabled && self.tool_key == PACKAGES_TOOL
+    }
+
+    fn pump_packages_queue(&mut self) {
+        if !self.is_eclipse_packages() || self.running.is_some() {
+            return;
+        }
+        while let Some(exec) = self.packages.take_next_request() {
+            match (self.starter)(&exec.request) {
+                Ok(job) => {
+                    self.running = Some((format!("pkg:{}", exec.op_name), job));
+                    return;
+                }
+                Err(words) => {
+                    if let Some(q) = self.packages.finish_exec(exec, Some(words)) {
+                        self.packages.set_notice(&q.sentences.join(" "));
+                    }
+                }
+            }
+        }
     }
 
     fn ensure_initial_check(&mut self) {

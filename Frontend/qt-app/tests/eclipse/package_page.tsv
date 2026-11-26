@@ -1,0 +1,22 @@
+# Eclipse Package Page (#69) against EclipsePackagePage.dc.html (1920 by 1200, with AUDIT.md:180 fix).
+# board_height: 1200
+name	line	element	program	part	x	y	w	h	radius	colour	size	status	type
+packagePageScreen	1	Package Page screen	PackagePageEclipse	-	0	0	right:0	1200	-	-	-	built	-
+eclipseBackdrop	31	Backdrop surface	Kit.Backdrop	Backdrop	0	0	right:0	1200	-	-	-	built	-
+packagePageHeader	78	Top header row	Item	Item	96	48	right:96	64	-	-	-	built	-
+packagePageCrescent	86	Crescent mark	Item	Item	in:packagePageHeader:0	63	34	34	-	-	-	built	-
+trailWords.0	106	"Tools" crumb	CardLine	CardLine	158	-	-	-	-	Tokens.muted	24	built	400 0 none
+trailWords.1	122	"Packages" crumb	CardLine	CardLine	after:trailSlash.0:14	-	-	-	-	Tokens.muted	24	built	400 0 none
+trailWords.2	142	Package title crumb	CardLine	CardLine	after:trailSlash.1:14	-	-	-	-	Tokens.textStrong	24	built	600 0 none
+statusPill	152	Status pill	Rectangle	Rectangle	-	-	inright:packagePageHeader:0	56	28	-	-	built	-
+clock	214	"9:41 PM"	Device.shortTime	CardLine	-	-	-	-	-	Tokens.textStrong	22	built	600 0 none
+packagePageTitle	232	Page title	CardLine	CardLine	96	150	1100	-	-	Tokens.textStrong	56	built	600 -0.01 none
+packagePageSubtitle	245	Page subtitle	CardLine	CardLine	96	below:packagePageTitle:10	1100	-	-	-	22	built	300 0 none
+packageFactsCol	280	Left facts column	Column	Column	96	300	840	-	-	-	-	built	-
+packageFactRow.0	290	Fact row 0	Rectangle	Rectangle	96	300	840	62	16	Tokens.inputSurface	-	built	-
+packageFactLabel.0	298	Fact label 0	CardLine	CardLine	118	-	-	-	-	Tokens.textStrong	22	built	600 0 none
+packageActionsCol	330	Right actions col	ListView	ListView	984	300	840	790	-	-	-	built	-
+packageActionRow.0	348	Action row 0	Item	Item	984	300	840	62	-	-	-	built	-
+packageActionLabel.0	368	Action label 0	CardLine	CardLine	1006	-	480	-	-	Tokens.textStrong	22	built	600 0 none
+packagePageFooter	410	Footer bar	Item	Item	96	1122	right:96	38	-	-	-	built	-
+positionCounterText	440	Position counter	CardLine	CardLine	-	-	right:96	-	-	Tokens.muted	20	built	-

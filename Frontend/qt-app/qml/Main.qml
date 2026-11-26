@@ -767,8 +767,12 @@ Window {
             cheatsUrl: program.cheatsUrl
             padFamily: program.padFamily
             splashShown: program.splashShown
+            clock: clock
+            battery: machineBattery.level
             // The Scraper's run ended: the library shows what it fetched.
             onLibraryChanged: library.refresh()
+            onOpenFolder: (path) => folders.open(path)
+            onSaid: (words) => program.said(words, true, false)
         }
         Binding {
             target: screens

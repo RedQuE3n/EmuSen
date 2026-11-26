@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 #[test]
 fn a_file_s_three_hashes_are_kept_at_its_size_and_time_and_a_changed_file_misses() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let sqlite = emusen_sqlite::for_tests();
     let dir = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-scrape-hashes-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

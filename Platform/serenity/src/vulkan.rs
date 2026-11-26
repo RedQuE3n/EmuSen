@@ -1330,22 +1330,10 @@ mod tests {
         println!("no card: {}", device.name());
     }
 
-    /// The card EMUSEN_GPU_DEVICE names (6800 when unset) is found exactly where a device of that name opens and is no CPU.
-    #[test]
-    fn a_card_is_found_where_a_device_of_its_name_opens_on_hardware() {
-        let wanted = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".into());
-        let hardware = Device::create(Some(&wanted), false).ok().filter(|d| {
-            unsafe { d.inner.root.instance.get_physical_device_properties(d.inner.physical) }.device_type != vk::PhysicalDeviceType::CPU
-        });
-        assert_eq!(Device::card_named(&wanted).is_some(), hardware.is_some(), "the card named {wanted}");
-    }
-
     #[test]
     fn a_software_driver_is_no_card_and_a_name_no_card_holds_finds_none() {
         assert_eq!(Device::card_named("no card is named this"), None);
-        if !std::path::Path::new(LAVAPIPE).exists() {
-            return eprintln!("skipped: no lavapipe at {LAVAPIPE}");
-        }
+        assert!(std::path::Path::new(LAVAPIPE).exists(), "lavapipe ICD required at {LAVAPIPE}");
         let out = std::process::Command::new(std::env::current_exe().expect("the test binary"))
             .args(["--exact", "vulkan::tests::child_with_only_a_software_driver", "--nocapture", "--test-threads=1"])
             .env(SOFTWARE_CHILD, "1")
@@ -1396,24 +1384,37 @@ mod tests {
         assert_eq!(std::mem::align_of::<Mark>(), 8);
     }
 
-    /// Devices made and dropped on eight threads at once, which crashed the loader before its lists were guarded (EmuSen_Serenity.md §14).
-    #[test]
-    #[ignore = "needs a Vulkan device; EMUSEN_SERENITY_RACE_ROUNDS sets the rounds per thread"]
-    fn devices_made_and_dropped_on_many_threads_at_once_do_not_crash_the_loader() {
-        let rounds: usize = std::env::var("EMUSEN_SERENITY_RACE_ROUNDS").ok().and_then(|r| r.parse().ok()).unwrap_or(40);
-        let name = std::env::var(DEVICE_VARIABLE).ok();
-        let threads: Vec<_> = (0..8)
-            .map(|_| {
-                let name = name.clone();
-                std::thread::spawn(move || {
-                    for _ in 0..rounds {
-                        Device::create(name.as_deref(), false).expect("a device");
-                    }
+    mod vulkan_gpu {
+        use super::*;
+
+        /// The card `EMUSEN_GPU_DEVICE` names (6800 when unset) is found where a hardware device opens.
+        #[test]
+        fn a_card_is_found_where_a_device_of_its_name_opens_on_hardware() {
+            let wanted = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".into());
+            let hardware = Device::create(Some(&wanted), false).ok().filter(|d| {
+                unsafe { d.inner.root.instance.get_physical_device_properties(d.inner.physical) }.device_type != vk::PhysicalDeviceType::CPU
+            });
+            assert_eq!(Device::card_named(&wanted).is_some(), hardware.is_some(), "the card named {wanted}");
+        }
+
+        /// Devices made and dropped on eight threads at once, which crashed the loader before its lists were guarded (EmuSen_Serenity.md §14).
+        #[test]
+        fn devices_made_and_dropped_on_many_threads_at_once_do_not_crash_the_loader() {
+            let rounds: usize = std::env::var("EMUSEN_SERENITY_RACE_ROUNDS").ok().and_then(|r| r.parse().ok()).unwrap_or(8);
+            let name = std::env::var(DEVICE_VARIABLE).ok();
+            let threads: Vec<_> = (0..8)
+                .map(|_| {
+                    let name = name.clone();
+                    std::thread::spawn(move || {
+                        for _ in 0..rounds {
+                            Device::create(name.as_deref(), false).expect("a device");
+                        }
+                    })
                 })
-            })
-            .collect();
-        for thread in threads {
-            thread.join().expect("a thread that made devices");
+                .collect();
+            for thread in threads {
+                thread.join().expect("a thread that made devices");
+            }
         }
     }
 }

@@ -1,18 +1,15 @@
-//! A read-only connection, as OpenVGDB is opened (EmuSen_Backend.md §30.6), over the e_sqlite3 the program ships: from
-//! `EMUSEN_SQLITE`, else the NuGet cache's copy; with neither, the test fails unless EMUSEN_SQLITE_SKIP names a reason.
+//! A read-only connection, as OpenVGDB is opened (EmuSen_Backend.md §30.6), over `emusen_sqlite::for_tests()`.
 
 use emusen_sqlite::{Connection, Sqlite};
 use std::sync::Arc;
 
-fn sqlite() -> Option<Arc<Sqlite>> {
+fn sqlite() -> Arc<Sqlite> {
     emusen_sqlite::for_tests()
 }
 
 #[test]
 fn a_read_only_connection_reads_refuses_a_write_and_makes_no_file() {
-    let Some(sqlite) = sqlite() else {
-        return;
-    };
+    let sqlite = sqlite();
     let dir = std::env::temp_dir().join(format!("emusen-sqlite-ro-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

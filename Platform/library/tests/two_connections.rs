@@ -23,7 +23,7 @@ fn records(lib: &Library) -> serde_json::Map<String, serde_json::Value> {
 
 #[test]
 fn writes_through_two_handles_under_load_are_all_kept_and_none_is_refused_busy() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let sqlite = emusen_sqlite::for_tests();
     let path = games_db("two-handles");
     let path = path.to_string_lossy().into_owned();
     let handles = [Arc::new(Library::open(sqlite.clone(), &path).unwrap()), Arc::new(Library::open(sqlite.clone(), &path).unwrap())];
@@ -58,7 +58,7 @@ fn writes_through_two_handles_under_load_are_all_kept_and_none_is_refused_busy()
 
 #[test]
 fn a_write_waits_out_the_other_connection_s_transaction() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let sqlite = emusen_sqlite::for_tests();
     let path = games_db("held-write");
     let path = path.to_string_lossy().into_owned();
     let lib = Library::open(sqlite.clone(), &path).unwrap();

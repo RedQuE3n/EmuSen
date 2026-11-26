@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 const SETTINGS: &str = r#"{"developer_files":false,"openemu":false,"test":{"offline":true}}"#;
 
 fn open(dir: &Path) -> Result<Scraper, Error> {
-    Scraper::open(emusen_sqlite::for_tests().expect("SQLite for the scraper"), &dir.to_string_lossy(), None, &[], SETTINGS)
+    Scraper::open(emusen_sqlite::for_tests(), &dir.to_string_lossy(), None, &[], SETTINGS)
 }
 
 fn refused(r: Result<Scraper, Error>) -> Error {
@@ -32,9 +32,6 @@ fn a_second_process_is_refused_while_the_first_holds_the_store() {
         std::fs::write(dir.join("held"), b"").unwrap();
         wait_for(&dir.join("release"));
         drop(held);
-        return;
-    }
-    if emusen_sqlite::for_tests().is_none() {
         return;
     }
     let dir = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-scrape-lock-{}", std::process::id()));
@@ -65,7 +62,7 @@ fn a_second_process_is_refused_while_the_first_holds_the_store() {
 // A handle for finding pictures alone (1.2) makes no folder and no media.db, holds no lock, and finds a picture already there.
 #[test]
 fn a_handle_for_sources_alone_makes_nothing_on_disk_and_holds_no_lock() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let sqlite = emusen_sqlite::for_tests();
     let dir = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-scrape-alone-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let store = dir.join("Media");

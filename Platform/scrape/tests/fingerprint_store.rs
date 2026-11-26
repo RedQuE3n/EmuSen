@@ -21,7 +21,7 @@ fn count(db: &Connection, table: &str) -> i64 {
 
 #[test]
 fn the_migration_from_schema_4_keeps_every_record() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let sqlite = emusen_sqlite::for_tests();
     let dir = folder("migrate4");
     let file = dir.join("media.db").to_string_lossy().into_owned();
     {
@@ -63,7 +63,7 @@ fn found(key: &Key, name: &str) -> Record {
 
 #[test]
 fn a_fingerprinted_game_and_its_art_are_found_again_after_a_restart_and_its_checksums_arrive_without_moving_it() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let sqlite = emusen_sqlite::for_tests();
     let dir = folder("fingerprint");
     let root = dir.to_string_lossy().into_owned();
     let size = 4_700_000_000;

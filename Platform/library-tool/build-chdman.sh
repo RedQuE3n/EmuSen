@@ -35,9 +35,13 @@ EOF
 podman run --rm --cpu-shares=205 -v "$PWD/src:/src:Z" -v "$PWD/build-in-container.sh:/build.sh:ro,Z" registry.fedoraproject.org/fedora:44 bash /build.sh > build.log 2>&1 \
   || { echo "FAIL: the build stopped; see $work/build.log"; exit 1; }
 
-cp -p src/chdman "$out/chdman"
-built=$(sha256sum "$out/chdman" | cut -d' ' -f1)
-"$out/chdman" 2>&1 | head -1
-echo "built  $built  $out/chdman"
+built=$(sha256sum src/chdman | cut -d' ' -f1)
+src/chdman 2>&1 | head -1 || true
+echo "built  $built"
 echo "pinned $pinned"
-[ "$built" = "$pinned" ] && echo "ok: the binary is the pinned one" || echo "NOTE: a rebuild differs from the pin; the tool refuses it until chdman.pin records this hash"
+if [ "$built" != "$pinned" ] && [ "${1:-}" != "--accept-new-hash" ]; then
+  echo "FAIL: rebuilt chdman differs from chdman.pin (live $out/chdman untouched)" >&2
+  exit 1
+fi
+cp -p src/chdman "$out/chdman"
+echo "ok: installed $out/chdman ($built)"

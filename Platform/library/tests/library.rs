@@ -1,13 +1,11 @@
-//! The library over a generated tree and a fresh `games.db`, with the e_sqlite3 the program ships: from
-//! `EMUSEN_SQLITE`, else the NuGet cache's copy; a machine with neither says so and runs nothing. The parity class in
-//! WiseMan holds every answer to the C#'s (EmuSen_Backend.md §28.6).
+//! The library over a generated tree and a fresh `games.db`, verified against the C# parity suite (EmuSen_Backend.md §28.6).
 
 use emusen_library::Library;
 use emusen_sqlite::Sqlite;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-fn sqlite() -> Option<Arc<Sqlite>> {
+fn sqlite() -> Arc<Sqlite> {
     emusen_sqlite::for_tests()
 }
 
@@ -41,9 +39,7 @@ impl Drop for Temp {
 
 #[test]
 fn a_tree_is_scanned_shelved_and_a_renamed_game_keeps_its_row() {
-    let Some(sqlite) = sqlite() else {
-        return;
-    };
+    let sqlite = sqlite();
     let t = Temp::new("scan");
     let mut colour = vec![0u8; 0x150];
     colour[0x143] = 0xC0;
@@ -84,7 +80,7 @@ fn a_tree_is_scanned_shelved_and_a_renamed_game_keeps_its_row() {
 
 #[test]
 fn a_newer_file_is_refused_unwritten() {
-    let Some(sqlite) = sqlite() else { return };
+    let sqlite = sqlite();
     let t = Temp::new("newer");
     drop(Library::open(sqlite.clone(), &t.at("games.db")).unwrap());
     {
@@ -98,7 +94,7 @@ fn a_newer_file_is_refused_unwritten() {
 
 #[test]
 fn a_package_is_one_entry_and_what_it_claims_is_not_listed_again() {
-    let Some(sqlite) = sqlite() else { return };
+    let sqlite = sqlite();
     let t = Temp::new("packages");
     t.put("roms/nes/Claimed.nes", b"NES\x1aclaimed");
     t.put("roms/nes/Free.nes", b"NES\x1afree");
@@ -142,7 +138,7 @@ fn a_package_is_one_entry_and_what_it_claims_is_not_listed_again() {
 
 #[test]
 fn each_game_names_its_folder_below_the_console_folder_and_a_1_2_reader_reads_the_answer_as_before() {
-    let Some(sqlite) = sqlite() else { return };
+    let sqlite = sqlite();
     let t = Temp::new("folders");
     t.put("roms/nes/Top.nes", b"NES\x1atop");
     t.put("roms/nes/RPG/Square/Deep.nes", b"NES\x1adeep");
@@ -180,9 +176,7 @@ fn each_game_names_its_folder_below_the_console_folder_and_a_1_2_reader_reads_th
 
 #[test]
 fn a_games_television_standard_is_read_set_refused_outside_the_two_and_kept_by_clear() {
-    let Some(sqlite) = sqlite() else {
-        return;
-    };
+    let sqlite = sqlite();
     let t = Temp::new("standard");
     let lib = Library::open(sqlite, &t.at("lib/games.db")).unwrap();
     let game = t.at("roms/snes/Game.sfc");
@@ -201,9 +195,7 @@ fn a_games_television_standard_is_read_set_refused_outside_the_two_and_kept_by_c
 
 #[test]
 fn the_editors_clear_keeps_the_cover_choices_and_drops_the_details() {
-    let Some(sqlite) = sqlite() else {
-        return;
-    };
+    let sqlite = sqlite();
     let t = Temp::new("cover-choice");
     let lib = Library::open(sqlite, &t.at("lib/games.db")).unwrap();
     let game = t.at("roms/snes/Game.sfc");

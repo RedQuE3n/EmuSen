@@ -538,9 +538,12 @@ mod tests {
 
     #[test]
     fn a_hold_released_lets_the_next_hold_in() {
+        let calls = std::cell::Cell::new(0);
         with_shell(|call| {
+            calls.set(calls.get() + 1);
             drop(call.slot(|| 0u32));
             *call.slot(|| 0u32) += 1;
+            assert_eq!(*call.slot(|| 0u32), calls.get());
         });
     }
 

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 /// The file the shared loader took SQLite from, read from the process's own mappings.
 fn loaded_from() -> Option<PathBuf> {
-    std::fs::read_to_string("/proc/self/maps").ok()?.lines().filter_map(|l| l.split_whitespace().nth(5)).find(|p| p.ends_with("libe_sqlite3.so")).map(PathBuf::from)
+    std::fs::read_to_string("/proc/self/maps").ok()?.lines().filter_map(|l| l.split_whitespace().nth(5)).find(|p| p.contains("libe_sqlite3.so") || p.contains("libsqlite3.so")).map(PathBuf::from)
 }
 
 fn run(sh: *mut emusen_platform::dianash::DianashShell, line: &str) -> String {
@@ -22,8 +22,8 @@ fn run(sh: *mut emusen_platform::dianash::DianashShell, line: &str) -> String {
 
 #[test]
 fn a_process_with_no_open_opens_its_own_scraper_and_a_front_end_s_open_replaces_it() {
-    let Some(_sqlite) = emusen_sqlite::for_tests() else { return };
-    let shipped = loaded_from().expect("for_tests loaded an e_sqlite3 file");
+    let _sqlite = emusen_sqlite::for_tests();
+    let shipped = loaded_from().expect("for_tests loaded a sqlite library");
     let base = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-platform-scrape-own-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let (program, library, home, etc) = (base.join("program"), base.join("library"), base.join("home"), base.join("etc"));

@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Dialogs
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
@@ -18,8 +19,8 @@ Kit.NormalizedCanvas {
     readonly property real boardUnit: Kit.CanvasUnits.designHeight / 1200
     readonly property string shownClock: screen.clock ? screen.clock.shortTime : (screen.clockText.length > 0 ? screen.clockText : fallbackClock.shortTime)
     readonly property int shownBattery: screen.battery >= 0 ? screen.battery : fallbackBattery.level
-    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : frame
-    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : frame.controller
+    readonly property Item activeView: screen.eclipseScreen === 1 ? eclipseView : screen.eclipseScreen === 2 ? scraperView : screen.eclipseScreen === 3 ? scrapeStatusView : screen.eclipseScreen === 4 ? libraryView : screen.eclipseScreen === 5 ? packagesLoader : screen.eclipseScreen === 6 ? packageLayersLoader : screen.eclipseScreen === 7 ? packagePageLoader : frame
+    readonly property var activeController: screen.eclipseScreen === 1 ? eclipseView.controller : screen.eclipseScreen === 2 ? scraperView.controller : screen.eclipseScreen === 3 ? scrapeStatusView.controller : screen.eclipseScreen === 4 ? libraryView.controller : screen.eclipseScreen === 5 && packagesLoader.item ? (packagesLoader.item as PackagesEclipse).controller : screen.eclipseScreen === 6 && packageLayersLoader.item ? (packageLayersLoader.item as PackageLayersEclipse).controller : screen.eclipseScreen === 7 && packagePageLoader.item ? (packagePageLoader.item as PackagePageEclipse).controller : frame.controller
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
     // B on the screen.
@@ -168,6 +169,68 @@ Kit.NormalizedCanvas {
         battery: screen.shownBattery
         clockText: screen.shownClock
         onBacked: screen.backed()
+    }
+    Loader {
+        id: packagesLoader
+        anchors.fill: parent
+        active: screen.eclipseMode && screen.eclipseScreen >= 5
+        visible: screen.eclipseScreen === 5 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 5 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        onLoaded: if (focus) forceActiveFocus()
+        sourceComponent: PackagesEclipse {
+            focus: true
+            tool: screen.tool
+            padFamily: screen.padFamily
+            pixelScale: screen.unit
+            battery: screen.shownBattery
+            clockText: screen.shownClock
+            onBacked: screen.backed()
+        }
+    }
+    Loader {
+        id: packageLayersLoader
+        anchors.fill: parent
+        active: screen.eclipseMode && screen.eclipseScreen >= 5
+        visible: screen.eclipseScreen === 6 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 6 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        onLoaded: if (focus) forceActiveFocus()
+        sourceComponent: PackageLayersEclipse {
+            focus: true
+            tool: screen.tool
+            padFamily: screen.padFamily
+            pixelScale: screen.unit
+            battery: screen.shownBattery
+            clockText: screen.shownClock
+        }
+    }
+    Loader {
+        id: packagePageLoader
+        anchors.fill: parent
+        active: screen.eclipseMode && screen.eclipseScreen >= 5
+        visible: screen.eclipseScreen === 7 && !screen.tool.cardOpen
+        focus: screen.eclipseScreen === 7 && screen.inputs && !screen.tool.cardOpen && !screen.tool.asking && !screen.tool.searchKeys
+        onLoaded: if (focus) forceActiveFocus()
+        sourceComponent: PackagePageEclipse {
+            focus: true
+            tool: screen.tool
+            padFamily: screen.padFamily
+            pixelScale: screen.unit
+            battery: screen.shownBattery
+            clockText: screen.shownClock
+        }
+    }
+    FileDialog {
+        id: patchFileDialog
+        objectName: "patchFileDialog"
+        title: screen.tool.fileDialogTitle
+        currentFolder: screen.tool.fileDialogFolder
+        nameFilters: screen.tool.fileDialogFilters
+        onAccepted: screen.tool.addPatchUrl(patchFileDialog.selectedFile)
+        onRejected: screen.tool.cancelPatchFile()
+    }
+    Connections {
+        target: screen.tool
+        function onChoosePatchFile() { patchFileDialog.open() }
     }
     // The search's words typed on the docked keyboard, from the List card's Search (EmuSen_Interface.md §15.2), as the grid's search types them.
     Kit.KeyboardModel {

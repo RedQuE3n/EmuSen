@@ -9,6 +9,7 @@ pub mod cheats;
 pub mod cores;
 pub mod jobs;
 pub mod library_eclipse;
+pub mod packages_eclipse;
 pub mod scraper;
 pub mod scraper_eclipse;
 
@@ -251,9 +252,19 @@ pub trait Source {
     fn take_library_changed(&mut self) -> bool {
         false
     }
-    /// Eclipse screen selector (0=none, 1=cores, 2=scraper, 3=scrapeStatus, 4=libraryManager).
+    /// Eclipse screen selector (0=none, 1=cores, 2=scraper, 3=scrapeStatus, 4=libraryManager, 5=pkgLib, 6=pkgLayers, 7=pkgPage).
     fn eclipse_screen_code(&self) -> i32 {
         0
+    }
+    /// Optional custom action_lines for Eclipse screens whose Frame routes extra pad buttons.
+    fn eclipse_action_lines(&self) -> Option<String> {
+        None
+    }
+    /// Delivers a chosen file path (or cancellation) to Eclipse screens that asked for one.
+    fn eclipse_patch_chosen(&mut self, _path: Option<&str>) {}
+    /// Optional start folder and name filters for the Eclipse patch file dialog.
+    fn eclipse_patch_dialog(&self) -> Option<(String, Vec<String>)> {
+        None
     }
 }
 
@@ -460,6 +471,11 @@ impl<S: Source> Tool<S> {
     /// The screen's actions as the kit's frame reads them, `key Button` a line, whether or not the bar names them now; while
     /// a search's rows hold the focus, the shoulders are the search's, back to the keys.
     pub fn action_lines(&self) -> String {
+        if !self.searching {
+            if let Some(lines) = self.source.eclipse_action_lines() {
+                return lines;
+            }
+        }
         let shoulders = [(crate::help::PREVIOUS, UiButton::PageUp), (crate::help::NEXT, UiButton::PageDown)];
         let search = if self.searching && !self.on_keys { &shoulders[..] } else { &[] };
         [(MORE, UiButton::Screensaver), (LIST, UiButton::Options), (APPLY, UiButton::Menu)].iter().chain(search).map(|(k, b)| format!("{k} {b:?}\n")).collect()
@@ -594,8 +610,22 @@ impl<S: Source> Tool<S> {
     }
 
     pub fn eclipse_action_key(&mut self, key: &str) -> Option<String> {
+        if key == "openSearch" {
+            self.cards.clear();
+            self.searching = true;
+            self.on_keys = true;
+            return None;
+        }
         let effect = self.source.eclipse_action_key(key);
         self.take_eclipse(effect, None)
+    }
+
+    pub fn eclipse_patch_chosen(&mut self, path: Option<&str>) {
+        self.source.eclipse_patch_chosen(path);
+    }
+
+    pub fn eclipse_patch_dialog(&self) -> Option<(String, Vec<String>)> {
+        self.source.eclipse_patch_dialog()
     }
 
     pub fn eclipse_navigate(&mut self, dir: &str) -> Option<String> {
@@ -958,6 +988,15 @@ impl Source for Box<dyn Source> {
     }
     fn eclipse_screen_code(&self) -> i32 {
         (**self).eclipse_screen_code()
+    }
+    fn eclipse_action_lines(&self) -> Option<String> {
+        (**self).eclipse_action_lines()
+    }
+    fn eclipse_patch_chosen(&mut self, path: Option<&str>) {
+        (**self).eclipse_patch_chosen(path)
+    }
+    fn eclipse_patch_dialog(&self) -> Option<(String, Vec<String>)> {
+        (**self).eclipse_patch_dialog()
     }
 }
 

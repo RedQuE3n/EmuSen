@@ -68,6 +68,8 @@ fn a_row_that_worsens_is_named() {
     let new = "theme\tloads\tunknown\tunsupported\tundrawn\tmae_system_1280\nA\tno\t0\t6\tvideo\t1.20\nB\tyes\t0\t2\t-\t3.00\nC\tno\t1\t9\t-\t-\n";
     assert_eq!(worsened(old, new), ["A: no longer loads", "A: unsupported 5 → 6", "A: mae_system_1280 1 → 1.2", "A: video undrawn"]);
     assert!(worsened(new, new).is_empty());
+    let watched_only = "theme\tmae_system_1280\nA\t1.20\nB\t3.00\n";
+    assert_eq!(worsened(old, watched_only), ["A: mae_system_1280 1 → 1.2"]);
     assert_eq!(fell(new, old), ["A: mae_system_1280 1.2 → 1"]);
     assert!(fell(old, new).is_empty());
 }

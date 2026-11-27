@@ -17,7 +17,7 @@ pub fn worsened(old: &str, new: &str) -> Vec<String> {
     for (theme, now) in &new {
         let Some(was) = old.get(theme) else { continue };
         let num = |r: &BTreeMap<String, String>, c: &str| r.get(c).and_then(|v| v.parse::<f64>().ok());
-        if was.get("loads").map(String::as_str) == Some("yes") && now["loads"] != "yes" {
+        if was.get("loads").map(String::as_str) == Some("yes") && now.get("loads").is_some_and(|v| v != "yes") {
             out.push(format!("{theme}: no longer loads"));
         }
         for c in ["unknown", "unsupported", "mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off", "mae_viewer_1280", "mae_viewer_1920", "viewer_off"] {

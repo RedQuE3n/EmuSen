@@ -493,7 +493,7 @@ macro_rules! __core_export {
         /// The pointers as the header requires: a live machine or null, buffers valid for their lengths or null.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $name($($arg: $ty),*) -> $ret {
-            unsafe { $crate::core::exports::$body::<$t>($($arg),*) }
+            $crate::ffi::guard(|| unsafe { $crate::core::exports::$body::<$t>($($arg),*) })
         }
     };
 }

@@ -60,11 +60,9 @@ fn replay(stream: &Path, expected: &Path) {
 }
 
 #[test]
+#[ignore = "needs EMUSEN_MARSRT_RDP_STREAMS corpus"]
 fn recorded_game_streams_end_where_the_csharp_processor_ended() {
-    let Ok(folder) = std::env::var(FOLDER) else {
-        eprintln!("{FOLDER} unset, not run");
-        return;
-    };
+    let folder = std::env::var(FOLDER).unwrap_or_else(|_| panic!("{FOLDER} corpus required"));
     let mut streams: Vec<_> = std::fs::read_dir(&folder).unwrap().filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "rdp")).collect();
     streams.sort();
     for stream in streams {

@@ -401,31 +401,25 @@ impl Drop for Connection {
     }
 }
 
-/// The e_sqlite3 a test binary loads, with libm global first (the NuGet builds leave it to a .NET host); a missing copy panics unless `EMUSEN_SQLITE_SKIP=<reason>` is set, which prints the reason and gives `None`.
-pub fn for_tests() -> Option<Arc<Sqlite>> {
-    use std::path::PathBuf;
+/// The SQLite shared library a test binary loads, from `EMUSEN_SQLITE` or system SQLite (`libsqlite3.so.0` / `libsqlite3.dylib` / `sqlite3.dll`).
+pub fn for_tests() -> Arc<Sqlite> {
     #[cfg(unix)]
     unsafe {
         libc::dlopen(c"libm.so.6".as_ptr(), libc::RTLD_NOW | libc::RTLD_GLOBAL);
     }
-    let mut candidates: Vec<PathBuf> = std::env::var_os("EMUSEN_SQLITE").map(PathBuf::from).into_iter().collect();
-    if let Some(home) = std::env::var_os("HOME") {
-        if let Ok(versions) = std::fs::read_dir(PathBuf::from(home).join(".nuget/packages/sqlite")) {
-            let mut found: Vec<PathBuf> = versions.flatten().map(|v| v.path().join("runtimes/linux-x64/native/libe_sqlite3.so")).filter(|p| p.exists()).collect();
-            found.sort();
-            candidates.extend(found.into_iter().rev());
-        }
-    }
+    let mut candidates: Vec<String> = std::env::var("EMUSEN_SQLITE").into_iter().filter(|s| !s.is_empty()).collect();
+    #[cfg(target_os = "linux")]
+    candidates.push("libsqlite3.so.0".into());
+    #[cfg(target_os = "macos")]
+    candidates.push("libsqlite3.dylib".into());
+    #[cfg(target_os = "windows")]
+    candidates.push("sqlite3.dll".into());
     let mut errors = Vec::new();
     for p in &candidates {
-        match Sqlite::open(&p.to_string_lossy()) {
-            Ok(s) => return Some(Arc::new(s)),
+        match Sqlite::open(p) {
+            Ok(s) => return Arc::new(s),
             Err(e) => errors.push(e),
         }
     }
-    if let Some(reason) = std::env::var_os("EMUSEN_SQLITE_SKIP") {
-        eprintln!("SKIPPED (EMUSEN_SQLITE_SKIP): {}", reason.to_string_lossy());
-        return None;
-    }
-    panic!("no e_sqlite3 could be loaded (set EMUSEN_SQLITE, or EMUSEN_SQLITE_SKIP=<reason> to skip): {errors:?}");
+    panic!("no sqlite could be loaded (set EMUSEN_SQLITE or install system libsqlite3): {errors:?}");
 }

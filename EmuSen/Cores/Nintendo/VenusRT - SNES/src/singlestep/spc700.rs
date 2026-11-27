@@ -253,11 +253,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
     fn the_replay_passes_every_case_and_every_spoiling_is_caught() {
-        let Some(dir) = suite_dir("SingleStepTests-spc700") else {
-            eprintln!("EMUSEN_VENUSRT_CORPUS unset, not run");
-            return;
-        };
+        let dir = suite_dir("SingleStepTests-spc700").expect("EMUSEN_VENUSRT_CORPUS SingleStepTests-spc700 corpus required");
         let files = suite_files(&dir);
         assert_eq!(files.len(), 256);
         let reports = run_suite(&files, threads(), |p| run_file(p, usize::MAX, |w| Replay::new(w, Spoil::None)));

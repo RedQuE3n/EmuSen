@@ -1320,10 +1320,7 @@ mod cover_found_tests {
     /// cover, with none found for it, still lacks one, while `media` gives the picture shown (EmuSen_Backend.md §30.6).
     #[test]
     fn a_game_showing_a_chosen_cover_still_lacks_the_cover_found() {
-        let Some(sqlite) = emusen_sqlite::for_tests() else {
-            eprintln!("a_game_showing_a_chosen_cover_still_lacks_the_cover_found stood down: no SQLite for the scraper");
-            return;
-        };
+        let sqlite = emusen_sqlite::for_tests();
         let dir = std::env::var("TMPDIR").map(std::path::PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-scrape-cover-found-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let snes = dir.join("esde").join("snes");
@@ -1349,10 +1346,7 @@ mod cover_found_tests {
 
     #[test]
     fn scraper_can_be_moved_after_start_and_shuts_down_cleanly() {
-        let Some(sqlite) = emusen_sqlite::for_tests() else {
-            eprintln!("scraper_can_be_moved_after_start_and_shuts_down_cleanly stood down: no SQLite for the scraper");
-            return;
-        };
+        let sqlite = emusen_sqlite::for_tests();
         let dir = std::env::var("TMPDIR").map(std::path::PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-scrape-move-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();

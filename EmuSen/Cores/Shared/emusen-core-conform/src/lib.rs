@@ -880,7 +880,10 @@ fn c5(s: &mut Session<'_>) -> Case {
             return c.done("C5", "capability honesty");
         }
     };
-    let _ = s.play(&m, 0, 2, false);
+    if let Err(e) = s.play(&m, 0, 2, false) {
+        c.that(false, || e);
+        return c.done("C5", "capability honesty");
+    }
     let f = &s.lib.f;
     let h = m.h;
     let mi = m.machine_info().ok().and_then(|t| parse(&t));
@@ -1048,6 +1051,21 @@ fn c7(s: &mut Session<'_>) -> Case {
                     c.that(r != 0, || format!("frame {p}: {what} was accepted"));
                     c.that(b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: {what} was refused but changed the machine"));
                 }
+                if own.len() > 32 {
+                    let mut flipped = own.clone();
+                    let mid = 32 + (flipped.len() - 32) / 2;
+                    for i in [32, mid, flipped.len() - 1] {
+                        flipped[i] ^= 0x5A;
+                    }
+                    let r = b.load(&flipped);
+                    if r != 0 {
+                        s.statuses.insert(r);
+                        c.that(b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: payload-bitflip state was refused but changed the machine"));
+                    } else {
+                        c.that(b.save(0).is_ok(), || format!("frame {p}: payload-bitflip state accepted then state_save failed"));
+                        c.that(b.load(&own) == 0 && b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: clean state failed to reload after payload bitflip"));
+                    }
+                }
             }
             let ta = s.play(&a, p, next - p, false)?;
             size_problem = size_problem.or(ta.size_problem);
@@ -1205,6 +1223,50 @@ fn c11(s: &mut Session<'_>) -> Case {
         ];
         for (name, r) in calls {
             c.that(r == null, || format!("{name} with a null machine answered {r}, not EMUSEN_NULL"));
+        }
+        let opt_calls: &[(&str, bool, Option<i64>)] = &[
+            ("reset", s.lib.claims(caps::RESET), f.reset.map(|g| g(n) as i64)),
+            ("present", s.lib.claims(caps::PRESENT), f.present.map(|g| g(n) as i64)),
+            ("phases", s.lib.claims(caps::PHASES), f.phases.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("audio_peek", s.lib.claims(caps::AUDIO_PEEK), f.audio_peek.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("set_mutes", s.lib.claims(caps::MUTES), f.set_mutes.map(|g| g(n, 0) as i64)),
+            ("set_axis", s.lib.claims(caps::AXES), f.set_axis.map(|g| g(n, 0, 0, 0.0) as i64)),
+            ("set_rom_patches", s.lib.claims(caps::ROM_PATCHES), f.set_rom_patches.map(|g| g(n, std::ptr::null(), 0))),
+            ("set_cheat_pokes", s.lib.claims(caps::CHEAT_POKES), f.set_cheat_pokes.map(|g| g(n, std::ptr::null(), 0))),
+            ("set_settings", s.lib.claims(caps::SETTINGS), f.set_settings.map(|g| g(n, std::ptr::null(), 0) as i64)),
+            ("setting_notes", s.lib.claims(caps::SETTING_NOTES), f.setting_notes.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("debug_set", s.lib.claims(caps::DEBUG), f.debug_set.map(|g| g(n, 0, 0, 0) as i64)),
+            ("debug_set_stack", s.lib.claims(caps::DEBUG_STACK), f.debug_set_stack.map(|g| g(n, std::ptr::null(), 0) as i64)),
+            ("debug_set_breakpoints", s.lib.claims(caps::DEBUG), f.debug_set_breakpoints.map(|g| g(n, 0, std::ptr::null(), 0) as i64)),
+            ("debug_set_ranges", s.lib.claims(caps::DEBUG), f.debug_set_ranges.map(|g| g(n, 0, std::ptr::null(), 0) as i64)),
+            ("debug_run_frame", s.lib.claims(caps::DEBUG), f.debug_run_frame.map(|g| g(n, 0, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) as i64)),
+            ("debug_writes", s.lib.claims(caps::DEBUG), f.debug_writes.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("debug_calls", s.lib.claims(caps::DEBUG), f.debug_calls.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("debug_profile", s.lib.claims(caps::DEBUG), f.debug_profile.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("debug_coverage", s.lib.claims(caps::DEBUG), f.debug_coverage.map(|g| g(n, 0, std::ptr::null_mut(), 0, std::ptr::null_mut()))),
+            ("debug_counters", s.lib.claims(caps::DEBUG), f.debug_counters.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("debug_pc", s.lib.claims(caps::DEBUG), f.debug_pc.map(|g| g(n, 0, std::ptr::null_mut()) as i64)),
+            ("debug_registers", s.lib.claims(caps::DEBUG_REGISTERS), f.debug_registers.map(|g| g(n, 0, std::ptr::null_mut(), 0))),
+            ("debug_disassemble", s.lib.claims(caps::DEBUG_DISASSEMBLE), f.debug_disassemble.map(|g| g(n, 0, 0, 0, 0, std::ptr::null_mut(), 0))),
+            ("media_lid", s.lib.claims(caps::MEDIA), f.media_lid.map(|g| g(n, 0, 0) as i64)),
+            ("media_insert", s.lib.claims(caps::MEDIA), f.media_insert.map(|g| g(n, 0, std::ptr::null()) as i64)),
+            ("debug_reads", s.lib.claims(caps::DEBUG_READS), f.debug_reads.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("frame_device", s.lib.claims(caps::DEVICE_PICTURE), f.frame_device.map(|g| g(n, std::ptr::null_mut()) as i64)),
+            ("raw_select", s.lib.claims(caps::RAW_PICTURE), f.raw_select.map(|g| g(n, 0) as i64)),
+            ("raw_info", s.lib.claims(caps::RAW_PICTURE), f.raw_info.map(|g| g(n, 0, std::ptr::null_mut()) as i64)),
+            ("raw_copy", s.lib.claims(caps::RAW_PICTURE), f.raw_copy.map(|g| g(n, 0, std::ptr::null_mut(), 0))),
+            ("telemetry", s.lib.claims(caps::TELEMETRY), f.telemetry.map(|g| g(n, std::ptr::null_mut(), 0))),
+            ("set_present", s.lib.claims(caps::PRESENCE), f.set_present.map(|g| g(n, 0, 0) as i64)),
+            ("debug_translate", s.lib.claims(caps::DEBUG_TRANSLATE), f.debug_translate.map(|g| g(n, 0, 0, std::ptr::null_mut()) as i64)),
+            ("ring_lend", s.lib.claims(caps::DEVICE_RING), f.ring_lend.map(|g| g(n, std::ptr::null()) as i64)),
+            ("frame_ring", s.lib.claims(caps::DEVICE_RING), f.frame_ring.map(|g| g(n, std::ptr::null_mut()) as i64)),
+        ];
+        for &(name, claimed, res) in opt_calls {
+            if let Some(r) = res {
+                c.that(r == null, || format!("{name} with a null machine answered {r}, not EMUSEN_NULL"));
+            } else if claimed {
+                c.that(false, || format!("{name} is claimed and not exported"));
+            }
         }
         let mut code = 0;
         c.that((f.create)(std::ptr::null(), &mut code).is_null() && code == status::NULL, || format!("create with null params answered status {code}"));
@@ -1414,7 +1476,10 @@ fn c14(s: &mut Session<'_>) -> Case {
             return c.done("C14", "descriptors against exports");
         }
     };
-    let _ = s.play(&m, 0, 2, false);
+    if let Err(e) = s.play(&m, 0, 2, false) {
+        c.that(false, || e);
+        return c.done("C14", "descriptors against exports");
+    }
     let Some(info) = m.machine_info().ok().and_then(|t| parse(&t)) else {
         c.that(false, || "machine info is not JSON".to_owned());
         return c.done("C14", "descriptors against exports");

@@ -198,12 +198,11 @@ fn the_fm_unit_is_found_on_the_consoles_that_carry_one() {
     }
 }
 
-/// ZEXDOC and ZEXALL for the Master System (`Endou_References.md` §2), found through `EMUSEN_ENDOU_CORPUS`
-/// (`~/.cache/emusen/probe/endou`), report in the cartridge's RAM: every one of the 79 tests "OK" and the run complete.
-/// Without the corpus the test passes unrun. Run it in release: about twenty seconds each (Endou_Native.md §9.9).
+/// ZEXDOC and ZEXALL for the Master System (`Endou_References.md` §2) report 79 "OK" tests via `EMUSEN_ENDOU_CORPUS`.
 #[test]
+#[ignore = "needs EMUSEN_ENDOU_CORPUS corpus"]
 fn zexdoc_and_zexall_pass_on_the_machine() {
-    let Some(root) = std::env::var_os("EMUSEN_ENDOU_CORPUS") else { return };
+    let root = std::env::var_os("EMUSEN_ENDOU_CORPUS").expect("EMUSEN_ENDOU_CORPUS corpus required");
     for name in ["zexdoc.sms", "zexall.sms"] {
         let path = std::path::Path::new(&root).join("roms/ZEXALL-SMS/ZEXALL-SMS-0.20").join(name);
         let image = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -308,13 +307,11 @@ fn skipping_rendering_leaves_the_state_as_drawing() {
     assert_eq!(save(&a), save(&b));
 }
 
-/// FluBBa's SMS VDP Test 1.31 (`Endou_References.md` §2), found through `EMUSEN_ENDOU_CORPUS`: its three pages of the
-/// Master System's tests, run by pressing button 1, keep each test's verdict in RAM at $C900 on, 0 for "Ok" (and the V
-/// counter's, $C914, 2 for NTSC or 1 for PAL). Every one passes on each model and in PAL, and on the Game Gear in a Master
-/// System cartridge's mode since its TH lines latch the H counter (Endou_Disputes.md D-25). Passes unrun without the corpus.
+/// FluBBa's SMS VDP Test 1.31 (`Endou_References.md` §2) via `EMUSEN_ENDOU_CORPUS` across every model and PAL/NTSC (D-25).
 #[test]
+#[ignore = "needs EMUSEN_ENDOU_CORPUS corpus"]
 fn flubba_s_vdp_test_passes_on_every_model() {
-    let Some(root) = std::env::var_os("EMUSEN_ENDOU_CORPUS") else { return };
+    let root = std::env::var_os("EMUSEN_ENDOU_CORPUS").expect("EMUSEN_ENDOU_CORPUS corpus required");
     let path = std::path::Path::new(&root).join("roms/SMSVDPTest-SMS/SMSVDPTest-SMS-1.31/VDPTEST.sms");
     let rom = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     for (model, market) in [(Model::Sms1, Market::Americas), (Model::Sms2, Market::Americas), (Model::Sms2, Market::Europe), (Model::MarkIII, Market::Japan), (Model::GameGear, Market::Americas)] {

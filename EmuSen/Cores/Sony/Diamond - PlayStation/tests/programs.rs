@@ -1898,11 +1898,9 @@ fn disc_digests(mut m: Machine, script: &str, observed: bool) -> (Vec<String>, O
 /// E1's goldens of the eight bench discs, opt-in by `EMUSEN_DIAMOND_DISCS`, the folder holding the tester's copies:
 /// each disc's digests at its anchors those it gave on the accurate path when the goldens were recorded.
 #[test]
+#[ignore = "needs EMUSEN_DIAMOND_DISCS corpus"]
 fn the_bench_discs_give_their_goldens() {
-    let Some(folder) = std::env::var_os("EMUSEN_DIAMOND_DISCS") else {
-        eprintln!("skipped: EMUSEN_DIAMOND_DISCS names no folder of the bench discs");
-        return;
-    };
+    let folder = std::env::var_os("EMUSEN_DIAMOND_DISCS").expect("EMUSEN_DIAMOND_DISCS corpus folder required");
     let folder = std::path::PathBuf::from(folder);
     check_both("discs.txt", "# The accurate goldens of the bench discs on the open kernel (Diamond_Enhancements.md §6): each disc, its press script and anchor, then\n# at every 300th frame the pictures and the sound folded from the start and the state then.\n", |observed| {
         let mut lines = Vec::new();

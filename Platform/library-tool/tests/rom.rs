@@ -140,7 +140,7 @@ fn library(root: &str) {
 
 fn context(t: &Temp) -> Context {
     let tree = Tree { root: t.at("root").into(), data_override: Some(t.at("home").into()), config_override: Some(t.at("home/etc/EmuSen").into()), ..Tree::default() };
-    let chdman = std::env::var("EMUSEN_CHDMAN").unwrap_or_default();
+    let chdman = chdman();
     let mut ctx = Context::pinned(tree, Some(t.at("library")), chdman.clone());
     ctx.pin = emusen_library_tool::pin::sha256(&chdman).ok();
     ctx
@@ -218,12 +218,25 @@ fn listing(root: &str) -> Vec<(String, u64, String)> {
     out
 }
 
-fn chdman() -> Option<String> {
-    let c = std::env::var("EMUSEN_CHDMAN").ok().filter(|c| !c.is_empty());
-    if c.is_none() {
-        eprintln!("skipped the CHD cases: EMUSEN_CHDMAN names no chdman");
+fn chdman() -> String {
+    if let Some(p) = std::env::var("EMUSEN_CHDMAN").ok().filter(|s| !s.is_empty()) {
+        return p;
     }
-    c
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let p = dir.join("chdman");
+            if p.is_file() {
+                return p.to_string_lossy().into_owned();
+            }
+        }
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let p = PathBuf::from(home).join(".cache/emusen/toolchains/chdman/linux-x64/chdman");
+        if p.is_file() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    panic!("chdman not found (set EMUSEN_CHDMAN, put chdman on PATH, or run Platform/library-tool/build-chdman.sh)");
 }
 
 #[test]
@@ -251,14 +264,13 @@ fn rom_hash_gives_the_dump_and_one_comparable_line_for_each_form_of_it() {
         _ => Vec::new(),
     };
     assert_eq!(said, ["nes: a folder; -r takes what is under it", "nowhere: no such file or folder in the library"]);
-    if let Some(chdman) = chdman() {
-        let chd = temp.at("library/psx/Disc.chd");
-        let made = std::process::Command::new(&chdman).args(["createcd", "-i", &temp.at("library/psx/Disc.cue"), "-o", &chd]).output().unwrap();
-        assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
-        let form = lines(&run(&ctx, r#"{"op": "rom-hash", "paths": ["psx"], "recursive": true, "comparable": true}"#));
-        assert_eq!(line_of(&form, "psx/Disc.chd"), line_of(&form, "psx/Disc.cue"));
-        std::fs::remove_file(&chd).unwrap();
-    }
+    let chdman = chdman();
+    let chd = temp.at("library/psx/Disc.chd");
+    let made = std::process::Command::new(&chdman).args(["createcd", "-i", &temp.at("library/psx/Disc.cue"), "-o", &chd]).output().unwrap();
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+    let form = lines(&run(&ctx, r#"{"op": "rom-hash", "paths": ["psx"], "recursive": true, "comparable": true}"#));
+    assert_eq!(line_of(&form, "psx/Disc.chd"), line_of(&form, "psx/Disc.cue"));
+    std::fs::remove_file(&chd).unwrap();
     assert_eq!(listing(&temp.at("library")), before, "the library was written");
 }
 
@@ -290,23 +302,22 @@ fn rom_check_names_each_broken_files_check_and_passes_the_sound_ones() {
     assert!(bad.contains("CRC-32"), "{bad}");
     let end = got.last().unwrap();
     assert_eq!(text(end, "event"), "end");
-    if let Some(chdman) = chdman() {
-        let chd = temp.at("library/psx/Broken.chd");
-        let made = std::process::Command::new(&chdman).args(["createcd", "-i", &temp.at("library/psx/Disc.cue"), "-o", &chd]).output().unwrap();
-        assert!(made.status.success());
-        let sound = checked(&run(&ctx, r#"{"op": "rom-check", "paths": ["psx/Broken.chd"]}"#));
-        assert_eq!(sound, ["psx/Broken.chd: ok"]);
-        let mut bytes = std::fs::read(&chd).unwrap();
-        let first = emusen_disc::Disc::from_image(bytes.clone(), emusen_disc::IsoForm::Mode1).unwrap().place(160).unwrap().offset as usize;
-        bytes[first..first + 4].iter_mut().for_each(|b| *b ^= 0x5A);
-        std::fs::write(&chd, &bytes).unwrap();
-        let broken = checked(&run(&ctx, r#"{"op": "rom-check", "paths": ["psx/Broken.chd"]}"#));
-        assert!(broken[0].starts_with("psx/Broken.chd: chd: chdman verify failed"), "{broken:?}");
-        let f = rom::File { rel: "psx/Broken.chd".into(), path: chd.clone(), system: emusen_systems::find("psx") };
-        let read = rom::check(&f, None, &|| false);
-        assert!(read.len() == 1 && read[0].check == "chd" && read[0].words.contains("damaged"), "{read:?}");
-        std::fs::remove_file(&chd).unwrap();
-    }
+    let chdman = chdman();
+    let chd = temp.at("library/psx/Broken.chd");
+    let made = std::process::Command::new(&chdman).args(["createcd", "-i", &temp.at("library/psx/Disc.cue"), "-o", &chd]).output().unwrap();
+    assert!(made.status.success());
+    let sound = checked(&run(&ctx, r#"{"op": "rom-check", "paths": ["psx/Broken.chd"]}"#));
+    assert_eq!(sound, ["psx/Broken.chd: ok"]);
+    let mut bytes = std::fs::read(&chd).unwrap();
+    let first = emusen_disc::Disc::from_image(bytes.clone(), emusen_disc::IsoForm::Mode1).unwrap().place(160).unwrap().offset as usize;
+    bytes[first..first + 4].iter_mut().for_each(|b| *b ^= 0x5A);
+    std::fs::write(&chd, &bytes).unwrap();
+    let broken = checked(&run(&ctx, r#"{"op": "rom-check", "paths": ["psx/Broken.chd"]}"#));
+    assert!(broken[0].starts_with("psx/Broken.chd: chd: chdman verify failed"), "{broken:?}");
+    let f = rom::File { rel: "psx/Broken.chd".into(), path: chd.clone(), system: emusen_systems::find("psx") };
+    let read = rom::check(&f, None, &|| false);
+    assert!(read.len() == 1 && read[0].check == "chd" && read[0].words.contains("damaged"), "{read:?}");
+    std::fs::remove_file(&chd).unwrap();
     assert_eq!(listing(&temp.at("library")), before, "the library was written");
 }
 

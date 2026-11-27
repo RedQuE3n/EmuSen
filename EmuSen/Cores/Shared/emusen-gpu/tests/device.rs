@@ -10,13 +10,10 @@ use emusen_gpu::{AHEAD, GpuDevice, Submission, Where};
 const TRIPLE: &[u8] = include_bytes!("shaders/triple.spv");
 const CHILD: &str = "EMUSEN_GPU_TEST_CHILD";
 
-fn device() -> Option<GpuDevice> {
+fn device() -> GpuDevice {
     let names = GpuDevice::device_names();
-    let Some(first) = names.first() else {
-        eprintln!("no Vulkan device: not run");
-        return None;
-    };
-    Some(GpuDevice::try_create(Some(first)).unwrap_or_else(|report| panic!("{report}")))
+    let first = names.first().expect("Vulkan hardware device required");
+    GpuDevice::try_create(Some(first)).unwrap_or_else(|report| panic!("{report}"))
 }
 
 fn tripled(seed: u32, add: u32) -> u32 {
@@ -25,21 +22,6 @@ fn tripled(seed: u32, add: u32) -> u32 {
 
 fn seeds(count: usize, salt: u32) -> Vec<u32> {
     (0..count as u32).map(|i| i.wrapping_mul(0x9E37_79B9) ^ salt).collect()
-}
-
-#[test]
-fn the_devices_are_listed_in_rank_order_and_the_first_opens_with_its_report() {
-    let names = GpuDevice::device_names();
-    let Some(device) = device() else {
-        let report = GpuDevice::try_create(None).err().expect("no device listed, and one opened");
-        assert!(report.starts_with("Vulkan is not available") || report.starts_with("no Vulkan device"), "{report}");
-        return;
-    };
-    assert_eq!(device.name(), names[0]);
-    let report = device.report();
-    assert!(report.starts_with(&format!("{}, Vulkan 1.", names[0])), "{report}");
-    assert!(device.max_buffer_bytes() >= 1 << 27, "a binding of {} bytes is below the specification's least", device.max_buffer_bytes());
-    eprintln!("{report}; {} devices: {names:?}", names.len());
 }
 
 /// Run alone as a child with every driver hidden from the loader: nothing is listed and the device is refused with a reason.
@@ -69,9 +51,23 @@ fn without_a_driver_nothing_is_listed_and_the_device_is_refused_with_a_reason() 
     eprintln!("{}", text.lines().find(|l| l.starts_with("refused: ")).unwrap_or_default());
 }
 
+mod vulkan_gpu {
+    use super::*;
+
+    #[test]
+    fn the_devices_are_listed_in_rank_order_and_the_first_opens_with_its_report() {
+        let names = GpuDevice::device_names();
+        let device = device();
+        assert_eq!(device.name(), names[0]);
+        let report = device.report();
+        assert!(report.starts_with(&format!("{}, Vulkan 1.", names[0])), "{report}");
+        assert!(device.max_buffer_bytes() >= 1 << 27, "a binding of {} bytes is below the specification's least", device.max_buffer_bytes());
+        eprintln!("{report}; {} devices: {names:?}", names.len());
+    }
+
 #[test]
 fn a_buffer_round_trips_through_device_memory_and_is_filled() {
-    let Some(device) = device() else { return };
+        let device = device();
     let words = 4099;
     let source = device.create_buffer(words as u64 * 4, Where::Host).expect("a host buffer");
     let middle = device.create_buffer(words as u64 * 4, Where::Device).expect("a device buffer");
@@ -103,7 +99,7 @@ fn a_buffer_round_trips_through_device_memory_and_is_filled() {
 
 #[test]
 fn a_program_runs_over_a_buffer_with_its_push_constants() {
-    let Some(device) = device() else { return };
+        let device = device();
     assert!(device.create_program(&TRIPLE[..TRIPLE.len() - 1], 1, 4).is_err(), "a part of a word of SPIR-V was taken");
     let program = device.create_program(TRIPLE, 1, 4).expect("the program");
     // Not a whole number of groups, so the last group's bound check is reached.
@@ -123,7 +119,7 @@ fn a_program_runs_over_a_buffer_with_its_push_constants() {
 
 #[test]
 fn submissions_ahead_go_out_without_waiting_and_are_waited_for_by_slot() {
-    let Some(device) = device() else { return };
+        let device = device();
     let program = device.create_program_with_sets(TRIPLE, 1, 4, AHEAD).expect("the program");
     let words = 1 << 16;
     let buffers: Vec<_> = (0..AHEAD).map(|_| device.create_buffer(words as u64 * 4, Where::Host).expect("a host buffer")).collect();
@@ -157,7 +153,7 @@ fn submissions_ahead_go_out_without_waiting_and_are_waited_for_by_slot() {
 
 #[test]
 fn a_pending_submission_is_waited_for_by_a_thread_that_does_not_submit() {
-    let Some(device) = device() else { return };
+        let device = device();
     let program = device.create_program(TRIPLE, 1, 4).expect("the program");
     let words = 1 << 18;
     let values = device.create_buffer(words as u64 * 4, Where::Host).expect("a host buffer");
@@ -185,10 +181,7 @@ fn a_pending_submission_is_waited_for_by_a_thread_that_does_not_submit() {
 #[test]
 fn a_device_is_chosen_by_any_part_of_its_name_in_any_case_and_refused_by_one_it_lacks() {
     let names = GpuDevice::device_names();
-    let Some(first) = names.first() else {
-        eprintln!("no Vulkan device: not run");
-        return;
-    };
+    let first = names.first().expect("Vulkan hardware device required");
     let device = GpuDevice::try_create(Some(&first.to_uppercase())).unwrap_or_else(|report| panic!("{report}"));
     assert_eq!(device.name(), first);
     drop(device);
@@ -201,7 +194,7 @@ fn a_device_is_chosen_by_any_part_of_its_name_in_any_case_and_refused_by_one_it_
 /// between; and a dispatch again before the recording wrote the set refused (EmuSen_Gpu.md §3.1).
 #[test]
 fn a_program_is_dispatched_again_in_one_recording_with_the_buffers_its_set_holds() {
-    let Some(device) = device() else { return };
+        let device = device();
     let first = device.create_program(TRIPLE, 1, 4).expect("the program");
     let second = device.create_program(TRIPLE, 1, 4).expect("the program");
     let words = 1000;
@@ -236,7 +229,7 @@ fn a_program_is_dispatched_again_in_one_recording_with_the_buffers_its_set_holds
 
 #[test]
 fn the_tally_counts_what_is_made_and_not_yet_destroyed_and_outlives_the_device() {
-    let Some(device) = device() else { return };
+        let device = device();
     let tally = device.tally();
     assert_eq!(tally.count(), 0);
     assert!(device.create_program(&TRIPLE[..TRIPLE.len() - 1], 1, 4).is_err());
@@ -250,4 +243,5 @@ fn the_tally_counts_what_is_made_and_not_yet_destroyed_and_outlives_the_device()
     device.destroy_buffer(own);
     drop(device);
     assert_eq!(tally.count(), 0);
+}
 }

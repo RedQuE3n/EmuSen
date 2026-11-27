@@ -50,11 +50,9 @@ fn files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 #[test]
+#[ignore = "needs EMUSEN_ROUTING_LIBRARY corpus"]
 fn the_testers_bin_files_route_by_their_headers() {
-    let Some(library) = std::env::var_os("EMUSEN_ROUTING_LIBRARY").map(PathBuf::from).filter(|l| l.is_dir()) else {
-        println!("skipped: EMUSEN_ROUTING_LIBRARY names the tester's library, read only");
-        return;
-    };
+    let library = std::env::var_os("EMUSEN_ROUTING_LIBRARY").map(PathBuf::from).filter(|l| l.is_dir()).expect("EMUSEN_ROUTING_LIBRARY corpus directory required");
     let every = named(&["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64", "sms", "sg1000"]);
     let mut found = Vec::new();
     files(&library, &mut found);

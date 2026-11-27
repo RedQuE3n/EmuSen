@@ -211,11 +211,10 @@ fn the_runner_starts_venusrt_from_a_boot_image_when_given_one() {
 
 /// Mesen's picture rows against a 224-line engine's: the offset that makes steady pictures agree is the one the differential uses.
 #[test]
+#[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus and Mesen probe"]
 fn the_picture_offset_is_the_one_steady_pictures_agree_at() {
-    let (Some(root), Some(_)) = (grader::corpus_root(), diff::mesen_probe()) else {
-        println!("{} unset or no probe, not run", grader::CORPUS_VARIABLE);
-        return;
-    };
+    let root = grader::corpus_root().expect("EMUSEN_VENUSRT_CORPUS corpus required");
+    let _probe = diff::mesen_probe().expect("Mesen probe required");
     let cache = root.join("runs").join("mesen");
     let mut best = Vec::new();
     for rom in ["roms/240pSuite-SNES-1.03/240pSuite.sfc", "roms/gilyon-snes-tests-v1.4/spctest/spctest.sfc", "src/higan-snes-test-roms/PeterLemon/SNES-CPUTest-CPU/ADC/CPUADC.sfc"] {
@@ -236,11 +235,11 @@ fn the_picture_offset_is_the_one_steady_pictures_agree_at() {
 
 /// Opt-in: each game in EMUSEN_VENUSRT_GAMES against Mesen every tenth frame, and where each space and the picture first part.
 #[test]
+#[ignore = "needs EMUSEN_VENUSRT_GAMES corpus and Mesen probe"]
 fn the_games_pictures_and_spaces_against_mesen() {
-    let (Some(dir), Some(root), Some(_)) = (std::env::var_os("EMUSEN_VENUSRT_GAMES").map(PathBuf::from), grader::corpus_root(), diff::mesen_probe()) else {
-        println!("EMUSEN_VENUSRT_GAMES, the corpus or the probe unset, not run");
-        return;
-    };
+    let dir = std::env::var_os("EMUSEN_VENUSRT_GAMES").map(PathBuf::from).expect("EMUSEN_VENUSRT_GAMES corpus required");
+    let root = grader::corpus_root().expect("EMUSEN_VENUSRT_CORPUS corpus required");
+    let _probe = diff::mesen_probe().expect("Mesen probe required");
     let until: u32 = std::env::var("EMUSEN_VENUSRT_GAMES_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(600);
     let frames: Vec<u32> = (1..=until / 10).map(|i| i * 10).collect();
     let cache = root.join("runs").join("mesen");
@@ -284,11 +283,9 @@ fn the_games_pictures_and_spaces_against_mesen() {
 
 /// The corpus over VenusRT and Mesen, graded by each suite's protocol, against the committed baseline; C# Venus's columns are frozen there since it was deleted (VenusRT_Native.md §68.3).
 #[test]
+#[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
 fn the_corpus_reproduces_the_recorded_baseline() {
-    let Some(root) = grader::corpus_root() else {
-        println!("{} unset, not run", grader::CORPUS_VARIABLE);
-        return;
-    };
+    let root = grader::corpus_root().expect("EMUSEN_VENUSRT_CORPUS corpus required");
     let mesen = diff::mesen_probe().is_some() && std::env::var("EMUSEN_VENUSRT_NO_MESEN").as_deref() != Ok("1");
     let cache = root.join("runs").join("mesen");
     let threads: usize = std::env::var("EMUSEN_VENUSRT_THREADS").ok().and_then(|t| t.parse().ok()).unwrap_or(4);

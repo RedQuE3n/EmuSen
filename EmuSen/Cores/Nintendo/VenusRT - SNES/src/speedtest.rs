@@ -135,11 +135,9 @@ mod tests {
 
     // Mesen as a black box: the same images, the counter's growth over the same 300 frames.
     #[test]
+    #[ignore = "needs EMUSEN_MESEN_PROBE and EMUSEN_MESEN_CHECKOUT"]
     fn mesen_counts_as_the_machine_does() {
-        let Some((probe, checkout)) = probe() else {
-            eprintln!("EMUSEN_MESEN_PROBE or EMUSEN_MESEN_CHECKOUT unset, not run");
-            return;
-        };
+        let (probe, checkout) = probe().expect("EMUSEN_MESEN_PROBE and EMUSEN_MESEN_CHECKOUT required");
         let dir = std::env::temp_dir().join(format!("venusrt-speed-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut report = String::new();

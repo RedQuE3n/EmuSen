@@ -62,10 +62,11 @@ fn command_name(op: Option<u32>) -> String {
 }
 
 #[test]
+#[ignore = "needs EMUSEN_BLACKMOON_CORPUS corpus"]
 fn test_all_every_case_bit_for_bit() {
-    let Some(root) = corpus() else { return };
+    let root = corpus().expect("EMUSEN_BLACKMOON_CORPUS corpus required");
     let path = root.join("tests/ps1-tests/gte/test-all/tests.c");
-    let Ok(source) = std::fs::read_to_string(&path) else { return };
+    let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     let all = cases(&source);
     assert_eq!(all.len(), 1150);
     let mut by_command: BTreeMap<String, (u32, u32)> = BTreeMap::new();

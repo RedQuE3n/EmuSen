@@ -164,30 +164,27 @@ mod tests {
 
     // The same ROMs through the cartridge's LoROM map, the access speeds, the refresh and the real I/O decode.
     #[test]
+    #[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
     fn gilyons_cpu_tests_on_the_machine() {
         for (name, tests) in [("cputest-basic.sfc", "0452"), ("cputest-full.sfc", "0649")] {
-            let Some(image) = rom(name) else {
-                eprintln!("EMUSEN_VENUSRT_CORPUS unset, not run");
-                return;
-            };
+            let image = rom(name);
             let (verdict, number, frames) = run_on_machine(&image, 1000);
             eprintln!("{name} on the machine: {verdict} at {number}, frame {frames}");
             assert_eq!((verdict.as_str(), number.as_str()), ("Success", tests), "{name}");
         }
     }
 
-    fn rom(name: &str) -> Option<Vec<u8>> {
-        let root = std::env::var_os("EMUSEN_VENUSRT_CORPUS")?;
-        std::fs::read(std::path::Path::new(&root).join("roms/gilyon-snes-tests-v1.4/cputest").join(name)).ok()
+    fn rom(name: &str) -> Vec<u8> {
+        let root = std::env::var_os("EMUSEN_VENUSRT_CORPUS").expect("EMUSEN_VENUSRT_CORPUS corpus required");
+        let path = std::path::Path::new(&root).join("roms/gilyon-snes-tests-v1.4/cputest").join(name);
+        std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
     }
 
     #[test]
+    #[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
     fn gilyons_cpu_tests_on_the_minimal_bus() {
         for (name, tests) in [("cputest-basic.sfc", "0452"), ("cputest-full.sfc", "0649")] {
-            let Some(image) = rom(name) else {
-                eprintln!("EMUSEN_VENUSRT_CORPUS unset, not run");
-                return;
-            };
+            let image = rom(name);
             let v = run(image, 6000);
             eprintln!("{name}: {v:?}");
             assert!(!v.unimplemented && !v.stopped, "{name}: {v:?}");

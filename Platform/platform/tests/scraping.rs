@@ -46,8 +46,8 @@ fn write(path: &Path, bytes: &[u8]) {
 
 #[test]
 fn scrape_runs_the_scraper_the_front_end_opened_and_no_other_is_opened() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
-    let shipped = std::fs::read_to_string("/proc/self/maps").unwrap().lines().filter_map(|l| l.split_whitespace().nth(5)).find(|p| p.ends_with("libe_sqlite3.so")).map(PathBuf::from).unwrap();
+    let sqlite = emusen_sqlite::for_tests();
+    let shipped = std::fs::read_to_string("/proc/self/maps").unwrap().lines().filter_map(|l| l.split_whitespace().nth(5)).find(|p| p.contains("libe_sqlite3.so") || p.contains("libsqlite3.so")).map(PathBuf::from).unwrap();
     let base = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-platform-scrape-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let (program, library, home, etc) = (base.join("program"), base.join("library"), base.join("home"), base.join("etc"));

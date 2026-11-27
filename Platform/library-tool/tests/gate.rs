@@ -194,19 +194,32 @@ fn summary(events: &[Value]) -> String {
     events.iter().map(|e| { let mut l = String::new(); l.push_str(&serde_json::to_string(e).expect("a value is JSON")); l }).collect::<Vec<_>>().join("\n")
 }
 
-fn chdman() -> Option<String> {
-    let c = std::env::var("EMUSEN_CHDMAN").ok();
-    if c.is_none() {
-        eprintln!("skipped: EMUSEN_CHDMAN names no chdman");
+fn chdman() -> String {
+    if let Some(p) = std::env::var("EMUSEN_CHDMAN").ok().filter(|s| !s.is_empty()) {
+        return p;
     }
-    c
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let p = dir.join("chdman");
+            if p.is_file() {
+                return p.to_string_lossy().into_owned();
+            }
+        }
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let p = PathBuf::from(home).join(".cache/emusen/toolchains/chdman/linux-x64/chdman");
+        if p.is_file() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    panic!("chdman not found (set EMUSEN_CHDMAN, put chdman on PATH, or run Platform/library-tool/build-chdman.sh)");
 }
 
 const SOURCES: [&str; 6] = ["psx/Lone (Track 1).bin", "psx/Noise/Noise.cue", "psx/One.cue", "psx/Two/Two.cue", "psx/Zipped.zip", "segacd/Disc.iso"];
 
 #[test]
 fn generated_sheets_round_trip_through_all_three_checks_and_the_library_is_unchanged() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("round");
     library(&temp.at("library"));
     let before = listing(&temp.at("library"));
@@ -263,7 +276,7 @@ fn check_word(event: &Value, check: &str) -> String {
 /// differs from the dump by one sample: only check 2 can see it.
 #[test]
 fn a_corrupted_chd_fails_check_two() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("corrupt");
     library(&temp.at("library"));
     let ctx = context(&temp, &chdman, None);
@@ -293,7 +306,7 @@ fn a_corrupted_chd_fails_check_two() {
 /// original's did.
 #[test]
 fn a_chd_of_another_layout_fails_check_three() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("layout");
     library(&temp.at("library"));
     let ctx = context(&temp, &chdman, None);
@@ -317,7 +330,7 @@ fn a_chd_of_another_layout_fails_check_three() {
 /// damaged map can still stop it at open (EmuSen_Disc.md §13.3), so the disc fails and the program goes on.
 #[test]
 fn a_damaged_chd_fails_check_one_and_is_not_read() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("damaged");
     library(&temp.at("library"));
     let ctx = context(&temp, &chdman, None);
@@ -336,7 +349,7 @@ fn a_damaged_chd_fails_check_one_and_is_not_read() {
 
 #[test]
 fn a_stopped_batch_resumes_and_finishes_leaving_no_partial() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("resume");
     library(&temp.at("library"));
     let ctx = context(&temp, &chdman, None);
@@ -416,7 +429,7 @@ fn a_library_that_holds_the_output_is_refused_before_anything_is_written() {
 /// Compressed and claimed there still; the CHD tool finds it done there and checks it there; its zip stores the CHD.
 #[test]
 fn a_converted_disc_made_self_contained_holds_its_chd_and_its_zip_stores_it() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("contained");
     library(&temp.at("library"));
     let before = listing(&temp.at("library"));
@@ -456,7 +469,7 @@ fn end_error(events: &[Value]) -> String {
 /// is written.
 #[test]
 fn a_chosen_output_folder_is_used_and_one_overlapping_the_library_is_refused() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("output");
     library(&temp.at("library"));
     let before = listing(&temp.at("library"));
@@ -491,7 +504,7 @@ fn a_chosen_output_folder_is_used_and_one_overlapping_the_library_is_refused() {
 /// already taken left as it is, a failed check leaving no partial, and every original as it was.
 #[test]
 fn beside_the_original_adds_only_the_chd_and_never_replaces_a_file() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("beside");
     let lib = temp.at("library");
     library(&lib);
@@ -577,7 +590,7 @@ fn manifest_of(temp: &Temp, rel: &str) -> Value {
 /// unchanged.
 #[test]
 fn a_synthetic_ps2_dvd_is_written_by_createdvd_checked_three_ways_and_packaged() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("ps2dvd");
     ps2_library(&temp.at("library"));
     let before = listing(&temp.at("library"));
@@ -640,7 +653,7 @@ fn a_synthetic_ps2_dvd_is_written_by_createdvd_checked_three_ways_and_packaged()
 /// of layer 1 apart from the dump: only check 2's read of every sector can see it.
 #[test]
 fn a_ps2_dvd_chd_whose_sectors_differ_fails_the_sector_check() {
-    let Some(chdman) = chdman() else { return };
+    let chdman = chdman();
     let temp = Temp::new("ps2bad");
     ps2_library(&temp.at("library"));
     let ctx = context(&temp, &chdman, None);

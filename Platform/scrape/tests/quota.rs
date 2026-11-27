@@ -9,15 +9,15 @@ use emusen_scrape::store::Store;
 use emusen_sqlite::Sqlite;
 use std::sync::Arc;
 
-fn sqlite() -> Option<Arc<Sqlite>> {
+fn sqlite() -> Arc<Sqlite> {
     emusen_sqlite::for_tests()
 }
 
-fn store(label: &str) -> Option<Store> {
-    let sqlite = sqlite()?;
+fn store(label: &str) -> Store {
+    let sqlite = sqlite();
     let dir = std::env::temp_dir().join(format!("emusen-scrape-quota-{label}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    Some(Store::open(sqlite, &dir.to_string_lossy()).unwrap())
+    Store::open(sqlite, &dir.to_string_lossy()).unwrap()
 }
 
 fn limits(per_minute: i32, per_day: i32, ko_per_day: i32, today: i32, ko_today: i32, threads: i32) -> Option<Quota> {
@@ -39,9 +39,7 @@ fn noon() -> i64 {
 
 #[test]
 fn the_pace_turns_threads_and_the_days_two_percent() {
-    let Some(store) = store("rules") else {
-        return;
-    };
+    let store = store("rules");
     let clock = Clock::test(noon());
     let quota = Manager::new(&store, &clock).unwrap();
     assert_eq!(quota.interval(), 22_222_222);
@@ -66,9 +64,7 @@ fn the_pace_turns_threads_and_the_days_two_percent() {
 
 #[test]
 fn a_430_lasts_until_paris_midnight_and_a_restart_and_a_403_until_the_settings_change() {
-    let Some(store) = store("stops") else {
-        return;
-    };
+    let store = store("stops");
     let clock = Clock::test(noon());
     let quota = Manager::new(&store, &clock).unwrap();
     quota.answered(&store, &clock, Status::DailyQuota).unwrap();
@@ -88,9 +84,7 @@ fn a_430_lasts_until_paris_midnight_and_a_restart_and_a_403_until_the_settings_c
 
 #[test]
 fn a_429_halves_the_pace_and_waits_a_minute_and_a_401_five() {
-    let Some(store) = store("waits") else {
-        return;
-    };
+    let store = store("waits");
     let clock = Clock::test(noon());
     let quota = Manager::new(&store, &clock).unwrap();
     quota.observe(&store, &clock, limits(60, 20000, 2000, 0, 0, 1)).unwrap();
@@ -118,9 +112,7 @@ fn pariss_day_turns_at_its_own_midnight_in_summer_and_in_winter() {
 // The day's unrecognised games stop two percent short of their limit too, as the requests do (the C# `ScrapeQuotaTests`' case, held here since its deletion).
 #[test]
 fn the_days_unrecognised_games_stop_two_percent_short_of_their_limit() {
-    let Some(store) = store("ko") else {
-        return;
-    };
+    let store = store("ko");
     let clock = Clock::test(noon());
     let quota = Manager::new(&store, &clock).unwrap();
     quota.observe(&store, &clock, limits(60, 20000, 2000, 0, 1959, 1)).unwrap();
@@ -132,9 +124,7 @@ fn the_days_unrecognised_games_stop_two_percent_short_of_their_limit() {
 // Counts are kept for the day in media.db, and a server's count replaces them.
 #[test]
 fn counts_are_kept_for_the_day_and_a_servers_count_replaces_them() {
-    let Some(store) = store("counts") else {
-        return;
-    };
+    let store = store("counts");
     let clock = Clock::test(noon());
     let quota = Manager::new(&store, &clock).unwrap();
     quota.counted(&store, &clock, false).unwrap();
@@ -150,9 +140,7 @@ fn counts_are_kept_for_the_day_and_a_servers_count_replaces_them() {
 // A 431, the day's unrecognised games used up, stops until Paris's midnight and outlives a restart, as a 430 does.
 #[test]
 fn a_431_lasts_until_paris_midnight_and_a_restart() {
-    let Some(store) = store("stops431") else {
-        return;
-    };
+    let store = store("stops431");
     let clock = Clock::test(noon());
     let quota = Manager::new(&store, &clock).unwrap();
     quota.answered(&store, &clock, Status::DailyKoQuota).unwrap();

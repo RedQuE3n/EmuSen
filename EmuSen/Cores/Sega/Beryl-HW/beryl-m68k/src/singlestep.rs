@@ -269,19 +269,17 @@ mod tests {
         assert!(!o.registers && o.memory && o.cycles);
     }
 
-    fn corpus(suite: &str) -> Option<Vec<PathBuf>> {
-        let dir = suite_dir(suite);
-        if dir.is_none() {
-            eprintln!("{CORPUS_VARIABLE} does not hold {suite}: not run");
-        }
-        dir.map(|d| suite_files(&d))
+    fn corpus(suite: &str) -> Vec<PathBuf> {
+        let dir = suite_dir(suite).unwrap_or_else(|| panic!("{CORPUS_VARIABLE} does not hold {suite}"));
+        suite_files(&dir)
     }
 
     /// The harness loads, answers and records as the suites' environment did (Beryl_M68k.md §3.1).
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_CORPUS corpus"]
     fn the_replay_control_passes_every_case() {
         for suite in SUITES {
-            let Some(files) = corpus(suite) else { continue };
+            let files = corpus(suite);
             let reports = run_suite(&files, pc_offset(suite), None, replay);
             let t = total(&reports);
             eprintln!("{suite}: replay {} of {} in {} files", t.passed, t.cases, reports.len());
@@ -292,9 +290,10 @@ mod tests {
 
     /// Each spoiling must fail every case it applies to, on the first 200 cases of every eighth file.
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_CORPUS corpus"]
     fn spoiled_replays_pass_nothing() {
         for suite in SUITES {
-            let Some(files) = corpus(suite) else { continue };
+            let files = corpus(suite);
             let sample: Vec<PathBuf> = files.iter().step_by(8).cloned().collect();
             let carry = |c: &Value, f: u32, b: &mut FlatBus| {
                 let mut r = replay(c, f, b);
@@ -332,11 +331,12 @@ mod tests {
     /// suite gates: each file misses exactly the cases `RULED` counts, address errors outside `UNFAULTED`. TomHarte's is
     /// measured, its disagreements being Beryl_M68k.md §3.3's, settled in §6.
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_CORPUS corpus"]
     fn the_processor_against_the_suites() {
         let mut lines = Vec::new();
         let mut failed_primary = false;
         for suite in SUITES {
-            let Some(files) = corpus(suite) else { continue };
+            let files = corpus(suite);
             let reports = run_suite(&files, pc_offset(suite), None, processor);
             let t = total(&reports);
             let line = format!("{suite}: {} of {} (registers {}, memory {}, cycles {})", t.passed, t.cases, t.registers, t.memory, t.cycles);
@@ -366,9 +366,10 @@ mod tests {
     /// SingleStepTests' cases the processor misses, each written to the `.jsonl` file `EMUSEN_BERYL_MISSES` names with
     /// the processor's own result, for the referee (Beryl_M68k.md §6); a measurement, failing nothing.
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_MISSES and EMUSEN_BERYL_CORPUS"]
     fn the_primary_misses_listed() {
-        let Some(out) = std::env::var_os("EMUSEN_BERYL_MISSES") else { return };
-        let Some(files) = corpus(SUITES[0]) else { return };
+        let out = std::env::var_os("EMUSEN_BERYL_MISSES").expect("EMUSEN_BERYL_MISSES required");
+        let files = corpus(SUITES[0]);
         let mut lines = String::new();
         for path in &files {
             let file = path.file_name().unwrap().to_string_lossy().into_owned();
@@ -389,8 +390,9 @@ mod tests {
     /// A development aid: `EMUSEN_BERYL_EXPLAIN=<suite folder>/<file>[:<skip>]` prints the first failing cases of a
     /// file after `skip`, with both transaction lists and the registers.
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_EXPLAIN and EMUSEN_BERYL_CORPUS"]
     fn explain() {
-        let Some(spec) = std::env::var("EMUSEN_BERYL_EXPLAIN").ok() else { return };
+        let spec = std::env::var("EMUSEN_BERYL_EXPLAIN").expect("EMUSEN_BERYL_EXPLAIN required");
         let (path, skip) = spec.split_once(':').map_or((spec.as_str(), 0), |(p, n)| (p, n.parse().unwrap_or(0)));
         let suite = SUITES.iter().find(|s| path.starts_with(*s)).expect("a suite folder");
         let file = Path::new(&std::env::var_os(CORPUS_VARIABLE).unwrap()).join(path);
@@ -442,12 +444,11 @@ mod tests {
     /// variable names a `.jsonl` file, each case is also written there with the processor's own result, for the
     /// referee's comparison (§6).
     #[test]
+    #[ignore = "needs EMUSEN_BERYL_DISAGREEMENTS and EMUSEN_BERYL_CORPUS"]
     fn the_second_suite_disagreements() {
-        if std::env::var_os("EMUSEN_BERYL_DISAGREEMENTS").is_none() {
-            return;
-        }
-        let Some(files) = corpus(SUITES[1]) else { return };
-        let listing = std::env::var("EMUSEN_BERYL_DISAGREEMENTS").ok().filter(|p| p.ends_with(".jsonl"));
+        let spec = std::env::var("EMUSEN_BERYL_DISAGREEMENTS").expect("EMUSEN_BERYL_DISAGREEMENTS required");
+        let files = corpus(SUITES[1]);
+        let listing = Some(spec).filter(|p| p.ends_with(".jsonl"));
         let mut lines = String::new();
         let mut classes: BTreeMap<String, usize> = BTreeMap::new();
         for path in &files {

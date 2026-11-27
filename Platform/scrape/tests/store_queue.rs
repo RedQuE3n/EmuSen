@@ -16,7 +16,7 @@ fn dir(name: &str) -> PathBuf {
 
 #[test]
 fn the_queue_goes_by_priority_then_arrival_and_a_game_shown_moves_up() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let sqlite = emusen_sqlite::for_tests();
     let d = dir("queue");
     let store = Store::open(sqlite, &d.to_string_lossy()).unwrap();
     store.enqueue("/r/a.sfc", "snes", Priority::Library).unwrap();
@@ -33,7 +33,7 @@ fn the_queue_goes_by_priority_then_arrival_and_a_game_shown_moves_up() {
 
 #[test]
 fn a_game_waiting_to_be_retried_is_not_due_until_its_time_and_the_queue_outlives_the_store_being_closed() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let sqlite = emusen_sqlite::for_tests();
     let d = dir("retry");
     {
         let store = Store::open(sqlite.clone(), &d.to_string_lossy()).unwrap();

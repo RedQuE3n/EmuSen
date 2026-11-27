@@ -25,14 +25,8 @@ use goldens::*;
 #[path = "support/records.rs"]
 mod records;
 
-fn renderer() -> Option<Renderer> {
-    match Renderer::new(None) {
-        Ok(r) => Some(r),
-        Err(e) => {
-            eprintln!("no Vulkan device ({e}): not run");
-            None
-        }
-    }
+fn renderer() -> Renderer {
+    Renderer::new(None).expect("Vulkan hardware device required")
 }
 
 /// The drawer of the gate: the renderer, when there is one, and the polygons it was given with their precise vertices,
@@ -178,124 +172,115 @@ fn run_paired(mut m: Machine, r: Renderer, form: Form, frames: usize) -> (Compar
     (c, counts, drawn(&mut m).counts(), end_digests(&m, &fold))
 }
 
-/// §23's first two items on the project's programs, each as its golden runs it: with the setting on (the exact form)
-/// every golden line holds; with the zero form every picture and VRAM is the software rasteriser's, as E3's gate holds.
-#[test]
-fn the_programs_keep_their_goldens_and_are_drawn_exactly_at_zero_fraction() {
-    if renderer().is_none() {
-        return;
-    }
-    let (mut failed, mut on, mut zero) = (Vec::new(), Vec::new(), Vec::new());
-    for (name, source) in own_programs() {
-        let (_, counts, _, digests) = run_paired(golden_program(&name, &source), renderer().unwrap(), Form::Exact, GOLDEN_PROGRAM_FRAMES);
-        on.push(format!("{name}\t{GOLDEN_PROGRAM_FRAMES}\t{digests}"));
-        let (c, zc, rc, digests) = run_paired(golden_program(&name, &source), renderer().unwrap(), Form::Zero, GOLDEN_PROGRAM_FRAMES);
-        zero.push(format!("{name}\t{GOLDEN_PROGRAM_FRAMES}\t{digests}"));
-        let cache = TEXTURE_CACHE_HALFWORDS.iter().find(|p| p.0 == name).map_or(0, |p| p.1);
-        if c.pixels != 0 || c.vram != cache {
-            failed.push(format!("{name}: {c:?}"));
-        }
-        if counts.projections > 0 || zc.precise_polygons > 0 {
-            eprintln!("{name}: on: {}\n  zero: {}", counts_line(&counts, None), counts_line(&zc, Some(&rc)));
-        }
-    }
-    let (a, b) = (goldens_equal("programs.txt", &on), goldens_equal("programs.txt", &zero));
-    assert!(failed.is_empty() && a.is_empty() && b.is_empty(), "at zero fraction:\n{}\ngoldens on:\n{}\nzero:\n{}", failed.join("\n"), a.join("\n"), b.join("\n"));
-}
+mod vulkan_gpu {
+    use super::*;
 
-/// The same on ps1-tests' release, for the frames its goldens run.
-#[test]
-fn ps1_tests_keep_their_goldens_and_are_drawn_exactly_at_zero_fraction() {
-    let Some(corpus) = records::corpus() else {
-        eprintln!("not run: {} names no ps1-tests build 158", records::CORPUS_VARIABLE);
-        return;
-    };
-    if renderer().is_none() {
-        return;
-    }
-    let (mut failed, mut on, mut zero) = (Vec::new(), Vec::new(), Vec::new());
-    for path in ps1_tests_programs(&corpus) {
-        let (frames, market) = ps1_tests_run(&path);
-        let (_, counts, _, digests) = run_paired(ps1_tests_machine(&corpus, &path, market), renderer().unwrap(), Form::Exact, frames);
-        on.push(format!("{path}\t{frames}\t{digests}"));
-        let (c, zc, rc, digests) = run_paired(ps1_tests_machine(&corpus, &path, market), renderer().unwrap(), Form::Zero, frames);
-        zero.push(format!("{path}\t{frames}\t{digests}"));
-        if c.pixels != 0 || c.vram != 0 {
-            failed.push(format!("{path}: {c:?}"));
-        }
-        if counts.projections > 0 {
-            eprintln!("{path}: on: {}\n  zero: {}", counts_line(&counts, None), counts_line(&zc, Some(&rc)));
-        }
-    }
-    let (a, b) = (goldens_equal("ps1-tests.txt", &on), goldens_equal("ps1-tests.txt", &zero));
-    assert!(failed.is_empty() && a.is_empty() && b.is_empty(), "at zero fraction:\n{}\ngoldens on:\n{}\nzero:\n{}", failed.join("\n"), a.join("\n"), b.join("\n"));
-}
-
-/// The bench discs by their press scripts to frame 3,000, the pair attached from power-on in `form`: the goldens'
-/// digests at every anchor, the renderer's picture against the machine's at every frame and its VRAM at every anchor,
-/// and the precision layer's counts. With `EMUSEN_DIAMOND_PICTURES` a folder, the exact form's pictures at each anchor
-/// are written there for looking at, the renderer's and the machine's side by side as raw RGBA.
-fn discs(form: Form) -> Option<(Vec<String>, Vec<String>)> {
-    let Some(folder) = std::env::var_os("EMUSEN_DIAMOND_DISCS") else {
-        eprintln!("not run: EMUSEN_DIAMOND_DISCS names no folder of the bench discs");
-        return None;
-    };
-    renderer()?;
-    let pictures = std::env::var_os("EMUSEN_DIAMOND_PICTURES").filter(|_| form == Form::Exact).map(std::path::PathBuf::from);
-    let folder = std::path::PathBuf::from(folder);
-    let (mut lines, mut goldens) = (Vec::new(), Vec::new());
-    for (file, script) in GOLDEN_DISCS {
-        let (anchor, presses, sticks) = press_script(script);
-        goldens.push(format!("{file}\t{script}\tanchor {anchor}"));
-        let mut m = disc_maker(folder.join(file))();
-        m.insert_card(0, None);
-        m.attach(Box::new(Precise::new(Precision::new(form), Tap::new(renderer(), false))));
-        let (mut c, mut fold) = (Compared::default(), Fold::new());
-        let mut by_anchor = Vec::new();
-        while m.frames < GOLDEN_DISC_FRAMES {
-            press(&mut m, &presses, &sticks);
-            m.advance();
-            fold.frame(&mut m);
-            c.frame(&mut m);
-            if m.frames % GOLDEN_DISC_ANCHOR == 0 {
-                c.vram(&mut m);
-                goldens.push(format!("\t{}\tpicture {:016X}\tsound {:016X}\tstate {:016X}", m.frames, fold.picture, fold.sound, state_digest(&m)));
-                let k = tap(&mut m).precision.counts();
-                by_anchor.push(format!("{}:{}/{}", m.frames, k.precise_vertices, k.vertices));
-                if let Some(dir) = &pictures {
-                    let stem = format!("{}-{:05}", script.trim_end_matches(".txt"), m.frames);
-                    let (w, h) = (m.board.gpu.display.width, m.board.gpu.display.height);
-                    std::fs::write(dir.join(format!("{stem}.machine.{w}x{h}.rgba")), m.board.gpu.display.frame()).unwrap();
-                    let (pic, rw, rh) = drawn(&mut m).picture();
-                    std::fs::write(dir.join(format!("{stem}.precise.{rw}x{rh}.rgba")), pic).unwrap();
-                }
+    /// §23 on the project's programs: exact form keeps every golden, zero form matches the software rasteriser.
+    #[test]
+    fn the_programs_keep_their_goldens_and_are_drawn_exactly_at_zero_fraction() {
+        let (mut failed, mut on, mut zero) = (Vec::new(), Vec::new(), Vec::new());
+        for (name, source) in own_programs() {
+            let (_, counts, _, digests) = run_paired(golden_program(&name, &source), renderer(), Form::Exact, GOLDEN_PROGRAM_FRAMES);
+            on.push(format!("{name}\t{GOLDEN_PROGRAM_FRAMES}\t{digests}"));
+            let (c, zc, rc, digests) = run_paired(golden_program(&name, &source), renderer(), Form::Zero, GOLDEN_PROGRAM_FRAMES);
+            zero.push(format!("{name}\t{GOLDEN_PROGRAM_FRAMES}\t{digests}"));
+            let cache = TEXTURE_CACHE_HALFWORDS.iter().find(|p| p.0 == name).map_or(0, |p| p.1);
+            if c.pixels != 0 || c.vram != cache {
+                failed.push(format!("{name}: {c:?}"));
+            }
+            if counts.projections > 0 || zc.precise_polygons > 0 {
+                eprintln!("{name}: on: {}\n  zero: {}", counts_line(&counts, None), counts_line(&zc, Some(&rc)));
             }
         }
-        let k = tap(&mut m).precision.counts();
-        let r = drawn(&mut m).counts();
-        lines.push(format!("{file}: {}; pictures differing in {} of {} frames, {} pixels, first {:?}; VRAM {}; by anchor {}", counts_line(&k, Some(&r)), c.frames_differing, c.frames, c.pixels, c.first, c.vram, by_anchor.join(" ")));
-        eprintln!("{}", lines.last().unwrap());
-        if form == Form::Zero && (c.pixels != 0 || c.vram != 0) {
-            lines.push(format!("FAILED {file}: at zero fraction the renderer differs"));
-        }
+        let (a, b) = (goldens_equal("programs.txt", &on), goldens_equal("programs.txt", &zero));
+        assert!(failed.is_empty() && a.is_empty() && b.is_empty(), "at zero fraction:\n{}\ngoldens on:\n{}\nzero:\n{}", failed.join("\n"), a.join("\n"), b.join("\n"));
     }
-    Some((lines, goldens))
-}
 
-/// §23 on the bench discs with the setting on: every golden anchor's digests, and the counts per game (P10).
-#[test]
-fn the_bench_discs_keep_their_goldens_with_the_setting_on() {
-    let Some((lines, goldens)) = discs(Form::Exact) else { return };
-    let differ = goldens_equal("discs.txt", &goldens);
-    assert!(differ.is_empty(), "goldens with the setting on:\n{}\n{}", differ.join("\n"), lines.join("\n"));
-}
+    /// The same on ps1-tests' release, for the frames its goldens run.
+    #[test]
+    #[ignore = "needs EMUSEN_DIAMOND_PS1TESTS corpus"]
+    fn ps1_tests_keep_their_goldens_and_are_drawn_exactly_at_zero_fraction() {
+        let corpus = records::corpus().unwrap_or_else(|| panic!("{} corpus required", records::CORPUS_VARIABLE));
+        let (mut failed, mut on, mut zero) = (Vec::new(), Vec::new(), Vec::new());
+        for path in ps1_tests_programs(&corpus) {
+            let (frames, market) = ps1_tests_run(&path);
+            let (_, counts, _, digests) = run_paired(ps1_tests_machine(&corpus, &path, market), renderer(), Form::Exact, frames);
+            on.push(format!("{path}\t{frames}\t{digests}"));
+            let (c, zc, rc, digests) = run_paired(ps1_tests_machine(&corpus, &path, market), renderer(), Form::Zero, frames);
+            zero.push(format!("{path}\t{frames}\t{digests}"));
+            if c.pixels != 0 || c.vram != 0 {
+                failed.push(format!("{path}: {c:?}"));
+            }
+            if counts.projections > 0 {
+                eprintln!("{path}: on: {}\n  zero: {}", counts_line(&counts, None), counts_line(&zc, Some(&rc)));
+            }
+        }
+        let (a, b) = (goldens_equal("ps1-tests.txt", &on), goldens_equal("ps1-tests.txt", &zero));
+        assert!(failed.is_empty() && a.is_empty() && b.is_empty(), "at zero fraction:\n{}\ngoldens on:\n{}\nzero:\n{}", failed.join("\n"), a.join("\n"), b.join("\n"));
+    }
 
-/// §23 on the bench discs at zero fraction: every picture and every anchor's VRAM the software rasteriser's.
-#[test]
-fn the_bench_discs_are_drawn_exactly_at_zero_fraction() {
-    let Some((lines, goldens)) = discs(Form::Zero) else { return };
-    let differ = goldens_equal("discs.txt", &goldens);
-    assert!(differ.is_empty() && !lines.iter().any(|l| l.starts_with("FAILED")), "{}\n{}", differ.join("\n"), lines.join("\n"));
+    /// The bench discs by their press scripts to frame 3,000, the pair attached from power-on in `form`.
+    fn discs(form: Form) -> (Vec<String>, Vec<String>) {
+        let folder = std::env::var_os("EMUSEN_DIAMOND_DISCS").expect("EMUSEN_DIAMOND_DISCS corpus folder required");
+        let _ = renderer();
+        let pictures = std::env::var_os("EMUSEN_DIAMOND_PICTURES").filter(|_| form == Form::Exact).map(std::path::PathBuf::from);
+        let folder = std::path::PathBuf::from(folder);
+        let (mut lines, mut goldens) = (Vec::new(), Vec::new());
+        for (file, script) in GOLDEN_DISCS {
+            let (anchor, presses, sticks) = press_script(script);
+            goldens.push(format!("{file}\t{script}\tanchor {anchor}"));
+            let mut m = disc_maker(folder.join(file))();
+            m.insert_card(0, None);
+            m.attach(Box::new(Precise::new(Precision::new(form), Tap::new(Some(renderer()), false))));
+            let (mut c, mut fold) = (Compared::default(), Fold::new());
+            let mut by_anchor = Vec::new();
+            while m.frames < GOLDEN_DISC_FRAMES {
+                press(&mut m, &presses, &sticks);
+                m.advance();
+                fold.frame(&mut m);
+                c.frame(&mut m);
+                if m.frames % GOLDEN_DISC_ANCHOR == 0 {
+                    c.vram(&mut m);
+                    goldens.push(format!("\t{}\tpicture {:016X}\tsound {:016X}\tstate {:016X}", m.frames, fold.picture, fold.sound, state_digest(&m)));
+                    let k = tap(&mut m).precision.counts();
+                    by_anchor.push(format!("{}:{}/{}", m.frames, k.precise_vertices, k.vertices));
+                    if let Some(dir) = &pictures {
+                        let stem = format!("{}-{:05}", script.trim_end_matches(".txt"), m.frames);
+                        let (w, h) = (m.board.gpu.display.width, m.board.gpu.display.height);
+                        std::fs::write(dir.join(format!("{stem}.machine.{w}x{h}.rgba")), m.board.gpu.display.frame()).unwrap();
+                        let (pic, rw, rh) = drawn(&mut m).picture();
+                        std::fs::write(dir.join(format!("{stem}.precise.{rw}x{rh}.rgba")), pic).unwrap();
+                    }
+                }
+            }
+            let k = tap(&mut m).precision.counts();
+            let r = drawn(&mut m).counts();
+            lines.push(format!("{file}: {}; pictures differing in {} of {} frames, {} pixels, first {:?}; VRAM {}; by anchor {}", counts_line(&k, Some(&r)), c.frames_differing, c.frames, c.pixels, c.first, c.vram, by_anchor.join(" ")));
+            eprintln!("{}", lines.last().unwrap());
+            if form == Form::Zero && (c.pixels != 0 || c.vram != 0) {
+                lines.push(format!("FAILED {file}: at zero fraction the renderer differs"));
+            }
+        }
+        (lines, goldens)
+    }
+
+    /// §23 on the bench discs with the setting on: every golden anchor's digests, and the counts per game (P10).
+    #[test]
+    #[ignore = "needs EMUSEN_DIAMOND_DISCS corpus"]
+    fn the_bench_discs_keep_their_goldens_with_the_setting_on() {
+        let (lines, goldens) = discs(Form::Exact);
+        let differ = goldens_equal("discs.txt", &goldens);
+        assert!(differ.is_empty(), "goldens with the setting on:\n{}\n{}", differ.join("\n"), lines.join("\n"));
+    }
+
+    /// §23 on the bench discs at zero fraction: every picture and every anchor's VRAM the software rasteriser's.
+    #[test]
+    #[ignore = "needs EMUSEN_DIAMOND_DISCS corpus"]
+    fn the_bench_discs_are_drawn_exactly_at_zero_fraction() {
+        let (lines, goldens) = discs(Form::Zero);
+        let differ = goldens_equal("discs.txt", &goldens);
+        assert!(differ.is_empty() && !lines.iter().any(|l| l.starts_with("FAILED")), "{}\n{}", differ.join("\n"), lines.join("\n"));
+    }
 }
 
 // --- The synthetic programs ---
@@ -641,12 +626,12 @@ fn edge_figures(frames: &[Vec<f64>]) -> [(f64, f64, f64); 2] {
     })
 }
 
-/// §23's mesh: the grid turned 0.23° a frame for 120 frames. Its vertices' error against the ideal projection with
-/// integer vertices, with MAC0's sums (§21.2's alternative) and with the precise vertices; and its texture's error
-/// against the perspective-correct reference with the setting off (the software rasteriser's VRAM) and on (the
-/// renderer's). The numbers are printed for Diamond_Enhancements.md §25; the test holds the improvement.
-#[test]
-fn the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on() {
+mod vulkan_gpu_suite {
+    use super::*;
+
+    /// §23's mesh: the grid turned 0.23° a frame for 120 frames, requiring a Vulkan hardware device.
+    #[test]
+    fn vulkan_gpu_the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on() {
     let run = |form: Form, r: Option<Renderer>| {
         let mut m = mesh_machine();
         m.attach(Box::new(Precise::new(Precision::new(form), Tap::new(r, true))));
@@ -676,11 +661,7 @@ fn the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on() {
         (vertices_drawn(&t.drawer.polygons), t.precision.counts(), off, on, (edge_figures(&edges_off), edge_figures(&edges_on), holes))
     };
     let (sums, sums_counts, _, _, _) = run(Form::Sums, None);
-    let Some(r) = renderer() else {
-        let integer: Vec<Vec<(f64, f64)>> = sums.iter().map(|f| f.iter().map(|v| v.0).collect()).collect();
-        eprintln!("integer vertices: {:?}", jitter(&integer[..MESH_FRAMES.min(integer.len())]));
-        return;
-    };
+    let r = renderer();
     let (exact, counts, off, on, (edges_off, edges_on, holes)) = run(Form::Exact, Some(r));
     assert_eq!((counts.polygons, counts.precise_polygons, counts.refused, counts.far), (counts.precise_polygons, counts.polygons, 0, 0), "every quad precise: {counts:?}");
     assert_eq!(sums_counts.precise_polygons, sums_counts.polygons);
@@ -707,7 +688,7 @@ fn the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on() {
 /// of whose vertices are projected and one moved: with the setting on, the picture and VRAM the software rasteriser's.
 #[test]
 fn a_2d_program_is_drawn_as_the_software_rasteriser_with_the_setting_on() {
-    let Some(r) = renderer() else { return };
+    let r = renderer();
     let mut s = String::new();
     s += "lui t9, 0x4000\nmtc0 t9, SR\nlui a0, 0x1F80\n";
     s += &(gp1(0) + &gp1(0x0800_0001) + &gp1(0x0300_0000));
@@ -860,7 +841,7 @@ fn filled(body: &str, r: Renderer) -> (Machine, Vec<u16>) {
 /// console's colour (§33.4).
 #[test]
 fn a_precise_floor_meets_an_integer_ring_with_no_crack() {
-    let Some(r) = renderer() else { return };
+    let r = renderer();
     let floor = |xl: i32, xr: i32| [(xl, -32), (xr, -32), (xl, 40), (xr, 40)];
     let texture = [0, 0x0108_0078, 0x4800, 0x4878];
     let body = ring(-140, -20) + &projected_quad(0x2800_C000, floor(-140, -20), None) + &projected_quad(0x2A60_6060, floor(-140, -20), None) + &projected_quad(0x2D80_8080, floor(20, 140), Some(texture)) + &ring(20, 140);
@@ -898,7 +879,7 @@ fn a_precise_floor_meets_an_integer_ring_with_no_crack() {
 /// later quad the pixels between the console's edge and the precise one (§33.3).
 #[test]
 fn two_precise_quads_sharing_an_edge_spill_nothing() {
-    let Some(r) = renderer() else { return };
+    let r = renderer();
     let pair = |x: i32| ([(x - 60, -40), (x, -40), (x - 70, 40), (x - 10, 40)], [(x, -40), (x + 60, -40), (x - 10, 40), (x + 50, 40)]);
     let (a, b) = (pair(-70), pair(90));
     let body = projected_quad(0x2800_00E0, a.0, None) + &projected_quad(0x28E0_0000, a.1, None) + &projected_quad(0x28E0_0000, b.1, None) + &projected_quad(0x2800_00E0, b.0, None);
@@ -933,7 +914,7 @@ fn two_precise_quads_sharing_an_edge_spill_nothing() {
 /// none is a blend of a blend, which a fill of a semi-transparent pixel would make where two meet (§33.4).
 #[test]
 fn a_semi_transparent_pair_is_blended_once() {
-    let Some(r) = renderer() else { return };
+    let r = renderer();
     let pair = |x: i32| ([(x - 60, -40), (x, -40), (x - 70, 40), (x - 10, 40)], [(x, -40), (x + 60, -40), (x - 10, 40), (x + 50, 40)]);
     let (a, b) = (pair(-70), pair(90));
     let texture = [0, 0x0109_003F, 0x3F00, 0x3F3F];
@@ -975,8 +956,8 @@ fn saved(m: &mut Machine) -> Vec<u8> {
     s
 }
 
-fn paired() -> Option<Box<Precise<Tap>>> {
-    Some(Box::new(Precise::new(Precision::default(), Tap::new(Some(renderer()?), false))))
+fn paired() -> Box<Precise<Tap>> {
+    Box::new(Precise::new(Precision::default(), Tap::new(Some(renderer()), false)))
 }
 
 /// §52.2: the marks are no longer the state's. Two precise quads that share a slanted edge, the left drawn at once and
@@ -987,9 +968,7 @@ fn paired() -> Option<Box<Precise<Tap>>> {
 /// stays; a game, drawing every frame, settles (§52.1).
 #[test]
 fn a_state_between_two_quads_that_share_an_edge_keeps_no_marks() {
-    if renderer().is_none() {
-        return;
-    }
+    let _ = renderer();
     let (left, right) = ([(-130, -40), (-70, -40), (-140, 40), (-80, 40)], [(-70, -40), (-10, -40), (-80, 40), (-20, 40)]);
     let acknowledged = li("t0", 0xFFFF_FFFE) + "sw t0, 0x1070(a0)\n";
     let mut body = projected_quad(0x2800_00E0, left, None) + &acknowledged;
@@ -999,13 +978,13 @@ fn a_state_between_two_quads_that_share_an_edge_keeps_no_marks() {
     }
     body += &projected_quad(0x28E0_0000, right, None);
     let mut a = fill_machine(&body);
-    a.attach(paired().unwrap());
+    a.attach(paired());
     a.advance();
     a.advance();
     assert_eq!(tap(&mut a).precision.counts().precise_polygons, 1, "the left quad alone before the state");
     let state = saved(&mut a);
     let mut b = fill_machine(&body);
-    b.attach(paired().unwrap());
+    b.attach(paired());
     b.load_state(&state).unwrap();
     for _ in 0..3 {
         a.advance();
@@ -1026,7 +1005,7 @@ fn a_state_between_two_quads_that_share_an_edge_keeps_no_marks() {
 /// empty at the load and finds its polygons again within two frames.
 #[test]
 fn a_state_with_the_setting_on_is_the_machines_and_its_picture_settles() {
-    let Some(pair) = paired() else { return };
+    let pair = paired();
     let mut a = mesh_machine();
     a.attach(pair);
     let mut c = mesh_machine();
@@ -1038,7 +1017,7 @@ fn a_state_with_the_setting_on_is_the_machines_and_its_picture_settles() {
     assert!(state == saved(&mut c), "the state is the machine's");
     let (mut b, mut e) = (mesh_machine(), mesh_machine());
     for m in [&mut b, &mut e] {
-        m.attach(paired().unwrap());
+        m.attach(paired());
         m.load_state(&state).unwrap();
     }
     assert!(saved(&mut b) == state, "save, load, save gives other bytes");
@@ -1072,7 +1051,7 @@ fn a_state_with_the_setting_on_is_the_machines_and_its_picture_settles() {
 /// strip's first column, which the console's own triangles cover and the precise ones do not, are filled (§33).
 #[test]
 fn a_strip_of_a_picture_shows_no_texel_past_its_edge() {
-    let Some(r) = renderer() else { return };
+    let r = renderer();
     let mut s = String::new();
     s += "lui t9, 0x4000\nmtc0 t9, SR\nlui a0, 0x1F80\n";
     s += &(gp1(0) + &gp1(0x0800_0001) + &gp1(0x0300_0000));
@@ -1131,8 +1110,8 @@ fn a_strip_of_a_picture_shows_no_texel_past_its_edge() {
 
 /// A fill program run three frames with the renderer at `scale`, paired with the precision layer or alone (the
 /// console's own polygons at that scale); the machine and every sample of the renderer's mirror.
-fn filled_at(body: &str, scale: u32, paired: bool) -> Option<(Machine, Vec<u32>)> {
-    let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).ok()?;
+fn filled_at(body: &str, scale: u32, paired: bool) -> (Machine, Vec<u32>) {
+    let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).expect("Vulkan hardware device required");
     let mut m = fill_machine(body);
     if paired {
         m.attach(Box::new(Precise::new(Precision::default(), Tap::new(Some(r), true))));
@@ -1147,7 +1126,7 @@ fn filled_at(body: &str, scale: u32, paired: bool) -> Option<(Machine, Vec<u32>)
         Some(p) => p.drawer.renderer.as_mut().expect("a renderer").samples().to_vec(),
         None => layer.downcast_mut::<Renderer>().expect("the renderer").samples().to_vec(),
     };
-    Some((m, samples))
+    (m, samples)
 }
 
 /// §33's floor and ring at 2x and 4x: no sample the console's own polygons cover at that scale shows the cleared
@@ -1155,9 +1134,7 @@ fn filled_at(body: &str, scale: u32, paired: bool) -> Option<(Machine, Vec<u32>)
 /// sample, each sample about the edge its own quad's by the side of the precise edge its point lies on.
 #[test]
 fn at_n_the_fill_closes_every_crack_and_spills_over_no_shared_edge() {
-    if renderer().is_none() {
-        return;
-    }
+    let _ = renderer();
     let floor = |xl: i32, xr: i32| [(xl, -32), (xr, -32), (xl, 40), (xr, 40)];
     let texture = [0, 0x0108_0078, 0x4800, 0x4878];
     let rings = ring(-140, -20) + &projected_quad(0x2800_C000, floor(-140, -20), None) + &projected_quad(0x2A60_6060, floor(-140, -20), None) + &projected_quad(0x2D80_8080, floor(20, 140), Some(texture)) + &ring(20, 140);
@@ -1166,8 +1143,8 @@ fn at_n_the_fill_closes_every_crack_and_spills_over_no_shared_edge() {
     let quads = projected_quad(0x2800_00E0, a.0, None) + &projected_quad(0x28E0_0000, a.1, None) + &projected_quad(0x28E0_0000, b.1, None) + &projected_quad(0x2800_00E0, b.0, None);
     for scale in [2u32, 4] {
         let n = scale as usize;
-        let (_, console) = filled_at(&rings, scale, false).unwrap();
-        let (_, precise) = filled_at(&rings, scale, true).unwrap();
+        let (_, console) = filled_at(&rings, scale, false);
+        let (_, precise) = filled_at(&rings, scale, true);
         let (mut covered, mut cracks) = (0, 0);
         for y in 0..240 * n {
             for x in 0..320 * n {
@@ -1178,7 +1155,7 @@ fn at_n_the_fill_closes_every_crack_and_spills_over_no_shared_edge() {
                 }
             }
         }
-        let (mut m, v) = filled_at(&quads, scale, true).unwrap();
+        let (mut m, v) = filled_at(&quads, scale, true);
         let t = tap(&mut m);
         let (left, right) = (0x001Cu16, 0x7000u16);
         let (mut spilled, mut graded) = (0, 0);
@@ -1208,13 +1185,9 @@ fn at_n_the_fill_closes_every_crack_and_spills_over_no_shared_edge() {
 }
 
 /// §34.2's figures at 2x and 4x: the turning grid with precise geometry at the scale, its edges graded sample by sample.
-/// The edges two precise quads share stay where the precise vertices put them, as at 1x, and no sample between two
-/// quads is left undrawn; the outline's figures are printed beside them.
 #[test]
-fn the_turning_grids_shared_edges_hold_at_n() {
-    if renderer().is_none() {
-        return;
-    }
+fn vulkan_gpu_the_turning_grids_shared_edges_hold_at_n() {
+    let _ = renderer();
     for scale in [2u32, 4] {
         let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).unwrap();
         let mut m = mesh_machine();
@@ -1237,4 +1210,5 @@ fn the_turning_grids_shared_edges_hold_at_n() {
         eprintln!("{scale}x, {} frames: edges between two quads {inner:.4?}, the outline {outline:.4?} (mean distance from the ideal px, mean change px, worst px); {holes} samples neither quad drew", edges.len());
         assert!(inner.0 < 0.05 && inner.1 < 0.05 && holes == 0, "the shared edges at {scale}x: {inner:?}, {holes} holes");
     }
+}
 }

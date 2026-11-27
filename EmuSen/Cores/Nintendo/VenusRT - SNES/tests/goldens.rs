@@ -123,12 +123,10 @@ fn random_programs_run_as_their_goldens_recorded() {
 }
 
 #[test]
+#[ignore = "needs EMUSEN_VENUSRT_CORPUS corpus"]
 fn the_corpus_runs_as_its_goldens_recorded() {
     let runs = corpus_runs();
-    if runs.is_empty() {
-        println!("{} unset, not run", grader::CORPUS_VARIABLE);
-        return;
-    }
+    assert!(!runs.is_empty(), "{} corpus required", grader::CORPUS_VARIABLE);
     let threads = std::env::var("EMUSEN_VENUSRT_THREADS").ok().and_then(|t| t.parse().ok()).unwrap_or_else(|| (std::thread::available_parallelism().map_or(4, |n| n.get()) / 4).max(1));
     let next = std::sync::atomic::AtomicUsize::new(0);
     let failures = std::sync::Mutex::new(Vec::new());
@@ -152,11 +150,10 @@ fn the_corpus_runs_as_its_goldens_recorded() {
 }
 
 #[test]
+#[ignore = "needs EMUSEN_VENUSRT_GAMES corpus"]
 fn the_games_run_as_their_goldens_recorded() {
     let runs = game_runs();
-    if runs.is_empty() {
-        println!("{GAMES_VARIABLE} unset or holding none of the games, not run");
-    }
+    assert!(!runs.is_empty(), "{GAMES_VARIABLE} corpus required");
     for r in runs {
         println!("{}", golden::check(&r));
     }

@@ -1,7 +1,7 @@
 //! The library tool through this library's two surfaces (EmuSen_GamePackages.md §12.3): a shell this library makes is
 //! handed the `emusen.library` service, so that `chd` runs with no help from the host, reading the library from the
 //! settings and writing only under the tree's `Compressed` and `Packages`; and the C calls refuse what is not a request.
-//! The conversion needs `EMUSEN_CHDMAN` naming the pinned chdman; without it only `chd ls` and the refusals run.
+//! The conversion uses `EMUSEN_CHDMAN`, `chdman` on `PATH`, or the cached chdman toolchain.
 
 use emusen_disc::ecma130::{self, RAW};
 use emusen_galaxia::tree::{self, Override};
@@ -22,6 +22,27 @@ fn data(sectors: u32) -> Vec<u8> {
 
 /// The tree is the process's: a test that moves it holds this.
 static TREE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn chdman() -> String {
+    if let Some(p) = std::env::var("EMUSEN_CHDMAN").ok().filter(|s| !s.is_empty()) {
+        return p;
+    }
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let p = dir.join("chdman");
+            if p.is_file() {
+                return p.to_string_lossy().into_owned();
+            }
+        }
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let p = PathBuf::from(home).join(".cache/emusen/toolchains/chdman/linux-x64/chdman");
+        if p.is_file() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    panic!("chdman not found (set EMUSEN_CHDMAN, put chdman on PATH, or run Platform/library-tool/build-chdman.sh)");
+}
 
 fn run(sh: *mut emusen_platform::dianash::DianashShell, line: &str) -> String {
     unsafe {
@@ -49,18 +70,15 @@ fn chd_runs_in_a_shell_this_library_makes_over_the_settings_library() {
     assert_eq!(unsafe { dianash_session_new(sh) }, 1);
     let listed = run(sh, "chd ls psx");
     assert!(listed.contains("not converted psx/Game (Track 1).bin"), "{listed}");
-    if let Ok(chdman) = std::env::var("EMUSEN_CHDMAN") {
-        assert!(!chdman.is_empty());
-        let converted = run(sh, "chd convert psx");
-        assert!(converted.contains("[1/1] psx/Game (Track 1).bin: converted"), "{converted}");
-        assert!(home.join("Compressed/psx/Game (Track 1).chd").is_file());
-        assert!(home.join("Packages/PlayStation/Game (Track 1).chd/package.json").is_file());
-        let checked = run(sh, "chd check");
-        assert!(checked.contains("[1/1] psx/Game (Track 1).bin: verified, three checks passed"), "{checked}");
-        assert!(run(sh, "chd ls").contains("converted     psx/Game (Track 1).bin"));
-    } else {
-        eprintln!("skipped the conversion: EMUSEN_CHDMAN names no chdman");
-    }
+    let chdman = chdman();
+    unsafe { std::env::set_var("EMUSEN_CHDMAN", &chdman) };
+    let converted = run(sh, "chd convert psx");
+    assert!(converted.contains("[1/1] psx/Game (Track 1).bin: converted"), "{converted}");
+    assert!(home.join("Compressed/psx/Game (Track 1).chd").is_file());
+    assert!(home.join("Packages/PlayStation/Game (Track 1).chd/package.json").is_file());
+    let checked = run(sh, "chd check");
+    assert!(checked.contains("[1/1] psx/Game (Track 1).bin: verified, three checks passed"), "{checked}");
+    assert!(run(sh, "chd ls").contains("converted     psx/Game (Track 1).bin"));
     let usage = run(sh, "chd frobnicate");
     assert!(usage.contains("Usage: chd ls"), "{usage}");
     unsafe { dianash_free(sh) };
@@ -95,12 +113,9 @@ fn a_request_that_is_not_one_is_refused_and_a_job_ends_with_zero() {
 /// made is there afterwards. The budget is made 1 ms here so that any job outlives it.
 #[test]
 fn a_job_past_the_budget_goes_on_in_the_background_and_ps_lists_it() {
-    let Ok(chdman) = std::env::var("EMUSEN_CHDMAN") else {
-        eprintln!("skipped: EMUSEN_CHDMAN names no chdman");
-        return;
-    };
-    assert!(!chdman.is_empty());
+    let chdman = chdman();
     let _tree = TREE.lock().unwrap_or_else(|p| p.into_inner());
+    unsafe { std::env::set_var("EMUSEN_CHDMAN", &chdman) };
     let base = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-platform-chd-bg-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let (library, home, etc) = (base.join("library"), base.join("home"), base.join("etc"));

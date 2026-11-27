@@ -4,6 +4,8 @@
 //! cases since 1.3: every form read from borrowed bytes as from owned ones, `open`, and the fingerprint; §10.3 the
 //! place of a sector, since 1.4.
 
+mod common;
+
 use std::sync::Arc;
 
 use emusen_disc::cue::Sheet;
@@ -160,14 +162,9 @@ fn an_sbi_marks_its_sectors_q_bad() {
     assert!(disc.subq(154).valid() && disc.subq(156).valid());
 }
 
-/// The same sheets made into CHDs by chdman, run as a tool: every sector read from the CHD equals the sheet's. Opt in
-/// with `EMUSEN_DISC_CHDMAN` naming the chdman binary.
 #[test]
 fn a_chd_reads_as_its_sheet() {
-    let Ok(chdman) = std::env::var("EMUSEN_DISC_CHDMAN") else {
-        eprintln!("skipped: EMUSEN_DISC_CHDMAN names no chdman");
-        return;
-    };
+    let chdman = common::chdman();
     let dir = std::env::temp_dir().join(format!("emusen-disc-chd-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let (d, a) = files();

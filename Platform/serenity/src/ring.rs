@@ -252,14 +252,14 @@ impl Ring {
 }
 
 #[cfg(test)]
-mod tests {
+mod vulkan_gpu {
     use super::*;
     use std::time::{Duration, Instant};
 
     // A device that says it makes rings makes one: lavapipe said so and refused the timeline semaphore's export (EmuSen_DevicePicture.md §5.6).
     #[test]
     fn a_device_that_says_it_makes_rings_makes_one() {
-        let Ok(device) = Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false) else { return eprintln!("skipped: no Vulkan device") };
+        let device = Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false).expect("Vulkan hardware device required");
         if device.rings() {
             device.create_ring(64, 64, 3).map(|_| ()).unwrap_or_else(|why| panic!("{} says it makes rings and made none: {why}", device.name()));
         } else {
@@ -267,14 +267,11 @@ mod tests {
         }
     }
 
-    /// A 64 × 64 ring of three slots on a device that makes rings, or None (said on stderr) where there is none.
-    fn test_ring() -> Option<std::sync::Arc<Ring>> {
-        let Ok(device) = Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false) else { eprintln!("skipped: no Vulkan device"); return None };
-        if !device.rings() {
-            eprintln!("skipped: the device makes no ring");
-            return None;
-        }
-        Some(std::sync::Arc::new(device.create_ring(64, 64, 3).unwrap()))
+    /// A 64 × 64 ring of three slots on a hardware device that makes rings.
+    fn test_ring() -> std::sync::Arc<Ring> {
+        let device = Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false).expect("Vulkan hardware device required");
+        assert!(device.rings(), "Vulkan hardware device with ring support required");
+        std::sync::Arc::new(device.create_ring(64, 64, 3).unwrap())
     }
 
     /// A read of `value` from `slot` on its own thread, so a test can watch whether it ends.
@@ -295,7 +292,7 @@ mod tests {
     // §5.4: a presenter's submission waiting on a `ready` no dead core will signal ends once the host raises it.
     #[test]
     fn a_wait_on_ready_that_a_dead_core_never_signals_ends_when_ready_is_raised() {
-        let Some(ring) = test_ring() else { return };
+        let ring = test_ring();
         let reading = reading(&ring, 0, 1);
         std::thread::sleep(Duration::from_millis(200));
         assert!(!reading.is_finished(), "the read waits for ready to reach 1");
@@ -324,7 +321,7 @@ mod tests {
     // §10x: a reader that skipped three pictures and reads the fourth gives the skipped ones back first, so the core makes it.
     #[test]
     fn a_picture_read_after_three_skipped_ones_gives_them_back_and_arrives() {
-        let Some(ring) = test_ring() else { return };
+        let ring = test_ring();
         let core = core_making(ring.clone(), 5);
         ring.read(0, 1, 64, 64).unwrap();
         let reading = reading(&ring, 1, 5);
@@ -336,7 +333,7 @@ mod tests {
     // §10x: a picture whose core died before making it is given up within a bound, never waited on for ever.
     #[test]
     fn a_picture_that_never_arrives_is_given_up_within_a_bound() {
-        let Some(ring) = test_ring() else { return };
+        let ring = test_ring();
         let reading = reading(&ring, 0, 1);
         ends_within_5_s(&reading, "the read of a picture that never comes still waits after 5 s");
         let said = reading.join().unwrap().unwrap_err();

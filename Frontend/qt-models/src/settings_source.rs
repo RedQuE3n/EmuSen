@@ -238,6 +238,9 @@ impl SettingsSource for ClientSettings {
     }
 
     fn preset_parameters(&self, path: &str) -> Result<Vec<Value>, String> {
+        if !crate::settings_shaders::is_safe_pack_rel(path) {
+            return Err("invalid shader preset path".to_owned());
+        }
         let root = self.platform.directory(DIR_SHADERS).map_err(words)?.ok_or("the shader pack's folder is not known")?;
         let preset = serenity::preset_load(&self.platform, &root.join(path).to_string_lossy()).map_err(words)?;
         failed(&preset)?;

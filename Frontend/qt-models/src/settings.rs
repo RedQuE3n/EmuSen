@@ -75,6 +75,11 @@ pub struct Read {
 
 /// Reads the source once; a model with no file yet reads as null, and its keys show their defaults.
 pub fn read(source: &dyn SettingsSource) -> Result<Read, String> {
+    read_with(source, true)
+}
+
+/// Reads the source once, enumerating audio output devices only when `include_outputs` is true.
+pub fn read_with(source: &dyn SettingsSource, include_outputs: bool) -> Result<Read, String> {
     let graphics = source.load(Model::Graphics)?;
     let levers = crate::settings_shaders::chosen_presets(&graphics).into_iter().map(|stored| {
         let read = source.preset_parameters(crate::display::pack_preset(&stored).unwrap_or_default());
@@ -86,7 +91,7 @@ pub fn read(source: &dyn SettingsSource) -> Result<Read, String> {
         levers: levers.collect(),
         graphics,
         catalogue: source.catalogue()?,
-        outputs: source.outputs(),
+        outputs: if include_outputs { source.outputs() } else { Vec::new() },
         folders: source.folders(),
         consoles: ConsoleRead::default(),
         bindings: crate::bindings::Bindings::default(),

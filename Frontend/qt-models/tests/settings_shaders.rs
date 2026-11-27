@@ -243,16 +243,22 @@ fn qt_7_7_eclipse_shaders_board_state_favourites_pack_and_sliders() {
     let _world = emusen_client_fixture::World::new("models-eclipse-shaders-board");
     let lib_str = emusen_client_fixture::library().display().to_string();
     let platform = emusen_platform_client::Platform::load(emusen_client_fixture::library()).unwrap();
-    let pack = platform.directory(DIR_SHADERS).unwrap().expect("pack dir");
-    std::fs::create_dir_all(pack.join("crt")).unwrap();
+    let pack = platform.directory(DIR_SHADERS).unwrap().expect("shaders dir");
+    std::fs::create_dir_all(pack.join("pack/crt")).unwrap();
     let shader = "#version 450\n#pragma parameter glow \"Glow\" 0.5 0.0 1.0 0.05\n#pragma stage vertex\nvoid main() {}\n#pragma stage fragment\nvoid main() {}\n";
-    std::fs::write(pack.join("crt/test_glow.slang"), shader).unwrap();
-    std::fs::write(pack.join("crt/test_glow.slangp"), "shaders = 1\nshader0 = test_glow.slang\n").unwrap();
+    std::fs::write(pack.join("pack/crt/test_glow.slang"), shader).unwrap();
+    std::fs::write(pack.join("pack/crt/test_glow.slangp"), "shaders = 1\nshader0 = test_glow.slang\n").unwrap();
+    std::fs::create_dir_all(pack.join("custom")).unwrap();
+    std::fs::write(pack.join("custom/user.slang"), shader).unwrap();
+    std::fs::write(pack.join("custom/user.slangp"), "shaders = 1\nshader0 = user.slang\n").unwrap();
 
     let source = emusen_qt_models::settings_source::ClientSettings::open(&lib_str).unwrap();
     let mut v = SettingsView::new();
     v.read = settings::read(&source).unwrap();
     v.read.consoles.consoles = vec![Console { console: "SNES".into(), name: "Super Nintendo".into(), engines: vec!["Engine".into()], ..Console::default() }];
+    v.read.graphics["Consoles"]["SNES"]["ScreenFilter"] = json!("slang:pack/crt/test_glow.slangp");
+    v.read.graphics["RecentShaders"]["SNES"] = json!(["slang:pack/crt/test_glow.slangp", "slang:custom/user.slangp", "CRT"]);
+    v.read.graphics["ShaderParameters"]["SNES"] = json!({"slang:pack/crt/test_glow.slangp": {"glow": "0.8"}, "slang:custom/user.slangp": {"glow": "0.3"}});
 
     let mut board = ShadersBoard::open(&v, &lib_str, 2);
     let snap = board.to_json(&v, &lib_str, false);
@@ -275,6 +281,80 @@ fn qt_7_7_eclipse_shaders_board_state_favourites_pack_and_sliders() {
     board.focus_zone = 7;
     assert!(matches!(board.accept(&mut v, &lib_str), ShadersOutcome::OpenSettingsPage { ref console, .. } if console == "SNES"));
     board.remove_pack(&mut v, &lib_str).unwrap();
-    assert!(v.read.pack.is_empty());
-    assert!(std::fs::read_dir(&pack).unwrap().next().is_none());
+    assert!(!pack.join("pack").exists(), "managed pack folder removed");
+    assert!(pack.join("custom/user.slangp").exists(), "sibling user preset preserved");
+    assert!(pack.join("custom/user.slang").exists(), "sibling user shader preserved");
+    assert_eq!(v.read.pack, vec!["custom/user.slangp".to_owned()]);
+    assert_eq!(v.read.graphics["Consoles"]["SNES"]["ScreenFilter"], "None");
+    assert_eq!(v.read.graphics["RecentShaders"]["SNES"], json!(["slang:custom/user.slangp", "CRT"]));
+    assert!(v.read.graphics["ShaderParameters"]["SNES"].get("slang:pack/crt/test_glow.slangp").is_none());
+    assert_eq!(v.read.graphics["ShaderParameters"]["SNES"]["slang:custom/user.slangp"]["glow"], "0.3");
+}
+
+#[test]
+fn qt_7_7_pack_path_traversal_and_symlink_guards() {
+    use emusen_qt_models::settings::SettingsSource;
+    use emusen_qt_models::settings_shaders::{is_managed_pack_rel, is_safe_pack_rel, ShadersBoard};
+
+    assert!(is_safe_pack_rel("pack/crt/a.slangp"));
+    assert!(is_safe_pack_rel("custom/user.slangp"));
+    for bad in ["", ".", "/pack/a.slangp", "\\pack\\a.slangp", "./pack/crt/a.slangp", ".\\pack\\crt\\a.slangp", "pack/./crt/a.slangp", "pack\\.\\crt\\a.slangp", "pack/../user.slangp", "../etc/passwd", "pack\\..\\user.slangp"] {
+        assert!(!is_safe_pack_rel(bad), "expected unsafe: {bad:?}");
+        assert!(!is_managed_pack_rel(bad), "expected non-managed: {bad:?}");
+    }
+    assert!(is_managed_pack_rel("pack/crt/a.slangp"));
+    assert!(!is_managed_pack_rel("custom/user.slangp"));
+
+    let world = emusen_client_fixture::World::new("models-shader-traversal-guard");
+    let custom = world.dir("custom_target");
+    let kept_file = custom.join("kept.txt");
+    std::fs::write(&kept_file, b"keep").unwrap();
+    let link = world.root.join("pack");
+    std::os::unix::fs::symlink(&custom, &link).unwrap();
+    ShadersBoard::remove_pack_dir(&link).unwrap();
+    assert!(kept_file.exists(), "remove_pack_dir must never follow symlinks into target dirs");
+
+    let source = emusen_qt_models::settings_source::ClientSettings::open(&emusen_client_fixture::library().display().to_string()).unwrap();
+    assert!(source.preset_parameters("../outside.slangp").is_err(), "preset_parameters must reject parent traversal");
+}
+
+#[test]
+fn favourites_toggled_while_loading_merge_with_disk_on_open() {
+    use emusen_qt_models::settings_shaders::{ShadersBoard, ShadersOpenData};
+
+    let source = Fake {
+        graphics: json!({
+            "Consoles": { "SNES": { "ScreenFilter": "None" } },
+            "ConsoleShaders": {},
+            "ShaderParameters": {},
+            "RecentShaders": {},
+        }),
+    };
+    let mut v = SettingsView::new();
+    v.read = settings::read(&source).unwrap();
+    v.read.catalogue = json!({
+        "filters": [
+            { "key": "CRT", "name": "CRT", "passes": [], "settings": [] },
+            { "key": "Scanlines", "name": "Scanlines", "passes": [], "settings": [] }
+        ]
+    });
+
+    let mut board = ShadersBoard::open_immediate(&v, 2);
+    assert!(!board.favourites_loaded);
+    board.scope = 0;
+    board.category = 1;
+    board.focused_preset = 0;
+    let first_stored = board.visible_items(&v)[0].stored.clone();
+    let (pre_favs, loaded) = board.toggle_favourite_in_memory(&v).expect("pre-open delta");
+    assert!(!loaded);
+    assert_eq!(pre_favs, vec![first_stored.clone()]);
+
+    let data = ShadersOpenData {
+        favourites: Some(vec!["Existing".to_owned()]),
+        ..Default::default()
+    };
+    let to_persist = board.apply_open_data(data, &v).expect("merged deltas must persist after open scan");
+    assert!(board.favourites_loaded);
+    assert_eq!(to_persist, vec!["Existing".to_owned(), first_stored.clone()]);
+    assert_eq!(board.favourites, vec!["Existing".to_owned(), first_stored]);
 }

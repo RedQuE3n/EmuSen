@@ -19,8 +19,9 @@ use emusen_crystal_client::service_flags::NO_GAME;
 use emusen_platform_client::cheats::CheatsDatabase;
 use emusen_platform_client::net::{Download, State};
 use serde_json::{json, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The List card's rows: the database got or updated, and the download stopped; A's action on a game with no list.
 pub const GET: &str = "get";
@@ -55,6 +56,12 @@ pub struct Found {
 
 /// The database and the library read and matched, as one read does it; what failed in words.
 pub fn read(source: &ClientSource) -> Result<Found, String> {
+    read_for(source, None)
+}
+
+/// Reads the cheat database and matches either `requested_game` alone or the full library.
+fn read_for(source: &ClientSource, requested_game: Option<&str>) -> Result<Found, String> {
+    let target = requested_game.map(str::trim).filter(|s| !s.is_empty());
     let words = |e: emusen_crystal_client::Error| e.to_string();
     let status = source.runtime.session_service(0, NO_GAME).and_then(|s| s.cheat_op(0, CHEAT_DB_STATUS, &json!({}))).map_err(words)?;
     let text = |k: &str| status[k].as_str().unwrap_or_default().to_owned();
@@ -72,6 +79,9 @@ pub fn read(source: &ClientSource) -> Result<Found, String> {
     }
     let systems = source.systems()?;
     for game in source.games()? {
+        if target.is_some_and(|req| game.path != req) {
+            continue;
+        }
         let Some(system) = systems.iter().find(|s| Some(&s.id) == game.system.as_ref()).filter(|s| !s.cheat_systems.is_empty()) else { continue };
         let name = std::path::Path::new(&game.path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let places = db.query(&json!({ "op": "find", "text": name, "limit": entries.len() })).map_err(|e| e.to_string())?;
@@ -157,7 +167,10 @@ pub struct Cheats {
     pub(super) source: Arc<ClientSource>,
     url: String,
     found: Option<Found>,
-    reading: Option<Receiver<Result<(Found, Option<super::cheats_eclipse::EclipseRead>), String>>>,
+    reading: Option<(u64, Option<String>, Receiver<Result<(Found, Option<super::cheats_eclipse::EclipseRead>), String>>)>,
+    read_gen: u64,
+    read_seq: Arc<AtomicU64>,
+    read_lock: Arc<Mutex<()>>,
     pub(super) download: Option<(Arc<Download>, Receiver<Words>)>,
     outcome: Option<Words>,
     problem: Option<String>,
@@ -170,7 +183,21 @@ impl Cheats {
     /// The tool over `source`, its database downloaded from `url` where one is named, else the header's address.
     pub fn new(source: Arc<ClientSource>, url: Option<String>) -> Cheats {
         let url = url.unwrap_or_else(|| emusen_platform_client::cheats::database_url().to_owned());
-        Cheats { source, url, found: None, reading: None, download: None, outcome: None, problem: None, acted: None, eclipse: false, eclipse_state: super::cheats_eclipse::State::default() }
+        Cheats {
+            source,
+            url,
+            found: None,
+            reading: None,
+            read_gen: 0,
+            read_seq: Arc::new(AtomicU64::new(0)),
+            read_lock: Arc::new(Mutex::new(())),
+            download: None,
+            outcome: None,
+            problem: None,
+            acted: None,
+            eclipse: false,
+            eclipse_state: super::cheats_eclipse::State::default(),
+        }
     }
 
     /// The download started off the GUI thread, into the folder the last read found; installed when it ends.
@@ -372,14 +399,34 @@ impl Source for Cheats {
         let (tx, rx) = channel();
         let source = self.source.clone();
         let want_eclipse = self.eclipse;
+        let req = (want_eclipse && !self.eclipse_state.requested_game.is_empty()).then(|| self.eclipse_state.requested_game.clone());
+        let target_key = want_eclipse.then(|| self.eclipse_state.requested_game.clone());
+        let gen = self.read_gen.wrapping_add(1);
+        self.read_gen = gen;
+        self.read_seq.store(gen, Ordering::Release);
+        let read_seq = self.read_seq.clone();
+        let read_lock = self.read_lock.clone();
+        let req_for_thread = req.clone();
         std::thread::spawn(move || {
-            let res = read(&source).and_then(|found| {
-                let ec = if want_eclipse { Some(super::cheats_eclipse::read_eclipse(&source, &found)?) } else { None };
+            let _guard = read_lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if read_seq.load(Ordering::Acquire) != gen {
+                return;
+            }
+            let res = read_for(&source, req_for_thread.as_deref()).and_then(|found| {
+                let ec = if want_eclipse {
+                    let mut read = super::cheats_eclipse::read_eclipse_for(&source, &found, req_for_thread.as_deref())?;
+                    if req_for_thread.is_none() {
+                        super::cheats_eclipse::ensure_initial_cht(&source, &mut read);
+                    }
+                    Some(read)
+                } else {
+                    None
+                };
                 Ok((found, ec))
             });
             drop(tx.send(res));
         });
-        self.reading = Some(rx);
+        self.reading = Some((gen, target_key, rx));
     }
 
     fn poll(&mut self) -> bool {
@@ -397,15 +444,25 @@ impl Source for Cheats {
         if self.download.is_some() {
             return true;
         }
-        let Some(read) = self.reading.as_ref().and_then(|r| r.try_recv().ok()) else { return false };
+        let Some((gen, target_key, read)) = self.reading.as_ref().and_then(|(gen, target, r)| r.try_recv().ok().map(|res| (*gen, target.clone(), res))) else { return false };
         self.reading = None;
+        if gen != self.read_gen || (self.eclipse && target_key.as_deref().is_some_and(|t| t != self.eclipse_state.requested_game)) {
+            self.refresh();
+            return true;
+        }
         match read {
             Ok((found, ec)) => {
                 if let Some(eclipse_read) = ec {
-                    self.eclipse_state.take_read(eclipse_read);
+                    self.eclipse_state.take_read(eclipse_read, target_key);
+                    self.eclipse_state.ensure_current_cht(&self.source);
                 } else if self.eclipse {
-                    if let Ok(eclipse_read) = super::cheats_eclipse::read_eclipse(&self.source, &found) {
-                        self.eclipse_state.take_read(eclipse_read);
+                    let req = (!self.eclipse_state.requested_game.is_empty()).then(|| self.eclipse_state.requested_game.clone());
+                    if let Ok(mut eclipse_read) = super::cheats_eclipse::read_eclipse_for(&self.source, &found, req.as_deref()) {
+                        if req.is_none() {
+                            super::cheats_eclipse::ensure_initial_cht(&self.source, &mut eclipse_read);
+                        }
+                        self.eclipse_state.take_read(eclipse_read, req);
+                        self.eclipse_state.ensure_current_cht(&self.source);
                     }
                 }
                 self.found = Some(found);
@@ -427,12 +484,28 @@ impl Source for Cheats {
 
     fn set_eclipse(&mut self, eclipse: bool) {
         self.eclipse = eclipse;
-        if eclipse && self.eclipse_state.read.is_none() {
+        if !eclipse {
+            return;
+        }
+        if self.eclipse_state.read.is_none() {
             if let Some(found) = &self.found {
-                if let Ok(eclipse_read) = super::cheats_eclipse::read_eclipse(&self.source, found) {
-                    self.eclipse_state.take_read(eclipse_read);
+                let req = (!self.eclipse_state.requested_game.is_empty()).then(|| self.eclipse_state.requested_game.clone());
+                if req.as_deref().is_some_and(|t| !found.games.iter().any(|g| g.path == t)) {
+                    if self.reading.is_none() {
+                        self.refresh();
+                    }
+                    return;
+                }
+                if let Ok(mut eclipse_read) = super::cheats_eclipse::read_eclipse_for(&self.source, found, req.as_deref()) {
+                    if req.is_none() {
+                        super::cheats_eclipse::ensure_initial_cht(&self.source, &mut eclipse_read);
+                    }
+                    self.eclipse_state.take_read(eclipse_read, req);
+                    self.eclipse_state.ensure_current_cht(&self.source);
                 }
             }
+        } else if self.eclipse_state.needs_refresh() && self.reading.is_none() {
+            self.refresh();
         }
     }
 
@@ -459,6 +532,7 @@ impl Source for Cheats {
     fn eclipse_act(&mut self, action: &str, key: Option<&str>) -> super::Effect {
         let platform = self.source.platform.clone();
         let (eff, db_toggle) = self.eclipse_state.eclipse_act(&platform, action, key, self.download.is_some());
+        self.eclipse_state.ensure_current_cht(&self.source);
         if db_toggle {
             if self.download.is_some() {
                 self.stop();
@@ -499,7 +573,7 @@ impl Source for Cheats {
     }
 
     fn eclipse_nav(&mut self, code: i32) -> super::Effect {
-        match code {
+        let eff = match code {
             0 => self.eclipse_state.navigate("up"),
             1 => self.eclipse_state.navigate("down"),
             2 => self.eclipse_state.navigate("left"),
@@ -510,11 +584,19 @@ impl Source for Cheats {
             7 => self.eclipse_act("prevGame", None),
             8 => self.eclipse_act("nextGame", None),
             _ => super::Effect::Done,
-        }
+        };
+        self.eclipse_state.ensure_current_cht(&self.source);
+        eff
     }
 
     fn eclipse_set_cheats_target(&mut self, game: &str, session_game: &str, master_on: bool) {
         self.eclipse_state.set_target(game, session_game, master_on);
+        let in_flight_mismatch = self.reading.as_ref().is_some_and(|(_, target, _)| target.as_deref().is_some_and(|t| t != self.eclipse_state.requested_game));
+        if in_flight_mismatch || (self.eclipse_state.needs_refresh() && self.reading.is_none()) {
+            self.refresh();
+        } else {
+            self.eclipse_state.ensure_current_cht(&self.source);
+        }
     }
 
     fn eclipse_set_field(&mut self, field: i32, text: &str) {
@@ -527,5 +609,85 @@ impl Source for Cheats {
 
     fn take_master_changed(&mut self) -> Option<bool> {
         self.eclipse_state.master_dirty.take()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use emusen_client_fixture::cheats::{CHT, SNES};
+    use emusen_client_fixture::{library, World};
+    use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
+    use emusen_platform_client::Platform;
+
+    fn wait_poll(cheats: &mut Cheats) {
+        for _ in 0..300 {
+            if !cheats.running() {
+                return;
+            }
+            cheats.poll();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("timed out waiting for cheats poll");
+    }
+
+    #[test]
+    fn target_switch_discards_stale_read_and_overview_resets_single_game_filter() {
+        let world = World::new("models-cheats-target-switch");
+        let alpha = world.dir("Roms/snes").join("Alpha Quest.sfc");
+        let beta = world.dir("Roms/snes").join("Beta Voyage.sfc");
+        std::fs::write(&alpha, vec![0u8; 4096]).unwrap();
+        std::fs::write(&beta, vec![0u8; 4096]).unwrap();
+
+        let platform = Platform::load(library()).unwrap();
+        let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
+        settings["RomDirectory"] = json!(world.dir("Roms").to_str().unwrap());
+        settings["OpenEmuFallback"] = json!(false);
+        platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+
+        let source = Arc::new(crate::clients::source_for(library().to_str().unwrap(), "").unwrap());
+        let db_dir = std::path::PathBuf::from(read(&source).unwrap().directory).join(SNES);
+        std::fs::create_dir_all(&db_dir).unwrap();
+        std::fs::write(db_dir.join("Alpha Quest.cht"), CHT).unwrap();
+        std::fs::write(db_dir.join("Beta Voyage.cht"), CHT).unwrap();
+
+        let alpha_s = alpha.to_string_lossy().into_owned();
+        let beta_s = beta.to_string_lossy().into_owned();
+
+        let mut cheats = Cheats::new(source, None);
+        cheats.set_eclipse(true);
+        cheats.eclipse_set_cheats_target(&alpha_s, &alpha_s, true);
+        cheats.refresh();
+        let gen1 = cheats.read_gen;
+        cheats.eclipse_set_cheats_target(&beta_s, &beta_s, true);
+        assert!(cheats.read_gen > gen1, "in-flight target mismatch must bump read_gen and restart read");
+        wait_poll(&mut cheats);
+        let single_games = &cheats
+            .eclipse_state
+            .read
+            .as_ref()
+            .unwrap_or_else(|| panic!("no eclipse read: problem={:?}", cheats.problem))
+            .games;
+        assert_eq!(single_games.len(), 1);
+        assert_eq!(single_games[0].path, beta_s);
+        assert!(!cheats.eclipse_state.needs_refresh());
+
+        let (stale_tx, stale_rx) = channel();
+        let mut stale_read = cheats.eclipse_state.read.as_ref().unwrap().clone();
+        stale_read.games[0].path = alpha_s.clone();
+        stale_tx.send(Ok((Found::default(), Some(stale_read)))).unwrap();
+        cheats.eclipse_state.set_target("", "", true);
+        assert!(cheats.eclipse_state.needs_refresh(), "switching from single game to overview must require refresh");
+        let stale_gen = cheats.read_gen.wrapping_add(10);
+        cheats.reading = Some((stale_gen, Some(alpha_s), stale_rx));
+        assert!(cheats.poll(), "stale target/generation response must trigger fresh overview read");
+        assert!(cheats.running());
+        assert_eq!(cheats.eclipse_state.read.as_ref().unwrap().games[0].path, beta_s, "stale response must be discarded");
+        wait_poll(&mut cheats);
+
+        let overview_read = cheats.eclipse_state.read.as_ref().unwrap();
+        assert_eq!(overview_read.games.len(), 2);
+        assert_eq!(cheats.eclipse_state.read_target, None);
+        assert!(!cheats.eclipse_state.needs_refresh());
     }
 }

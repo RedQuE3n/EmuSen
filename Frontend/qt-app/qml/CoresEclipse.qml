@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
+import QtQml.Models
 import EmuSen.Kit as Kit
 import EmuSen.Models
 import EmuSen.App
@@ -15,18 +16,29 @@ FocusScope {
     property string clockText: ""
     signal backed()
     readonly property real unit: Kit.CanvasUnits.designHeight / 1200
-    readonly property var view: JSON.parse(root.tool.eclipseCores)
-    readonly property var labels: root.view.labels ?? ({})
-    readonly property var aside: root.view.aside ?? ({})
-    readonly property var statusPill: root.view.statusPill ?? ({})
-    readonly property int focusZone: root.view.focusZoneCode ?? 1
-    readonly property int focusedTopIndex: root.view.focusedTopIndex ?? 0
-    readonly property int focusedConsoleIndex: root.view.focusedConsoleIndex ?? -1
-    readonly property int focusedAsideIndex: root.view.focusedAsideIndex ?? -1
+    readonly property bool isCores: root.tool.eclipseScreen === 1
+    readonly property var view: root.isCores ? root.tool.eclipseState : null
+    readonly property var labels: root.view?.labels ?? null
+    readonly property var aside: root.view?.aside ?? null
+    readonly property var statusPill: root.view?.statusPill ?? null
+    readonly property int focusZone: root.isCores ? root.tool.eclipseFocusedZone : 1
+    readonly property int focusedTopIndex: root.isCores ? root.tool.eclipseFilterIndex : 0
+    readonly property int focusedConsoleIndex: root.isCores ? root.tool.eclipseFocusedIndex : -1
+    readonly property int focusedAsideIndex: root.isCores ? root.tool.eclipseAuxIndex : -1
+    readonly property string focusedAsideKey: root.isCores ? root.tool.eclipseFocusedKey : ""
     readonly property alias controller: frame.controller
     readonly property bool sheetOpen: frame.controller.sheetOpen
     objectName: "coresEclipse"
     property bool backdrop: root.tool.cardOpen || root.tool.asking
+
+    EclipseListModel {
+        id: cardsModel
+        rows: root.isCores ? root.tool.eclipseRowsJson : ""
+    }
+    EclipseListModel {
+        id: asideModel
+        rows: root.isCores ? root.tool.eclipseAuxRowsJson : ""
+    }
 
     component LibretroMark: Item {
         id: mark
@@ -124,17 +136,10 @@ FocusScope {
     }
 
     onFocusedAsideIndexChanged: {
-        if (root.focusedAsideIndex < 0) {
-            asideFlick.contentY = 0
-            return
-        }
-        const item = root.focusedAsideIndex < instRep.count ? instRep.itemAt(root.focusedAsideIndex) : availRep.itemAt(root.focusedAsideIndex - instRep.count)
-        if (!item) return
-        const top = item.mapToItem(asideCol, 0, 0).y
-        const bottom = top + item.height
-        const viewH = asideFlick.height - 48 * root.unit
-        if (top < asideFlick.contentY) asideFlick.contentY = top
-        else if (bottom > asideFlick.contentY + viewH) asideFlick.contentY = Math.max(0, bottom - viewH)
+        if (root.focusedAsideIndex < 0)
+            asideFlick.contentY = -24 * root.unit
+        else if (root.focusedAsideIndex < asideModel.count)
+            asideFlick.positionViewAtIndex(root.focusedAsideIndex, ListView.Contain)
     }
 
     Kit.Backdrop {
@@ -165,7 +170,7 @@ FocusScope {
         helpShown: false
         padFamily: root.padFamily
         controller.navigationShown: false
-        controller.actionLines: root.view.actionLines ?? ""
+        controller.actionLines: root.view?.actionLines ?? ""
         Connections {
             target: frame.controller
             function onBackDeclined() { root.backed() }
@@ -220,7 +225,7 @@ FocusScope {
                 objectName: "trailWords.0"
                 unit: root.unit
                 boardLine: true
-                text: root.labels.tools ?? ""
+                text: root.labels?.tools ?? ""
                 size: 24
                 weight: Font.Normal
                 color: Kit.Tokens.muted
@@ -233,7 +238,7 @@ FocusScope {
                 objectName: "trailSlash.0"
                 unit: root.unit
                 boardLine: true
-                text: root.labels.slash ?? ""
+                text: root.labels?.slash ?? ""
                 size: 24
                 weight: Font.Normal
                 color: ThemeInk.dim
@@ -242,7 +247,7 @@ FocusScope {
                 objectName: "trailWords.1"
                 unit: root.unit
                 boardLine: true
-                text: root.labels.cores ?? ""
+                text: root.labels?.cores ?? ""
                 size: 24
                 weight: Font.DemiBold
                 color: Kit.Tokens.textStrong
@@ -255,14 +260,14 @@ FocusScope {
             Rectangle {
                 id: statusPillBox
                 objectName: "coresStatusPill"
-                visible: root.statusPill.visible === true
+                visible: root.statusPill?.visible === true
                 y: (parent.height - height) / 2
                 height: 44 * root.unit
                 width: statusLine.implicitWidth + 32 * root.unit
                 radius: 22 * root.unit
-                color: root.statusPill.error ? ThemeInk.errorFill : Kit.Tokens.surfaceRaised
+                color: root.statusPill?.error ? ThemeInk.errorFill : Kit.Tokens.surfaceRaised
                 border.width: 2 * root.unit
-                border.color: root.statusPill.error ? Kit.Tokens.error : ThemeInk.pillBorder
+                border.color: root.statusPill?.error ? Kit.Tokens.error : ThemeInk.pillBorder
                 CardLine {
                     id: statusLine
                     objectName: "coresStatusText"
@@ -270,10 +275,10 @@ FocusScope {
                     y: (parent.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.statusPill.text ?? ""
+                    text: root.statusPill?.text ?? ""
                     size: 17
                     weight: Font.Normal
-                    color: root.statusPill.error ? Kit.Tokens.error : Kit.Tokens.textStrong
+                    color: root.statusPill?.error ? Kit.Tokens.error : Kit.Tokens.textStrong
                 }
             }
             CardLine {
@@ -315,7 +320,7 @@ FocusScope {
             spacing: 12 * root.unit
             Repeater {
                 id: filterRep
-                model: root.view.filters ?? []
+                model: root.view?.filters ?? null
                 Item {
                     id: filterPill
                     required property int index
@@ -387,13 +392,13 @@ FocusScope {
                 font.family: Kit.Tokens.faceText
                 font.pixelSize: 21
                 font.weight: viewButton.active ? Font.DemiBold : Font.Normal
-                text: root.view.viewLabel ?? ""
+                text: root.view?.viewLabel ?? ""
             }
             readonly property real maxLabelWidth: Math.max(120 * root.unit, 424 * root.unit - viewBadge.width - 42 * root.unit)
             height: 52 * root.unit
             width: viewBadge.width + viewLabel.width + 42 * root.unit
-            readonly property bool focused: root.focusZone === 0 && root.focusedTopIndex === (root.view.filters?.length ?? 1)
-            readonly property bool active: root.view.showingRemaining === true
+            readonly property bool focused: root.focusZone === 0 && root.focusedTopIndex === (root.view?.filters?.length ?? 1)
+            readonly property bool active: root.view?.showingRemaining === true
             Kit.FocusRing {
                 visible: viewButton.focused
                 anchors.fill: parent
@@ -442,7 +447,7 @@ FocusScope {
                     width: Math.min(viewMetrics.advanceWidth * root.unit, viewButton.maxLabelWidth)
                     unit: root.unit
                     boardLine: true
-                    text: root.view.viewLabel ?? ""
+                    text: root.view?.viewLabel ?? ""
                     size: 21
                     weight: viewButton.active ? Font.DemiBold : Font.Normal
                     color: viewButton.active ? Kit.Tokens.overAccent : Kit.Tokens.textStrong
@@ -472,20 +477,31 @@ FocusScope {
         rightMargin: 42 * root.unit
         cellWidth: ((1124 + 20) / 3) * root.unit
         cellHeight: (258 + 20) * root.unit
-        clip: (root.view.cards?.length ?? 0) > 9
-        interactive: (root.view.cards?.length ?? 0) > 9
+        clip: cardsModel.count > 9
+        interactive: cardsModel.count > 9
+        reuseItems: true
         boundsBehavior: Flickable.StopAtBounds
         highlightMoveDuration: 0
-        model: root.view.cards ?? []
+        readonly property int targetFocusIndex: root.focusedConsoleIndex >= 0 && root.focusedConsoleIndex < cardsModel.count ? root.focusedConsoleIndex : -1
+        model: cardsModel
         Binding {
             target: grid
             property: "currentIndex"
-            value: Math.max(0, root.focusedConsoleIndex)
+            value: grid.targetFocusIndex
+        }
+        onCountChanged: {
+            if (grid.currentIndex !== grid.targetFocusIndex) grid.currentIndex = grid.targetFocusIndex
+            if (grid.targetFocusIndex >= 0) grid.positionViewAtIndex(grid.targetFocusIndex, GridView.Contain)
+        }
+        onCurrentIndexChanged: {
+            if (grid.currentIndex !== grid.targetFocusIndex) grid.currentIndex = grid.targetFocusIndex
+            if (grid.currentIndex >= 0) grid.positionViewAtIndex(grid.currentIndex, GridView.Contain)
         }
         delegate: Item {
             id: cardCell
             required property int index
-            required property var modelData
+            required property var model
+            readonly property var modelData: cardCell.model.item
             width: grid.cellWidth
             height: grid.cellHeight
             readonly property bool cardFocused: root.focusZone === 1 && root.focusedConsoleIndex === cardCell.index
@@ -717,7 +733,7 @@ FocusScope {
                 boardLineHeight: 22
                 width: parent.width
                 visible: text.length > 0
-                text: root.aside.eyebrow ?? ""
+                text: root.aside?.eyebrow ?? ""
                 size: 18
                 weight: Font.DemiBold
                 spacing: 18 * 0.2
@@ -730,14 +746,14 @@ FocusScope {
                 unit: root.unit
                 boardLine: true
                 width: parent.width
-                text: root.aside.heading ?? ""
+                text: root.aside?.heading ?? ""
                 size: 46
                 weight: Font.DemiBold
                 color: Kit.Tokens.textStrong
                 elide: Text.ElideRight
             }
         }
-        Flickable {
+        ListView {
             id: asideFlick
             x: -48 * root.unit
             y: asideHeader.height
@@ -747,50 +763,84 @@ FocusScope {
             rightMargin: 48 * root.unit
             topMargin: 24 * root.unit
             bottomMargin: 24 * root.unit
-            contentWidth: 544 * root.unit
-            contentHeight: asideCol.implicitHeight
-            clip: asideCol.implicitHeight > height - 48 * root.unit
-            interactive: asideCol.implicitHeight > height - 48 * root.unit
+            spacing: 16 * root.unit
+            reuseItems: true
+            clip: contentHeight > height - 48 * root.unit
+            interactive: contentHeight > height - 48 * root.unit
             boundsBehavior: Flickable.StopAtBounds
-            Column {
-                id: asideCol
-                width: 544 * root.unit
-                spacing: 16 * root.unit
-                CardLine {
-                    objectName: "asideInstalledHeading"
-                    unit: root.unit
-                    boardLine: true
-                    width: parent.width
-                    text: root.aside.installedHeading ?? root.labels.installedHeading ?? ""
-                    size: 14
-                    weight: Font.DemiBold
-                    spacing: 2.1
-                    capitalization: Font.AllUppercase
-                    color: ThemeInk.dim
+            readonly property int targetFocusIndex: root.focusedAsideIndex >= 0 && root.focusedAsideIndex < asideModel.count ? root.focusedAsideIndex : -1
+            model: asideModel
+            Binding {
+                target: asideFlick
+                property: "currentIndex"
+                value: asideFlick.targetFocusIndex
+            }
+            onCountChanged: {
+                if (asideFlick.currentIndex !== asideFlick.targetFocusIndex) asideFlick.currentIndex = asideFlick.targetFocusIndex
+                if (asideFlick.targetFocusIndex < 0) asideFlick.contentY = -24 * root.unit
+                else asideFlick.positionViewAtIndex(asideFlick.targetFocusIndex, ListView.Contain)
+            }
+            onCurrentIndexChanged: {
+                if (asideFlick.currentIndex !== asideFlick.targetFocusIndex) asideFlick.currentIndex = asideFlick.targetFocusIndex
+                if (asideFlick.currentIndex >= 0) asideFlick.positionViewAtIndex(asideFlick.currentIndex, ListView.Contain)
+            }
+            delegate: DelegateChooser {
+                role: "kind"
+
+                DelegateChoice {
+                    roleValue: 0
+                    delegate: Item {
+                        id: hdrItem
+                        required property var model
+                        readonly property var itemData: hdrItem.model.item
+                        width: 544 * root.unit
+                        height: hdrItem.itemData.first === true ? asideHeadLine.implicitHeight : (asideHeadLine.implicitHeight + 8 * root.unit)
+                        CardLine {
+                            id: asideHeadLine
+                            objectName: hdrItem.itemData.objectName ?? ""
+                            y: hdrItem.itemData.first === true ? 0 : 8 * root.unit
+                            unit: root.unit
+                            boardLine: true
+                            width: parent.width
+                            text: hdrItem.itemData.text ?? ""
+                            size: 14
+                            weight: Font.DemiBold
+                            spacing: 2.1
+                            capitalization: Font.AllUppercase
+                            color: ThemeInk.dim
+                        }
+                    }
                 }
-                CardLine {
-                    unit: root.unit
-                    boardLine: true
-                    width: parent.width
-                    visible: (root.aside.installed?.length ?? 0) === 0
-                    text: root.labels.emptyInstalled ?? ""
-                    size: 17
-                    weight: Font.Normal
-                    color: Kit.Tokens.muted
+
+                DelegateChoice {
+                    roleValue: 1
+                    delegate: CardLine {
+                        id: emptyLine
+                        required property var model
+                        unit: root.unit
+                        boardLine: true
+                        width: 544 * root.unit
+                        text: emptyLine.model.item.text ?? ""
+                        size: 17
+                        weight: Font.Normal
+                        color: Kit.Tokens.muted
+                    }
                 }
-                Repeater {
-                    id: instRep
-                    model: root.aside.installed ?? []
-                    Item {
+
+                DelegateChoice {
+                    roleValue: 2
+                    delegate: Item {
                         id: instCard
                         required property int index
-                        required property var modelData
-                        objectName: "asideCore." + instCard.index
-                        readonly property bool cardFocused: root.focusZone === 2 && root.focusedAsideIndex === instCard.index
-                        width: parent.width
+                        required property var model
+                        readonly property var modelData: instCard.model.item
+                        readonly property int coreIndex: instCard.modelData.coreIndex ?? 0
+                        objectName: instCard.modelData.objectName ?? ""
+                        readonly property bool cardFocused: root.focusZone === 2 && root.focusedAsideKey === (instCard.modelData.key ?? "")
+                        width: 544 * root.unit
                         height: instInner.implicitHeight + 36 * root.unit
                         Kit.FocusRing {
-                            objectName: "asideCoreRing." + instCard.index
+                            objectName: "asideCoreRing." + instCard.coreIndex
                             visible: instCard.cardFocused
                             anchors.fill: parent
                             gap: 3 * root.unit
@@ -802,7 +852,7 @@ FocusScope {
                             pixelScale: root.pixelScale
                         }
                         Rectangle {
-                            objectName: "asideCoreBg." + instCard.index
+                            objectName: "asideCoreBg." + instCard.coreIndex
                             anchors.fill: parent
                             radius: 18 * root.unit
                             color: instCard.cardFocused ? Kit.Tokens.surfaceRaised : ThemeInk.rowSurface
@@ -824,7 +874,7 @@ FocusScope {
                                     width: instBadge.visible ? parent.width - instBadge.width - 14 * root.unit : parent.width
                                     spacing: 14 * root.unit
                                     Item {
-                                        objectName: "asideCoreMark." + instCard.index
+                                        objectName: "asideCoreMark." + instCard.coreIndex
                                         y: (parent.height - height) / 2
                                         width: 40 * root.unit
                                         height: 40 * root.unit
@@ -861,7 +911,7 @@ FocusScope {
                                         width: parent.width - 54 * root.unit
                                         spacing: 2 * root.unit
                                         CardLine {
-                                            objectName: "asideCoreName." + instCard.index
+                                            objectName: "asideCoreName." + instCard.coreIndex
                                             unit: root.unit
                                             boardLine: true
                                             width: parent.width
@@ -872,7 +922,7 @@ FocusScope {
                                             elide: Text.ElideRight
                                         }
                                         CardLine {
-                                            objectName: "asideCoreKind." + instCard.index
+                                            objectName: "asideCoreKind." + instCard.coreIndex
                                             unit: root.unit
                                             boardLine: true
                                             width: parent.width
@@ -886,7 +936,7 @@ FocusScope {
                                 }
                                 Rectangle {
                                     id: instBadge
-                                    objectName: "asideCoreBadge." + instCard.index
+                                    objectName: "asideCoreBadge." + instCard.coreIndex
                                     visible: (instCard.modelData.badge ?? "").length > 0
                                     anchors.right: parent.right
                                     y: (parent.height - height) / 2
@@ -922,7 +972,7 @@ FocusScope {
                                 width: parent.width
                                 spacing: 12 * root.unit
                                 Rectangle {
-                                    objectName: "asideTimelineBox." + instCard.index
+                                    objectName: "asideTimelineBox." + instCard.coreIndex
                                     width: parent.width
                                     height: 40 * root.unit
                                     radius: 12 * root.unit
@@ -940,12 +990,12 @@ FocusScope {
                                             CardLine {
                                                 unit: root.unit
                                                 boardLine: true
-                                                text: root.labels.youHavePrefix ?? ""
+                                                text: root.labels?.youHavePrefix ?? ""
                                                 size: 14.5
                                                 color: Kit.Tokens.muted
                                             }
                                             CardLine {
-                                                objectName: "asideYouHave." + instCard.index
+                                                objectName: "asideYouHave." + instCard.coreIndex
                                                 unit: root.unit
                                                 boardLine: true
                                                 text: instCard.modelData.youHaveDate ?? ""
@@ -955,7 +1005,7 @@ FocusScope {
                                             }
                                         }
                                         Rectangle {
-                                            objectName: "asideTimelineRule." + instCard.index
+                                            objectName: "asideTimelineRule." + instCard.coreIndex
                                             x: haveDateRow.width + 12 * root.unit
                                             anchors.verticalCenter: parent.verticalCenter
                                             width: Math.max(12 * root.unit, parent.width - haveDateRow.width - newerDateRow.width - 24 * root.unit)
@@ -973,13 +1023,13 @@ FocusScope {
                                             CardLine {
                                                 unit: root.unit
                                                 boardLine: true
-                                                text: root.labels.newerPrefix ?? ""
+                                                text: root.labels?.newerPrefix ?? ""
                                                 size: 14.5
                                                 weight: Font.DemiBold
                                                 color: ThemeInk.rose
                                             }
                                             CardLine {
-                                                objectName: "asideNewer." + instCard.index
+                                                objectName: "asideNewer." + instCard.coreIndex
                                                 unit: root.unit
                                                 boardLine: true
                                                 text: (instCard.modelData.newerDate ?? "") + (instCard.modelData.newerSize ?? "")
@@ -998,7 +1048,7 @@ FocusScope {
                                         anchors.verticalCenter: parent.verticalCenter
                                         spacing: 8 * root.unit
                                         Item {
-                                            objectName: "asidePillUpdate." + instCard.index
+                                            objectName: "asidePillUpdate." + instCard.coreIndex
                                             visible: instCard.modelData.canUpdate === true
                                             height: 36 * root.unit
                                             width: updRow.implicitWidth + 18 * root.unit
@@ -1029,7 +1079,7 @@ FocusScope {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     unit: root.unit
                                                     boardLine: true
-                                                    text: root.labels.updatePill ?? ""
+                                                    text: root.labels?.updatePill ?? ""
                                                     size: 14
                                                     weight: Font.DemiBold
                                                     color: Kit.Tokens.overAccent
@@ -1041,7 +1091,7 @@ FocusScope {
                                             }
                                         }
                                         Item {
-                                            objectName: "asidePillDefault." + instCard.index
+                                            objectName: "asidePillDefault." + instCard.coreIndex
                                             visible: instCard.modelData.canDefault === true
                                             height: 36 * root.unit
                                             width: defRow.implicitWidth + 18 * root.unit
@@ -1071,7 +1121,7 @@ FocusScope {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     unit: root.unit
                                                     boardLine: true
-                                                    text: root.labels.defaultPill ?? ""
+                                                    text: root.labels?.defaultPill ?? ""
                                                     size: 14
                                                     weight: Font.Normal
                                                     color: Kit.Tokens.textStrong
@@ -1083,7 +1133,7 @@ FocusScope {
                                             }
                                         }
                                         Item {
-                                            objectName: "asidePillRemove." + instCard.index
+                                            objectName: "asidePillRemove." + instCard.coreIndex
                                             visible: instCard.modelData.canRemove === true
                                             height: 36 * root.unit
                                             width: remRow.implicitWidth + 18 * root.unit
@@ -1113,7 +1163,7 @@ FocusScope {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     unit: root.unit
                                                     boardLine: true
-                                                    text: root.labels.removePill ?? ""
+                                                    text: root.labels?.removePill ?? ""
                                                     size: 14
                                                     weight: Font.Normal
                                                     color: Kit.Tokens.textStrong
@@ -1126,7 +1176,7 @@ FocusScope {
                                         }
                                     }
                                     Item {
-                                        objectName: "asidePillPage." + instCard.index
+                                        objectName: "asidePillPage." + instCard.coreIndex
                                         visible: instCard.modelData.canUpdate === true
                                         anchors.right: parent.right
                                         anchors.verticalCenter: parent.verticalCenter
@@ -1144,7 +1194,7 @@ FocusScope {
                                             anchors.centerIn: parent
                                             unit: root.unit
                                             boardLine: true
-                                            text: root.labels.pagePill ?? ""
+                                            text: root.labels?.pagePill ?? ""
                                             size: 14
                                             weight: Font.Normal
                                             color: Kit.Tokens.textStrong
@@ -1159,39 +1209,21 @@ FocusScope {
                         }
                     }
                 }
-                Item {
-                    visible: (root.aside.availableHeading ?? "").length > 0
-                    width: parent.width
-                    height: availHeadLine.implicitHeight + 8 * root.unit
-                    CardLine {
-                        id: availHeadLine
-                        objectName: "asideAvailableHeading"
-                        y: 8 * root.unit
-                        unit: root.unit
-                        boardLine: true
-                        width: parent.width
-                        text: root.aside.availableHeading ?? ""
-                        size: 14
-                        weight: Font.DemiBold
-                        spacing: 2.1
-                        capitalization: Font.AllUppercase
-                        color: ThemeInk.dim
-                    }
-                }
-                Repeater {
-                    id: availRep
-                    model: root.aside.available ?? []
-                    Item {
+
+                DelegateChoice {
+                    roleValue: 3
+                    delegate: Item {
                         id: availCard
                         required property int index
-                        required property var modelData
-                        readonly property int asideIdx: instRep.count + availCard.index
-                        readonly property bool cardFocused: root.focusZone === 2 && root.focusedAsideIndex === availCard.asideIdx
-                        objectName: "asideAvail." + availCard.index
-                        width: parent.width
+                        required property var model
+                        readonly property var modelData: availCard.model.item
+                        readonly property int availIndex: availCard.modelData.availIndex ?? 0
+                        readonly property bool cardFocused: root.focusZone === 2 && root.focusedAsideKey === (availCard.modelData.key ?? "")
+                        objectName: availCard.modelData.objectName ?? ""
+                        width: 544 * root.unit
                         height: 84 * root.unit
                         Kit.FocusRing {
-                            objectName: "asideAvailRing." + availCard.index
+                            objectName: "asideAvailRing." + availCard.availIndex
                             visible: availCard.cardFocused
                             anchors.fill: parent
                             gap: 3 * root.unit
@@ -1203,7 +1235,7 @@ FocusScope {
                             pixelScale: root.pixelScale
                         }
                         Rectangle {
-                            objectName: "asideAvailBg." + availCard.index
+                            objectName: "asideAvailBg." + availCard.availIndex
                             anchors.fill: parent
                             radius: 18 * root.unit
                             color: availCard.cardFocused ? Kit.Tokens.surfaceRaised : ThemeInk.rowSurface
@@ -1216,7 +1248,7 @@ FocusScope {
                             anchors.rightMargin: 20 * root.unit
                             spacing: 14 * root.unit
                             LibretroMark {
-                                objectName: "asideAvailMark." + availCard.index
+                                objectName: "asideAvailMark." + availCard.availIndex
                                 anchors.verticalCenter: parent.verticalCenter
                                 side: 34
                                 light: ThemeInk.hairline
@@ -1227,7 +1259,7 @@ FocusScope {
                                 width: parent.width - 34 * root.unit - availRight.width - 28 * root.unit
                                 spacing: 2 * root.unit
                                 CardLine {
-                                    objectName: "asideAvailName." + availCard.index
+                                    objectName: "asideAvailName." + availCard.availIndex
                                     unit: root.unit
                                     boardLine: true
                                     width: parent.width
@@ -1238,7 +1270,7 @@ FocusScope {
                                     elide: Text.ElideRight
                                 }
                                 CardLine {
-                                    objectName: "asideAvailDesc." + availCard.index
+                                    objectName: "asideAvailDesc." + availCard.availIndex
                                     unit: root.unit
                                     boardLine: true
                                     width: parent.width
@@ -1280,7 +1312,7 @@ FocusScope {
                                     }
                                 }
                                 CardLine {
-                                    objectName: "asideAvailSize." + availCard.index
+                                    objectName: "asideAvailSize." + availCard.availIndex
                                     anchors.verticalCenter: parent.verticalCenter
                                     visible: text.length > 0
                                     unit: root.unit
@@ -1302,18 +1334,23 @@ FocusScope {
                         }
                     }
                 }
-                CardLine {
-                    objectName: "asideNote"
-                    visible: text.length > 0
-                    unit: root.unit
-                    boardLine: true
-                    boardLineHeight: 17 * 1.5
-                    width: parent.width
-                    text: root.aside.note ?? ""
-                    size: 17
-                    weight: Font.Normal
-                    color: Kit.Tokens.muted
-                    wrapMode: Text.Wrap
+
+                DelegateChoice {
+                    roleValue: 4
+                    delegate: CardLine {
+                        id: noteLine
+                        required property var model
+                        objectName: noteLine.model.item.objectName ?? ""
+                        unit: root.unit
+                        boardLine: true
+                        boardLineHeight: 17 * 1.5
+                        width: 544 * root.unit
+                        text: noteLine.model.item.text ?? ""
+                        size: 17
+                        weight: Font.Normal
+                        color: Kit.Tokens.muted
+                        wrapMode: Text.Wrap
+                    }
                 }
             }
         }
@@ -1376,7 +1413,7 @@ FocusScope {
                 unit: root.unit
                 boardLine: true
                 boardLineHeight: 20
-                text: root.aside.footerSummary ?? ""
+                text: root.isCores ? root.tool.eclipseCounter : ""
                 size: 16
                 weight: Font.Normal
                 family: Kit.Tokens.faceCode

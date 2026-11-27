@@ -1087,18 +1087,15 @@ impl qobject::SessionModel {
         let catalogue = self.catalogue.as_ref().ok_or("no catalogue")?;
         let display = display::read_for_game(catalogue, &settings.load(Model::Graphics)?, console, self.game_crop);
         let preset = match &display.preset {
-            Some(path) => {
-                let pack = platform.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).map_err(|e| e.to_string())?;
-                let pack = pack.ok_or("the shader pack's folder is not known")?;
-                emusen_platform_client::serenity::preset_document(&platform, &pack.join(path).to_string_lossy())
-            }
+            Some(path) => preset_document_for_rel(&platform, path)?,
             None => {
                 let root = handoff.presets().to_string_lossy();
                 let chosen = display.chosen_json();
                 emusen_platform_client::serenity::filter_preset(&platform, &display.filter, Some(console), chosen.as_ref(), &root)
+                    .map_err(|e| e.to_string())?
             }
         };
-        Ok((display, preset.map_err(|e| e.to_string())?))
+        Ok((display, preset))
     }
 
     /// The picture's shape and crop from the frame's shapes and the console's display settings.
@@ -1599,6 +1596,15 @@ impl qobject::SessionModel {
     }
 }
 
+fn preset_document_for_rel(platform: &Platform, path: &str) -> Result<Vec<u8>, String> {
+    if !crate::settings_shaders::is_safe_pack_rel(path) {
+        return Err("Invalid shader preset path".to_owned());
+    }
+    let pack = platform.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).map_err(|e| e.to_string())?;
+    let pack = pack.ok_or("the shader pack's folder is not known")?;
+    emusen_platform_client::serenity::preset_document(platform, &pack.join(path).to_string_lossy()).map_err(|e| e.to_string())
+}
+
 fn holding_for(opening_game: bool, has_from_state: bool, setting: resume::Setting) -> Option<resume::Setting> {
     (opening_game && !has_from_state && setting != resume::Setting::Never).then_some(setting)
 }
@@ -1667,5 +1673,22 @@ mod tests {
         session.as_mut().reported(Report::Closed);
         assert_eq!(scene.property("scene", "playedGame"), "/rom/Aurora.sfc");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn slang_preset_path_guard_rejects_traversal_and_curdir_pack() {
+        let world = emusen_client_fixture::World::new("models-session-slang-guard");
+        let platform = Platform::load(emusen_client_fixture::library()).unwrap();
+        let shaders = platform.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).unwrap().expect("shaders dir");
+        std::fs::create_dir_all(shaders.join("custom")).unwrap();
+        let shader = "#version 450\n#pragma stage vertex\nvoid main() {}\n#pragma stage fragment\nvoid main() {}\n";
+        std::fs::write(shaders.join("custom/user.slang"), shader).unwrap();
+        std::fs::write(shaders.join("custom/user.slangp"), "shaders = 1\nshader0 = user.slang\n").unwrap();
+
+        for bad in ["../outside.slangp", "./pack/crt/a.slangp", ".\\pack\\crt\\a.slangp", "pack/../user.slangp"] {
+            assert_eq!(preset_document_for_rel(&platform, bad), Err("Invalid shader preset path".to_owned()), "must reject {bad:?}");
+        }
+        assert!(preset_document_for_rel(&platform, "custom/user.slangp").is_ok());
+        drop(world);
     }
 }

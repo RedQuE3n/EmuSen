@@ -96,15 +96,18 @@ fn with_shaders_world(tag: &str, with_host: bool, f: impl FnOnce(&mut Scene<'_>,
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &app).unwrap();
 
     let pack = platform.directory(DIR_SHADERS).unwrap().expect("shaders dir");
-    std::fs::create_dir_all(pack.join("crt")).unwrap();
-    std::fs::write(pack.join("crt/royale.slang"), ROYALE_SLANG).unwrap();
-    std::fs::write(pack.join("crt/crt-royale.slangp"), "shaders = 1\nshader0 = royale.slang\n").unwrap();
-    std::fs::write(pack.join("crt/tint.slang"), TINT_SLANG).unwrap();
-    std::fs::write(pack.join("crt/tint-preview.slangp"), "shaders = 1\nshader0 = tint.slang\nfilter_linear0 = false\nscale_type0 = viewport\n").unwrap();
+    std::fs::create_dir_all(pack.join("pack/crt")).unwrap();
+    std::fs::write(pack.join("pack/crt/royale.slang"), ROYALE_SLANG).unwrap();
+    std::fs::write(pack.join("pack/crt/crt-royale.slangp"), "shaders = 1\nshader0 = royale.slang\n").unwrap();
+    std::fs::write(pack.join("pack/crt/tint.slang"), TINT_SLANG).unwrap();
+    std::fs::write(pack.join("pack/crt/tint-preview.slangp"), "shaders = 1\nshader0 = tint.slang\nfilter_linear0 = false\nscale_type0 = viewport\n").unwrap();
+    std::fs::create_dir_all(pack.join("custom")).unwrap();
+    std::fs::write(pack.join("custom/user.slang"), TINT_SLANG).unwrap();
+    std::fs::write(pack.join("custom/user.slangp"), "shaders = 1\nshader0 = user.slang\n").unwrap();
 
     let graphics_file = platform.file(FILE_GRAPHICS).unwrap();
     let graphics = json!({
-        "Consoles": { "SNES": { "ScreenFilter": "slang:crt/crt-royale.slangp" } }
+        "Consoles": { "SNES": { "ScreenFilter": "slang:pack/crt/crt-royale.slangp" } }
     });
     platform.model_save(MODEL_GRAPHICS_CONFIG, None, graphics_file.file_name().unwrap().to_str().unwrap(), &graphics).unwrap();
 
@@ -158,7 +161,11 @@ fn with_shaders_world(tag: &str, with_host: bool, f: impl FnOnce(&mut Scene<'_>,
         press(&mut scene, &sdl, &pad, PadControl::Down);
         settle(&mut scene);
     }
-    press_handoff(&mut scene, &sdl, &pad, PadControl::South, "#20 shaders shown", |s| s.property("settingsModel", "shadersShown") == "true" && shown(s, "shadersEclipseCanvas"));
+    press_handoff(&mut scene, &sdl, &pad, PadControl::South, "#20 shaders shown", |s| {
+        s.property("settingsModel", "shadersShown") == "true"
+            && s.property("settingsModel", "shadersLoading") == "false"
+            && shown(s, "shadersEclipseCanvas")
+    });
     f(&mut scene, &sdl, &pad, &platform);
     sdl.detach(pad);
     drop(scene);
@@ -283,12 +290,14 @@ pub fn oracle_software() {
         until(scene, "cancel closes confirm", |s| s.property("settingsModel", "shadersBoard").contains("\"confirmOpen\":false") && !shown(s, "dialogDisc"));
         until(scene, "navScope regains focus after cancel", |s| s.property("shadersNavScope", "activeFocus") == "true");
         let pack = platform.directory(DIR_SHADERS).unwrap().unwrap();
-        assert!(pack.join("crt/crt-royale.slangp").exists());
+        assert!(pack.join("pack/crt/crt-royale.slangp").exists());
+        assert!(pack.join("custom/user.slangp").exists());
         scene.click(rx, ry);
         until(scene, "remove confirm reopens", |s| s.property("settingsModel", "shadersBoard").contains("\"confirmOpen\":true"));
         press(scene, sdl, pad, PadControl::Right);
         press(scene, sdl, pad, PadControl::South);
-        until(scene, "pack cleared locally", |s| !pack.join("crt/crt-royale.slangp").exists() && !shown(s, "dialogDisc"));
+        until(scene, "pack cleared locally", |s| !pack.join("pack").exists() && pack.join("custom/user.slangp").exists() && !shown(s, "dialogDisc"));
+        assert!(pack.join("custom/user.slang").exists());
         until(scene, "navScope regains focus", |s| s.property("shadersNavScope", "activeFocus") == "true");
 
         press_handoff(scene, sdl, pad, PadControl::East, "B returns to Display", |s| s.property("settingsModel", "shadersShown") == "false" && at(s).1 == "display");

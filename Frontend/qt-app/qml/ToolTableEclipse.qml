@@ -22,16 +22,21 @@ FocusScope {
     readonly property real boardHeight: 1200
     readonly property real unit: Kit.CanvasUnits.designHeight / root.boardHeight
     readonly property bool screenShown: root.screenCode === 0 || root.tool.eclipseScreen === root.screenCode
-    readonly property var view: root.screenShown && root.tool.eclipseCores.length > 0 ? JSON.parse(root.tool.eclipseCores) : ({})
-    readonly property var aside: root.view.aside ?? ({})
-    readonly property var colSpecs: root.view.columns ?? []
-    readonly property int focusedZone: root.view.focusedZone ?? 1
-    readonly property int focusedIndex: root.view.focusedIndex ?? -1
-    readonly property int focusedFilterIndex: root.view.focusedFilterIndex ?? 0
+    readonly property var view: root.screenShown ? root.tool.eclipseState : ({})
+    readonly property var aside: root.view?.aside ?? ({})
+    readonly property var colSpecs: root.view?.columns ?? null
+    readonly property int focusedZone: root.screenShown ? root.tool.eclipseFocusedZone : 1
+    readonly property int focusedIndex: root.screenShown ? root.tool.eclipseFocusedIndex : -1
+    readonly property int focusedFilterIndex: root.screenShown ? root.tool.eclipseFilterIndex : 0
     readonly property alias controller: frame.controller
     readonly property bool sheetOpen: frame.controller.sheetOpen
     readonly property bool isLibrary: root.screenCode === 4
-    readonly property bool isStructuredAside: root.aside.structured === true
+    readonly property bool isStructuredAside: root.aside?.structured === true
+
+    EclipseListModel {
+        id: rowsModel
+        rows: root.screenShown ? root.tool.eclipseRowsJson : ""
+    }
 
     component TableHelpGlyph: Item {
         id: tg
@@ -126,13 +131,8 @@ FocusScope {
     }
 
     onFocusedIndexChanged: {
-        if (root.focusedIndex < 0 || root.focusedIndex >= rowRep.count) return
-        const row = rowRep.itemAt(root.focusedIndex)
-        if (!row) return
-        const top = row.y
-        const bottom = top + row.height
-        if (top < tableFlick.contentY) tableFlick.contentY = Math.max(0, top - 8 * root.unit)
-        else if (bottom > tableFlick.contentY + tableFlick.height) tableFlick.contentY = Math.max(0, bottom - tableFlick.height + 8 * root.unit)
+        if (root.focusedIndex >= 0 && root.focusedIndex < rowsModel.count)
+            tableFlick.positionViewAtIndex(root.focusedIndex, ListView.Contain)
     }
 
     onFocusedFilterIndexChanged: {
@@ -174,7 +174,7 @@ FocusScope {
         helpShown: false
         padFamily: root.padFamily
         controller.navigationShown: false
-        controller.actionLines: root.view.actionLines ?? ""
+        controller.actionLines: root.view?.actionLines ?? ""
         Connections {
             target: frame.controller
             function onBackDeclined() { root.backed() }
@@ -232,7 +232,7 @@ FocusScope {
                 y: (parent.height - height) / 2
                 spacing: 14 * root.unit
                 Repeater {
-                    model: root.view.trail ?? []
+                    model: root.view?.trail ?? null
                     Row {
                         id: crumbItem
                         required property var modelData
@@ -289,7 +289,7 @@ FocusScope {
                     y: (statusPillRow.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.battery + (root.view.percentSuffix ?? "")
+                    text: root.battery + (root.view?.percentSuffix ?? "")
                     size: 22
                     weight: Font.Normal
                     color: Kit.Tokens.textStrong
@@ -319,7 +319,7 @@ FocusScope {
             unit: root.unit
             boardLine: true
             boardLineHeight: 56 * 1.06
-            text: root.view.title ?? ""
+            text: root.view?.title ?? ""
             size: 56
             weight: Font.DemiBold
             spacing: -0.56
@@ -327,12 +327,12 @@ FocusScope {
         }
         CardLine {
             objectName: "toolSubtitle"
-            visible: (root.view.subtitle ?? "").length > 0
+            visible: (root.view?.subtitle ?? "").length > 0
             width: 1100 * root.unit
             unit: root.unit
             boardLine: true
             boardLineHeight: 22 * 1.45
-            text: root.view.subtitle ?? ""
+            text: root.view?.subtitle ?? ""
             size: 22
             weight: Font.Light
             color: ThemeInk.body
@@ -358,7 +358,7 @@ FocusScope {
                 spacing: 10 * root.unit
                 Repeater {
                     id: filterRep
-                    model: root.view.filters ?? []
+                    model: root.view?.filters ?? null
                     Item {
                         id: pill
                         required property int index
@@ -470,158 +470,167 @@ FocusScope {
                     }
                 }
             }
-            Flickable {
+            ListView {
                 id: tableFlick
                 x: 0
                 y: 48 * root.unit
                 width: tableBlock.width
                 height: tableBlock.height - 48 * root.unit
-                contentWidth: width
-                contentHeight: rowsCol.implicitHeight
+                spacing: 8 * root.unit
+                reuseItems: true
                 clip: contentHeight > height
-                Column {
-                    id: rowsCol
+                boundsBehavior: Flickable.StopAtBounds
+                readonly property int targetFocusIndex: root.focusedIndex >= 0 && root.focusedIndex < rowsModel.count ? root.focusedIndex : -1
+                model: rowsModel
+                Binding {
+                    target: tableFlick
+                    property: "currentIndex"
+                    value: tableFlick.targetFocusIndex
+                }
+                onCountChanged: {
+                    if (tableFlick.currentIndex !== tableFlick.targetFocusIndex) tableFlick.currentIndex = tableFlick.targetFocusIndex
+                    if (tableFlick.targetFocusIndex >= 0) tableFlick.positionViewAtIndex(tableFlick.targetFocusIndex, ListView.Contain)
+                }
+                onCurrentIndexChanged: {
+                    if (tableFlick.currentIndex !== tableFlick.targetFocusIndex) tableFlick.currentIndex = tableFlick.targetFocusIndex
+                    if (tableFlick.currentIndex >= 0) tableFlick.positionViewAtIndex(tableFlick.currentIndex, ListView.Contain)
+                }
+                delegate: Item {
+                    id: rowItem
+                    required property int index
+                    required property var model
+                    readonly property var itemData: rowItem.model.item
+                    readonly property bool rowFocused: root.focusedZone === 1 && rowItem.index === root.focusedIndex
+                    readonly property var cellNames: rowItem.itemData.cellObjectNames ?? null
+                    objectName: rowItem.itemData.objectName ?? ""
                     width: tableFlick.width
-                    spacing: 8 * root.unit
-                    Repeater {
-                        id: rowRep
-                        model: root.view.rows ?? []
-                        Item {
-                            id: rowItem
-                            required property int index
-                            required property var modelData
-                            readonly property var cellNames: rowItem.modelData.cellObjectNames ?? []
-                            objectName: rowItem.modelData.objectName ?? ""
-                            width: rowsCol.width
-                            height: Math.max(66 * root.unit, cellsRow.implicitHeight + 20 * root.unit)
-                            Kit.FocusRing {
-                                objectName: rowItem.modelData.ringObjectName ?? ""
-                                visible: rowItem.modelData.focused === true
-                                anchors.fill: rowBg
-                                radius: 16 * root.unit
-                                gap: 4 * root.unit
-                                thickness: 3 * root.unit
-                                bandRadius: 23 * root.unit
-                                glowColor: ThemeInk.glowStrong
-                                glowBlur: 40 * root.unit
-                                glowSpread: 10 * root.unit
-                                pixelScale: root.pixelScale
-                            }
-                            Rectangle {
-                                id: rowBg
-                                objectName: rowItem.modelData.bgObjectName ?? ""
-                                anchors.fill: parent
-                                radius: 16 * root.unit
-                                color: rowItem.modelData.focused ? Kit.Tokens.surfaceRaised : Kit.Tokens.inputSurface
-                                border.width: rowItem.modelData.focused ? 0 : 1 * root.unit
-                                border.color: ThemeInk.hairline
-                            }
-                            Row {
-                                id: cellsRow
-                                x: 20 * root.unit
-                                y: (parent.height - height) / 2
-                                spacing: 16 * root.unit
-                                Repeater {
-                                    model: rowItem.modelData.cells ?? []
-                                    Item {
-                                        id: cellWrap
-                                        required property int index
-                                        required property string modelData
-                                        readonly property real colW: (root.colSpecs[cellWrap.index]?.width ?? 100) * root.unit
-                                        readonly property bool isMono: root.isLibrary && ((rowItem.modelData.cellMono ?? [])[cellWrap.index] === true)
-                                        readonly property string subLine: root.isLibrary ? ((rowItem.modelData.cellSubs ?? [])[cellWrap.index] ?? "") : ""
-                                        readonly property var chipData: rowItem.modelData.statusChip ?? ({})
-                                        readonly property bool hasChip: root.isLibrary && cellWrap.index === 5 && (cellWrap.chipData.text ?? "").length > 0
-                                        width: cellWrap.colW
-                                        height: cellWrap.hasChip ? 26 * root.unit : cellCol.height
-                                        y: (cellsRow.height - height) / 2
-                                        Column {
-                                            id: cellCol
-                                            visible: !cellWrap.hasChip
-                                            width: parent.width
-                                            spacing: 2 * root.unit
-                                            CardLine {
-                                                id: cellText
-                                                objectName: rowItem.cellNames[cellWrap.index] ?? ""
-                                                width: parent.width
-                                                unit: root.unit
-                                                boardLine: true
-                                                boardLineHeight: root.isLibrary ? 22 : 26
-                                                lineHeight: root.isLibrary ? 22 : 26
-                                                lineHeightMode: Text.FixedHeight
-                                                wrapMode: cellWrap.isMono ? Text.NoWrap : Text.WordWrap
-                                                elide: cellWrap.isMono ? Text.ElideRight : Text.ElideNone
-                                                text: cellWrap.modelData
-                                                size: root.isLibrary ? (cellWrap.isMono ? 16 : 17) : 20
-                                                weight: root.isLibrary && cellWrap.isMono && cellWrap.index === 0 ? Font.DemiBold : Font.Normal
-                                                family: cellWrap.isMono ? Kit.Tokens.faceCode : Kit.Tokens.faceText
-                                                color: root.isLibrary && cellWrap.index === 3 ? Kit.Tokens.accent : (root.isLibrary && cellWrap.index === 1 ? Kit.Tokens.muted : Kit.Tokens.textStrong)
-                                                horizontalAlignment: root.isLibrary && cellWrap.index === 4 ? Text.AlignRight : Text.AlignLeft
-                                            }
-                                            CardLine {
-                                                visible: cellWrap.subLine.length > 0
-                                                width: parent.width
-                                                unit: root.unit
-                                                boardLine: true
-                                                text: cellWrap.subLine
-                                                size: 14
-                                                weight: Font.Normal
-                                                color: Kit.Tokens.muted
-                                                elide: Text.ElideRight
-                                            }
-                                        }
-                                        Rectangle {
-                                            visible: cellWrap.hasChip
-                                            anchors.right: parent.right
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            height: 26 * root.unit
-                                            width: chipLine.width + 20 * root.unit
-                                            radius: 13 * root.unit
-                                            readonly property int toneCode: cellWrap.chipData.toneCode ?? 0
-                                            color: toneCode === 1 ? ThemeInk.errorFill : (toneCode === 2 ? ThemeInk.attentionFill : Kit.Tokens.surface)
-                                            border.width: 1 * root.unit
-                                            border.color: toneCode === 1 ? ThemeInk.rose : (toneCode === 2 ? ThemeInk.accentSoft : ThemeInk.pillBorder)
-                                            CardLine {
-                                                id: chipLine
-                                                objectName: "tableChip." + rowItem.index
-                                                anchors.centerIn: parent
-                                                unit: root.unit
-                                                boardLine: true
-                                                text: cellWrap.chipData.text ?? ""
-                                                size: 13
-                                                weight: Font.DemiBold
-                                                color: (cellWrap.chipData.toneCode ?? 0) === 1 ? ThemeInk.rose : ((cellWrap.chipData.toneCode ?? 0) === 2 ? Kit.Tokens.accent : Kit.Tokens.muted)
-                                            }
-                                        }
+                    height: Math.max(66 * root.unit, cellsRow.implicitHeight + 20 * root.unit)
+                    Kit.FocusRing {
+                        objectName: rowItem.itemData.ringObjectName ?? ""
+                        visible: rowItem.rowFocused
+                        anchors.fill: rowBg
+                        radius: 16 * root.unit
+                        gap: 4 * root.unit
+                        thickness: 3 * root.unit
+                        bandRadius: 23 * root.unit
+                        glowColor: ThemeInk.glowStrong
+                        glowBlur: 40 * root.unit
+                        glowSpread: 10 * root.unit
+                        pixelScale: root.pixelScale
+                    }
+                    Rectangle {
+                        id: rowBg
+                        objectName: rowItem.itemData.bgObjectName ?? ""
+                        anchors.fill: parent
+                        radius: 16 * root.unit
+                        color: rowItem.rowFocused ? Kit.Tokens.surfaceRaised : Kit.Tokens.inputSurface
+                        border.width: rowItem.rowFocused ? 0 : 1 * root.unit
+                        border.color: ThemeInk.hairline
+                    }
+                    Row {
+                        id: cellsRow
+                        x: 20 * root.unit
+                        y: (parent.height - height) / 2
+                        spacing: 16 * root.unit
+                        Repeater {
+                            model: rowItem.itemData.cells ?? null
+                            Item {
+                                id: cellWrap
+                                required property int index
+                                required property string modelData
+                                readonly property real colW: (root.colSpecs && root.colSpecs[cellWrap.index] ? (root.colSpecs[cellWrap.index].width ?? 100) : 100) * root.unit
+                                readonly property bool isMono: root.isLibrary && (rowItem.itemData.cellMono ? rowItem.itemData.cellMono[cellWrap.index] === true : false)
+                                readonly property string subLine: root.isLibrary && rowItem.itemData.cellSubs ? (rowItem.itemData.cellSubs[cellWrap.index] ?? "") : ""
+                                readonly property var chipData: rowItem.itemData.statusChip ?? null
+                                readonly property bool hasChip: root.isLibrary && cellWrap.index === 5 && ((cellWrap.chipData?.text ?? "").length > 0)
+                                width: cellWrap.colW
+                                height: cellWrap.hasChip ? 26 * root.unit : cellCol.height
+                                y: (cellsRow.height - height) / 2
+                                Column {
+                                    id: cellCol
+                                    visible: !cellWrap.hasChip
+                                    width: parent.width
+                                    spacing: 2 * root.unit
+                                    CardLine {
+                                        id: cellText
+                                        objectName: rowItem.cellNames ? (rowItem.cellNames[cellWrap.index] ?? "") : ""
+                                        width: parent.width
+                                        unit: root.unit
+                                        boardLine: true
+                                        boardLineHeight: root.isLibrary ? 22 : 26
+                                        lineHeight: root.isLibrary ? 22 : 26
+                                        lineHeightMode: Text.FixedHeight
+                                        wrapMode: cellWrap.isMono ? Text.NoWrap : Text.WordWrap
+                                        elide: cellWrap.isMono ? Text.ElideRight : Text.ElideNone
+                                        text: cellWrap.modelData
+                                        size: root.isLibrary ? (cellWrap.isMono ? 16 : 17) : 20
+                                        weight: root.isLibrary && cellWrap.isMono && cellWrap.index === 0 ? Font.DemiBold : Font.Normal
+                                        family: cellWrap.isMono ? Kit.Tokens.faceCode : Kit.Tokens.faceText
+                                        color: root.isLibrary && cellWrap.index === 3 ? Kit.Tokens.accent : (root.isLibrary && cellWrap.index === 1 ? Kit.Tokens.muted : Kit.Tokens.textStrong)
+                                        horizontalAlignment: root.isLibrary && cellWrap.index === 4 ? Text.AlignRight : Text.AlignLeft
+                                    }
+                                    CardLine {
+                                        visible: cellWrap.subLine.length > 0
+                                        width: parent.width
+                                        unit: root.unit
+                                        boardLine: true
+                                        text: cellWrap.subLine
+                                        size: 14
+                                        weight: Font.Normal
+                                        color: Kit.Tokens.muted
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                                Rectangle {
+                                    visible: cellWrap.hasChip
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: 26 * root.unit
+                                    width: chipLine.width + 20 * root.unit
+                                    radius: 13 * root.unit
+                                    readonly property int toneCode: cellWrap.chipData?.toneCode ?? 0
+                                    color: toneCode === 1 ? ThemeInk.errorFill : (toneCode === 2 ? ThemeInk.attentionFill : Kit.Tokens.surface)
+                                    border.width: 1 * root.unit
+                                    border.color: toneCode === 1 ? ThemeInk.rose : (toneCode === 2 ? ThemeInk.accentSoft : ThemeInk.pillBorder)
+                                    CardLine {
+                                        id: chipLine
+                                        objectName: "tableChip." + rowItem.index
+                                        anchors.centerIn: parent
+                                        unit: root.unit
+                                        boardLine: true
+                                        text: cellWrap.chipData?.text ?? ""
+                                        size: 13
+                                        weight: Font.DemiBold
+                                        color: (cellWrap.chipData?.toneCode ?? 0) === 1 ? ThemeInk.rose : ((cellWrap.chipData?.toneCode ?? 0) === 2 ? Kit.Tokens.accent : Kit.Tokens.muted)
                                     }
                                 }
                             }
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: root.tool.eclipseActCode(3, rowItem.modelData.key ?? "")
-                                onDoubleClicked: root.tool.eclipseNav(4)
-                            }
                         }
                     }
-                    CardLine {
-                        objectName: "tableEmpty"
-                        visible: rowRep.count === 0
-                        width: rowsCol.width
-                        unit: root.unit
-                        boardLine: true
-                        boardLineHeight: 29
-                        text: root.view.emptyMessage ?? ""
-                        size: 20
-                        weight: Font.Normal
-                        color: Kit.Tokens.muted
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.tool.eclipseActCode(3, rowItem.itemData.key ?? "")
+                        onDoubleClicked: root.tool.eclipseNav(4)
                     }
+                }
+                CardLine {
+                    objectName: "tableEmpty"
+                    visible: rowsModel.count === 0
+                    width: tableFlick.width
+                    unit: root.unit
+                    boardLine: true
+                    boardLineHeight: 29
+                    text: root.view?.emptyMessage ?? ""
+                    size: 20
+                    weight: Font.Normal
+                    color: Kit.Tokens.muted
                 }
             }
         }
 
         Rectangle {
             visible: !root.isStructuredAside
-            objectName: !root.isStructuredAside ? (root.view.asideObjectName ?? "") : ""
+            objectName: !root.isStructuredAside ? (root.view?.asideObjectName ?? "") : ""
             x: 1300 * root.unit
             y: 276 * root.unit
             width: 524 * root.unit
@@ -637,7 +646,7 @@ FocusScope {
                 width: 460 * root.unit
                 spacing: 16 * root.unit
                 CardLine {
-                    objectName: !root.isStructuredAside ? (root.view.asideTitleObjectName ?? "") : ""
+                    objectName: !root.isStructuredAside ? (root.view?.asideTitleObjectName ?? "") : ""
                     width: asideCol.width
                     unit: root.unit
                     boardLine: true
@@ -645,14 +654,14 @@ FocusScope {
                     lineHeight: 36
                     lineHeightMode: Text.FixedHeight
                     wrapMode: Text.WordWrap
-                    text: root.aside.title ?? ""
+                    text: root.aside?.title ?? ""
                     size: 30
                     weight: Font.DemiBold
                     color: Kit.Tokens.textStrong
                 }
                 CardLine {
-                    objectName: !root.isStructuredAside ? (root.view.asideSubObjectName ?? "") : ""
-                    visible: (root.aside.subtitle ?? "").length > 0
+                    objectName: !root.isStructuredAside ? (root.view?.asideSubObjectName ?? "") : ""
+                    visible: (root.aside?.subtitle ?? "").length > 0
                     width: asideCol.width
                     unit: root.unit
                     boardLine: true
@@ -660,10 +669,10 @@ FocusScope {
                     lineHeight: 29
                     lineHeightMode: Text.FixedHeight
                     wrapMode: Text.WordWrap
-                    text: root.aside.subtitle ?? ""
+                    text: root.aside?.subtitle ?? ""
                     size: 20
                     weight: Font.Normal
-                    color: root.aside.subtitleMuted ? Kit.Tokens.muted : ThemeInk.body
+                    color: root.aside?.subtitleMuted ? Kit.Tokens.muted : ThemeInk.body
                 }
                 Loader {
                     id: asideMediaLoader
@@ -673,7 +682,7 @@ FocusScope {
                     sourceComponent: root.asideMediaSlot
                 }
                 Repeater {
-                    model: root.isStructuredAside ? [] : (root.aside.lines ?? [])
+                    model: root.isStructuredAside ? null : (root.aside?.lines ?? null)
                     CardLine {
                         id: asideLine
                         required property var modelData
@@ -701,7 +710,7 @@ FocusScope {
             width: 524 * root.unit
             spacing: 16 * root.unit
             Rectangle {
-                objectName: root.isStructuredAside ? (root.view.asideObjectName ?? "") : ""
+                objectName: root.isStructuredAside ? (root.view?.asideObjectName ?? "") : ""
                 width: parent.width
                 height: diagCol.implicitHeight + 52 * root.unit
                 radius: 22 * root.unit
@@ -722,15 +731,15 @@ FocusScope {
                             width: parent.width
                             unit: root.unit
                             boardLine: true
-                            text: root.aside.eyebrow ?? ""
+                            text: root.aside?.eyebrow ?? ""
                             size: 13
                             weight: Font.DemiBold
                             spacing: 2.08
                             capitalization: Font.AllUppercase
-                            color: (root.aside.eyebrowToneCode ?? 0) === 1 ? ThemeInk.rose : ((root.aside.eyebrowToneCode ?? 0) === 2 ? Kit.Tokens.accent : Kit.Tokens.muted)
+                            color: (root.aside?.eyebrowToneCode ?? 0) === 1 ? ThemeInk.rose : ((root.aside?.eyebrowToneCode ?? 0) === 2 ? Kit.Tokens.accent : Kit.Tokens.muted)
                         }
                         CardLine {
-                            objectName: root.isStructuredAside ? (root.view.asideTitleObjectName ?? "") : ""
+                            objectName: root.isStructuredAside ? (root.view?.asideTitleObjectName ?? "") : ""
                             width: parent.width
                             unit: root.unit
                             boardLine: true
@@ -738,7 +747,7 @@ FocusScope {
                             lineHeight: 28
                             lineHeightMode: Text.FixedHeight
                             wrapMode: Text.WordWrap
-                            text: root.aside.title ?? ""
+                            text: root.aside?.title ?? ""
                             size: 23
                             weight: Font.Bold
                             family: Kit.Tokens.faceCode
@@ -755,7 +764,7 @@ FocusScope {
                         border.color: ThemeInk.hairline
                         CardLine {
                             id: diagPath
-                            objectName: root.isStructuredAside ? (root.view.asideSubObjectName ?? "") : ""
+                            objectName: root.isStructuredAside ? (root.view?.asideSubObjectName ?? "") : ""
                             x: 15 * root.unit
                             y: 11 * root.unit
                             width: parent.width - 30 * root.unit
@@ -765,7 +774,7 @@ FocusScope {
                             lineHeight: 19
                             lineHeightMode: Text.FixedHeight
                             wrapMode: Text.WrapAnywhere
-                            text: root.aside.subtitle ?? ""
+                            text: root.aside?.subtitle ?? ""
                             size: 14
                             weight: Font.Normal
                             family: Kit.Tokens.faceCode
@@ -777,13 +786,13 @@ FocusScope {
                         width: parent.width
                         height: diagWords.implicitHeight + 26 * root.unit
                         radius: 14 * root.unit
-                        readonly property int toneCode: root.aside.eyebrowToneCode ?? 0
+                        readonly property int toneCode: root.aside?.eyebrowToneCode ?? 0
                         color: toneCode === 1 ? ThemeInk.errorFill : (toneCode === 2 ? ThemeInk.attentionFill : Kit.Tokens.surfaceRaised)
                         border.width: 1 * root.unit
                         border.color: toneCode === 1 ? ThemeInk.rose : (toneCode === 2 ? ThemeInk.accentSoft : ThemeInk.hairline)
                         CardLine {
                             id: diagWords
-                            objectName: root.isStructuredAside ? (root.aside.diagObjectName ?? "") : ""
+                            objectName: root.isStructuredAside ? (root.aside?.diagObjectName ?? "") : ""
                             x: 16 * root.unit
                             y: 13 * root.unit
                             width: parent.width - 32 * root.unit
@@ -793,7 +802,7 @@ FocusScope {
                             lineHeight: 22
                             lineHeightMode: Text.FixedHeight
                             wrapMode: Text.WordWrap
-                            text: root.aside.diagnostic ?? ""
+                            text: root.aside?.diagnostic ?? ""
                             size: 15
                             weight: Font.Normal
                             color: Kit.Tokens.textStrong
@@ -809,7 +818,7 @@ FocusScope {
                         width: parent.width
                         spacing: 10 * root.unit
                         Repeater {
-                            model: root.aside.facts ?? []
+                            model: root.aside?.facts ?? null
                             Row {
                                 id: factRow
                                 required property var modelData
@@ -875,7 +884,7 @@ FocusScope {
                         width: parent.width
                         unit: root.unit
                         boardLine: true
-                        text: root.aside.contractHeading ?? ""
+                        text: root.aside?.contractHeading ?? ""
                         size: 16
                         weight: Font.DemiBold
                         color: Kit.Tokens.textStrong
@@ -889,7 +898,7 @@ FocusScope {
                         lineHeight: 21
                         lineHeightMode: Text.FixedHeight
                         wrapMode: Text.WordWrap
-                        text: root.aside.contractBody ?? ""
+                        text: root.aside?.contractBody ?? ""
                         size: 14
                         weight: Font.Normal
                         color: ThemeInk.body
@@ -899,7 +908,7 @@ FocusScope {
         }
 
         Rectangle {
-            objectName: root.view.markBarObjectName ?? ""
+            objectName: root.view?.markBarObjectName ?? ""
             x: 96 * root.unit
             y: 1032 * root.unit
             width: root.width - 192 * root.unit
@@ -909,12 +918,12 @@ FocusScope {
             border.width: 1 * root.unit
             border.color: ThemeInk.hairline
             CardLine {
-                objectName: root.view.markBarTextObjectName ?? ""
+                objectName: root.view?.markBarTextObjectName ?? ""
                 x: 24 * root.unit
                 y: (parent.height - height) / 2
                 unit: root.unit
                 boardLine: true
-                text: root.view.markBarText ?? ""
+                text: root.view?.markBarText ?? ""
                 size: 21
                 weight: Font.Normal
                 color: Kit.Tokens.textStrong
@@ -938,14 +947,14 @@ FocusScope {
     }
 
     Item {
-        objectName: root.view.footerObjectName ?? ""
+        objectName: root.view?.footerObjectName ?? ""
         x: 96 * root.unit
         y: 1122 * root.unit
         width: root.width - 192 * root.unit
         height: 38 * root.unit
         Kit.HelpBar {
             id: footerHelpBar
-            objectName: root.view.helpObjectName ?? ""
+            objectName: root.view?.helpObjectName ?? ""
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             controller: frame.controller
@@ -962,7 +971,7 @@ FocusScope {
             glyphSize: (root.isLibrary ? 34 : 34) * root.unit
             snapped: false
             model: RowsModel {
-                rows: root.screenShown ? root.tool.eclipseHelp : []
+                rows: root.screenShown ? root.tool.eclipseHelp : ""
             }
             label: Component {
                 CardLine {
@@ -975,12 +984,12 @@ FocusScope {
             glyph: root.isLibrary ? libraryHelpGlyph : defaultHelpGlyph
         }
         CardLine {
-            objectName: root.view.counterObjectName ?? ""
+            objectName: root.view?.counterObjectName ?? ""
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             unit: root.unit
             boardLine: true
-            text: root.view.counter ?? ""
+            text: root.screenShown ? root.tool.eclipseCounter : ""
             size: 21
             weight: Font.Normal
             color: Kit.Tokens.muted

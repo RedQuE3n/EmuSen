@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
+import QtQml.Models
 import EmuSen.Kit as Kit
 import EmuSen.Models
 import EmuSen.App
@@ -19,7 +20,7 @@ Kit.NormalizedCanvas {
 
     readonly property real boardHeight: 1200
     readonly property real boardUnit: Kit.CanvasUnits.designHeight / canvas.boardHeight
-    readonly property var view: JSON.parse(collectionsModel.view)
+    readonly property var view: collectionsModel.meta
     readonly property real gridWidth: canvas.width - 192 * canvas.boardUnit
     readonly property real cardWidth: (canvas.gridWidth - 3 * 28 * canvas.boardUnit) / 4
     readonly property int focusedRow: Math.floor(collectionsModel.focused / 4)
@@ -164,38 +165,44 @@ Kit.NormalizedCanvas {
                 focus: !collectionsModel.dialogOpen && !collectionsModel.typingOpen
                 Keys.onPressed: (event) => event.accepted = collectionsModel.handleKey(event.key)
 
-                Flickable {
+                EclipseListModel {
+                    id: cardsModel
+                    rows: collectionsModel.cardsJson
+                }
+
+                GridView {
                     id: scroller
+                    objectName: "collectionsGrid"
                     x: 68 * canvas.boardUnit
                     y: 162 * canvas.boardUnit
                     width: canvas.gridWidth + 56 * canvas.boardUnit
                     height: canvas.height - 252 * canvas.boardUnit
                     leftMargin: 28 * canvas.boardUnit
-                    rightMargin: 28 * canvas.boardUnit
+                    rightMargin: -4 * canvas.boardUnit
                     topMargin: 28 * canvas.boardUnit
                     bottomMargin: 28 * canvas.boardUnit
-                    contentWidth: canvas.gridWidth
-                    contentHeight: gridLayout.height
-                    contentY: Math.max(0, canvas.focusedRow >= 2 ? (canvas.focusedRow - 1) * 438 * canvas.boardUnit : 0)
+                    cellWidth: canvas.cardWidth + 28 * canvas.boardUnit
+                    cellHeight: 438 * canvas.boardUnit
+                    reuseItems: true
+                    interactive: false
                     clip: true
+                    model: cardsModel
+                    contentY: (canvas.focusedRow >= 2 ? (canvas.focusedRow - 1) * 438 * canvas.boardUnit : 0) - 28 * canvas.boardUnit
 
-                    Grid {
-                        id: gridLayout
-                        objectName: "collectionsGrid"
-                        columns: 4
-                        columnSpacing: 28 * canvas.boardUnit
-                        rowSpacing: 28 * canvas.boardUnit
+                    delegate: DelegateChooser {
+                        role: "kind"
 
-                        Repeater {
-                            model: canvas.view.cards ?? []
-                            Item {
+                        DelegateChoice {
+                            roleValue: 0
+                            delegate: Item {
                                 id: card
                                 required property int index
-                                required property var modelData
+                                required property var model
+                                readonly property var itemData: card.model.item
                                 readonly property bool focusedCard: !collectionsModel.dialogOpen && !collectionsModel.typingOpen && collectionsModel.focused === card.index
-                                readonly property var covers: card.modelData.covers ?? []
+                                readonly property var covers: card.itemData.covers
 
-                                objectName: card.modelData.objectName ?? ""
+                                objectName: card.itemData.objectName ?? ""
                                 width: canvas.cardWidth
                                 height: 410 * canvas.boardUnit
 
@@ -236,9 +243,9 @@ Kit.NormalizedCanvas {
                                         radius: 14
                                         unit: canvas.boardUnit
                                         pixelScale: canvas.unit
-                                        cover: card.covers[2]?.cover ?? ""
+                                        cover: card.covers && card.covers.length > 2 ? (card.covers[2].cover ?? "") : ""
                                         slot: 2
-                                        swatch: card.covers[2]
+                                        swatch: card.covers && card.covers.length > 2 ? card.covers[2] : null
                                     }
 
                                     EclipseArtPlate {
@@ -253,9 +260,9 @@ Kit.NormalizedCanvas {
                                         shadowBlur: 20
                                         shadowOffsetY: 8
                                         shadowColor: ThemeInk.shadowMid
-                                        cover: card.covers[1]?.cover ?? ""
+                                        cover: card.covers && card.covers.length > 1 ? (card.covers[1].cover ?? "") : ""
                                         slot: 1
-                                        swatch: card.covers[1]
+                                        swatch: card.covers && card.covers.length > 1 ? card.covers[1] : null
                                     }
 
                                     EclipseArtPlate {
@@ -269,9 +276,9 @@ Kit.NormalizedCanvas {
                                         shadowBlur: 26
                                         shadowOffsetY: 10
                                         shadowColor: ThemeInk.shadowStrong
-                                        cover: card.covers[0]?.cover ?? ""
+                                        cover: card.covers && card.covers.length > 0 ? (card.covers[0].cover ?? "") : ""
                                         slot: 0
-                                        swatch: card.covers[0]
+                                        swatch: card.covers && card.covers.length > 0 ? card.covers[0] : null
                                     }
                                 }
 
@@ -287,7 +294,7 @@ Kit.NormalizedCanvas {
                                         width: parent.width
                                         unit: canvas.boardUnit
                                         boardLine: true
-                                        text: card.modelData.name ?? ""
+                                        text: card.itemData.name ?? ""
                                         size: 30
                                         weight: Font.DemiBold
                                         color: Kit.Tokens.text
@@ -299,7 +306,7 @@ Kit.NormalizedCanvas {
                                         width: parent.width
                                         unit: canvas.boardUnit
                                         boardLine: true
-                                        text: card.modelData.meta ?? ""
+                                        text: card.itemData.meta ?? ""
                                         size: 19
                                         weight: Font.Normal
                                         color: Kit.Tokens.muted
@@ -313,88 +320,94 @@ Kit.NormalizedCanvas {
                             }
                         }
 
-                        Item {
-                            id: newCard
-                            objectName: "newCollectionCard"
-                            readonly property int slotIndex: canvas.view.totalCount ?? 0
-                            readonly property bool focusedCard: !collectionsModel.dialogOpen && !collectionsModel.typingOpen && collectionsModel.focused === newCard.slotIndex
-                            readonly property real cr: 26 * canvas.boardUnit
+                        DelegateChoice {
+                            roleValue: 1
+                            delegate: Item {
+                                id: newCard
+                                required property int index
+                                required property var model
+                                readonly property var itemData: newCard.model.item
+                                readonly property int slotIndex: collectionsModel.totalCount
+                                readonly property bool focusedCard: !collectionsModel.dialogOpen && !collectionsModel.typingOpen && collectionsModel.focused === newCard.slotIndex
+                                readonly property real cr: 26 * canvas.boardUnit
 
-                            width: canvas.cardWidth
-                            height: 410 * canvas.boardUnit
+                                objectName: newCard.itemData.objectName ?? ""
+                                width: canvas.cardWidth
+                                height: 410 * canvas.boardUnit
 
-                            Kit.FocusRing {
-                                anchors.fill: parent
-                                visible: newCard.focusedCard
-                                radius: 26 * canvas.boardUnit
-                                gap: 4 * canvas.boardUnit
-                                thickness: 3 * canvas.boardUnit
-                                glowColor: ThemeInk.glowMid
-                                glowBlur: 46 * canvas.boardUnit
-                                glowSpread: 10 * canvas.boardUnit
-                                pixelScale: canvas.unit
-                            }
-
-                            Shape {
-                                anchors.fill: parent
-                                preferredRendererType: Shape.CurveRenderer
-                                ShapePath {
-                                    fillColor: "transparent"
-                                    strokeColor: ThemeInk.pillBorder
-                                    strokeWidth: 2 * canvas.boardUnit
-                                    strokeStyle: ShapePath.DashLine
-                                    dashPattern: Kit.Tokens.dashPattern
-                                    startX: newCard.cr
-                                    startY: 0
-                                    PathLine { x: newCard.width - newCard.cr; y: 0 }
-                                    PathArc { x: newCard.width; y: newCard.cr; radiusX: newCard.cr; radiusY: newCard.cr }
-                                    PathLine { x: newCard.width; y: newCard.height - newCard.cr }
-                                    PathArc { x: newCard.width - newCard.cr; y: newCard.height; radiusX: newCard.cr; radiusY: newCard.cr }
-                                    PathLine { x: newCard.cr; y: newCard.height }
-                                    PathArc { x: 0; y: newCard.height - newCard.cr; radiusX: newCard.cr; radiusY: newCard.cr }
-                                    PathLine { x: 0; y: newCard.cr }
-                                    PathArc { x: newCard.cr; y: 0; radiusX: newCard.cr; radiusY: newCard.cr }
+                                Kit.FocusRing {
+                                    anchors.fill: parent
+                                    visible: newCard.focusedCard
+                                    radius: 26 * canvas.boardUnit
+                                    gap: 4 * canvas.boardUnit
+                                    thickness: 3 * canvas.boardUnit
+                                    glowColor: ThemeInk.glowMid
+                                    glowBlur: 46 * canvas.boardUnit
+                                    glowSpread: 10 * canvas.boardUnit
+                                    pixelScale: canvas.unit
                                 }
-                            }
 
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 18 * canvas.boardUnit
-
-                                Item {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    width: 56 * canvas.boardUnit
-                                    height: 56 * canvas.boardUnit
-                                    Shape {
-                                        width: 24
-                                        height: 24
-                                        scale: 56 * canvas.boardUnit / 24
-                                        transformOrigin: Item.TopLeft
-                                        preferredRendererType: Shape.CurveRenderer
-                                        ShapePath {
-                                            fillColor: "transparent"
-                                            strokeColor: ThemeInk.body
-                                            strokeWidth: 1.6
-                                            capStyle: ShapePath.RoundCap
-                                            PathSvg { path: canvas.view.plusIcon ?? "" }
-                                        }
+                                Shape {
+                                    anchors.fill: parent
+                                    preferredRendererType: Shape.CurveRenderer
+                                    ShapePath {
+                                        fillColor: "transparent"
+                                        strokeColor: ThemeInk.pillBorder
+                                        strokeWidth: 2 * canvas.boardUnit
+                                        strokeStyle: ShapePath.DashLine
+                                        dashPattern: Kit.Tokens.dashPattern
+                                        startX: newCard.cr
+                                        startY: 0
+                                        PathLine { x: newCard.width - newCard.cr; y: 0 }
+                                        PathArc { x: newCard.width; y: newCard.cr; radiusX: newCard.cr; radiusY: newCard.cr }
+                                        PathLine { x: newCard.width; y: newCard.height - newCard.cr }
+                                        PathArc { x: newCard.width - newCard.cr; y: newCard.height; radiusX: newCard.cr; radiusY: newCard.cr }
+                                        PathLine { x: newCard.cr; y: newCard.height }
+                                        PathArc { x: 0; y: newCard.height - newCard.cr; radiusX: newCard.cr; radiusY: newCard.cr }
+                                        PathLine { x: 0; y: newCard.cr }
+                                        PathArc { x: newCard.cr; y: 0; radiusX: newCard.cr; radiusY: newCard.cr }
                                     }
                                 }
 
-                                CardLine {
-                                    objectName: "newCollectionLabel"
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    unit: canvas.boardUnit
-                                    boardLine: true
-                                    text: canvas.view.newCardLabel ?? ""
-                                    size: 26
-                                    weight: Font.Normal
-                                    color: ThemeInk.body
-                                }
-                            }
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 18 * canvas.boardUnit
 
-                            TapHandler {
-                                onTapped: collectionsModel.openSlot(newCard.slotIndex)
+                                    Item {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: 56 * canvas.boardUnit
+                                        height: 56 * canvas.boardUnit
+                                        Shape {
+                                            width: 24
+                                            height: 24
+                                            scale: 56 * canvas.boardUnit / 24
+                                            transformOrigin: Item.TopLeft
+                                            preferredRendererType: Shape.CurveRenderer
+                                            ShapePath {
+                                                fillColor: "transparent"
+                                                strokeColor: ThemeInk.body
+                                                strokeWidth: 1.6
+                                                capStyle: ShapePath.RoundCap
+                                                PathSvg { path: newCard.itemData.plusIcon ?? "" }
+                                            }
+                                        }
+                                    }
+
+                                    CardLine {
+                                        objectName: "newCollectionLabel"
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        unit: canvas.boardUnit
+                                        boardLine: true
+                                        text: newCard.itemData.name ?? ""
+                                        size: 26
+                                        weight: Font.Normal
+                                        color: ThemeInk.body
+                                    }
+                                }
+
+                                TapHandler {
+                                    onTapped: collectionsModel.openSlot(newCard.slotIndex)
+                                }
                             }
                         }
                     }
@@ -425,7 +438,7 @@ Kit.NormalizedCanvas {
                     anchors.verticalCenter: parent.verticalCenter
                     unit: canvas.boardUnit
                     boardLine: true
-                    text: canvas.view.footerRight ?? ""
+                    text: collectionsModel.footerRight
                     size: 21
                     weight: Font.Normal
                     color: ThemeInk.body

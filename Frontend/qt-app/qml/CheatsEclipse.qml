@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
+import QtQml.Models
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
@@ -16,26 +17,50 @@ FocusScope {
 
     readonly property real boardHeight: 1200
     readonly property real unit: Kit.CanvasUnits.designHeight / root.boardHeight
-    readonly property var view: JSON.parse(root.tool.eclipseCores)
-    readonly property var dbCard: root.view.dbCard ?? ({})
-    readonly property var inspector: root.view.inspector ?? ({})
-    readonly property var addCard: root.view.addCard ?? ({})
-    readonly property bool overlayOpen: root.view.overlayOpen === true
-    readonly property bool browseOpen: root.view.browseOpen === true
-    readonly property bool editorOpen: root.view.editorOpen === true
-    readonly property bool editorTyping: root.view.editorTyping === true
-    readonly property int editorField: root.view.editorField ?? 0
-    readonly property string activeFieldText: root.editorField === 1 ? (root.view.editorCode ?? "") : (root.view.editorDesc ?? "")
-    readonly property int focusedRowY: root.view.focusedRowY ?? 0
+    readonly property bool isCheats: root.tool.eclipseScreen === 8
+    readonly property var view: root.isCheats ? root.tool.eclipseState : null
+    readonly property var dbCard: root.view?.dbCard ?? null
+    readonly property var inspector: root.view?.inspector ?? null
+    readonly property var addCard: root.view?.addCard ?? null
+    readonly property bool overlayOpen: root.view?.overlayOpen === true
+    readonly property bool browseOpen: root.view?.browseOpen === true
+    readonly property bool editorOpen: root.view?.editorOpen === true
+    readonly property bool editorTyping: root.view?.editorTyping === true
+    onEditorOpenChanged: {
+        if (root.editorOpen && root.editorTyping) cheatKeyboard.forceActiveFocus()
+        else if (!root.editorOpen && !root.editorTyping && root.visible && !root.sheetOpen && !root.tool.cardOpen && !root.tool.asking) cheatsNavScope.forceActiveFocus()
+    }
+    onEditorTypingChanged: {
+        cheatTypist.setText(root.activeFieldText, root.activeFieldText.length)
+        if (root.editorOpen && root.editorTyping) cheatKeyboard.forceActiveFocus()
+        else if (!root.editorTyping && root.visible && !root.sheetOpen && !root.tool.cardOpen && !root.tool.asking) cheatsNavScope.forceActiveFocus()
+    }
+    readonly property int editorField: root.view?.editorField ?? 0
+    readonly property string activeFieldText: root.editorField === 1 ? (root.view?.editorCode ?? "") : (root.view?.editorDesc ?? "")
+    readonly property int zoneCode: root.isCheats ? root.tool.eclipseFocusedZone : 2
+    readonly property int focusedFlatIndex: root.isCheats ? root.tool.eclipseFocusedIndex : -1
+    readonly property string focusedOrigKey: root.isCheats ? root.tool.eclipseFocusedKey : ""
+    readonly property int browseCursor: root.isCheats ? root.tool.eclipseAuxIndex : 0
     readonly property alias controller: frame.controller
     readonly property bool sheetOpen: frame.controller.sheetOpen
-    onSheetOpenChanged: if (!root.sheetOpen && !root.tool.cardOpen && !root.tool.asking && root.visible) frame.forceActiveFocus()
+    onSheetOpenChanged: if (!root.sheetOpen && !root.editorTyping && !root.tool.cardOpen && !root.tool.asking && root.visible) cheatsNavScope.forceActiveFocus()
 
-    onFocusedRowYChanged: {
-        const top = root.focusedRowY * root.unit
-        const bottom = top + 70 * root.unit
-        if (top < cheatsFlick.contentY) cheatsFlick.contentY = Math.max(0, top - 8 * root.unit)
-        else if (bottom > cheatsFlick.contentY + cheatsFlick.height) cheatsFlick.contentY = Math.max(0, bottom - cheatsFlick.height + 8 * root.unit)
+    EclipseListModel {
+        id: rowsModel
+        rows: root.isCheats ? root.tool.eclipseRowsJson : ""
+    }
+    EclipseListModel {
+        id: browseModel
+        rows: root.isCheats ? root.tool.eclipseAuxRowsJson : ""
+    }
+
+    onFocusedFlatIndexChanged: {
+        if (root.focusedFlatIndex >= 0 && root.focusedFlatIndex < rowsModel.count)
+            cheatsFlick.positionViewAtIndex(root.focusedFlatIndex, ListView.Contain)
+    }
+    onBrowseCursorChanged: {
+        if (root.browseCursor >= 0 && root.browseCursor < browseModel.count)
+            browseListView.positionViewAtIndex(root.browseCursor, ListView.Contain)
     }
 
     readonly property color groundColor: Kit.Tokens.surface
@@ -72,7 +97,7 @@ FocusScope {
         helpShown: false
         padFamily: root.padFamily
         controller.navigationShown: false
-        controller.actionLines: root.view.actionLines ?? ""
+        controller.actionLines: root.view?.actionLines ?? ""
         Connections {
             target: frame.controller
             function onBackDeclined() { root.backed() }
@@ -135,7 +160,7 @@ FocusScope {
                 height: topTrailRow.height
                 spacing: 12 * root.unit
                 Repeater {
-                    model: root.view.trail ?? []
+                    model: root.view?.trail ?? null
                     Row {
                         id: crumb
                         required property var modelData
@@ -191,7 +216,7 @@ FocusScope {
                     y: (statusPillRow.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.battery + (root.view.percentSuffix ?? "")
+                    text: root.battery + (root.view?.percentSuffix ?? "")
                     size: 19
                     weight: Font.Medium
                     color: root.inkColor
@@ -254,19 +279,19 @@ FocusScope {
                 border.color: root.hairlineColor
 
                 CardPlanet {
-                    visible: (root.view.cover ?? "").length === 0
+                    visible: (root.view?.cover ?? "").length === 0
                     anchors.centerIn: parent
                     unit: root.unit
-                    planet: root.view.planet ?? 0
+                    planet: root.view?.planet ?? 0
                     side: 36
                     pixelScale: root.pixelScale
                 }
 
                 Image {
-                    visible: (root.view.cover ?? "").length > 0
+                    visible: (root.view?.cover ?? "").length > 0
                     anchors.fill: parent
                     anchors.margins: 1
-                    source: root.view.cover ?? ""
+                    source: root.view?.cover ?? ""
                     fillMode: Image.PreserveAspectCrop
                     clip: true
                 }
@@ -286,7 +311,7 @@ FocusScope {
                     y: (parent.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.view.gameTitle ?? ""
+                    text: root.view?.gameTitle ?? ""
                     size: 34
                     weight: Font.DemiBold
                     spacing: -0.51
@@ -295,7 +320,7 @@ FocusScope {
                 }
                 Rectangle {
                     objectName: "systemTag"
-                    visible: (root.view.systemBadge ?? "").length > 0
+                    visible: (root.view?.systemBadge ?? "").length > 0
                     y: (parent.height - height) / 2
                     width: sysTagLine.implicitWidth + 20 * root.unit
                     height: 24 * root.unit
@@ -308,7 +333,7 @@ FocusScope {
                         anchors.centerIn: parent
                         unit: root.unit
                         boardLine: true
-                        text: root.view.systemBadge ?? ""
+                        text: root.view?.systemBadge ?? ""
                         size: 12
                         weight: Font.DemiBold
                         spacing: 1.68
@@ -321,10 +346,10 @@ FocusScope {
                 objectName: "gameFacts"
                 spacing: 14 * root.unit
                 CardPlanet {
-                    visible: (root.view.planet ?? -3) > -3
+                    visible: (root.view?.planet ?? -3) > -3
                     y: (parent.height - height) / 2
                     unit: root.unit
-                    planet: root.view.planet ?? 0
+                    planet: root.view?.planet ?? 0
                     side: 16
                     pixelScale: root.pixelScale
                 }
@@ -332,44 +357,44 @@ FocusScope {
                     y: (parent.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.view.coreText ?? ""
+                    text: root.view?.coreText ?? ""
                     size: 16
                     color: root.mutedColor
                 }
                 CardLine {
-                    visible: (root.view.listPathText ?? "").length > 0
+                    visible: (root.view?.listPathText ?? "").length > 0
                     y: (parent.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.view.dotSep ?? ""
+                    text: root.view?.dotSep ?? ""
                     size: 16
                     color: root.mutedColor
                 }
                 CardLine {
-                    visible: (root.view.listPathText ?? "").length > 0
+                    visible: (root.view?.listPathText ?? "").length > 0
                     y: (parent.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.view.listPathText ?? ""
+                    text: root.view?.listPathText ?? ""
                     family: Kit.Tokens.faceCode
                     size: 14.5
                     color: root.mutedColor
                 }
                 CardLine {
-                    visible: (root.view.dbMatchText ?? "").length > 0
+                    visible: (root.view?.dbMatchText ?? "").length > 0
                     y: (parent.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.view.dotSep ?? ""
+                    text: root.view?.dotSep ?? ""
                     size: 16
                     color: root.mutedColor
                 }
                 CardLine {
-                    visible: (root.view.dbMatchText ?? "").length > 0
+                    visible: (root.view?.dbMatchText ?? "").length > 0
                     y: (parent.height - height) / 2
                     unit: root.unit
                     boardLine: true
-                    text: root.view.dbMatchText ?? ""
+                    text: root.view?.dbMatchText ?? ""
                     family: Kit.Tokens.faceCode
                     size: 14.5
                     color: root.mutedColor
@@ -392,7 +417,7 @@ FocusScope {
                     anchors.right: parent.right
                     unit: root.unit
                     boardLine: true
-                    text: root.view.activeSummary ?? ""
+                    text: root.view?.activeSummary ?? ""
                     size: 17
                     weight: Font.DemiBold
                     color: root.coronaColor
@@ -402,7 +427,7 @@ FocusScope {
                     anchors.right: parent.right
                     unit: root.unit
                     boardLine: true
-                    text: root.view.appliedSub ?? ""
+                    text: root.view?.appliedSub ?? ""
                     size: 14
                     color: root.dimColor
                 }
@@ -417,7 +442,7 @@ FocusScope {
 
                 Kit.FocusRing {
                     anchors.fill: parent
-                    visible: root.view.masterFocused === true
+                    visible: root.zoneCode === 0
                     radius: 29 * root.unit
                     gap: 3 * root.unit
                     thickness: 2.5 * root.unit
@@ -432,7 +457,7 @@ FocusScope {
                     radius: 29 * root.unit
                     color: root.raisedColor
                     border.width: 1 * root.unit
-                    border.color: root.view.masterFocused === true ? root.coronaColor : root.outlineColor
+                    border.color: root.zoneCode === 0 ? root.coronaColor : root.outlineColor
                 }
 
                 Row {
@@ -454,7 +479,7 @@ FocusScope {
                             anchors.centerIn: parent
                             unit: root.unit
                             boardLine: true
-                            text: root.view.masterHint ?? ""
+                            text: root.view?.masterHint ?? ""
                             family: Kit.Tokens.faceCode
                             size: 12
                             weight: Font.Bold
@@ -468,7 +493,7 @@ FocusScope {
                         y: (parent.height - height) / 2
                         unit: root.unit
                         boardLine: true
-                        text: root.view.masterLabel ?? ""
+                        text: root.view?.masterLabel ?? ""
                         size: 18
                         weight: Font.DemiBold
                         color: root.inkColor
@@ -480,17 +505,17 @@ FocusScope {
                         width: 62 * root.unit
                         height: 34 * root.unit
                         radius: 17 * root.unit
-                        color: root.view.masterOn === true ? root.coronaColor : root.hairlineColor
-                        border.width: root.view.masterOn === true ? 0 : 1 * root.unit
+                        color: root.view?.masterOn === true ? root.coronaColor : root.hairlineColor
+                        border.width: root.view?.masterOn === true ? 0 : 1 * root.unit
                         border.color: root.outlineColor
 
                         Rectangle {
-                            x: root.view.masterOn === true ? 32 * root.unit : 3 * root.unit
+                            x: root.view?.masterOn === true ? 32 * root.unit : 3 * root.unit
                             y: (parent.height - height) / 2
                             width: 26 * root.unit
                             height: 26 * root.unit
                             radius: 13 * root.unit
-                            color: root.view.masterOn === true ? root.overAccentColor : root.dimColor
+                            color: root.view?.masterOn === true ? root.overAccentColor : root.dimColor
                         }
                     }
                 }
@@ -525,7 +550,7 @@ FocusScope {
                 spacing: 10 * root.unit
 
                 Repeater {
-                    model: root.view.filters ?? []
+                    model: root.view?.filters ?? null
                     Item {
                         id: pillItem
                         required property var modelData
@@ -595,219 +620,232 @@ FocusScope {
                 y: (parent.height - height) / 2
                 unit: root.unit
                 boardLine: true
-                text: root.view.sortCaption ?? ""
+                text: root.view?.sortCaption ?? ""
                 size: 16
                 color: root.dimColor
             }
         }
 
-        Flickable {
+        ListView {
             id: cheatsFlick
             objectName: "cheatsFlick"
             x: -8 * root.unit
             y: 64 * root.unit
             width: parent.width + 16 * root.unit
             height: parent.height - 64 * root.unit
-            contentWidth: width
-            contentHeight: groupsCol.height + 16 * root.unit
+            topMargin: 8 * root.unit
+            bottomMargin: 8 * root.unit
+            leftMargin: 8 * root.unit
+            rightMargin: 8 * root.unit
+            spacing: 9 * root.unit
+            reuseItems: true
             clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            readonly property int targetFocusIndex: root.focusedFlatIndex >= 0 && root.focusedFlatIndex < rowsModel.count ? root.focusedFlatIndex : -1
+            model: rowsModel
+            Binding {
+                target: cheatsFlick
+                property: "currentIndex"
+                value: cheatsFlick.targetFocusIndex
+            }
+            onCountChanged: {
+                if (cheatsFlick.currentIndex !== cheatsFlick.targetFocusIndex) cheatsFlick.currentIndex = cheatsFlick.targetFocusIndex
+                if (cheatsFlick.targetFocusIndex >= 0) cheatsFlick.positionViewAtIndex(cheatsFlick.targetFocusIndex, ListView.Contain)
+            }
+            onCurrentIndexChanged: {
+                if (cheatsFlick.currentIndex !== cheatsFlick.targetFocusIndex) cheatsFlick.currentIndex = cheatsFlick.targetFocusIndex
+                if (cheatsFlick.currentIndex >= 0) cheatsFlick.positionViewAtIndex(cheatsFlick.currentIndex, ListView.Contain)
+            }
 
-            Column {
-                id: groupsCol
+            Rectangle {
+                visible: rowsModel.count === 0
                 x: 8 * root.unit
                 y: 8 * root.unit
                 width: cheatsFlick.width - 16 * root.unit
-                spacing: 18 * root.unit
+                height: 112 * root.unit
+                radius: 16 * root.unit
+                color: root.cardColor
+                border.width: 1 * root.unit
+                border.color: root.hairlineColor
 
-                Rectangle {
-                    visible: (root.view.groups ?? []).length === 0
-                    width: parent.width
-                    height: 112 * root.unit
-                    radius: 16 * root.unit
-                    color: root.cardColor
-                    border.width: 1 * root.unit
-                    border.color: root.hairlineColor
+                CardLine {
+                    anchors.centerIn: parent
+                    unit: root.unit
+                    boardLine: true
+                    text: root.view?.emptyStateWords ?? ""
+                    size: 18
+                    color: root.mutedColor
+                }
+            }
 
-                    CardLine {
-                        anchors.centerIn: parent
-                        unit: root.unit
-                        boardLine: true
-                        text: root.view.emptyStateWords ?? ""
-                        size: 18
-                        color: root.mutedColor
+            delegate: DelegateChooser {
+                role: "kind"
+
+                DelegateChoice {
+                    roleValue: 0
+                    delegate: Item {
+                        id: groupHeadItem
+                        required property var model
+                        readonly property var itemData: groupHeadItem.model.item
+                        readonly property bool isFirst: groupHeadItem.itemData.first === true
+                        width: cheatsFlick.width - 16 * root.unit
+                        height: (groupHeadItem.isFirst ? 19 : 28) * root.unit
+                        CardLine {
+                            objectName: groupHeadItem.itemData.objectName ?? ""
+                            x: 6 * root.unit
+                            y: groupHeadItem.isFirst ? 0 : 9 * root.unit
+                            unit: root.unit
+                            boardLine: true
+                            text: groupHeadItem.itemData.title ?? ""
+                            size: 13
+                            weight: Font.DemiBold
+                            spacing: 2.08
+                            capitalization: Font.AllUppercase
+                            color: root.roseColor
+                        }
                     }
                 }
 
-                Repeater {
-                    model: root.view.groups ?? []
-                    Column {
-                        id: groupBlock
-                        required property var modelData
-                        width: groupsCol.width
-                        spacing: 8 * root.unit
+                DelegateChoice {
+                    roleValue: 1
+                    delegate: Item {
+                        id: cheatRowItem
+                        required property int index
+                        required property var model
+                        readonly property var modelData: cheatRowItem.model.item
+                        readonly property bool rowFocused: root.zoneCode === 2 && (cheatRowItem.modelData.key ?? "") === root.focusedOrigKey
+                        objectName: cheatRowItem.modelData.objectName ?? ""
+                        width: cheatsFlick.width - 16 * root.unit
+                        height: 70 * root.unit
 
-                        Item {
-                            width: parent.width
-                            height: 20 * root.unit
-                            CardLine {
-                                objectName: groupBlock.modelData.objectName ?? ""
-                                x: 6 * root.unit
-                                y: 0
-                                unit: root.unit
-                                boardLine: true
-                                text: groupBlock.modelData.title ?? ""
-                                size: 13
-                                weight: Font.DemiBold
-                                spacing: 2.08
-                                capitalization: Font.AllUppercase
-                                color: root.roseColor
-                            }
+                        Kit.FocusRing {
+                            objectName: cheatRowItem.modelData.ringObjectName ?? ""
+                            anchors.fill: parent
+                            visible: cheatRowItem.rowFocused
+                            radius: 16 * root.unit
+                            gap: 3 * root.unit
+                            thickness: 2.5 * root.unit
+                            glowColor: Kit.Tokens.glowColor
+                            glowBlur: 38 * root.unit
+                            glowSpread: 7 * root.unit
+                            pixelScale: root.pixelScale
                         }
 
-                        Column {
-                            width: parent.width
-                            spacing: 9 * root.unit
+                        Rectangle {
+                            objectName: cheatRowItem.modelData.bgObjectName ?? ""
+                            anchors.fill: parent
+                            radius: 16 * root.unit
+                            color: cheatRowItem.rowFocused ? root.raisedColor : root.cardColor
+                            border.width: cheatRowItem.rowFocused ? 0 : 1 * root.unit
+                            border.color: root.hairlineColor
+                        }
 
-                            Repeater {
-                                model: groupBlock.modelData.rows ?? []
-                                Item {
-                                    id: cheatRowItem
-                                    required property var modelData
-                                    objectName: cheatRowItem.modelData.objectName ?? ""
-                                    width: groupsCol.width
-                                    height: 70 * root.unit
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: root.tool.eclipseFocusCore(cheatRowItem.modelData.key ?? "")
+                        }
 
-                                    Kit.FocusRing {
-                                        objectName: cheatRowItem.modelData.ringObjectName ?? ""
-                                        anchors.fill: parent
-                                        visible: cheatRowItem.modelData.focused === true
-                                        radius: 16 * root.unit
-                                        gap: 3 * root.unit
-                                        thickness: 2.5 * root.unit
-                                        glowColor: Kit.Tokens.glowColor
-                                        glowBlur: 38 * root.unit
-                                        glowSpread: 7 * root.unit
-                                        pixelScale: root.pixelScale
-                                    }
+                        Item {
+                            x: 22 * root.unit
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: parent.width - 44 * root.unit
+
+                            Item {
+                                id: rowSwitchBox
+                                x: 0
+                                y: (parent.height - height) / 2
+                                width: 62 * root.unit
+                                height: 34 * root.unit
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 17 * root.unit
+                                    color: cheatRowItem.modelData.on === true ? root.coronaColor : root.hairlineColor
+                                    border.width: cheatRowItem.modelData.on === true ? 0 : 1 * root.unit
+                                    border.color: root.outlineColor
 
                                     Rectangle {
-                                        objectName: cheatRowItem.modelData.bgObjectName ?? ""
-                                        anchors.fill: parent
-                                        radius: 16 * root.unit
-                                        color: cheatRowItem.modelData.focused === true ? root.raisedColor : root.cardColor
-                                        border.width: cheatRowItem.modelData.focused === true ? 0 : 1 * root.unit
-                                        border.color: root.hairlineColor
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: root.tool.eclipseFocusCore(cheatRowItem.modelData.key ?? "")
-                                    }
-
-                                    Item {
-                                        x: 22 * root.unit
-                                        anchors.top: parent.top
-                                        anchors.bottom: parent.bottom
-                                        width: parent.width - 44 * root.unit
-
-                                        Item {
-                                            id: rowSwitchBox
-                                            x: 0
-                                            y: (parent.height - height) / 2
-                                            width: 62 * root.unit
-                                            height: 34 * root.unit
-
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                radius: 17 * root.unit
-                                                color: cheatRowItem.modelData.on === true ? root.coronaColor : root.hairlineColor
-                                                border.width: cheatRowItem.modelData.on === true ? 0 : 1 * root.unit
-                                                border.color: root.outlineColor
-
-                                                Rectangle {
-                                                    x: cheatRowItem.modelData.on === true ? 32 * root.unit : 3 * root.unit
-                                                    y: (parent.height - height) / 2
-                                                    width: 26 * root.unit
-                                                    height: 26 * root.unit
-                                                    radius: 13 * root.unit
-                                                    color: cheatRowItem.modelData.on === true ? root.overAccentColor : root.dimColor
-                                                }
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                onClicked: root.tool.eclipseActCode(0, cheatRowItem.modelData.key ?? "")
-                                            }
-                                        }
-
-                                        CardLine {
-                                            x: rowSwitchBox.width + 18 * root.unit
-                                            y: (parent.height - height) / 2
-                                            width: 270 * root.unit
-                                            unit: root.unit
-                                            boardLine: true
-                                            text: cheatRowItem.modelData.name ?? ""
-                                            size: 20
-                                            weight: Font.DemiBold
-                                            color: root.inkColor
-                                            elide: Text.ElideRight
-                                        }
-
-                                        CardLine {
-                                            id: rowDesc
-                                            x: rowSwitchBox.width + 18 * root.unit + 270 * root.unit + 18 * root.unit
-                                            y: (parent.height - height) / 2
-                                            width: Math.max(0, rowBadgeBox.x - x - 18 * root.unit)
-                                            unit: root.unit
-                                            boardLine: true
-                                            text: cheatRowItem.modelData.desc ?? ""
-                                            size: 15.5
-                                            color: root.mutedColor
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Rectangle {
-                                            id: rowBadgeBox
-                                            x: rowCodeLine.x - width - 18 * root.unit
-                                            y: (parent.height - height) / 2
-                                            width: rowBadgeText.implicitWidth + 22 * root.unit
-                                            height: 28 * root.unit
-                                            radius: 14 * root.unit
-                                            color: cheatRowItem.modelData.isLiveRam === true ? Qt.alpha(root.coronaColor, 0.12) : Qt.alpha(root.roseColor, 0.10)
-                                            border.width: 1 * root.unit
-                                            border.color: cheatRowItem.modelData.isLiveRam === true ? Qt.alpha(root.coronaColor, 0.36) : Qt.alpha(root.roseColor, 0.28)
-
-                                            CardLine {
-                                                id: rowBadgeText
-                                                anchors.centerIn: parent
-                                                unit: root.unit
-                                                boardLine: true
-                                                text: cheatRowItem.modelData.badge ?? ""
-                                                size: 13
-                                                weight: Font.DemiBold
-                                                spacing: 0.26
-                                                color: cheatRowItem.modelData.isLiveRam === true ? root.coronaColor : root.roseColor
-                                            }
-                                        }
-
-                                        CardLine {
-                                            id: rowCodeLine
-                                            anchors.right: parent.right
-                                            y: (parent.height - height) / 2
-                                            width: 148 * root.unit
-                                            unit: root.unit
-                                            boardLine: true
-                                            text: cheatRowItem.modelData.code ?? ""
-                                            family: Kit.Tokens.faceCode
-                                            size: 17
-                                            weight: Font.Bold
-                                            spacing: 0.68
-                                            horizontalAlignment: Text.AlignRight
-                                            elide: Text.ElideRight
-                                            color: root.coronaColor
-                                        }
+                                        x: cheatRowItem.modelData.on === true ? 32 * root.unit : 3 * root.unit
+                                        y: (parent.height - height) / 2
+                                        width: 26 * root.unit
+                                        height: 26 * root.unit
+                                        radius: 13 * root.unit
+                                        color: cheatRowItem.modelData.on === true ? root.overAccentColor : root.dimColor
                                     }
                                 }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.tool.eclipseActCode(0, cheatRowItem.modelData.key ?? "")
+                                }
+                            }
+
+                            CardLine {
+                                x: rowSwitchBox.width + 18 * root.unit
+                                y: (parent.height - height) / 2
+                                width: 270 * root.unit
+                                unit: root.unit
+                                boardLine: true
+                                text: cheatRowItem.modelData.name ?? ""
+                                size: 20
+                                weight: Font.DemiBold
+                                color: root.inkColor
+                                elide: Text.ElideRight
+                            }
+
+                            CardLine {
+                                id: rowDesc
+                                x: rowSwitchBox.width + 18 * root.unit + 270 * root.unit + 18 * root.unit
+                                y: (parent.height - height) / 2
+                                width: Math.max(0, rowBadgeBox.x - x - 18 * root.unit)
+                                unit: root.unit
+                                boardLine: true
+                                text: cheatRowItem.modelData.desc ?? ""
+                                size: 15.5
+                                color: root.mutedColor
+                                elide: Text.ElideRight
+                            }
+
+                            Rectangle {
+                                id: rowBadgeBox
+                                x: rowCodeLine.x - width - 18 * root.unit
+                                y: (parent.height - height) / 2
+                                width: rowBadgeText.implicitWidth + 22 * root.unit
+                                height: 28 * root.unit
+                                radius: 14 * root.unit
+                                color: cheatRowItem.modelData.isLiveRam === true ? Qt.alpha(root.coronaColor, 0.12) : Qt.alpha(root.roseColor, 0.10)
+                                border.width: 1 * root.unit
+                                border.color: cheatRowItem.modelData.isLiveRam === true ? Qt.alpha(root.coronaColor, 0.36) : Qt.alpha(root.roseColor, 0.28)
+
+                                CardLine {
+                                    id: rowBadgeText
+                                    anchors.centerIn: parent
+                                    unit: root.unit
+                                    boardLine: true
+                                    text: cheatRowItem.modelData.badge ?? ""
+                                    size: 13
+                                    weight: Font.DemiBold
+                                    spacing: 0.26
+                                    color: cheatRowItem.modelData.isLiveRam === true ? root.coronaColor : root.roseColor
+                                }
+                            }
+
+                            CardLine {
+                                id: rowCodeLine
+                                anchors.right: parent.right
+                                y: (parent.height - height) / 2
+                                width: 148 * root.unit
+                                unit: root.unit
+                                boardLine: true
+                                text: cheatRowItem.modelData.code ?? ""
+                                family: Kit.Tokens.faceCode
+                                size: 17
+                                weight: Font.Bold
+                                spacing: 0.68
+                                horizontalAlignment: Text.AlignRight
+                                elide: Text.ElideRight
+                                color: root.coronaColor
                             }
                         }
                     }
@@ -854,7 +892,7 @@ FocusScope {
                         CardLine {
                             unit: root.unit
                             boardLine: true
-                            text: root.inspector.eyebrow ?? ""
+                            text: root.inspector?.eyebrow ?? ""
                             size: 12.5
                             weight: Font.DemiBold
                             spacing: 1.875
@@ -866,7 +904,7 @@ FocusScope {
                             width: parent.width
                             unit: root.unit
                             boardLine: true
-                            text: root.inspector.name ?? ""
+                            text: root.inspector?.name ?? ""
                             size: 27
                             weight: Font.DemiBold
                             spacing: -0.27
@@ -878,26 +916,26 @@ FocusScope {
                     Rectangle {
                         id: stateTagBox
                         objectName: "inspectorStateTag"
-                        visible: (root.inspector.stateTag ?? "").length > 0
+                        visible: (root.inspector?.stateTag ?? "").length > 0
                         anchors.right: parent.right
                         y: (parent.height - height) / 2
                         width: stateTagLine.implicitWidth + 24 * root.unit
                         height: 30 * root.unit
                         radius: 15 * root.unit
-                        color: root.inspector.stateActive === true ? Qt.alpha(root.coronaColor, 0.12) : root.raisedColor
+                        color: root.inspector?.stateActive === true ? Qt.alpha(root.coronaColor, 0.12) : root.raisedColor
                         border.width: 1 * root.unit
-                        border.color: root.inspector.stateActive === true ? Qt.alpha(root.coronaColor, 0.45) : root.outlineColor
+                        border.color: root.inspector?.stateActive === true ? Qt.alpha(root.coronaColor, 0.45) : root.outlineColor
 
                         CardLine {
                             id: stateTagLine
                             anchors.centerIn: parent
                             unit: root.unit
                             boardLine: true
-                            text: root.inspector.stateTag ?? ""
+                            text: root.inspector?.stateTag ?? ""
                             size: 12.5
                             weight: Font.DemiBold
                             spacing: 1.5
-                            color: root.inspector.stateActive === true ? root.coronaColor : root.mutedColor
+                            color: root.inspector?.stateActive === true ? root.coronaColor : root.mutedColor
                         }
                     }
                 }
@@ -923,7 +961,7 @@ FocusScope {
                             width: parent.width
                             unit: root.unit
                             boardLine: true
-                            text: root.inspector.code ?? ""
+                            text: root.inspector?.code ?? ""
                             family: Kit.Tokens.faceCode
                             size: 31
                             weight: Font.Bold
@@ -934,11 +972,11 @@ FocusScope {
 
                         CardLine {
                             objectName: "inspectorDecoded"
-                            visible: (root.inspector.decoded ?? "").length > 0
+                            visible: (root.inspector?.decoded ?? "").length > 0
                             width: parent.width
                             unit: root.unit
                             boardLine: true
-                            text: root.inspector.decoded ?? ""
+                            text: root.inspector?.decoded ?? ""
                             family: Kit.Tokens.faceCode
                             size: 14
                             color: root.mutedColor
@@ -949,12 +987,12 @@ FocusScope {
 
                 CardLine {
                     objectName: "inspectorCopy"
-                    visible: (root.inspector.sentence ?? "").length > 0
+                    visible: (root.inspector?.sentence ?? "").length > 0
                     width: parent.width
                     unit: root.unit
                     boardLine: true
                     boardLineHeight: 24
-                    text: root.inspector.sentence ?? ""
+                    text: root.inspector?.sentence ?? ""
                     size: 16
                     weight: Font.Light
                     color: root.mutedColor
@@ -973,7 +1011,7 @@ FocusScope {
                     }
 
                     Repeater {
-                        model: root.inspector.facts ?? []
+                        model: root.inspector?.facts ?? null
                         Item {
                             id: factRow
                             required property var modelData
@@ -1050,7 +1088,7 @@ FocusScope {
                         y: (parent.height - height) / 2
                         unit: root.unit
                         boardLine: true
-                        text: root.dbCard.title ?? ""
+                        text: root.dbCard?.title ?? ""
                         size: 21
                         weight: Font.DemiBold
                         color: root.inkColor
@@ -1072,7 +1110,7 @@ FocusScope {
                             anchors.centerIn: parent
                             unit: root.unit
                             boardLine: true
-                            text: root.dbCard.attributionTag ?? ""
+                            text: root.dbCard?.attributionTag ?? ""
                             family: Kit.Tokens.faceCode
                             size: 12.5
                             color: root.mutedColor
@@ -1086,7 +1124,7 @@ FocusScope {
                     radius: 4 * root.unit
                     color: root.hairlineColor
                     Rectangle {
-                        width: parent.width * Math.max(0, Math.min(1, root.dbCard.meterPct ?? 0))
+                        width: parent.width * Math.max(0, Math.min(1, root.dbCard?.meterPct ?? 0))
                         height: parent.height
                         radius: 4 * root.unit
                         color: root.coronaColor
@@ -1099,7 +1137,7 @@ FocusScope {
                     unit: root.unit
                     boardLine: true
                     boardLineHeight: 22.5
-                    text: root.dbCard.copy ?? ""
+                    text: root.dbCard?.copy ?? ""
                     size: 15.5
                     color: root.mutedColor
                     wrapMode: Text.WordWrap
@@ -1111,13 +1149,13 @@ FocusScope {
 
                     Item {
                         objectName: "dbBrowseButton"
-                        visible: root.dbCard.showBrowse === true
+                        visible: root.dbCard?.showBrowse === true
                         width: (parent.width - 10 * root.unit) / 2
                         height: 46 * root.unit
 
                         Kit.FocusRing {
                             anchors.fill: parent
-                            visible: root.dbCard.browseFocused === true
+                            visible: root.zoneCode === 3
                             radius: 23 * root.unit
                             gap: 3 * root.unit
                             thickness: 2 * root.unit
@@ -1132,7 +1170,7 @@ FocusScope {
                             radius: 23 * root.unit
                             color: root.raisedColor
                             border.width: 1.5 * root.unit
-                            border.color: root.dbCard.browseFocused === true ? root.coronaColor : root.outlineColor
+                            border.color: root.zoneCode === 3 ? root.coronaColor : root.outlineColor
 
                             Row {
                                 anchors.centerIn: parent
@@ -1151,7 +1189,7 @@ FocusScope {
                                     y: (parent.height - height) / 2
                                     unit: root.unit
                                     boardLine: true
-                                    text: root.dbCard.browseLabel ?? ""
+                                    text: root.dbCard?.browseLabel ?? ""
                                     size: 15.5
                                     weight: Font.DemiBold
                                     color: root.inkColor
@@ -1167,12 +1205,12 @@ FocusScope {
 
                     Item {
                         objectName: "dbUpdateButton"
-                        width: root.dbCard.showBrowse === true ? (parent.width - 10 * root.unit) / 2 : parent.width
+                        width: root.dbCard?.showBrowse === true ? (parent.width - 10 * root.unit) / 2 : parent.width
                         height: 46 * root.unit
 
                         Kit.FocusRing {
                             anchors.fill: parent
-                            visible: root.dbCard.updateFocused === true
+                            visible: root.zoneCode === 4
                             radius: 23 * root.unit
                             gap: 3 * root.unit
                             thickness: 2 * root.unit
@@ -1187,13 +1225,13 @@ FocusScope {
                             radius: 23 * root.unit
                             color: root.raisedColor
                             border.width: 1.5 * root.unit
-                            border.color: root.dbCard.updateFocused === true ? root.coronaColor : root.outlineColor
+                            border.color: root.zoneCode === 4 ? root.coronaColor : root.outlineColor
 
                             CardLine {
                                 anchors.centerIn: parent
                                 unit: root.unit
                                 boardLine: true
-                                text: root.dbCard.updateLabel ?? ""
+                                text: root.dbCard?.updateLabel ?? ""
                                 size: 15.5
                                 weight: Font.DemiBold
                                 color: root.inkColor
@@ -1218,7 +1256,7 @@ FocusScope {
 
             Kit.FocusRing {
                 anchors.fill: parent
-                visible: root.addCard.focused === true
+                visible: root.zoneCode === 5
                 radius: 22 * root.unit
                 gap: 3 * root.unit
                 thickness: 2.5 * root.unit
@@ -1231,7 +1269,7 @@ FocusScope {
             Rectangle {
                 anchors.fill: parent
                 radius: 22 * root.unit
-                color: root.addCard.focused === true ? root.raisedColor : root.cardColor
+                color: root.zoneCode === 5 ? root.raisedColor : root.cardColor
             }
 
             Shape {
@@ -1240,7 +1278,7 @@ FocusScope {
                 ShapePath {
                     readonly property real cr: 22 * root.unit
                     fillColor: root.transparentColor
-                    strokeColor: root.addCard.focused === true ? root.coronaColor : root.outlineColor
+                    strokeColor: root.zoneCode === 5 ? root.coronaColor : root.outlineColor
                     strokeWidth: 1.5 * root.unit
                     strokeStyle: ShapePath.DashLine
                     dashPattern: Kit.Tokens.dashPattern
@@ -1277,7 +1315,7 @@ FocusScope {
                         anchors.centerIn: parent
                         unit: root.unit
                         boardLine: true
-                        text: root.addCard.pill ?? ""
+                        text: root.addCard?.pill ?? ""
                         size: 13
                         weight: Font.DemiBold
                         spacing: 0.78
@@ -1292,7 +1330,7 @@ FocusScope {
                     CardLine {
                         unit: root.unit
                         boardLine: true
-                        text: root.addCard.title ?? ""
+                        text: root.addCard?.title ?? ""
                         size: 19
                         weight: Font.DemiBold
                         color: root.inkColor
@@ -1301,7 +1339,7 @@ FocusScope {
                         width: parent.width
                         unit: root.unit
                         boardLine: true
-                        text: root.addCard.copy ?? ""
+                        text: root.addCard?.copy ?? ""
                         size: 15
                         color: root.mutedColor
                         elide: Text.ElideRight
@@ -1336,7 +1374,7 @@ FocusScope {
 
         Rectangle {
             objectName: "cheatsPosCounter"
-            visible: (root.view.positionCounter ?? "").length > 0
+            visible: (root.isCheats ? root.tool.eclipseCounter : "").length > 0
             anchors.right: parent.right
             y: (parent.height - height) / 2
             width: posLine.implicitWidth + 32 * root.unit
@@ -1351,7 +1389,7 @@ FocusScope {
                 anchors.centerIn: parent
                 unit: root.unit
                 boardLine: true
-                text: root.view.positionCounter ?? ""
+                text: root.isCheats ? root.tool.eclipseCounter : ""
                 family: Kit.Tokens.faceCode
                 size: 17
                 color: root.mutedColor
@@ -1397,7 +1435,7 @@ FocusScope {
                         CardLine {
                             unit: root.unit
                             boardLine: true
-                            text: root.view.browseTitle ?? ""
+                            text: root.view?.browseTitle ?? ""
                             size: 26
                             weight: Font.DemiBold
                             color: root.inkColor
@@ -1405,7 +1443,7 @@ FocusScope {
                         CardLine {
                             unit: root.unit
                             boardLine: true
-                            text: root.view.browseSubtitle ?? ""
+                            text: root.view?.browseSubtitle ?? ""
                             size: 16
                             color: root.mutedColor
                         }
@@ -1437,100 +1475,111 @@ FocusScope {
                     }
                 }
 
-                Flickable {
+                ListView {
+                    id: browseListView
                     width: parent.width
                     height: parent.height - 68 * root.unit
-                    contentWidth: width
-                    contentHeight: browseListCol.height + 12 * root.unit
+                    spacing: 9 * root.unit
+                    bottomMargin: 12 * root.unit
+                    reuseItems: true
                     clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    readonly property int targetFocusIndex: root.browseCursor >= 0 && root.browseCursor < browseModel.count ? root.browseCursor : -1
+                    model: browseModel
+                    Binding {
+                        target: browseListView
+                        property: "currentIndex"
+                        value: browseListView.targetFocusIndex
+                    }
+                    onCountChanged: {
+                        if (browseListView.currentIndex !== browseListView.targetFocusIndex) browseListView.currentIndex = browseListView.targetFocusIndex
+                        if (browseListView.targetFocusIndex >= 0) browseListView.positionViewAtIndex(browseListView.targetFocusIndex, ListView.Contain)
+                    }
+                    onCurrentIndexChanged: {
+                        if (browseListView.currentIndex !== browseListView.targetFocusIndex) browseListView.currentIndex = browseListView.targetFocusIndex
+                        if (browseListView.currentIndex >= 0) browseListView.positionViewAtIndex(browseListView.currentIndex, ListView.Contain)
+                    }
+                    delegate: Item {
+                        id: chtRow
+                        required property int index
+                        required property var model
+                        readonly property var modelData: chtRow.model.item
+                        readonly property bool rowFocused: chtRow.index === root.browseCursor
+                        width: browseListView.width
+                        height: 64 * root.unit
 
-                    Column {
-                        id: browseListCol
-                        width: parent.width
-                        spacing: 9 * root.unit
+                        Kit.FocusRing {
+                            anchors.fill: parent
+                            visible: chtRow.rowFocused
+                            radius: 14 * root.unit
+                            gap: 2 * root.unit
+                            thickness: 2 * root.unit
+                            glowColor: Kit.Tokens.glowColor
+                            glowBlur: 24 * root.unit
+                            glowSpread: 4 * root.unit
+                            pixelScale: root.pixelScale
+                        }
 
-                        Repeater {
-                            model: root.view.browseRows ?? []
-                            Item {
-                                id: chtRow
-                                required property var modelData
-                                width: browseListCol.width
-                                height: 64 * root.unit
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 14 * root.unit
+                            color: chtRow.rowFocused ? root.raisedColor : root.groundColor
+                            border.width: 1 * root.unit
+                            border.color: chtRow.rowFocused ? root.coronaColor : root.hairlineColor
+                        }
 
-                                Kit.FocusRing {
-                                    anchors.fill: parent
-                                    visible: chtRow.modelData.focused === true
-                                    radius: 14 * root.unit
-                                    gap: 2 * root.unit
-                                    thickness: 2 * root.unit
-                                    glowColor: Kit.Tokens.glowColor
-                                    glowBlur: 24 * root.unit
-                                    glowSpread: 4 * root.unit
-                                    pixelScale: root.pixelScale
-                                }
+                        CardLine {
+                            x: 20 * root.unit
+                            y: (parent.height - height) / 2
+                            width: 480 * root.unit
+                            unit: root.unit
+                            boardLine: true
+                            text: chtRow.modelData.name ?? ""
+                            size: 18
+                            weight: Font.DemiBold
+                            color: root.inkColor
+                            elide: Text.ElideRight
+                        }
 
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: 14 * root.unit
-                                    color: chtRow.modelData.focused === true ? root.raisedColor : root.groundColor
-                                    border.width: 1 * root.unit
-                                    border.color: chtRow.modelData.focused === true ? root.coronaColor : root.hairlineColor
-                                }
+                        CardLine {
+                            x: 520 * root.unit
+                            y: (parent.height - height) / 2
+                            width: 200 * root.unit
+                            unit: root.unit
+                            boardLine: true
+                            text: chtRow.modelData.code ?? ""
+                            family: Kit.Tokens.faceCode
+                            size: 16
+                            weight: Font.Bold
+                            color: root.coronaColor
+                            elide: Text.ElideRight
+                        }
 
-                                CardLine {
-                                    x: 20 * root.unit
-                                    y: (parent.height - height) / 2
-                                    width: 480 * root.unit
-                                    unit: root.unit
-                                    boardLine: true
-                                    text: chtRow.modelData.name ?? ""
-                                    size: 18
-                                    weight: Font.DemiBold
-                                    color: root.inkColor
-                                    elide: Text.ElideRight
-                                }
-
-                                CardLine {
-                                    x: 520 * root.unit
-                                    y: (parent.height - height) / 2
-                                    width: 200 * root.unit
-                                    unit: root.unit
-                                    boardLine: true
-                                    text: chtRow.modelData.code ?? ""
-                                    family: Kit.Tokens.faceCode
-                                    size: 16
-                                    weight: Font.Bold
-                                    color: root.coronaColor
-                                    elide: Text.ElideRight
-                                }
-
-                                Rectangle {
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: 20 * root.unit
-                                    y: (parent.height - height) / 2
-                                    width: statusBadgeLine.implicitWidth + 24 * root.unit
-                                    height: 32 * root.unit
-                                    radius: 16 * root.unit
-                                    color: chtRow.modelData.added ? Qt.alpha(root.coronaColor, 0.16) : root.raisedColor
-                                    border.width: 1 * root.unit
-                                    border.color: chtRow.modelData.added ? root.coronaColor : root.outlineColor
-                                    CardLine {
-                                        id: statusBadgeLine
-                                        anchors.centerIn: parent
-                                        unit: root.unit
-                                        boardLine: true
-                                        text: chtRow.modelData.statusWords ?? ""
-                                        size: 14
-                                        weight: Font.DemiBold
-                                        color: chtRow.modelData.added ? root.coronaColor : root.inkColor
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: root.tool.eclipseActCode(0, chtRow.modelData.indexKey ?? "")
-                                }
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 20 * root.unit
+                            y: (parent.height - height) / 2
+                            width: statusBadgeLine.implicitWidth + 24 * root.unit
+                            height: 32 * root.unit
+                            radius: 16 * root.unit
+                            color: chtRow.modelData.added ? Qt.alpha(root.coronaColor, 0.16) : root.raisedColor
+                            border.width: 1 * root.unit
+                            border.color: chtRow.modelData.added ? root.coronaColor : root.outlineColor
+                            CardLine {
+                                id: statusBadgeLine
+                                anchors.centerIn: parent
+                                unit: root.unit
+                                boardLine: true
+                                text: chtRow.modelData.statusWords ?? ""
+                                size: 14
+                                weight: Font.DemiBold
+                                color: chtRow.modelData.added ? root.coronaColor : root.inkColor
                             }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: root.tool.eclipseActCode(0, chtRow.modelData.indexKey ?? "")
                         }
                     }
                 }
@@ -1543,11 +1592,6 @@ FocusScope {
         id: cheatTypist
         onTextChanged: root.tool.eclipseSetField(root.editorField, cheatTypist.text)
         onClosed: root.tool.eclipseActCode(11, "")
-    }
-
-    Connections {
-        target: root
-        function onEditorTypingChanged() { cheatTypist.setText(root.activeFieldText, root.activeFieldText.length) }
     }
 
     Item {
@@ -1572,7 +1616,7 @@ FocusScope {
                 objectName: "cheatEditorTitle"
                 unit: root.unit
                 boardLine: true
-                text: root.view.editorTitle ?? ""
+                text: root.view?.editorTitle ?? ""
                 size: 36
                 weight: Font.DemiBold
                 color: root.inkColor
@@ -1581,7 +1625,7 @@ FocusScope {
             CardLine {
                 unit: root.unit
                 boardLine: true
-                text: root.view.editorSubtitle ?? ""
+                text: root.view?.editorSubtitle ?? ""
                 size: 20
                 color: root.mutedColor
             }
@@ -1596,7 +1640,7 @@ FocusScope {
                     CardLine {
                         unit: root.unit
                         boardLine: true
-                        text: root.view.editorDescLabel ?? ""
+                        text: root.view?.editorDescLabel ?? ""
                         size: 15
                         weight: Font.DemiBold
                         color: root.roseColor
@@ -1628,9 +1672,9 @@ FocusScope {
                                 width: parent.width - 40 * root.unit
                                 unit: root.unit
                                 boardLine: true
-                                text: (root.view.editorDesc ?? "").length > 0 ? (root.view.editorDesc ?? "") : (root.view.editorDescHint ?? "")
+                                text: (root.view?.editorDesc ?? "").length > 0 ? (root.view?.editorDesc ?? "") : (root.view?.editorDescHint ?? "")
                                 size: 22
-                                color: (root.view.editorDesc ?? "").length > 0 ? root.inkColor : root.dimColor
+                                color: (root.view?.editorDesc ?? "").length > 0 ? root.inkColor : root.dimColor
                                 elide: Text.ElideRight
                             }
                         }
@@ -1647,7 +1691,7 @@ FocusScope {
                     CardLine {
                         unit: root.unit
                         boardLine: true
-                        text: root.view.editorCodeLabel ?? ""
+                        text: root.view?.editorCodeLabel ?? ""
                         size: 15
                         weight: Font.DemiBold
                         color: root.roseColor
@@ -1679,11 +1723,11 @@ FocusScope {
                                 width: parent.width - 40 * root.unit
                                 unit: root.unit
                                 boardLine: true
-                                text: (root.view.editorCode ?? "").length > 0 ? (root.view.editorCode ?? "") : (root.view.editorCodeHint ?? "")
+                                text: (root.view?.editorCode ?? "").length > 0 ? (root.view?.editorCode ?? "") : (root.view?.editorCodeHint ?? "")
                                 family: Kit.Tokens.faceCode
                                 size: 22
                                 weight: Font.Bold
-                                color: (root.view.editorCode ?? "").length > 0 ? root.coronaColor : root.dimColor
+                                color: (root.view?.editorCode ?? "").length > 0 ? root.coronaColor : root.dimColor
                                 elide: Text.ElideRight
                             }
                         }
@@ -1697,11 +1741,11 @@ FocusScope {
 
             CardLine {
                 objectName: "cheatEditorError"
-                visible: (root.view.editorError ?? "").length > 0
+                visible: (root.view?.editorError ?? "").length > 0
                 width: parent.width
                 unit: root.unit
                 boardLine: true
-                text: root.view.editorError ?? ""
+                text: root.view?.editorError ?? ""
                 size: 17
                 weight: Font.DemiBold
                 color: Kit.Tokens.error
@@ -1735,7 +1779,7 @@ FocusScope {
                             anchors.centerIn: parent
                             unit: root.unit
                             boardLine: true
-                            text: root.view.editorSaveLabel ?? ""
+                            text: root.view?.editorSaveLabel ?? ""
                             size: 18
                             weight: Font.DemiBold
                             color: root.editorField === 2 ? root.overAccentColor : root.inkColor
@@ -1773,7 +1817,7 @@ FocusScope {
                             anchors.centerIn: parent
                             unit: root.unit
                             boardLine: true
-                            text: root.view.editorCancelLabel ?? ""
+                            text: root.view?.editorCancelLabel ?? ""
                             size: 18
                             weight: Font.DemiBold
                             color: root.inkColor
@@ -1794,7 +1838,7 @@ FocusScope {
                 typist: cheatTypist
                 focus: root.editorOpen && root.editorTyping
                 activeFocusOnKeys: root.editorOpen && root.editorTyping
-                eraseIcon: root.view.eraseIcon ?? ""
+                eraseIcon: root.view?.eraseIcon ?? ""
             }
         }
     }

@@ -55,9 +55,10 @@ fn main() {
             "src/collections_eclipse.rs",
             "src/tools_hub.rs",
             "src/desktop.rs",
+            "src/eclipse_list_model.rs",
         ])
         .include_dir("cpp")
-        .cpp_files(["cpp/session_pictures.cpp", "cpp/folders.cpp", "cpp/short_time.cpp"])
+        .cpp_files(["cpp/session_pictures.cpp", "cpp/folders.cpp", "cpp/short_time.cpp", "cpp/json_variant.cpp"])
         .qt_module("Quick")
         .qt_module("Qml")
         .build()

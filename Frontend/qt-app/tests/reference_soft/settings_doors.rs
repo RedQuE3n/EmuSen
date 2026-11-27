@@ -237,6 +237,9 @@ fn the_navigation_sounds_play_at_sound_volume_changed_at_once_by_a_step(harness:
     walk_to(&mut scene, "How loud the navigation sounds are");
     scene.pad(UiButton::Right);
     until(&mut scene, 2, "the step held by the player", |s| s.property("cues", "heldVolume") == "0.45");
+    until(&mut scene, 2, "the step is saved", |_| {
+        platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap()["BigPictureInterface"]["NavigationVolume"] == json!(45)
+    });
     let stored = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     assert_eq!(stored["BigPictureInterface"]["NavigationVolume"], json!(45), "the step is saved");
     scene.pad(UiButton::Left);

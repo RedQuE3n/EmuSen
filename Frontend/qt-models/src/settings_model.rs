@@ -2,12 +2,13 @@
 //! or page shown, with the roles the kit's settings frame reads, and the focused row's pane as properties. A read runs
 //! off the GUI thread and comes back through qt_thread().queue; a change is saved through Galaxia's model at once.
 
-use crate::consoles_source::{ClientConsoles, ScriptedConsoles};
+use crate::consoles_source::{ConsolesClients, ScriptedConsoles};
+use crate::eclipse_list_model::json_to_variant;
 use crate::help::Screen;
 use crate::help_model::shown_screen;
-use crate::settings::{self, Outcome, SettingsView};
+use crate::settings::{self, Model, Outcome, SettingsView};
 use crate::settings_source::ClientSettings;
-use crate::settings::SettingsSource;
+use emusen_platform_client::galaxia::consts::{FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant, QVector};
@@ -110,6 +111,14 @@ pub mod qobject {
         #[qproperty(bool, bindings_keys, cxx_name = "bindingsKeys", READ, NOTIFY = drawn)]
         #[qproperty(bool, bindings_from_card, cxx_name = "bindingsFromCard", READ, NOTIFY = drawn)]
         #[qproperty(QString, bindings_pad, cxx_name = "bindingsPad", READ, NOTIFY = drawn)]
+        #[qproperty(QVariant, pad_meta, cxx_name = "padMeta", READ, NOTIFY = drawn)]
+        #[qproperty(QString, pad_svg, cxx_name = "padSvg", READ, NOTIFY = pad_scalar_changed)]
+        #[qproperty(i32, pad_focus, cxx_name = "padFocus", READ, NOTIFY = pad_scalar_changed)]
+        #[qproperty(i32, pad_header_focus, cxx_name = "padHeaderFocus", READ, NOTIFY = pad_scalar_changed)]
+        #[qproperty(f64, pad_left_scroll_y, cxx_name = "padLeftScrollY", READ, NOTIFY = pad_scalar_changed)]
+        #[qproperty(f64, pad_right_scroll_y, cxx_name = "padRightScrollY", READ, NOTIFY = pad_scalar_changed)]
+        #[qproperty(QString, pad_left_rows, cxx_name = "padLeftRows", READ, NOTIFY = pad_rows_changed)]
+        #[qproperty(QString, pad_right_rows, cxx_name = "padRightRows", READ, NOTIFY = pad_rows_changed)]
         #[qproperty(QString, drawing, READ, NOTIFY = drawn)]
         #[qproperty(QStringList, drawing_controls, cxx_name = "drawingControls", READ, NOTIFY = drawn)]
         #[qproperty(QStringList, drawing_texts, cxx_name = "drawingTexts", READ, NOTIFY = drawn)]
@@ -141,8 +150,23 @@ pub mod qobject {
         #[qproperty(bool, themed_settings, cxx_name = "themedSettings")]
         /// Eclipse `#20` Shaders overlay state and live Serenity preview feed.
         #[qproperty(bool, shaders_shown, cxx_name = "shadersShown", READ, NOTIFY = shaders_changed)]
+        #[qproperty(bool, shaders_loading, cxx_name = "shadersLoading", READ, NOTIFY = shaders_changed)]
         #[qproperty(QString, shaders_board, cxx_name = "shadersBoard", READ, NOTIFY = shaders_changed)]
         #[qproperty(QString, shaders_help, cxx_name = "shadersHelp", READ, NOTIFY = shaders_changed)]
+        #[qproperty(QVariant, shaders_meta, cxx_name = "shadersMeta", READ, NOTIFY = shaders_changed)]
+        #[qproperty(QString, shaders_presets_json, cxx_name = "shadersPresetsJson", READ, NOTIFY = shaders_lists_changed)]
+        #[qproperty(QString, shaders_categories_json, cxx_name = "shadersCategoriesJson", READ, NOTIFY = shaders_lists_changed)]
+        #[qproperty(QString, shaders_sliders_json, cxx_name = "shadersSlidersJson", READ, NOTIFY = shaders_lists_changed)]
+        #[qproperty(f64, shaders_split, cxx_name = "shadersSplit", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(bool, shaders_comparing, cxx_name = "shadersComparing", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(i32, shaders_focus_zone, cxx_name = "shadersFocusZone", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(i32, shaders_focused_preset, cxx_name = "shadersFocusedPreset", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(i32, shaders_focused_slider, cxx_name = "shadersFocusedSlider", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(bool, shaders_confirm_open, cxx_name = "shadersConfirmOpen", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(i32, shaders_source_idx, cxx_name = "shadersSourceIdx", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(i32, shaders_category_idx, cxx_name = "shadersCategoryIdx", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(i32, shaders_scope_idx, cxx_name = "shadersScopeIdx", READ, NOTIFY = shaders_scalar_changed)]
+        #[qproperty(QString, shaders_counter, cxx_name = "shadersCounter", READ, NOTIFY = shaders_scalar_changed)]
         #[qproperty(u64, shader_preview_feed, cxx_name = "shaderPreviewFeed", READ, NOTIFY = shader_preview_changed)]
         #[qproperty(QString, shader_preview_source, cxx_name = "shaderPreviewSource", READ, NOTIFY = shader_preview_changed)]
         #[qproperty(bool, shader_preview_pending, cxx_name = "shaderPreviewPending", READ, NOTIFY = shader_preview_changed)]
@@ -392,6 +416,22 @@ pub mod qobject {
         fn shaders_changed(self: Pin<&mut SettingsModel>);
 
         #[qsignal]
+        #[cxx_name = "shadersScalarChanged"]
+        fn shaders_scalar_changed(self: Pin<&mut SettingsModel>);
+
+        #[qsignal]
+        #[cxx_name = "shadersListsChanged"]
+        fn shaders_lists_changed(self: Pin<&mut SettingsModel>);
+
+        #[qsignal]
+        #[cxx_name = "padScalarChanged"]
+        fn pad_scalar_changed(self: Pin<&mut SettingsModel>);
+
+        #[qsignal]
+        #[cxx_name = "padRowsChanged"]
+        fn pad_rows_changed(self: Pin<&mut SettingsModel>);
+
+        #[qsignal]
         #[cxx_name = "shaderPreviewChanged"]
         fn shader_preview_changed(self: Pin<&mut SettingsModel>);
 
@@ -561,15 +601,28 @@ pub struct SettingsModelRust {
     asked: u64,
     /// The scrape mutations asked for, so an older scrape task finishing late is dropped.
     scrape_asked: u64,
+    /// The theme mutations asked for, so an older theme write finishing late skips stale state updates.
+    theme_write_gen: u64,
     /// The typing prompts asked for, so a deferred `typeWords` from a closed prompt is dropped.
     type_asked: u64,
     /// Whether the last read asked for is still to come back.
     reading: bool,
+    read_in_flight: usize,
+    reread_pending: usize,
     game_pads: u64,
     bindings_shown: bool,
     bindings_keys: bool,
     bindings_from_card: bool,
     bindings_pad: QString,
+    pad_meta: QVariant,
+    pad_svg: QString,
+    pad_focus: i32,
+    pad_header_focus: i32,
+    pad_left_scroll_y: f64,
+    pad_right_scroll_y: f64,
+    pad_left_rows: QString,
+    pad_right_rows: QString,
+    pad_meta_json: String,
     drawing: QString,
     drawing_controls: QStringList,
     drawing_texts: QStringList,
@@ -592,13 +645,32 @@ pub struct SettingsModelRust {
     built_ins: QStringList,
     themed_settings: bool,
     shaders_shown: bool,
+    shaders_loading: bool,
     shaders_board: QString,
     shaders_help: QString,
+    shaders_meta: QVariant,
+    shaders_presets_json: QString,
+    shaders_categories_json: QString,
+    shaders_sliders_json: QString,
+    shaders_split: f64,
+    shaders_comparing: bool,
+    shaders_focus_zone: i32,
+    shaders_focused_preset: i32,
+    shaders_focused_slider: i32,
+    shaders_confirm_open: bool,
+    shaders_source_idx: i32,
+    shaders_category_idx: i32,
+    shaders_scope_idx: i32,
+    shaders_counter: QString,
+    shaders_meta_json: String,
+    shaders_open_gen: u64,
+    shaders_meta_gen: u64,
     shader_preview_feed: u64,
     shader_preview_source: QString,
     shader_preview_pending: bool,
     shaders_state: Option<crate::settings_shaders::ShadersBoard>,
     shader_preview: crate::shader_preview::ShaderPreview,
+    clients: ConsolesClients,
     /// The page's question waiting for typed words.
     typed_for: Option<crate::settings_controllers::Typed>,
     /// Each pad's buttons at the last read of the seats, so a press listened for is the one newly down.
@@ -670,13 +742,25 @@ impl Default for SettingsModelRust {
             view,
             asked: 0,
             scrape_asked: 0,
+            theme_write_gen: 0,
             type_asked: 0,
             reading: false,
+            read_in_flight: 0,
+            reread_pending: 0,
             game_pads: 0,
             bindings_shown: false,
             bindings_keys: false,
             bindings_from_card: false,
             bindings_pad: QString::default(),
+            pad_meta: QVariant::default(),
+            pad_svg: QString::default(),
+            pad_focus: 0,
+            pad_header_focus: -1,
+            pad_left_scroll_y: 0.0,
+            pad_right_scroll_y: 0.0,
+            pad_left_rows: QString::from("[]"),
+            pad_right_rows: QString::from("[]"),
+            pad_meta_json: String::new(),
             drawing: QString::default(),
             drawing_controls: QStringList::default(),
             drawing_texts: QStringList::default(),
@@ -699,13 +783,32 @@ impl Default for SettingsModelRust {
             built_ins: QStringList::default(),
             themed_settings: false,
             shaders_shown: false,
+            shaders_loading: false,
             shaders_board: QString::from("{}"),
             shaders_help: QString::from("[]"),
+            shaders_meta: QVariant::default(),
+            shaders_presets_json: QString::from("[]"),
+            shaders_categories_json: QString::from("[]"),
+            shaders_sliders_json: QString::from("[]"),
+            shaders_split: 0.5,
+            shaders_comparing: false,
+            shaders_focus_zone: 4,
+            shaders_focused_preset: 0,
+            shaders_focused_slider: 0,
+            shaders_confirm_open: false,
+            shaders_source_idx: 0,
+            shaders_category_idx: 1,
+            shaders_scope_idx: 1,
+            shaders_counter: QString::default(),
+            shaders_meta_json: String::new(),
+            shaders_open_gen: 0,
+            shaders_meta_gen: 0,
             shader_preview_feed: 0,
             shader_preview_source: QString::default(),
             shader_preview_pending: false,
             shaders_state: None,
             shader_preview: crate::shader_preview::ShaderPreview::default(),
+            clients: ConsolesClients::default(),
             typed_for: None,
             pressed: Vec::new(),
         }
@@ -882,24 +985,84 @@ impl qobject::SettingsModel {
         }
     }
 
-    pub fn refresh(mut self: Pin<&mut Self>) {
+    pub fn refresh(self: Pin<&mut Self>) {
+        self.refresh_inner(true);
+    }
+
+    fn begin_reread_guard(mut self: Pin<&mut Self>) -> (bool, u64) {
+        let was_reading = self.reading;
+        let asked = if was_reading {
+            let next = self.asked.wrapping_add(1);
+            let mut r = self.as_mut().rust_mut();
+            r.asked = next;
+            r.reread_pending += 1;
+            next
+        } else {
+            self.asked
+        };
+        (was_reading, asked)
+    }
+
+    fn finish_async_save(mut self: Pin<&mut Self>, was_reading: bool, asked: u64) -> bool {
+        if was_reading {
+            let mut r = self.as_mut().rust_mut();
+            r.reread_pending = r.reread_pending.saturating_sub(1);
+        }
+        if self.open {
+            self.as_mut().rust_mut().saved_since_open = true;
+        } else {
+            self.as_mut().rust_mut().saved_since_open = false;
+            self.as_mut().saved();
+        }
+        if (was_reading && self.asked == asked) || self.read_in_flight > 0 {
+            self.refresh();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn end_reread_guard_err(mut self: Pin<&mut Self>, was_reading: bool, asked: u64) {
+        if was_reading {
+            let mut r = self.as_mut().rust_mut();
+            r.reread_pending = r.reread_pending.saturating_sub(1);
+            if r.asked == asked && r.read_in_flight == 0 && r.reread_pending == 0 {
+                r.reading = false;
+            }
+        }
+    }
+
+    fn refresh_inner(mut self: Pin<&mut Self>, clear_said: bool) {
         let library = self.platform_library.to_string();
         if library.is_empty() {
+            let mut r = self.as_mut().rust_mut();
+            if r.read_in_flight == 0 && r.reread_pending == 0 {
+                r.reading = false;
+            }
             return;
         }
         let asked = self.asked.wrapping_add(1);
-        self.as_mut().rust_mut().asked = asked;
-        self.as_mut().rust_mut().reading = true;
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.asked = asked;
+            r.reading = true;
+            r.read_in_flight += 1;
+        }
         // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
-        self.as_mut().said(String::new());
+        if clear_said {
+            self.as_mut().said(String::new());
+        }
         let thread = self.qt_thread();
+        let clients = self.clients.clone();
         let (cores, world) = (self.cores.to_string(), self.world.to_string());
+        let (open, world_empty) = (self.open, world.is_empty());
         let manifests: Vec<String> = self.built_ins.iter().map(|m| m.to_string()).collect();
-        std::thread::spawn(move || {
+        let board_snap = self.shaders_state.clone();
+        self.clients.spawn(move || {
             let read = ClientSettings::open(&library).and_then(|source| {
-                let mut read = settings::read(&source)?;
+                let mut read = settings::read_with(&source, open)?;
                 read.consoles = if world.is_empty() {
-                    crate::consoles::read(&ClientConsoles::open(&library, &cores)?)?
+                    crate::consoles::read(&clients.consoles(&library, &cores, true)?)?
                 } else {
                     let scripted = ScriptedConsoles::open(&world)?;
                     if let Some(outputs) = scripted.outputs() {
@@ -913,15 +1076,32 @@ impl qobject::SettingsModel {
                 let built_ins: Vec<(&str, &str)> = crate::themes::BUILT_IN.iter().copied().zip(manifests.iter().map(String::as_str)).collect();
                 let listing = crate::themes::listing(&read.app, store.as_deref(), &built_ins);
                 let scrape = source.scrape_snapshot();
-                Ok((read, source.chooser()?, listing, scrape))
+                let shader_data = if let Some(board) = board_snap.as_ref() {
+                    let mut tmp = SettingsView::new();
+                    tmp.read = read.clone();
+                    let platform = clients.platform(&library).ok();
+                    Some(crate::settings_shaders::ShadersBoard::collect_open_data(platform.as_deref(), &tmp, board, true))
+                } else {
+                    None
+                };
+                Ok((read, source.chooser()?, listing, scrape, shader_data))
             });
             let _ = thread.queue(move |mut model| {
-                if model.asked != asked {
-                    return;
+                {
+                    let mut r = model.as_mut().rust_mut();
+                    r.read_in_flight = r.read_in_flight.saturating_sub(1);
+                    if r.asked != asked {
+                        if r.read_in_flight == 0 && r.reread_pending == 0 {
+                            r.reading = false;
+                        }
+                        return;
+                    }
+                    r.reading = r.read_in_flight > 0 || r.reread_pending > 0;
                 }
-                model.as_mut().rust_mut().reading = false;
+                let mut persist_favs = None;
+                let mut cleared_loading = false;
                 match read {
-                    Ok((read, chooser, mut listing, scrape)) => {
+                    Ok((read, chooser, mut listing, scrape, shader_data)) => {
                         if let Some(prev) = model.view.themes.as_ref() {
                             for row in &mut listing.rows {
                                 if let Some(before) = prev.rows.iter().find(|r| r.id == row.id && r.kind == row.kind && row.checked == crate::themes::Checked::Not) {
@@ -931,28 +1111,41 @@ impl qobject::SettingsModel {
                         }
                         let mut r = model.as_mut().rust_mut();
                         let (note, pending) = (r.view.scrape.status_note.clone(), r.view.scrape.pending_user.clone());
+                        let prev_outputs = std::mem::take(&mut r.view.read.outputs);
                         r.view.read = read;
+                        if !open && world_empty {
+                            r.view.read.outputs = prev_outputs;
+                        }
                         r.view.chooser = Some(chooser);
                         r.view.themes = Some(listing);
                         r.view.scrape = scrape;
                         r.view.scrape.status_note = note;
                         r.view.scrape.pending_user = pending;
-                        let library = r.platform_library.to_string();
-                        if let Some(mut board) = r.shaders_state.take() {
-                            board.sync_preview_stored(&r.view, &library);
+                        if let (Some(mut board), Some(data)) = (r.shaders_state.take(), shader_data) {
+                            persist_favs = board.apply_open_data(data, &r.view);
                             r.shaders_state = Some(board);
+                            cleared_loading = r.shaders_loading;
+                            r.shaders_loading = false;
                         }
-                        model.as_mut().said(String::new());
+                        if clear_said {
+                            model.as_mut().said(String::new());
+                        }
                     }
                     Err(words) => model.as_mut().said(format!("The settings could not be read: {words}")),
                 }
                 model.as_mut().applied();
                 model.as_mut().shown(false);
                 if model.shaders_state.is_some() {
-                    model.as_mut().sync_shaders_view();
+                    let changed = model.as_mut().sync_shaders_view_changed();
+                    if cleared_loading && !changed {
+                        model.as_mut().shaders_changed();
+                    }
                     if model.shaders_shown {
                         model.as_mut().sync_shaders_preview(false);
                     }
+                }
+                if let Some(favs) = persist_favs {
+                    model.as_mut().spawn_save_favourites(favs);
                 }
             });
         });
@@ -1015,11 +1208,11 @@ impl qobject::SettingsModel {
                     if let Some(mut board) = self.as_mut().rust_mut().shaders_state.take() {
                         board.return_params = false;
                         board.confirm_remove = false;
-                        let library = self.platform_library.to_string();
-                        board.sync_preview_stored(&self.view, &library);
+                        board.sync_preview_stored_in_memory(&self.view);
                         self.as_mut().rust_mut().shaders_state = Some(board);
                     }
                     self.as_mut().sync_shaders_view();
+                    self.as_mut().maybe_fetch_shaders_meta();
                     self.sync_shaders_preview(true);
                     return true;
                 }
@@ -1088,17 +1281,36 @@ impl qobject::SettingsModel {
         match outcome {
             Outcome::Nothing => {}
             Outcome::Saved(model, document) => {
-                let saved = ClientSettings::open(&self.platform_library.to_string()).and_then(|s| s.save(model, &document));
-                if saved.is_ok() {
-                    self.as_mut().rust_mut().saved_since_open = true;
-                }
-                self.as_mut().said(saved.err().map(|e| format!("The settings could not be saved: {e}")).unwrap_or_default());
+                let (was_reading, asked) = self.as_mut().begin_reread_guard();
                 self.as_mut().applied();
                 self.as_mut().shown(false);
-                // A read begun before this save would bring the old value back: read again after it (EmuSen_Qt.md §7.7.H7).
-                if self.reading {
-                    self.refresh();
-                }
+                let library = self.platform_library.to_string();
+                let clients = self.clients.clone();
+                let qt = self.qt_thread();
+                self.clients.spawn(move || {
+                    let saved = clients.platform(&library).and_then(|platform| {
+                        let (file_const, schema) = match model {
+                            Model::App => (FILE_SETTINGS, MODEL_APP_SETTINGS),
+                            Model::Graphics => (FILE_GRAPHICS, MODEL_GRAPHICS_CONFIG),
+                        };
+                        let file = platform.file(file_const).map_err(|e| e.to_string())?;
+                        let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| "missing settings file name".to_owned())?;
+                        platform.model_save(schema, None, name, &document).map_err(|e| e.to_string())
+                    });
+                    let _ = qt.queue(move |mut model| match saved {
+                        Ok(()) => {
+                            let _ = model.finish_async_save(was_reading, asked);
+                        }
+                        Err(e) => {
+                            if was_reading {
+                                let mut r = model.as_mut().rust_mut();
+                                r.reread_pending = r.reread_pending.saturating_sub(1);
+                            }
+                            model.as_mut().said(format!("The settings could not be saved: {e}"));
+                            model.as_mut().refresh_inner(false);
+                        }
+                    });
+                });
             }
             Outcome::Opened => self.shown(true),
             Outcome::Shown => self.shown(false),
@@ -1111,30 +1323,55 @@ impl qobject::SettingsModel {
             }
             Outcome::NewCard(_) | Outcome::Cards { .. } if !self.world.is_empty() => self.shown(false),
             Outcome::Cards { op, args } => {
-                let (done, words) = match ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()) {
-                    Ok(c) => c.cards_change(op, &args),
-                    Err(e) => (false, e),
-                };
-                self.as_mut().rust_mut().view.cards_said(op, done, words);
-                self.as_mut().shown(true);
-                self.refresh();
+                let (library, cores) = (self.platform_library.to_string(), self.cores.to_string());
+                let clients = self.clients.clone();
+                let qt = self.qt_thread();
+                self.clients.spawn(move || {
+                    let (done, words) = match clients.consoles(&library, &cores, false) {
+                        Ok(c) => c.cards_change(op, &args),
+                        Err(e) => (false, e),
+                    };
+                    let _ = qt.queue(move |mut model| {
+                        model.as_mut().rust_mut().view.cards_said(op, done, words);
+                        model.as_mut().shown(true);
+                        model.refresh();
+                    });
+                });
             }
             Outcome::Set { console, key, value } => {
-                let set = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.set(&console, &key, value.as_deref()));
-                let failed = set.is_err();
                 let page_changed = list(self.view.trail().into_iter()) != self.trail;
-                self.as_mut().said(set.err().map(|e| format!("The console's setting could not be stored: {e}")).unwrap_or_default());
                 self.as_mut().shown(page_changed);
-                // The engine chosen changes the schema the page draws, a refusal leaves the stored value as it was, and a
-                // read begun before this store would bring the old value back.
-                if failed || key == crate::consoles::ENGINE_KEY || self.reading {
-                    self.refresh();
-                }
+                let (was_reading, asked) = self.as_mut().begin_reread_guard();
+                let (library, cores) = (self.platform_library.to_string(), self.cores.to_string());
+                let clients = self.clients.clone();
+                let qt = self.qt_thread();
+                let engine_change = key == crate::consoles::ENGINE_KEY;
+                self.clients.spawn(move || {
+                    let set = clients.consoles(&library, &cores, false).and_then(|c| c.set(&console, &key, value.as_deref()));
+                    let _ = qt.queue(move |mut model| {
+                        if was_reading {
+                            let mut r = model.as_mut().rust_mut();
+                            r.reread_pending = r.reread_pending.saturating_sub(1);
+                        }
+                        let failed = set.is_err();
+                        model.as_mut().said(set.err().map(|e| format!("The console's setting could not be stored: {e}")).unwrap_or_default());
+                        if failed || engine_change || model.reading || (was_reading && model.asked == asked) {
+                            model.refresh_inner(!failed);
+                        }
+                    });
+                });
             }
             Outcome::NewCard(path) => {
-                let made = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.new_card(&path));
-                self.as_mut().said(made.err().map(|e| format!("The memory card could not be made: {e}")).unwrap_or_default());
-                self.refresh();
+                let (library, cores) = (self.platform_library.to_string(), self.cores.to_string());
+                let clients = self.clients.clone();
+                let qt = self.qt_thread();
+                self.clients.spawn(move || {
+                    let made = clients.consoles(&library, &cores, false).and_then(|c| c.new_card(&path));
+                    let _ = qt.queue(move |mut model| {
+                        model.as_mut().said(made.err().map(|e| format!("The memory card could not be made: {e}")).unwrap_or_default());
+                        model.refresh();
+                    });
+                });
             }
             Outcome::Reread => self.refresh(),
             Outcome::Lever { console, id, value } => self.lever(QString::from(console.as_str()), QString::from(id.as_str()), f64::from(value)),
@@ -1143,14 +1380,22 @@ impl qobject::SettingsModel {
                 self.shown(false);
             }
             Outcome::Bindings(files) => {
-                // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
-                let pads = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) };
-                let saved = ClientSettings::open(&self.platform_library.to_string())
-                    .and_then(|s| crate::pads_reach::bindings_saved(&s, &self.view.read.bindings, &files, pads.as_deref()));
                 let page_changed = list(self.view.trail().into_iter()) != self.trail;
-                self.as_mut().said(saved.err().map(|e| format!("The bindings could not be saved: {e}")).unwrap_or_default());
                 self.as_mut().shown(page_changed);
-                self.refresh();
+                let library = self.platform_library.to_string();
+                let bindings = self.view.read.bindings.clone();
+                let qt = self.qt_thread();
+                self.clients.spawn(move || {
+                    let saved = ClientSettings::open(&library).and_then(|s| s.save_bindings(&bindings, &files));
+                    let _ = qt.queue(move |mut model| {
+                        // SAFETY: `game_pads` is `PadReader.gamePads` outliving SettingsModel.
+                        if let Some(pads) = unsafe { emusen_qt_endymion::game::GamePads::at(model.game_pads) } {
+                            pads.rebind();
+                        }
+                        model.as_mut().said(saved.err().map(|e| format!("The bindings could not be saved: {e}")).unwrap_or_default());
+                        model.refresh();
+                    });
+                });
             }
             Outcome::Seat(ask) => {
                 // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
@@ -1368,30 +1613,65 @@ impl qobject::SettingsModel {
         let pad_board = self.as_mut().rust_mut().view.pad_board();
         let bindings_keys = pad_board.as_ref().and_then(|v| v["keys"].as_bool()).unwrap_or(false);
         let bindings_from_card = pad_board.as_ref().and_then(|v| v["fromCard"].as_bool()).unwrap_or(false);
-        let bindings_pad = pad_board.map_or_else(String::new, |v| v.to_string());
-        let mut r = self.as_mut().rust_mut();
-        r.bindings_shown = shown;
-        r.bindings_keys = bindings_keys;
-        r.bindings_from_card = bindings_from_card;
-        r.bindings_pad = QString::from(bindings_pad.as_str());
-        r.drawing = QString::from(d.drawing.as_str());
-        r.drawing_controls = list(d.controls.into_iter());
-        r.drawing_texts = list(d.texts.into_iter());
-        r.drawing_focus = d.focus;
-        r.drawing_held = list(d.held.into_iter());
-        r.drawing_pushes = QVariant::from(&d.pushes.iter().copied().collect::<QList<f64>>());
-        r.tester_back = r.tester_back && testing;
-        r.tester_hold_ms = hold;
-        r.binding_tabs = list(d.tabs.into_iter());
-        r.binding_caption = QString::from(d.caption.as_str());
-        r.listening = listening;
-        r.listening_pad = listening_pad;
-        r.testing = testing;
-        r.card_controllers = QString::from(card.as_str());
-        r.card_settings = QString::from(card_settings.as_str());
+        let (pad_svg, pad_focus, pad_header_focus, pad_left_scroll_y, pad_right_scroll_y, pad_left_rows, pad_right_rows, pad_meta_json, bindings_pad) =
+            split_pad_board(pad_board.as_ref());
+        let mut scalar_dirty = false;
+        let mut rows_dirty = false;
+        let mut meta_variant = None;
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.bindings_shown = shown;
+            r.bindings_keys = bindings_keys;
+            r.bindings_from_card = bindings_from_card;
+            r.bindings_pad = QString::from(bindings_pad.as_str());
+            if r.pad_meta_json != pad_meta_json {
+                r.pad_meta_json = pad_meta_json;
+                meta_variant = Some(json_to_variant(&r.pad_meta_json));
+            }
+            if let Some(mv) = meta_variant {
+                r.pad_meta = mv;
+            }
+            let svg_q = QString::from(pad_svg.as_str());
+            if r.pad_svg != svg_q || r.pad_focus != pad_focus || r.pad_header_focus != pad_header_focus || (r.pad_left_scroll_y - pad_left_scroll_y).abs() > 1e-6 || (r.pad_right_scroll_y - pad_right_scroll_y).abs() > 1e-6 {
+                r.pad_svg = svg_q;
+                r.pad_focus = pad_focus;
+                r.pad_header_focus = pad_header_focus;
+                r.pad_left_scroll_y = pad_left_scroll_y;
+                r.pad_right_scroll_y = pad_right_scroll_y;
+                scalar_dirty = true;
+            }
+            let left_q = QString::from(pad_left_rows.as_str());
+            let right_q = QString::from(pad_right_rows.as_str());
+            if r.pad_left_rows != left_q || r.pad_right_rows != right_q {
+                r.pad_left_rows = left_q;
+                r.pad_right_rows = right_q;
+                rows_dirty = true;
+            }
+            r.drawing = QString::from(d.drawing.as_str());
+            r.drawing_controls = list(d.controls.into_iter());
+            r.drawing_texts = list(d.texts.into_iter());
+            r.drawing_focus = d.focus;
+            r.drawing_held = list(d.held.into_iter());
+            r.drawing_pushes = QVariant::from(&d.pushes.iter().copied().collect::<QList<f64>>());
+            r.tester_back = r.tester_back && testing;
+            r.tester_hold_ms = hold;
+            r.binding_tabs = list(d.tabs.into_iter());
+            r.binding_caption = QString::from(d.caption.as_str());
+            r.listening = listening;
+            r.listening_pad = listening_pad;
+            r.testing = testing;
+            r.card_controllers = QString::from(card.as_str());
+            r.card_settings = QString::from(card_settings.as_str());
+        }
         let problem = self.view.controllers_problem();
         if let Some(words) = problem {
             self.as_mut().said(words);
+        }
+        if rows_dirty {
+            self.as_mut().pad_rows_changed();
+        }
+        if scalar_dirty {
+            self.as_mut().pad_scalar_changed();
         }
         self.drawn();
     }
@@ -1710,35 +1990,48 @@ impl qobject::SettingsModel {
         }) else {
             return;
         };
+        let (was_reading, asked) = self.as_mut().begin_reread_guard();
+        let write_gen = self.theme_write_gen.wrapping_add(1);
+        self.as_mut().rust_mut().theme_write_gen = write_gen;
         let root = folder.as_deref().map(emusen_esde::check::theme_root);
-        let saved = emusen_platform_client::Platform::load(self.platform_library.to_string()).map_err(|e| e.to_string()).and_then(|p| {
-            crate::clients::change_app_settings(&p, |settings| match (kind, &root) {
-                (crate::themes::Kind::Esde, Some(root)) => crate::themes::choose_esde(settings, root),
-                _ => crate::themes::choose_own(settings, &id),
-            })
+        let library = self.platform_library.to_string();
+        let clients = self.clients.clone();
+        let qt = self.qt_thread();
+        self.clients.spawn(move || {
+            let saved = clients.platform(&library).and_then(|p| {
+                crate::clients::change_app_settings(&p, |settings| match (kind, &root) {
+                    (crate::themes::Kind::Esde, Some(root)) => crate::themes::choose_esde(settings, root),
+                    _ => crate::themes::choose_own(settings, &id),
+                })
+            });
+            let _ = qt.queue(move |mut model| match saved {
+                Ok(settings) => {
+                    if model.theme_write_gen == write_gen {
+                        if model.asked == asked {
+                            {
+                                let mut r = model.as_mut().rust_mut();
+                                r.view.read.app = settings.clone();
+                                if let Some(listing) = r.view.themes.as_mut() {
+                                    listing.esde = crate::themes::mark(&mut listing.rows, &settings, store.as_deref());
+                                    listing.chosen = crate::themes::chosen_of(&settings);
+                                }
+                            }
+                            model.as_mut().shown(false);
+                        }
+                        if kind == crate::themes::Kind::EmuSen {
+                            let host_folder = crate::themes::resolve(&id, store.as_deref()).host_folder();
+                            model.as_mut().theme_used(QString::from(host_folder.as_str()));
+                        }
+                        model.as_mut().theme_restyled(kind == crate::themes::Kind::Esde);
+                    }
+                    let _ = model.finish_async_save(was_reading, asked);
+                }
+                Err(words) => {
+                    model.as_mut().end_reread_guard_err(was_reading, asked);
+                    model.said(format!("The theme could not be stored: {words}"));
+                }
+            });
         });
-        let settings = match saved {
-            Ok(s) => s,
-            Err(words) => return self.said(format!("The theme could not be stored: {words}")),
-        };
-        {
-            let mut r = self.as_mut().rust_mut();
-            r.view.read.app = settings.clone();
-            r.saved_since_open = true;
-            if let Some(listing) = r.view.themes.as_mut() {
-                listing.esde = crate::themes::mark(&mut listing.rows, &settings, store.as_deref());
-                listing.chosen = crate::themes::chosen_of(&settings);
-            }
-        }
-        self.as_mut().shown(false);
-        if self.reading {
-            self.as_mut().refresh();
-        }
-        if kind == crate::themes::Kind::EmuSen {
-            let host_folder = crate::themes::resolve(&id, store.as_deref()).host_folder();
-            self.as_mut().theme_used(QString::from(host_folder.as_str()));
-        }
-        self.theme_restyled(kind == crate::themes::Kind::Esde);
     }
 
     /// Checks a non-built-in theme package off the GUI thread on Settings -> Library -> Themes (#61).
@@ -1769,48 +2062,72 @@ impl qobject::SettingsModel {
         });
     }
 
-    /// Steps an active ES-DE theme choice on Settings -> Library -> Themes (#61).
+    /// Steps an active ES-DE theme choice off the GUI thread on Settings -> Library -> Themes (#61).
     fn step_theme_choice(mut self: Pin<&mut Self>, index: usize, by: i32) {
         let Some((root, mut choice)) = self.view.themes.as_ref().and_then(|l| l.esde.as_ref()).and_then(|e| Some((e.root.clone(), e.choices.get(index)?.clone()))) else {
             return;
         };
         let value = choice.step(by).to_owned();
-        let saved = emusen_platform_client::Platform::load(self.platform_library.to_string())
-            .map_err(|e| e.to_string())
-            .and_then(|p| crate::clients::change_app_settings(&p, |settings| crate::themes::store_choice(settings, &root, choice.key, &value)));
-        match saved {
-            Ok(settings) => {
-                let mut r = self.as_mut().rust_mut();
-                r.view.read.app = settings;
-                r.saved_since_open = true;
-                if let Some(esde) = r.view.themes.as_mut().and_then(|l| l.esde.as_mut()) {
-                    if let Some(slot) = esde.choices.get_mut(index) {
-                        *slot = choice;
+        let (was_reading, asked) = self.as_mut().begin_reread_guard();
+        let write_gen = self.theme_write_gen.wrapping_add(1);
+        self.as_mut().rust_mut().theme_write_gen = write_gen;
+        let library = self.platform_library.to_string();
+        let clients = self.clients.clone();
+        let qt = self.qt_thread();
+        self.clients.spawn(move || {
+            let saved = clients
+                .platform(&library)
+                .and_then(|p| crate::clients::change_app_settings(&p, |settings| crate::themes::store_choice(settings, &root, choice.key, &value)));
+            let _ = qt.queue(move |mut model| match saved {
+                Ok(settings) => {
+                    if model.theme_write_gen == write_gen {
+                        if model.asked == asked {
+                            let mut r = model.as_mut().rust_mut();
+                            r.view.read.app = settings;
+                            if let Some(esde) = r.view.themes.as_mut().and_then(|l| l.esde.as_mut()) {
+                                if let Some(slot) = esde.choices.get_mut(index) {
+                                    *slot = choice;
+                                }
+                            }
+                            model.as_mut().shown(false);
+                        }
+                        model.as_mut().theme_restyled(true);
                     }
+                    let _ = model.finish_async_save(was_reading, asked);
                 }
-                self.as_mut().shown(false);
-                if self.reading {
-                    self.as_mut().refresh();
+                Err(words) => {
+                    model.as_mut().end_reread_guard_err(was_reading, asked);
+                    model.said(format!("The choice could not be stored: {words}"));
                 }
-                self.theme_restyled(true);
-            }
-            Err(words) => self.said(format!("The choice could not be stored: {words}")),
-        }
+            });
+        });
     }
 
-    /// Reads live ScreenScraper account, queue, run and quota state from emusen.scrape (#62).
+    /// Reads live ScreenScraper account, queue, run and quota state off the GUI thread (#62).
     fn refresh_scrape(mut self: Pin<&mut Self>) {
         let asked = self.scrape_asked.wrapping_add(1);
         self.as_mut().rust_mut().scrape_asked = asked;
-        if let Ok(source) = ClientSettings::open(&self.platform_library.to_string()) {
-            let snap = source.scrape_snapshot();
-            let mut r = self.as_mut().rust_mut();
-            let (note, pending) = (r.view.scrape.status_note.clone(), r.view.scrape.pending_user.clone());
-            r.view.scrape = snap;
-            r.view.scrape.status_note = note;
-            r.view.scrape.pending_user = pending;
-        }
-        self.shown(false);
+        let library = self.platform_library.to_string();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let snap = ClientSettings::open(&library).map(|s| s.scrape_snapshot());
+            let _ = qt.queue(move |mut model| {
+                if model.scrape_asked != asked {
+                    return;
+                }
+                match snap {
+                    Ok(snap) => {
+                        let mut r = model.as_mut().rust_mut();
+                        let (note, pending) = (r.view.scrape.status_note.clone(), r.view.scrape.pending_user.clone());
+                        r.view.scrape = snap;
+                        r.view.scrape.status_note = note;
+                        r.view.scrape.pending_user = pending;
+                        model.shown(false);
+                    }
+                    Err(words) => model.said(format!("The scraping settings could not be read: {words}")),
+                }
+            });
+        });
     }
 
     /// Spawns a background ScreenScraper operation and merges its refreshed snapshot back onto the model (#62).
@@ -1861,30 +2178,14 @@ impl qobject::SettingsModel {
         });
     }
 
-    /// Runs a synchronous ScreenScraper action and surfaces any platform or service error on the page.
-    fn run_scrape_sync(mut self: Pin<&mut Self>, clear_said: bool, work: impl FnOnce(&ClientSettings) -> Result<(), String>) {
-        let asked = self.scrape_asked.wrapping_add(1);
-        self.as_mut().rust_mut().scrape_asked = asked;
-        match ClientSettings::open(&self.platform_library.to_string()).and_then(|source| work(&source).map(|()| source.scrape_snapshot())) {
-            Ok(snap) => {
-                self.as_mut().rust_mut().view.scrape = snap;
-                if clear_said {
-                    self.as_mut().said(String::new());
-                }
-            }
-            Err(why) => self.as_mut().rust_mut().view.scrape.status_note = why,
-        }
-        self.shown(false);
-    }
-
     /// Signs into a ScreenScraper account off the GUI thread (#62).
     fn scrape_sign_in(self: Pin<&mut Self>, user: String, password: String) {
         self.run_scrape_task(true, true, move |s| s.scrape_sign_in(&user, &password).map(|val| scrape_account_note(&val, "Could not sign in.")));
     }
 
-    /// Signs out of the saved ScreenScraper account (#62).
+    /// Signs out of the saved ScreenScraper account off the GUI thread (#62).
     fn scrape_sign_out(self: Pin<&mut Self>) {
-        self.run_scrape_sync(true, |s| s.scrape_sign_out().map(|_| ()));
+        self.run_scrape_task(false, true, |s| s.scrape_sign_out().map(|_| None));
     }
 
     /// Re-verifies the saved ScreenScraper account off the GUI thread (#62).
@@ -1898,9 +2199,9 @@ impl qobject::SettingsModel {
         self.run_scrape_task(false, false, move |s| s.scrape_resume(&app).map(|_| None));
     }
 
-    /// Cancels an active scrape run (#62).
+    /// Cancels an active scrape run off the GUI thread (#62).
     fn scrape_cancel(self: Pin<&mut Self>) {
-        self.run_scrape_sync(false, |s| s.scrape_cancel().map(|_| ()));
+        self.run_scrape_task(false, false, |s| s.scrape_cancel().map(|_| None));
     }
 
     /// The focused row's pane.
@@ -1957,10 +2258,110 @@ impl qobject::SettingsModel {
     }
 
     pub(crate) fn open_shaders_board(mut self: Pin<&mut Self>, return_row: usize) {
+        let mut board = crate::settings_shaders::ShadersBoard::open_immediate(&self.view, return_row);
+        let has_lib = !self.platform_library.is_empty();
+        board.favourites_loaded = !has_lib;
+        let gen = self.shaders_open_gen.wrapping_add(1);
+        let loading_changed = {
+            let mut r = self.as_mut().rust_mut();
+            let changed = r.shaders_loading != has_lib;
+            r.shaders_open_gen = gen;
+            r.shaders_loading = has_lib;
+            r.shaders_state = Some(board);
+            changed
+        };
+        let view_changed = self.as_mut().sync_shaders_view_changed();
+        if loading_changed && !view_changed {
+            self.as_mut().shaders_changed();
+        }
+        self.as_mut().spawn_shaders_open(gen, true);
+    }
+
+    fn spawn_shaders_open(mut self: Pin<&mut Self>, open_gen: u64, include_scan: bool) {
         let library = self.platform_library.to_string();
-        let board = crate::settings_shaders::ShadersBoard::open(&self.view, &library, return_row);
-        self.as_mut().rust_mut().shaders_state = Some(board);
-        self.as_mut().sync_shaders_view();
+        if library.is_empty() {
+            return;
+        }
+        let Some(board) = self.shaders_state.clone() else { return };
+        let view = self.view.clone();
+        let meta_gen = self.shaders_meta_gen.wrapping_add(1);
+        self.as_mut().rust_mut().shaders_meta_gen = meta_gen;
+        let clients = self.clients.clone();
+        let qt = self.qt_thread();
+        self.clients.spawn(move || {
+            let loaded = clients
+                .platform(&library)
+                .map(|p| crate::settings_shaders::ShadersBoard::collect_open_data(Some(&p), &view, &board, include_scan));
+            let _ = qt.queue(move |mut model| {
+                if model.shaders_open_gen != open_gen || (!include_scan && model.shaders_meta_gen != meta_gen) {
+                    return;
+                }
+                let data = match loaded {
+                    Ok(d) => d,
+                    Err(words) => {
+                        if include_scan && model.shaders_loading {
+                            model.as_mut().rust_mut().shaders_loading = false;
+                            model.as_mut().shaders_changed();
+                        }
+                        model.said(format!("The shader presets could not be read: {words}"));
+                        return;
+                    }
+                };
+                let (took, persist_favs, cleared_loading) = {
+                    let mut r = model.as_mut().rust_mut();
+                    let cleared = if include_scan {
+                        let was = r.shaders_loading;
+                        r.shaders_loading = false;
+                        was
+                    } else {
+                        false
+                    };
+                    if let Some(mut b) = r.shaders_state.take() {
+                        let persist = b.apply_open_data(data, &r.view);
+                        r.shaders_state = Some(b);
+                        (true, persist, cleared)
+                    } else {
+                        (false, None, cleared)
+                    }
+                };
+                if took {
+                    let view_changed = model.as_mut().sync_shaders_view_changed();
+                    if cleared_loading && !view_changed {
+                        model.as_mut().shaders_changed();
+                    }
+                    if model.shaders_shown {
+                        model.as_mut().sync_shaders_preview(false);
+                    }
+                } else if cleared_loading {
+                    model.as_mut().shaders_changed();
+                }
+                if let Some(favs) = persist_favs {
+                    model.as_mut().spawn_save_favourites(favs);
+                }
+            });
+        });
+    }
+
+    fn spawn_save_favourites(self: Pin<&mut Self>, favs: Vec<String>) {
+        let library = self.platform_library.to_string();
+        if library.is_empty() {
+            return;
+        }
+        let clients = self.clients.clone();
+        let qt = self.qt_thread();
+        self.clients.spawn(move || {
+            let saved = clients.platform(&library).and_then(|p| crate::settings_shaders::save_favourites_on(&p, &favs));
+            if let Err(words) = saved {
+                let _ = qt.queue(move |model| model.said(format!("The shader favourites could not be saved: {words}")));
+            }
+        });
+    }
+
+    fn maybe_fetch_shaders_meta(self: Pin<&mut Self>) {
+        let open_gen = self.shaders_open_gen;
+        if self.shaders_state.as_ref().is_some_and(|b| b.needs_visible_meta(&self.view)) {
+            self.spawn_shaders_open(open_gen, false);
+        }
     }
 
     /// Rewinds any subpage, moves to `section`, and returns the index of `row_id` if present.
@@ -1977,18 +2378,28 @@ impl qobject::SettingsModel {
     }
 
     fn close_shaders_state(mut self: Pin<&mut Self>) {
-        let had = self.shaders_state.is_some() || self.shaders_shown || self.shader_preview_feed != 0;
+        let had = self.shaders_state.is_some() || self.shaders_shown || self.shaders_loading || self.shader_preview_feed != 0;
         {
             let mut r = self.as_mut().rust_mut();
+            r.shaders_open_gen = r.shaders_open_gen.wrapping_add(1);
             r.shaders_state = None;
             r.shaders_shown = false;
+            r.shaders_loading = false;
             r.shader_preview.release();
             r.shader_preview_feed = 0;
             r.shader_preview_pending = false;
             r.shaders_board = QString::from("{}");
             r.shaders_help = QString::from("[]");
+            r.shaders_presets_json = QString::from("[]");
+            r.shaders_categories_json = QString::from("[]");
+            r.shaders_sliders_json = QString::from("[]");
+            r.shaders_meta_json.clear();
+            r.shaders_meta = QVariant::default();
+            r.shaders_counter = QString::default();
         }
         if had {
+            self.as_mut().shaders_lists_changed();
+            self.as_mut().shaders_scalar_changed();
             self.as_mut().shaders_changed();
             self.as_mut().shader_preview_changed();
         }
@@ -2002,47 +2413,142 @@ impl qobject::SettingsModel {
         }
     }
 
-    fn sync_shaders_view(mut self: Pin<&mut Self>) {
-        let library = self.platform_library.to_string();
-        let (shown, board_json, help_json) = {
+    fn sync_shaders_scalars(mut self: Pin<&mut Self>) {
+        let Some(board) = self.shaders_state.as_ref() else { return };
+        let (split, comparing, zone, preset, slider, confirm, src, cat, scope) = (
+            board.split,
+            board.comparing,
+            board.focus_zone as i32,
+            board.focused_preset as i32,
+            board.focused_slider as i32,
+            board.confirm_remove,
+            board.source as i32,
+            board.category as i32,
+            board.scope as i32,
+        );
+        let changed = (self.shaders_split - split).abs() > 1e-6
+            || self.shaders_comparing != comparing
+            || self.shaders_focus_zone != zone
+            || self.shaders_focused_preset != preset
+            || self.shaders_focused_slider != slider
+            || self.shaders_confirm_open != confirm
+            || self.shaders_source_idx != src
+            || self.shaders_category_idx != cat
+            || self.shaders_scope_idx != scope;
+        if changed {
             let mut r = self.as_mut().rust_mut();
-            let Some(mut board) = r.shaders_state.take() else {
+            r.shaders_split = split;
+            r.shaders_comparing = comparing;
+            r.shaders_focus_zone = zone;
+            r.shaders_focused_preset = preset;
+            r.shaders_focused_slider = slider;
+            r.shaders_confirm_open = confirm;
+            r.shaders_source_idx = src;
+            r.shaders_category_idx = cat;
+            r.shaders_scope_idx = scope;
+            self.as_mut().shaders_scalar_changed();
+        }
+    }
+
+    fn sync_shaders_view(self: Pin<&mut Self>) {
+        let _ = self.sync_shaders_view_changed();
+    }
+
+    fn sync_shaders_view_changed(mut self: Pin<&mut Self>) -> bool {
+        let (shown, parts, board_ref) = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(board) = r.shaders_state.take() else {
                 r.shaders_shown = false;
                 r.shaders_board = QString::from("{}");
                 r.shaders_help = QString::from("[]");
-                return;
+                return false;
             };
             let shown = !board.return_params;
-            let json = board.to_json(&r.view, &library, board.comparing);
-            let help = json["footerHelp"].to_string();
-            let board_str = json.to_string();
+            let parts = board.to_parts_in_memory(&r.view, board.comparing, true);
+            let scalar_snap = (
+                board.split,
+                board.comparing,
+                board.focus_zone as i32,
+                board.focused_preset as i32,
+                board.focused_slider as i32,
+                board.confirm_remove,
+                board.source as i32,
+                board.category as i32,
+                board.scope as i32,
+            );
             r.shaders_state = Some(board);
-            (shown, QString::from(board_str.as_str()), QString::from(help.as_str()))
+            (shown, parts, scalar_snap)
         };
-        let changed = self.shaders_shown != shown || self.shaders_board != board_json || self.shaders_help != help_json;
-        if changed {
+        let help = parts.meta["footerHelp"].to_string();
+        let meta_str = parts.meta.to_string();
+        let board_str = parts.board.to_string();
+        let counter_str = parts.board["counter"].as_str().unwrap_or("0 of 0").to_owned();
+
+        let (presets_q, cats_q, sliders_q, board_q, help_q, counter_q) = (
+            QString::from(parts.presets_json.as_str()),
+            QString::from(parts.categories_json.as_str()),
+            QString::from(parts.sliders_json.as_str()),
+            QString::from(board_str.as_str()),
+            QString::from(help.as_str()),
+            QString::from(counter_str.as_str()),
+        );
+        let lists_changed = self.shaders_presets_json != presets_q || self.shaders_categories_json != cats_q || self.shaders_sliders_json != sliders_q;
+        let scalars_changed = (self.shaders_split - board_ref.0).abs() > 1e-6
+            || self.shaders_comparing != board_ref.1
+            || self.shaders_focus_zone != board_ref.2
+            || self.shaders_focused_preset != board_ref.3
+            || self.shaders_focused_slider != board_ref.4
+            || self.shaders_confirm_open != board_ref.5
+            || self.shaders_source_idx != board_ref.6
+            || self.shaders_category_idx != board_ref.7
+            || self.shaders_scope_idx != board_ref.8
+            || self.shaders_counter != counter_q;
+        let meta_dirty = self.shaders_meta_json != meta_str;
+        let view_changed = self.shaders_shown != shown || self.shaders_board != board_q || self.shaders_help != help_q || meta_dirty;
+
+        if lists_changed {
+            let mut r = self.as_mut().rust_mut();
+            r.shaders_presets_json = presets_q;
+            r.shaders_categories_json = cats_q;
+            r.shaders_sliders_json = sliders_q;
+            self.as_mut().shaders_lists_changed();
+        }
+        if scalars_changed {
+            let mut r = self.as_mut().rust_mut();
+            (r.shaders_split, r.shaders_comparing, r.shaders_focus_zone, r.shaders_focused_preset, r.shaders_focused_slider) =
+                (board_ref.0, board_ref.1, board_ref.2, board_ref.3, board_ref.4);
+            (r.shaders_confirm_open, r.shaders_source_idx, r.shaders_category_idx, r.shaders_scope_idx, r.shaders_counter) =
+                (board_ref.5, board_ref.6, board_ref.7, board_ref.8, counter_q);
+            self.as_mut().shaders_scalar_changed();
+        }
+        if view_changed {
+            let next_meta = if meta_dirty { Some(json_to_variant(&meta_str)) } else { None };
             let mut r = self.as_mut().rust_mut();
             r.shaders_shown = shown;
-            r.shaders_board = board_json;
-            r.shaders_help = help_json;
+            r.shaders_board = board_q;
+            r.shaders_help = help_q;
+            if let Some(m) = next_meta {
+                r.shaders_meta_json = meta_str;
+                r.shaders_meta = m;
+            }
             self.as_mut().shaders_changed();
         }
+        view_changed
     }
 
     fn sync_shaders_preview(mut self: Pin<&mut Self>, immediate: bool) {
         let library = self.platform_library.to_string();
         let target = {
-            let mut r = self.as_mut().rust_mut();
-            let Some(mut board) = r.shaders_state.take() else { return };
-            let target = board.preview_target(&r.view, &library);
-            r.shaders_state = Some(board);
-            target
+            let r = self.as_mut().rust_mut();
+            let Some(board) = r.shaders_state.as_ref() else { return };
+            board.preview_target_in_memory(&r.view)
         };
+        let platform = if immediate && !library.is_empty() { self.clients.platform(&library).ok() } else { None };
         let (scheduled, committed, feed_addr, src, pending) = {
             let mut r = self.as_mut().rust_mut();
             let scheduled = r.shader_preview.schedule(target);
             let committed = if immediate && (scheduled || r.shader_preview.has_pending()) {
-                r.shader_preview.commit(&library)
+                r.shader_preview.commit_with_platform(platform.as_deref())
             } else {
                 false
             };
@@ -2099,14 +2605,15 @@ impl qobject::SettingsModel {
             }
         }
         self.as_mut().sync_shaders_view();
+        self.as_mut().maybe_fetch_shaders_meta();
         self.sync_shaders_preview(immediate);
     }
 
     fn shaders_apply_search(self: Pin<&mut Self>, query: String) {
-        self.mutate_shaders(false, |board, view, library| {
+        self.mutate_shaders(false, |board, view, _| {
             board.search = query;
             board.focused_preset = 0;
-            board.sync_preview_stored(view, library);
+            board.sync_preview_stored_in_memory(view);
             crate::settings_shaders::ShadersOutcome::Changed
         });
     }
@@ -2139,9 +2646,10 @@ impl qobject::SettingsModel {
             return;
         }
         let library = self.platform_library.to_string();
+        let platform = if !library.is_empty() { self.clients.platform(&library).ok() } else { None };
         let (committed, pending, problem) = {
             let mut r = self.as_mut().rust_mut();
-            let committed = r.shader_preview.commit(&library);
+            let committed = r.shader_preview.commit_with_platform(platform.as_deref());
             let pending = r.shader_preview.has_pending();
             let problem = r.shader_preview.problem().to_owned();
             (committed, pending, problem)
@@ -2206,12 +2714,12 @@ impl qobject::SettingsModel {
                 self.shaders_step_slider(slot, dx);
                 return true;
             }
-            self.mutate_shaders(false, |board, view, library| board.nav(view, library, dx, dy));
+            self.mutate_shaders(false, |board, view, _| board.nav_in_memory(view, dx, dy));
             return true;
         }
         if ui == UiButton::PageUp || ui == UiButton::PageDown {
             let delta = if ui == UiButton::PageUp { -0.08 } else { 0.08 };
-            self.mutate_shaders(false, |board, _, _| if board.step_split(delta) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None });
+            self.mutate_shaders_scalar(|board| board.step_split(delta));
             return true;
         }
         if repeat {
@@ -2232,8 +2740,8 @@ impl qobject::SettingsModel {
             }
             UiButton::First | UiButton::Last => {
                 let by = if ui == UiButton::First { -1 } else { 1 };
-                self.mutate_shaders(false, |board, view, library| {
-                    if board.step_console(view, library, by) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None }
+                self.mutate_shaders(false, |board, view, _| {
+                    if board.step_console_in_memory(view, by) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None }
                 });
                 true
             }
@@ -2241,31 +2749,42 @@ impl qobject::SettingsModel {
         }
     }
 
+    fn mutate_shaders_scalar(mut self: Pin<&mut Self>, f: impl FnOnce(&mut crate::settings_shaders::ShadersBoard) -> bool) {
+        let changed = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(board) = r.shaders_state.as_mut() else { return };
+            f(board)
+        };
+        if changed {
+            self.as_mut().sync_shaders_scalars();
+        }
+    }
+
     pub fn shaders_source(self: Pin<&mut Self>, index: i32) {
-        self.mutate_shaders(true, |board, view, library| {
+        self.mutate_shaders(true, |board, view, _| {
             board.focus_zone = 0;
-            board.set_source(view, library, index.max(0) as usize);
+            board.set_source_in_memory(view, index.max(0) as usize);
             crate::settings_shaders::ShadersOutcome::Changed
         });
     }
 
     pub fn shaders_category(self: Pin<&mut Self>, index: i32) {
-        self.mutate_shaders(true, |board, view, library| {
+        self.mutate_shaders(true, |board, view, _| {
             board.focus_zone = 1;
-            board.set_category(view, library, index.max(0) as usize);
+            board.set_category_in_memory(view, index.max(0) as usize);
             crate::settings_shaders::ShadersOutcome::Changed
         });
     }
 
     pub fn shaders_focus_preset(self: Pin<&mut Self>, index: i32, activate: bool) {
-        self.mutate_shaders(activate, |board, view, library| {
+        self.mutate_shaders(activate, |board, view, _| {
             let visible = board.visible_items(view).len();
             if visible == 0 {
                 return crate::settings_shaders::ShadersOutcome::None;
             }
             board.focus_zone = 4;
             board.focused_preset = (index.max(0) as usize).min(visible - 1);
-            board.sync_preview_stored(view, library);
+            board.sync_preview_stored_in_memory(view);
             if activate {
                 let out = board.apply_current(view);
                 if out == Outcome::Nothing { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::Saved(out) }
@@ -2276,25 +2795,36 @@ impl qobject::SettingsModel {
     }
 
     pub fn shaders_scope(self: Pin<&mut Self>, index: i32) {
-        self.mutate_shaders(true, |board, view, library| {
+        self.mutate_shaders(true, |board, view, _| {
             board.focus_zone = 5;
-            board.set_scope(view, library, index.max(0) as usize);
+            board.set_scope_in_memory(view, index.max(0) as usize);
             crate::settings_shaders::ShadersOutcome::Changed
         });
     }
 
-    pub fn shaders_toggle_favourite(self: Pin<&mut Self>, index: i32) {
-        self.mutate_shaders(false, |board, view, library| {
+    pub fn shaders_toggle_favourite(mut self: Pin<&mut Self>, index: i32) {
+        let updated = {
+            let mut r = self.as_mut().rust_mut();
+            let Some(mut board) = r.shaders_state.take() else { return };
             if index >= 0 {
-                let visible = board.visible_items(view).len();
+                let visible = board.visible_items(&r.view).len();
                 if visible > 0 {
                     board.focus_zone = 4;
                     board.focused_preset = (index as usize).min(visible - 1);
-                    board.sync_preview_stored(view, library);
+                    board.sync_preview_stored_in_memory(&r.view);
                 }
             }
-            if board.toggle_favourite(view, library) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None }
-        });
+            let favs = board.toggle_favourite_in_memory(&r.view);
+            r.shaders_state = Some(board);
+            favs
+        };
+        let Some((favs, loaded)) = updated else { return };
+        self.as_mut().sync_shaders_view();
+        self.as_mut().maybe_fetch_shaders_meta();
+        self.as_mut().sync_shaders_preview(false);
+        if loaded {
+            self.as_mut().spawn_save_favourites(favs);
+        }
     }
 
     pub fn shaders_search(self: Pin<&mut Self>) {
@@ -2327,25 +2857,68 @@ impl qobject::SettingsModel {
             return;
         }
         let library = self.platform_library.to_string();
-        let res = {
+        let (open_gen, pack_dir, favs_loaded, favs, deltas, graphics_dirty, graphics_doc) = {
             let mut r = self.as_mut().rust_mut();
             let Some(mut board) = r.shaders_state.take() else { return };
-            let out = board.remove_pack(&mut r.view, &library);
+            board.confirm_remove = false;
+            let mut probe_view = r.view.clone();
+            let mut probe_board = board.clone();
+            let dirty = probe_board.finish_remove_pack(&mut probe_view);
+            let dir = board.pack_dir.clone();
+            let favs_loaded = board.favourites_loaded;
+            let deltas = board.pending_fav_deltas.clone();
             r.shaders_state = Some(board);
-            out
+            (r.shaders_open_gen, dir, favs_loaded, probe_board.favourites, deltas, dirty, probe_view.read.graphics)
         };
-        match res {
-            Ok(()) => {
-                self.as_mut().said(String::new());
-                self.as_mut().sync_shaders_view();
-                self.as_mut().sync_shaders_preview(true);
-                self.carry(Outcome::Reread);
-            }
-            Err(words) => {
-                self.as_mut().said(words);
-                self.sync_shaders_view();
-            }
-        }
+        self.as_mut().said(String::new());
+        self.as_mut().sync_shaders_view();
+        let (was_reading, asked) = self.as_mut().begin_reread_guard();
+        let clients = self.clients.clone();
+        let qt = self.qt_thread();
+        self.clients.spawn(move || {
+            let outcome = if library.is_empty() {
+                crate::settings_shaders::ShadersBoard::persist_remove_pack(None, pack_dir, favs_loaded, &favs, &deltas, graphics_dirty, &graphics_doc)
+            } else {
+                clients.platform(&library).and_then(|p| {
+                    crate::settings_shaders::ShadersBoard::persist_remove_pack(Some(&p), pack_dir, favs_loaded, &favs, &deltas, graphics_dirty, &graphics_doc)
+                })
+            };
+            let _ = qt.queue(move |mut model| match outcome {
+                Err(words) => {
+                    model.as_mut().end_reread_guard_err(was_reading, asked);
+                    model.as_mut().said(format!("The shader pack could not be removed: {words}"));
+                    model.as_mut().refresh_inner(false);
+                    if model.shaders_open_gen == open_gen && model.shaders_state.is_some() {
+                        model.as_mut().spawn_shaders_open(open_gen, true);
+                        model.as_mut().sync_shaders_view();
+                    }
+                }
+                Ok(()) => {
+                    if model.shaders_open_gen == open_gen {
+                        let took = {
+                            let mut r = model.as_mut().rust_mut();
+                            if let Some(mut board) = r.shaders_state.take() {
+                                board.finish_remove_pack(&mut r.view);
+                                r.shaders_state = Some(board);
+                                true
+                            } else {
+                                false
+                            }
+                        };
+                        if took {
+                            model.as_mut().sync_shaders_view();
+                            if model.shaders_shown {
+                                model.as_mut().sync_shaders_preview(true);
+                            }
+                        }
+                    }
+                    let refreshed = model.as_mut().finish_async_save(was_reading, asked);
+                    if !refreshed {
+                        model.refresh();
+                    }
+                }
+            });
+        });
     }
 
     fn shaders_update_slider(mut self: Pin<&mut Self>, slot: i32, res: Option<(String, f32, Outcome)>) {
@@ -2361,11 +2934,10 @@ impl qobject::SettingsModel {
     }
 
     pub fn shaders_step_slider(mut self: Pin<&mut Self>, slot: i32, by: i32) {
-        let library = self.platform_library.to_string();
         let res = {
             let mut r = self.as_mut().rust_mut();
             let Some(mut board) = r.shaders_state.take() else { return };
-            let out = board.step_slider(&mut r.view, &library, slot.max(0) as usize, by);
+            let out = board.step_slider_in_memory(&mut r.view, slot.max(0) as usize, by);
             r.shaders_state = Some(board);
             out
         };
@@ -2373,11 +2945,10 @@ impl qobject::SettingsModel {
     }
 
     pub fn shaders_slide_slider(mut self: Pin<&mut Self>, slot: i32, norm: f64) {
-        let library = self.platform_library.to_string();
         let res = {
             let mut r = self.as_mut().rust_mut();
             let Some(mut board) = r.shaders_state.take() else { return };
-            let out = board.slide_slider(&mut r.view, &library, slot.max(0) as usize, norm);
+            let out = board.slide_slider_in_memory(&mut r.view, slot.max(0) as usize, norm);
             r.shaders_state = Some(board);
             out
         };
@@ -2385,20 +2956,20 @@ impl qobject::SettingsModel {
     }
 
     pub fn shaders_set_split(self: Pin<&mut Self>, norm: f64) {
-        self.mutate_shaders(false, |board, _, _| if board.set_split(norm) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None });
+        self.mutate_shaders_scalar(|board| board.set_split(norm));
     }
 
     pub fn shaders_scrub_split(self: Pin<&mut Self>, delta: f64) {
-        self.mutate_shaders(false, |board, _, _| if board.step_split(delta) { crate::settings_shaders::ShadersOutcome::Changed } else { crate::settings_shaders::ShadersOutcome::None });
+        self.mutate_shaders_scalar(|board| board.step_split(delta));
     }
 
     pub fn shaders_hold_compare(self: Pin<&mut Self>, down: bool) {
-        self.mutate_shaders(false, |board, _, _| {
+        self.mutate_shaders_scalar(|board| {
             if board.comparing == down {
-                crate::settings_shaders::ShadersOutcome::None
+                false
             } else {
                 board.comparing = down;
-                crate::settings_shaders::ShadersOutcome::Changed
+                true
             }
         });
     }
@@ -2406,6 +2977,42 @@ impl qobject::SettingsModel {
     pub fn shaders_back(self: Pin<&mut Self>) {
         self.close_shaders_to_display();
     }
+}
+
+fn strip_pad_volatile(arr: Option<&serde_json::Value>) -> String {
+    let Some(items) = arr.and_then(serde_json::Value::as_array) else {
+        return "[]".to_owned();
+    };
+    let mut clean = Vec::with_capacity(items.len());
+    for item in items {
+        let mut copy = item.clone();
+        if let Some(map) = copy.as_object_mut() {
+            map.remove("focused");
+            map.remove("held");
+        }
+        clean.push(copy);
+    }
+    serde_json::Value::Array(clean).to_string()
+}
+
+fn split_pad_board(pad_board: Option<&serde_json::Value>) -> (String, i32, i32, f64, f64, String, String, String, String) {
+    let Some(v) = pad_board else {
+        return (String::new(), 0, -1, 0.0, 0.0, "[]".to_owned(), "[]".to_owned(), "{}".to_owned(), String::new());
+    };
+    let svg = v["svg"].as_str().unwrap_or_default().to_owned();
+    let focus = v["focus"].as_i64().unwrap_or(0) as i32;
+    let header_focus = v["headerFocus"].as_i64().unwrap_or(-1) as i32;
+    let left_y = v["leftScrollY"].as_f64().unwrap_or(0.0);
+    let right_y = v["rightScrollY"].as_f64().unwrap_or(0.0);
+    let left_rows = strip_pad_volatile(v.get("left"));
+    let right_rows = strip_pad_volatile(v.get("right"));
+    let mut meta = v.clone();
+    if let Some(m) = meta.as_object_mut() {
+        for volatile_key in ["svg", "focus", "headerFocus", "leftScrollY", "rightScrollY", "left", "right"] {
+            m.remove(volatile_key);
+        }
+    }
+    (svg, focus, header_focus, left_y, right_y, left_rows, right_rows, meta.to_string(), v.to_string())
 }
 
 /// Formats a non-signed-in ScreenScraper account response into a UI status note (#62).

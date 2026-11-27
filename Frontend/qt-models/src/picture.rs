@@ -94,6 +94,7 @@ struct Render {
     device: Arc<Device>,
     through: Through,
     chain: Option<Chain>,
+    generation: u64,
     /// The chain's parameters and the values it was last given, in its order.
     values: Vec<(String, f32)>,
     current: Frame,
@@ -142,6 +143,7 @@ impl PictureFeed {
             device,
             through: Through { preset, uniforms: Vec::new() },
             chain: None,
+            generation: 0,
             values: Vec::new(),
             current: Frame::default(),
             advanced: false,
@@ -327,6 +329,7 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
                 locked(&context.shared.live).clear();
                 render.chain = Some(chain);
                 render.values = values;
+                render.generation = render.generation.wrapping_add(1);
             }
             Err(e) => {
                 render.problem = Some(e.to_string());
@@ -356,7 +359,7 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
         }
         render.advanced = true;
         if !std::mem::take(&mut render.fresh) {
-            return show(chain, width, height, out, &mut render.problem);
+            return show(chain, width, height, render.generation, out, &mut render.problem);
         }
         render.fresh_since_swap = true;
         let counts = &context.shared.counts;
@@ -368,7 +371,7 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
             Source::Pixels => 0,
         };
     }
-    show(chain, width, height, out, &mut render.problem)
+    show(chain, width, height, render.generation, out, &mut render.problem)
 }
 
 /// The chain for a preset, its uniforms set over the preset's values where its passes declare them, and the values
@@ -389,12 +392,19 @@ fn build(device: &Arc<Device>, through: &Through) -> emusen_platform_client::Res
 }
 
 /// Every pass drawn for a view of `width` by `height`, the picture handed to GamePicture.
-fn show(chain: &mut Chain, width: i32, height: i32, out: *mut Picture, problem: &mut Option<String>) -> i32 {
+fn show(chain: &mut Chain, width: i32, height: i32, generation: u64, out: *mut Picture, problem: &mut Option<String>) -> i32 {
     match chain.draw(width, height) {
         Ok(drawn) => {
             // SAFETY: GamePicture passes its own picture to fill.
             unsafe {
-                *out = Picture { image: drawn.image, width: drawn.width, height: drawn.height, format: drawn.format, layout: drawn.layout }
+                *out = Picture {
+                    image: drawn.image,
+                    width: drawn.width,
+                    height: drawn.height,
+                    format: drawn.format,
+                    layout: drawn.layout,
+                    generation,
+                }
             };
             1
         }

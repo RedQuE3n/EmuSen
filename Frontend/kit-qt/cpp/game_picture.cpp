@@ -14,6 +14,7 @@ namespace {
 struct PictureNode : QSGSimpleTextureNode {
     uint64_t image = 0;
     QSize size;
+    uint64_t generation = 0;
 };
 
 // Owns the adopted instance for as long as the window lives; a child, so it goes after the window's scene graph.
@@ -96,11 +97,12 @@ QSGNode* GamePicture::updatePaintNode(QSGNode* old, UpdatePaintNodeData*)
         node->setFiltering(QSGTexture::Nearest);
     }
     const QSize size(int(picture.width), int(picture.height));
-    if (node->image != picture.image || node->size != size) {
+    if (node->image != picture.image || node->size != size || node->generation != picture.generation) {
         QSGTexture* texture = QNativeInterface::QSGVulkanTexture::fromNative(VkImage(picture.image), VkImageLayout(picture.layout), window(), size);
         node->setTexture(texture);
         node->image = picture.image;
         node->size = size;
+        node->generation = picture.generation;
     }
     node->setRect(boundingRect());
     node->markDirty(QSGNode::DirtyMaterial);

@@ -25,6 +25,7 @@ Kit.Sheet {
     background: null
     Overlay.modal: Item {}
     onAboutToShow: view.choiceList.currentIndex = 0
+    onOpened: view.choiceList.forceActiveFocus()
     onChosen: root.close()
     Connections {
         target: root.controller

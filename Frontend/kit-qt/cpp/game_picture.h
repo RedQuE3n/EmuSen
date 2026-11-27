@@ -11,10 +11,11 @@
 class QQuickWindow;
 class QSGTexture;
 
-// The image a feed drew this frame: Vulkan's VkImage as an integer, its size, VkFormat and VkImageLayout.
+// The image a feed drew this frame: Vulkan's VkImage, its size, VkFormat, VkImageLayout and chain generation.
 struct EmuSenPicture {
     uint64_t image;
     uint32_t width, height, format, layout;
+    uint64_t generation;
 };
 
 // A host's picture: both calls come on the render thread, `draw` at the item's sync and `swapped` after each swap.

@@ -113,7 +113,7 @@ Window {
     onSaid: (words, attention, overGame) => { if (words.length > 0) notices.raise(words, attention, overGame) }
     signal settleFocus()
     onSettleFocus: {
-        if (program.splashShown)
+        if (program.splashShown || player.session.resumeAsked || launch.asking)
             return
         if (!program.bigScreen) {
             if (chosenTheme.active && chosenTheme.focus)

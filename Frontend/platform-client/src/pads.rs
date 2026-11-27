@@ -78,9 +78,25 @@ impl Pads {
     }
 
     fn events(&self, call: impl Fn(*mut raw::emusen_endymion_pad_event, usize) -> i64) -> Result<Vec<PadEvent>> {
+        let map_events = |slice: &[raw::emusen_endymion_pad_event]| -> Vec<PadEvent> {
+            slice.iter().map(|e| PadEvent { opened: e.kind == 0, announce: e.announce != 0, key: e.key }).collect()
+        };
         let mut out = [raw::emusen_endymion_pad_event::default(); EVENTS];
         let n = self.platform.status(call(out.as_mut_ptr(), out.len()))? as usize;
-        Ok(out[..n.min(EVENTS)].iter().map(|e| PadEvent { opened: e.kind == 0, announce: e.announce != 0, key: e.key }).collect())
+        if n <= EVENTS {
+            return Ok(map_events(&out[..n]));
+        }
+        let mut more = vec![raw::emusen_endymion_pad_event::default(); n];
+        loop {
+            let taken = self
+                .platform
+                .status(unsafe { self.platform.lib.emusen_endymion_pads_take(self.pads.as_ptr(), more.as_mut_ptr(), more.len()) })?
+                as usize;
+            if taken <= more.len() {
+                return Ok(map_events(&more[..taken]));
+            }
+            more.resize(taken, raw::emusen_endymion_pad_event::default());
+        }
     }
 
     /// Starts the devices; the pads opened.
@@ -123,8 +139,23 @@ impl Pads {
         let mut keys = [0u64; EVENTS];
         let n = self
             .platform
-            .status(unsafe { self.platform.lib.emusen_endymion_pads_open(self.pads.as_ptr(), keys.as_mut_ptr(), keys.len()) })?;
-        Ok(keys[..(n as usize).min(EVENTS)].to_vec())
+            .status(unsafe { self.platform.lib.emusen_endymion_pads_open(self.pads.as_ptr(), keys.as_mut_ptr(), keys.len()) })?
+            as usize;
+        if n <= EVENTS {
+            return Ok(keys[..n].to_vec());
+        }
+        let mut more = vec![0u64; n];
+        loop {
+            let m = self
+                .platform
+                .status(unsafe { self.platform.lib.emusen_endymion_pads_open(self.pads.as_ptr(), more.as_mut_ptr(), more.len()) })?
+                as usize;
+            if m <= more.len() {
+                more.truncate(m);
+                return Ok(more);
+            }
+            more.resize(m, 0);
+        }
     }
 
     /// A number of a pad's, consts' ID to VENDOR_PRODUCT, with its argument.
@@ -281,5 +312,41 @@ impl SimSet {
 impl Drop for SimSet {
     fn drop(&mut self) {
         unsafe { self.platform.lib.emusen_endymion_sim_set_free(self.set.as_ptr()) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn more_than_sixteen_pads_drain_pending_events_and_open_keys() {
+        let p = Platform::load(emusen_client_fixture::library()).unwrap();
+        let set = SimSet::new(&p).unwrap();
+        let mut sim_pads = Vec::new();
+        for _ in 0..20 {
+            let sp = SimPad::new(&p, None).unwrap();
+            set.connect(&sp).unwrap();
+            sim_pads.push(sp);
+        }
+        let pads = Pads::simulated(&p, &set).unwrap();
+        let started = pads.start().unwrap();
+        assert_eq!(started.len(), 20);
+        assert!(started.iter().all(|e| e.opened && !e.announce && e.key != 0));
+        assert!(pads.take().unwrap().is_empty(), "pending must be drained after start");
+        let open = pads.open().unwrap();
+        assert_eq!(open.len(), 20);
+        assert_eq!(open, started.iter().map(|e| e.key).collect::<Vec<_>>());
+        let mut hot = Vec::new();
+        for _ in 0..17 {
+            let sp = SimPad::new(&p, None).unwrap();
+            set.connect(&sp).unwrap();
+            hot.push(sp);
+        }
+        let polled = pads.poll().unwrap();
+        assert_eq!(polled.len(), 17);
+        assert!(polled.iter().all(|e| e.opened && e.announce && e.key != 0));
+        assert!(pads.take().unwrap().is_empty(), "pending must be drained after poll");
+        assert_eq!(pads.open().unwrap().len(), 37);
     }
 }

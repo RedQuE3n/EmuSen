@@ -3,7 +3,7 @@
 //! as a document: `{"key"}` for one of the catalog's, or its own description for a filter a caller made. Values cross
 //! as JSON objects of each id's 32 bits. Since interface 35. See EmuSen_Serenity.md §3.13.
 
-use crate::serenity::{bits, document, list, number, object, out_json, parameter_of};
+use crate::serenity::{bits, document, guard, list, number, object, out_json, parameter_of};
 use crate::{fail, status, text};
 use serde_json::Value;
 use emusen_serenity::filters::write::{self, Refusal, Written};
@@ -145,28 +145,30 @@ fn filter_json(f: &Filter) -> Value {
 /// `out` valid for `cap` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_filters(out: *mut u8, cap: usize) -> i64 {
-    let screens = screens::ALL
-        .iter()
-        .map(|s| {
-            object(vec![
-                ("console", Value::String(String::from(s.console))),
-                ("kind", Value::String(String::from(s.kind.name()))),
-                ("profile", Value::String(String::from(s.profile))),
-                ("hosts_picture", Value::Bool(s.hosts_picture)),
-                ("gap", s.gap.map_or(Value::Null, |s| Value::String(String::from(s)))),
-            ])
-        })
-        .collect();
-    let owed = screens::OWED.iter().map(|(console, note)| object(vec![("console", Value::String(String::from(*console))), ("note", Value::String(String::from(*note)))])).collect();
-    let document = object(vec![
-        ("filters", Value::Array(filters::catalog().iter().map(filter_json).collect())),
-        ("screens", Value::Array(screens)),
-        ("owed", Value::Array(owed)),
-        ("televisions", Value::Array(screens::televisions().into_iter().map(|s| Value::String(String::from(s))).collect())),
-        ("crop", object(vec![("television", Value::from(screens::TELEVISION_OVERSCAN.to_bits())), ("most_at_an_edge", Value::from(screens::MOST_AT_AN_EDGE.to_bits()))])),
-        ("reduce", Value::String(String::from(glsl::REDUCE))),
-    ]);
-    unsafe { out_json(&document, out, cap) }
+    guard(|s| s as i64, || {
+        let screens = screens::ALL
+            .iter()
+            .map(|s| {
+                object(vec![
+                    ("console", Value::String(String::from(s.console))),
+                    ("kind", Value::String(String::from(s.kind.name()))),
+                    ("profile", Value::String(String::from(s.profile))),
+                    ("hosts_picture", Value::Bool(s.hosts_picture)),
+                    ("gap", s.gap.map_or(Value::Null, |s| Value::String(String::from(s)))),
+                ])
+            })
+            .collect();
+        let owed = screens::OWED.iter().map(|(console, note)| object(vec![("console", Value::String(String::from(*console))), ("note", Value::String(String::from(*note)))])).collect();
+        let document = object(vec![
+            ("filters", Value::Array(filters::catalog().iter().map(filter_json).collect())),
+            ("screens", Value::Array(screens)),
+            ("owed", Value::Array(owed)),
+            ("televisions", Value::Array(screens::televisions().into_iter().map(|s| Value::String(String::from(s))).collect())),
+            ("crop", object(vec![("television", Value::from(screens::TELEVISION_OVERSCAN.to_bits())), ("most_at_an_edge", Value::from(screens::MOST_AT_AN_EDGE.to_bits()))])),
+            ("reduce", Value::String(String::from(glsl::REDUCE))),
+        ]);
+        unsafe { out_json(&document, out, cap) }
+    })
 }
 
 /// A filter's values on a console (`console` null for none): each setting's given value or its default there, then the console's constants.
@@ -175,16 +177,18 @@ pub unsafe extern "C" fn emusen_serenity_filters(out: *mut u8, cap: usize) -> i6
 /// Each pointer valid for its length, or null; `out` for `cap`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_filter_values(filter: *const u8, filter_len: usize, console: *const u8, console_len: usize, given: *const u8, given_len: usize, out: *mut u8, cap: usize) -> i64 {
-    let run = || -> Result<Values, i32> {
-        let filter = unsafe { filter_of(filter, filter_len) }?;
-        let console = unsafe { text(console, console_len) }?;
-        let given = unsafe { values_of(given, given_len) }?;
-        Ok(filter.values_for(console, given.as_ref()))
-    };
-    match run() {
-        Ok(values) => unsafe { out_json(&values_json(&values), out, cap) },
-        Err(status) => status as i64,
-    }
+    guard(|s| s as i64, || {
+        let run = || -> Result<Values, i32> {
+            let filter = unsafe { filter_of(filter, filter_len) }?;
+            let console = unsafe { text(console, console_len) }?;
+            let given = unsafe { values_of(given, given_len) }?;
+            Ok(filter.values_for(console, given.as_ref()))
+        };
+        match run() {
+            Ok(values) => unsafe { out_json(&values_json(&values), out, cap) },
+            Err(status) => status as i64,
+        }
+    })
 }
 
 /// The passes a filter is made of for these values, before translation.
@@ -193,15 +197,17 @@ pub unsafe extern "C" fn emusen_serenity_filter_values(filter: *const u8, filter
 /// Each pointer valid for its length, or null; `out` for `cap`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_filter_passes(filter: *const u8, filter_len: usize, values: *const u8, values_len: usize, out: *mut u8, cap: usize) -> i64 {
-    let run = || -> Result<Vec<Pass>, i32> {
-        let filter = unsafe { filter_of(filter, filter_len) }?;
-        let values = unsafe { values_of(values, values_len) }?.unwrap_or_default();
-        Ok(filter.passes_for(&values))
-    };
-    match run() {
-        Ok(passes) => unsafe { out_json(&Value::Array(passes.iter().map(pass_json).collect()), out, cap) },
-        Err(status) => status as i64,
-    }
+    guard(|s| s as i64, || {
+        let run = || -> Result<Vec<Pass>, i32> {
+            let filter = unsafe { filter_of(filter, filter_len) }?;
+            let values = unsafe { values_of(values, values_len) }?.unwrap_or_default();
+            Ok(filter.passes_for(&values))
+        };
+        match run() {
+            Ok(passes) => unsafe { out_json(&Value::Array(passes.iter().map(pass_json).collect()), out, cap) },
+            Err(status) => status as i64,
+        }
+    })
 }
 
 /// Whether a pass made for this console and these values reads the filter's raw encoding: 1 or 0.
@@ -210,16 +216,18 @@ pub unsafe extern "C" fn emusen_serenity_filter_passes(filter: *const u8, filter
 /// Each pointer valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_filter_reads_raw(filter: *const u8, filter_len: usize, console: *const u8, console_len: usize, given: *const u8, given_len: usize) -> i32 {
-    let run = || -> Result<bool, i32> {
-        let filter = unsafe { filter_of(filter, filter_len) }?;
-        let console = unsafe { text(console, console_len) }?;
-        let given = unsafe { values_of(given, given_len) }?;
-        Ok(filter.reads_raw(console, given.as_ref()))
-    };
-    match run() {
-        Ok(reads) => reads as i32,
-        Err(status) => status,
-    }
+    guard(|s| s, || {
+        let run = || -> Result<bool, i32> {
+            let filter = unsafe { filter_of(filter, filter_len) }?;
+            let console = unsafe { text(console, console_len) }?;
+            let given = unsafe { values_of(given, given_len) }?;
+            Ok(filter.reads_raw(console, given.as_ref()))
+        };
+        match run() {
+            Ok(reads) => reads as i32,
+            Err(status) => status,
+        }
+    })
 }
 
 /// How many rows of a frame are one of the console's lines for the filter's reducing pass; 1 when it has none.
@@ -228,10 +236,10 @@ pub unsafe extern "C" fn emusen_serenity_filter_reads_raw(filter: *const u8, fil
 /// `filter` valid for `filter_len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_filter_reduce_by(filter: *const u8, filter_len: usize, width: i32, height: i32, lines: i32) -> i32 {
-    match unsafe { filter_of(filter, filter_len) } {
+    guard(|s| s, || match unsafe { filter_of(filter, filter_len) } {
         Ok(filter) => filter.reduce_by(width, height, lines),
         Err(status) => status,
-    }
+    })
 }
 
 fn written_json(pass: &Written) -> Value {
@@ -252,15 +260,17 @@ fn written_json(pass: &Written) -> Value {
 /// Each pointer valid for its length, or null; `out` for `cap`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_filter_translate(filter: *const u8, filter_len: usize, values: *const u8, values_len: usize, reduce_by: i32, nudge_x: f32, nudge_y: f32, out: *mut u8, cap: usize) -> i64 {
-    let run = || -> Result<Vec<Written>, i32> {
-        let filter = unsafe { filter_of(filter, filter_len) }?;
-        let values = unsafe { values_of(values, values_len) }?.unwrap_or_default();
-        write::translate(&filter, &values, reduce_by, (nudge_x, nudge_y)).map_err(|words| fail(status::PARSE, words))
-    };
-    match run() {
-        Ok(passes) => unsafe { out_json(&Value::Array(passes.iter().map(written_json).collect()), out, cap) },
-        Err(status) => status as i64,
-    }
+    guard(|s| s as i64, || {
+        let run = || -> Result<Vec<Written>, i32> {
+            let filter = unsafe { filter_of(filter, filter_len) }?;
+            let values = unsafe { values_of(values, values_len) }?.unwrap_or_default();
+            write::translate(&filter, &values, reduce_by, (nudge_x, nudge_y)).map_err(|words| fail(status::PARSE, words))
+        };
+        match run() {
+            Ok(passes) => unsafe { out_json(&Value::Array(passes.iter().map(written_json).collect()), out, cap) },
+            Err(status) => status as i64,
+        }
+    })
 }
 
 /// Writes a filter's preset into a folder of `root` named by its content, once, and gives the preset's path.
@@ -283,20 +293,22 @@ pub unsafe extern "C" fn emusen_serenity_filter_write(
     out: *mut u8,
     cap: usize,
 ) -> i64 {
-    let run = || -> Result<String, i32> {
-        let filter = unsafe { filter_of(filter, filter_len) }?;
-        let console = unsafe { text(console, console_len) }?;
-        let chosen = unsafe { values_of(chosen, chosen_len) }?;
-        let Some(root) = (unsafe { text(root, root_len) })? else { return Err(fail(status::NULL, "no root named")) };
-        write::write(root, &filter, console, chosen.as_ref(), reduce_by, (nudge_x, nudge_y)).map_err(|refusal| match refusal {
-            Refusal::Pass(words) => fail(status::PARSE, words),
-            Refusal::Io(words) => fail(status::IO, words),
-        })
-    };
-    match run() {
-        Ok(path) => unsafe { crate::put(path.as_bytes(), out, cap) },
-        Err(status) => status as i64,
-    }
+    guard(|s| s as i64, || {
+        let run = || -> Result<String, i32> {
+            let filter = unsafe { filter_of(filter, filter_len) }?;
+            let console = unsafe { text(console, console_len) }?;
+            let chosen = unsafe { values_of(chosen, chosen_len) }?;
+            let Some(root) = (unsafe { text(root, root_len) })? else { return Err(fail(status::NULL, "no root named")) };
+            write::write(root, &filter, console, chosen.as_ref(), reduce_by, (nudge_x, nudge_y)).map_err(|refusal| match refusal {
+                Refusal::Pass(words) => fail(status::PARSE, words),
+                Refusal::Io(words) => fail(status::IO, words),
+            })
+        };
+        match run() {
+            Ok(path) => unsafe { crate::put(path.as_bytes(), out, cap) },
+            Err(status) => status as i64,
+        }
+    })
 }
 
 #[cfg(test)]

@@ -37,6 +37,24 @@ pub(crate) fn leave(document: Option<&Value>) {
     PENDING.with_borrow_mut(|pending| *pending = text.into_bytes());
 }
 
+fn panic_words(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "panic".to_string()
+    }
+}
+
+/// Runs a C-ABI body without unwinding, recording any panic into `last_error`.
+pub(crate) fn guard<T>(on_panic: impl FnOnce(i32) -> T, f: impl FnOnce() -> T) -> T {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(value) => value,
+        Err(payload) => on_panic(fail(status::IO, panic_words(payload))),
+    }
+}
+
 /// Shaderc as lent, else as the library finds it beside the program, once; a search that fails is said and tried again at the next call.
 pub(crate) fn shaderc() -> Result<Arc<Shaderc>, i32> {
     static FINDING: Mutex<()> = Mutex::new(());
@@ -91,20 +109,22 @@ pub(crate) fn failure(error: &Error) -> Value {
 /// `handle` a live handle to Shaderc from the platform's loader, kept loaded for the process; `path` valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_shaderc_lend(handle: *mut c_void, path: *const u8, len: usize) -> i32 {
-    if SHADERC.get().is_some() {
-        return 0;
-    }
-    let path = match unsafe { text(path, len) } {
-        Ok(path) => path,
-        Err(status) => return status,
-    };
-    match unsafe { Shaderc::lent(handle, path) } {
-        Ok(lent) => {
-            let _ = SHADERC.set(Arc::new(lent));
-            0
+    guard(|s| s, || {
+        if SHADERC.get().is_some() {
+            return 0;
         }
-        Err(words) => fail(if handle.is_null() { status::NULL } else { status::NOT_SUPPORTED }, words),
-    }
+        let path = match unsafe { text(path, len) } {
+            Ok(path) => path,
+            Err(status) => return status,
+        };
+        match unsafe { Shaderc::lent(handle, path) } {
+            Ok(lent) => {
+                let _ = SHADERC.set(Arc::new(lent));
+                0
+            }
+            Err(words) => fail(if handle.is_null() { status::NULL } else { status::NOT_SUPPORTED }, words),
+        }
+    })
 }
 
 /// SQLite as the host has it loaded, so that the process holds one SQLite. The first lent is kept, and never closed.
@@ -113,16 +133,18 @@ pub unsafe extern "C" fn emusen_serenity_shaderc_lend(handle: *mut c_void, path:
 /// `handle` a live handle to SQLite from the platform's loader, kept loaded for the process.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_sqlite_lend(handle: *mut c_void) -> i32 {
-    if SQLITE.get().is_some() {
-        return 0;
-    }
-    match unsafe { Sqlite::lent(handle) } {
-        Ok(lent) => {
-            let _ = SQLITE.set(Arc::new(lent));
-            0
+    guard(|s| s, || {
+        if SQLITE.get().is_some() {
+            return 0;
         }
-        Err(words) => fail(if handle.is_null() { status::NULL } else { status::NOT_SUPPORTED }, words),
-    }
+        match unsafe { Sqlite::lent(handle) } {
+            Ok(lent) => {
+                let _ = SQLITE.set(Arc::new(lent));
+                0
+            }
+            Err(words) => fail(if handle.is_null() { status::NULL } else { status::NOT_SUPPORTED }, words),
+        }
+    })
 }
 
 /// What is waiting on this thread from a call whose result did not fit, copied when it fits now and then forgotten.
@@ -131,7 +153,7 @@ pub unsafe extern "C" fn emusen_serenity_sqlite_lend(handle: *mut c_void) -> i32
 /// `out` valid for `cap` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_take(out: *mut u8, cap: usize) -> i64 {
-    PENDING.with_borrow_mut(|pending| unsafe { take(pending, out, cap) })
+    guard(|s| s as i64, || PENDING.with_borrow_mut(|pending| unsafe { take(pending, out, cap) }))
 }
 
 /// The compiler's identity, which a cache's keys carry.
@@ -140,10 +162,10 @@ pub unsafe extern "C" fn emusen_serenity_take(out: *mut u8, cap: usize) -> i64 {
 /// `out` valid for `cap` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_compiler_identity(out: *mut u8, cap: usize) -> i64 {
-    match shaderc() {
+    guard(|s| s as i64, || match shaderc() {
         Ok(shaderc) => unsafe { crate::put(shaderc.identity().as_bytes(), out, cap) },
         Err(status) => status as i64,
-    }
+    })
 }
 
 fn wrap(wrap: Wrap) -> Value {
@@ -219,15 +241,17 @@ fn preset_json(preset: &Preset) -> Value {
 /// `path` valid for `len` bytes; `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_preset_load(path: *const u8, len: usize, out: *mut u8, cap: usize) -> i64 {
-    let path = match unsafe { required(path, len) } {
-        Ok(path) => path,
-        Err(status) => return status as i64,
-    };
-    let document = match preset::load(path) {
-        Ok(preset) => preset_json(&preset),
-        Err(error) => failure(&error),
-    };
-    unsafe { out_json(&document, out, cap) }
+    guard(|s| s as i64, || {
+        let path = match unsafe { required(path, len) } {
+            Ok(path) => path,
+            Err(status) => return status as i64,
+        };
+        let document = match preset::load(path) {
+            Ok(preset) => preset_json(&preset),
+            Err(error) => failure(&error),
+        };
+        unsafe { out_json(&document, out, cap) }
+    })
 }
 
 pub(crate) fn parameter_json(parameter: &Parameter) -> Value {
@@ -258,15 +282,17 @@ fn source_json(source: &Source) -> Value {
 /// `path` valid for `len` bytes; `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_source_load(path: *const u8, len: usize, out: *mut u8, cap: usize) -> i64 {
-    let path = match unsafe { required(path, len) } {
-        Ok(path) => path,
-        Err(status) => return status as i64,
-    };
-    let document = match source::load(path) {
-        Ok(source) => source_json(&source),
-        Err(error) => failure(&error),
-    };
-    unsafe { out_json(&document, out, cap) }
+    guard(|s| s as i64, || {
+        let path = match unsafe { required(path, len) } {
+            Ok(path) => path,
+            Err(status) => return status as i64,
+        };
+        let document = match source::load(path) {
+            Ok(source) => source_json(&source),
+            Err(error) => failure(&error),
+        };
+        unsafe { out_json(&document, out, cap) }
+    })
 }
 
 pub(crate) fn number(value: Option<&Value>) -> Option<u32> {
@@ -308,24 +334,26 @@ pub(crate) fn list(value: Option<&Value>) -> Option<&Vec<Value>> {
 /// `input` valid for `len` bytes; `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_parameters_merge(input: *const u8, len: usize, out: *mut u8, cap: usize) -> i64 {
-    let input = match unsafe { document(input, len) } {
-        Ok(input) => input,
-        Err(status) => return status as i64,
-    };
-    let read = || -> Option<Merge> {
-        let sources = list(input.get("sources"))?.iter().map(|source| list(Some(source))?.iter().map(parameter_of).collect()).collect::<Option<Vec<Vec<Parameter>>>>()?;
-        let overrides = list(input.get("overrides"))?
-            .iter()
-            .map(|pair| {
-                let pair = list(Some(pair))?;
-                Some((pair.first()?.as_str()?.to_string(), f32::from_bits(number(pair.get(1))?)))
-            })
-            .collect::<Option<Vec<(String, f32)>>>()?;
-        Some((sources, overrides))
-    };
-    let Some((sources, overrides)) = read() else { return fail(status::PARSE, "not the sources and overrides of a merge") as i64 };
-    let merged = parameters::merge(sources.iter().map(Vec::as_slice), &overrides);
-    unsafe { out_json(&Value::Array(merged.iter().map(parameter_json).collect()), out, cap) }
+    guard(|s| s as i64, || {
+        let input = match unsafe { document(input, len) } {
+            Ok(input) => input,
+            Err(status) => return status as i64,
+        };
+        let read = || -> Option<Merge> {
+            let sources = list(input.get("sources"))?.iter().map(|source| list(Some(source))?.iter().map(parameter_of).collect()).collect::<Option<Vec<Vec<Parameter>>>>()?;
+            let overrides = list(input.get("overrides"))?
+                .iter()
+                .map(|pair| {
+                    let pair = list(Some(pair))?;
+                    Some((pair.first()?.as_str()?.to_string(), f32::from_bits(number(pair.get(1))?)))
+                })
+                .collect::<Option<Vec<(String, f32)>>>()?;
+            Some((sources, overrides))
+        };
+        let Some((sources, overrides)) = read() else { return fail(status::PARSE, "not the sources and overrides of a merge") as i64 };
+        let merged = parameters::merge(sources.iter().map(Vec::as_slice), &overrides);
+        unsafe { out_json(&Value::Array(merged.iter().map(parameter_json).collect()), out, cap) }
+    })
 }
 
 /// What a merge is given: each source's parameters, and the preset's values.
@@ -345,14 +373,16 @@ pub(crate) fn stage(stage: u32) -> Result<Stage, i32> {
 /// `source` valid for `len` bytes and `name` for `name_len`; `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_compile(source: *const u8, len: usize, kind: u32, name: *const u8, name_len: usize, out: *mut u8, cap: usize) -> i64 {
-    let compiled = (|| {
-        let (source, name) = (unsafe { required(source, len) }?, unsafe { required(name, name_len) }?);
-        shaderc()?.compile(source, stage(kind)?, name).map_err(|words| fail(status::PARSE, words))
-    })();
-    match compiled {
-        Ok(spirv) => unsafe { out_bytes(spirv, out, cap) },
-        Err(status) => status as i64,
-    }
+    guard(|s| s as i64, || {
+        let compiled = (|| {
+            let (source, name) = (unsafe { required(source, len) }?, unsafe { required(name, name_len) }?);
+            shaderc()?.compile(source, stage(kind)?, name).map_err(|words| fail(status::PARSE, words))
+        })();
+        match compiled {
+            Ok(spirv) => unsafe { out_bytes(spirv, out, cap) },
+            Err(status) => status as i64,
+        }
+    })
 }
 
 fn block_json(block: &Option<Block>) -> Value {
@@ -396,11 +426,13 @@ pub(crate) unsafe fn bytes<'a>(data: *const u8, len: usize) -> &'a [u8] {
 /// `spirv` valid for `len` bytes; `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_reflect(spirv: *const u8, len: usize, out: *mut u8, cap: usize) -> i64 {
-    let document = match reflection::read(unsafe { bytes(spirv, len) }) {
-        Ok(reflection) => reflection_json(&reflection),
-        Err(fault) => fault_json(&fault),
-    };
-    unsafe { out_json(&document, out, cap) }
+    guard(|s| s as i64, || {
+        let document = match reflection::read(unsafe { bytes(spirv, len) }) {
+            Ok(reflection) => reflection_json(&reflection),
+            Err(fault) => fault_json(&fault),
+        };
+        unsafe { out_json(&document, out, cap) }
+    })
 }
 
 fn block_of(value: Option<&Value>) -> Option<Option<Block>> {
@@ -430,14 +462,16 @@ fn reflection_of(value: Option<&Value>) -> Option<Reflection> {
 /// `input` valid for `len` bytes; `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_reflect_merge(input: *const u8, len: usize, out: *mut u8, cap: usize) -> i64 {
-    let input = match unsafe { document(input, len) } {
-        Ok(input) => input,
-        Err(status) => return status as i64,
-    };
-    let (Some(vertex), Some(fragment)) = (reflection_of(input.get("vertex")), reflection_of(input.get("fragment"))) else {
-        return fail(status::PARSE, "not the two reflections of a merge") as i64;
-    };
-    unsafe { out_json(&reflection_json(&reflection::merge(&vertex, &fragment)), out, cap) }
+    guard(|s| s as i64, || {
+        let input = match unsafe { document(input, len) } {
+            Ok(input) => input,
+            Err(status) => return status as i64,
+        };
+        let (Some(vertex), Some(fragment)) = (reflection_of(input.get("vertex")), reflection_of(input.get("fragment"))) else {
+            return fail(status::PARSE, "not the two reflections of a merge") as i64;
+        };
+        unsafe { out_json(&reflection_json(&reflection::merge(&vertex, &fragment)), out, cap) }
+    })
 }
 
 /// The module with the inputs no function reads left out of its entry points: its length in bytes, or ABSENT when
@@ -447,11 +481,11 @@ pub unsafe extern "C" fn emusen_serenity_reflect_merge(input: *const u8, len: us
 /// `spirv` valid for `len` bytes; `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_without_unread_inputs(spirv: *const u8, len: usize, out: *mut u8, cap: usize) -> i64 {
-    match reflection::without_unread_inputs(unsafe { bytes(spirv, len) }) {
+    guard(|s| s as i64, || match reflection::without_unread_inputs(unsafe { bytes(spirv, len) }) {
         Ok(Some(pruned)) => unsafe { out_bytes(pruned, out, cap) },
         Ok(None) => status::ABSENT as i64,
         Err(_) => fail(status::BAD_ARGUMENT, "an entry point's name runs to its end") as i64,
-    }
+    })
 }
 
 // The cache.
@@ -471,29 +505,33 @@ fn locked(handle: &CacheHandle) -> std::sync::MutexGuard<'_, Cache> {
 /// `path` valid for `len` bytes; `identity` for `identity_len`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_cache_new(path: *const u8, len: usize, limit: i64, identity: *const u8, identity_len: usize) -> *mut CacheHandle {
-    let made = (|| {
-        let path = unsafe { required(path, len) }?;
-        let identity = match unsafe { text(identity, identity_len) }? {
-            Some(identity) => identity.to_string(),
-            None => shaderc()?.identity().to_string(),
-        };
-        let sqlite = SQLITE.get().cloned().ok_or_else(|| fail(status::NOT_SUPPORTED, "SQLite has not been lent to the library"))?;
-        Ok::<_, i32>(Cache::open(sqlite, path, limit, &identity))
-    })();
-    match made {
-        Ok(cache) => Box::into_raw(Box::new(CacheHandle { cache: Mutex::new(cache) })),
-        Err(_) => std::ptr::null_mut(),
-    }
+    guard(|_| std::ptr::null_mut(), || {
+        let made = (|| {
+            let path = unsafe { required(path, len) }?;
+            let identity = match unsafe { text(identity, identity_len) }? {
+                Some(identity) => identity.to_string(),
+                None => shaderc()?.identity().to_string(),
+            };
+            let sqlite = SQLITE.get().cloned().ok_or_else(|| fail(status::NOT_SUPPORTED, "SQLite has not been lent to the library"))?;
+            Ok::<_, i32>(Cache::open(sqlite, path, limit, &identity))
+        })();
+        match made {
+            Ok(cache) => Box::into_raw(Box::new(CacheHandle { cache: Mutex::new(cache) })),
+            Err(_) => std::ptr::null_mut(),
+        }
+    })
 }
 
 /// # Safety
 /// `h` from `emusen_serenity_cache_new`, not freed, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_cache_free(h: *mut CacheHandle) -> i32 {
-    if !h.is_null() {
-        drop(unsafe { Box::from_raw(h) });
-    }
-    0
+    guard(|s| s, || {
+        if !h.is_null() {
+            drop(unsafe { Box::from_raw(h) });
+        }
+        0
+    })
 }
 
 macro_rules! cache {
@@ -511,8 +549,10 @@ macro_rules! cache {
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_cache_close(h: *const CacheHandle) -> i32 {
-    locked(cache!(h)).close();
-    0
+    guard(|s| s, || {
+        locked(cache!(h)).close();
+        0
+    })
 }
 
 /// A stage's SPIR-V from the cache, or compiled and kept: its length in bytes. `now` is Unix seconds. PARSE for a
@@ -522,15 +562,17 @@ pub unsafe extern "C" fn emusen_serenity_cache_close(h: *const CacheHandle) -> i
 /// `h` live; `source` valid for `len` bytes and `name` for `name_len`; `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_cache_compile(h: *const CacheHandle, source: *const u8, len: usize, kind: u32, name: *const u8, name_len: usize, now: i64, out: *mut u8, cap: usize) -> i64 {
-    let handle = cache!(h);
-    let compiled = (|| {
-        let (source, name) = (unsafe { required(source, len) }?, unsafe { required(name, name_len) }?);
-        cache::compile(&handle.cache, &*shaderc()?, source, stage(kind)?, name, now).map_err(|words| fail(status::PARSE, words))
-    })();
-    match compiled {
-        Ok(spirv) => unsafe { out_bytes(spirv, out, cap) },
-        Err(status) => status as i64,
-    }
+    guard(|s| s as i64, || {
+        let handle = cache!(h);
+        let compiled = (|| {
+            let (source, name) = (unsafe { required(source, len) }?, unsafe { required(name, name_len) }?);
+            cache::compile(&handle.cache, &*shaderc()?, source, stage(kind)?, name, now).map_err(|words| fail(status::PARSE, words))
+        })();
+        match compiled {
+            Ok(spirv) => unsafe { out_bytes(spirv, out, cap) },
+            Err(status) => status as i64,
+        }
+    })
 }
 
 pub const CACHE_WORKING: u32 = 0;
@@ -548,26 +590,30 @@ pub const CACHE_TOUCH_AFTER: u32 = 7;
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_cache_get(h: *const CacheHandle, which: u32) -> i64 {
-    let cache = locked(cache!(h));
-    match which {
-        CACHE_WORKING => cache.working() as i64,
-        CACHE_HITS => cache.counters.hits as i64,
-        CACHE_MISSES => cache.counters.misses as i64,
-        CACHE_STORED => cache.counters.stored as i64,
-        CACHE_DAMAGED => cache.counters.damaged as i64,
-        CACHE_SKIPPED => cache.counters.skipped as i64,
-        CACHE_EVICTED => cache.counters.evicted as i64,
-        CACHE_TOUCH_AFTER => cache.touch_after,
-        _ => fail(status::BAD_ARGUMENT, "no such number") as i64,
-    }
+    guard(|s| s as i64, || {
+        let cache = locked(cache!(h));
+        match which {
+            CACHE_WORKING => cache.working() as i64,
+            CACHE_HITS => cache.counters.hits as i64,
+            CACHE_MISSES => cache.counters.misses as i64,
+            CACHE_STORED => cache.counters.stored as i64,
+            CACHE_DAMAGED => cache.counters.damaged as i64,
+            CACHE_SKIPPED => cache.counters.skipped as i64,
+            CACHE_EVICTED => cache.counters.evicted as i64,
+            CACHE_TOUCH_AFTER => cache.touch_after,
+            _ => fail(status::BAD_ARGUMENT, "no such number") as i64,
+        }
+    })
 }
 
 /// # Safety
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_cache_set_touch_after(h: *const CacheHandle, seconds: i64) -> i32 {
-    locked(cache!(h)).touch_after = seconds;
-    0
+    guard(|s| s, || {
+        locked(cache!(h)).touch_after = seconds;
+        0
+    })
 }
 
 /// Why the cache is off; ABSENT while it works.
@@ -576,10 +622,10 @@ pub unsafe extern "C" fn emusen_serenity_cache_set_touch_after(h: *const CacheHa
 /// `h` live; `out` valid for `cap` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_cache_problem(h: *const CacheHandle, out: *mut u8, cap: usize) -> i64 {
-    match &locked(cache!(h)).problem {
+    guard(|s| s as i64, || match &locked(cache!(h)).problem {
         Some(problem) => unsafe { crate::put(problem.as_bytes(), out, cap) },
         None => status::ABSENT as i64,
-    }
+    })
 }
 
 /// The key a compile is kept under: 32 bytes into `out`.
@@ -588,15 +634,17 @@ pub unsafe extern "C" fn emusen_serenity_cache_problem(h: *const CacheHandle, ou
 /// The three texts valid for their lengths; `out` valid for 32 bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_cache_key(identity: *const u8, identity_len: usize, source: *const u8, len: usize, kind: u32, name: *const u8, name_len: usize, out: *mut u8) -> i32 {
-    let made = (|| Ok::<_, i32>(cache::key(unsafe { required(identity, identity_len) }?, unsafe { required(source, len) }?, stage(kind)?, unsafe { required(name, name_len) }?)))();
-    match made {
-        Ok(key) if !out.is_null() => {
-            unsafe { std::ptr::copy_nonoverlapping(key.as_ptr(), out, 32) };
-            0
+    guard(|s| s, || {
+        let made = (|| Ok::<_, i32>(cache::key(unsafe { required(identity, identity_len) }?, unsafe { required(source, len) }?, stage(kind)?, unsafe { required(name, name_len) }?)))();
+        match made {
+            Ok(key) if !out.is_null() => {
+                unsafe { std::ptr::copy_nonoverlapping(key.as_ptr(), out, 32) };
+                0
+            }
+            Ok(_) => fail(status::NULL, "nowhere to put the key"),
+            Err(status) => status,
         }
-        Ok(_) => fail(status::NULL, "nowhere to put the key"),
-        Err(status) => status,
-    }
+    })
 }
 
 pub const CLASS_SPACE: u32 = 0;
@@ -605,12 +653,14 @@ pub const CLASS_WORD: u32 = 1;
 /// Whether a UTF-16 code unit is white space or a word character to the readers, for a test that holds both to .NET's own answer.
 #[unsafe(no_mangle)]
 pub extern "C" fn emusen_serenity_text_class(which: u32, unit: u32) -> i32 {
-    let Some(c) = char::from_u32(unit) else { return 0 };
-    match which {
-        CLASS_SPACE => rules::is_space(c) as i32,
-        CLASS_WORD => word::is_word(c) as i32,
-        _ => fail(status::BAD_ARGUMENT, "no such class"),
-    }
+    guard(|s| s, || {
+        let Some(c) = char::from_u32(unit) else { return 0 };
+        match which {
+            CLASS_SPACE => rules::is_space(c) as i32,
+            CLASS_WORD => word::is_word(c) as i32,
+            _ => fail(status::BAD_ARGUMENT, "no such class"),
+        }
+    })
 }
 
 pub const NUMBER_FLOAT: u32 = 0;
@@ -622,23 +672,25 @@ pub const NUMBER_INTEGER: u32 = 1;
 /// `text` valid for `len` bytes; `out` valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_parse_number(which: u32, data: *const u8, len: usize, out: *mut u32) -> i32 {
-    let text = match unsafe { required(data, len) } {
-        Ok(text) => text,
-        Err(status) => return status,
-    };
-    let parsed = match which {
-        NUMBER_FLOAT => rules::parse_float(text).map(f32::to_bits),
-        NUMBER_INTEGER => rules::parse_int(text).map(|value| value as u32),
-        _ => return fail(status::BAD_ARGUMENT, "no such number"),
-    };
-    match (parsed, unsafe { out.as_mut() }) {
-        (Some(value), Some(out)) => {
-            *out = value;
-            1
+    guard(|s| s, || {
+        let text = match unsafe { required(data, len) } {
+            Ok(text) => text,
+            Err(status) => return status,
+        };
+        let parsed = match which {
+            NUMBER_FLOAT => rules::parse_float(text).map(f32::to_bits),
+            NUMBER_INTEGER => rules::parse_int(text).map(|value| value as u32),
+            _ => return fail(status::BAD_ARGUMENT, "no such number"),
+        };
+        match (parsed, unsafe { out.as_mut() }) {
+            (Some(value), Some(out)) => {
+                *out = value;
+                1
+            }
+            (Some(_), None) => fail(status::NULL, "nowhere to put the number"),
+            (None, _) => 0,
         }
-        (Some(_), None) => fail(status::NULL, "nowhere to put the number"),
-        (None, _) => 0,
-    }
+    })
 }
 
 #[cfg(test)]

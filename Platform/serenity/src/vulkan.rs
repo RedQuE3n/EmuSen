@@ -199,6 +199,7 @@ struct Inner {
     /// The physical device and the API version the device was made with.
     physical: vk::PhysicalDevice,
     api: u32,
+    max_image_dimension_2d: u32,
     /// The queues a device that can be lent keeps for it: one lent to a core, and the host's own for taking the core's
     /// pictures, with its lock (EmuSen_DevicePicture.md §17).
     lending: Option<Lending>,
@@ -568,6 +569,7 @@ impl Device {
         let mut id = vk::PhysicalDeviceIDProperties::default();
         let mut properties = vk::PhysicalDeviceProperties2::default().push_next(&mut id);
         unsafe { root.instance.get_physical_device_properties2(physical, &mut properties) };
+        let max_image_dimension_2d = properties.properties.limits.max_image_dimension2_d;
         let uuid = id.device_uuid;
         let driver_uuid = id.driver_uuid;
         let made = (|| unsafe {
@@ -620,6 +622,7 @@ impl Device {
                 ring_exports,
                 physical,
                 api,
+                max_image_dimension_2d,
                 lending,
                 probing: AtomicBool::new(false),
                 probe: Mutex::new(None),
@@ -689,6 +692,11 @@ impl Device {
 
     pub(crate) fn api(&self) -> u32 {
         self.inner.api
+    }
+
+    /// Maximum 2D image dimension supported by the physical device.
+    pub fn max_image_dimension_2d(&self) -> u32 {
+        self.inner.max_image_dimension_2d
     }
 
     pub fn family(&self) -> u32 {
@@ -933,7 +941,7 @@ impl Device {
     }
 
     /// A fence of this device's own work waited for within `FENCE_BOUND`, so a wedged queue is an error, never a hang.
-    fn wait_fence(&self, fence: vk::Fence) -> Result<(), String> {
+    pub(crate) fn wait_fence(&self, fence: vk::Fence) -> Result<(), String> {
         match unsafe { self.inner.device.wait_for_fences(&[fence], true, FENCE_BOUND.as_nanos() as u64) } {
             Err(vk::Result::TIMEOUT) => Err(format!("the device did not finish its work within {} s", FENCE_BOUND.as_secs())),
             r => r.check("vkWaitForFences"),

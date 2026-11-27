@@ -79,6 +79,20 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+pub(crate) fn checked_image_bytes(width: i32, height: i32, max_dim: u32, rgba_len: usize) -> Option<(u32, u32, usize)> {
+    let w = u32::try_from(width).ok().filter(|&w| w > 0 && w <= max_dim)?;
+    let h = u32::try_from(height).ok().filter(|&h| h > 0 && h <= max_dim)?;
+    let bytes = usize::try_from(u64::from(w).checked_mul(u64::from(h))?.checked_mul(4)?).ok()?;
+    (rgba_len >= bytes).then_some((w, h, bytes))
+}
+
+pub(crate) fn checked_advance_shape(width: i32, height: i32, row_repeat: i32, max_dim: u32, rgba_len: usize) -> Option<(u32, u32, u32, usize)> {
+    let (w, rows, bytes) = checked_image_bytes(width, height, max_dim, rgba_len)?;
+    let repeat = u32::try_from(row_repeat.max(1)).ok()?;
+    rows.checked_mul(repeat).filter(|&h| h <= max_dim)?;
+    Some((w, rows, repeat, bytes))
+}
+
 /// An image a pass draws into, and the framebuffer over it.
 struct Target {
     image: Image,
@@ -494,6 +508,8 @@ pub struct Chain {
     values: HashMap<String, f32>,
     history: Vec<Option<Image>>,
     blank: Image,
+    blank_staging: Buffer,
+    blank_pending: bool,
     vertices: Buffer,
     staging: Option<Buffer>,
     rows: Option<Image>,
@@ -553,7 +569,8 @@ impl Chain {
         }
 
         let blank = device.create_image(1, 1, UNORM, false)?;
-        device.upload(&blank, &[0; 4], &device.create_buffer(16, vk::BufferUsageFlags::TRANSFER_SRC)?)?;
+        let blank_staging = device.create_buffer(16, vk::BufferUsageFlags::TRANSFER_SRC)?;
+        device.write_staging(&blank_staging, &[0; 4]);
         let vertices = device.create_buffer(64, vk::BufferUsageFlags::VERTEX_BUFFER)?;
         vertices.with_bytes(64, |bytes| floats(bytes, &QUAD));
 
@@ -566,6 +583,8 @@ impl Chain {
             values: HashMap::new(),
             history: (0..depth).map(|_| None).collect(),
             blank,
+            blank_staging,
+            blank_pending: true,
             vertices,
             staging: None,
             rows: None,
@@ -636,31 +655,31 @@ impl Chain {
     /// filter's raw frame, EmuSen_DevicePicture.md §3.4) makes nothing per frame.
     pub fn load_lut(&mut self, index: usize, width: i32, height: i32, rgba: &[u8]) -> Result<(), String> {
         let Some(spec) = self.textures.get(index).cloned() else { return Err("The preset has no such lookup image.".to_string()) };
+        let (w, h, needed) = checked_image_bytes(width, height, self.device.max_image_dimension_2d(), rgba.len())
+            .ok_or_else(|| "The lookup image dimensions or pixel buffer are invalid.".to_string())?;
+        let pixels = &rgba[..needed];
         if let Some(Lut { image: Some(image), staging: Some(staging), .. }) = self.luts.get(&spec.name) {
-            if !spec.mipmap && image.width == width as u32 && image.height == height as u32 {
-                return self.device.upload(image, rgba, staging);
+            if !spec.mipmap && image.width == w && image.height == h {
+                return self.device.upload(image, pixels, staging);
             }
         }
-        let image = self.device.create_image(width as u32, height as u32, UNORM, spec.mipmap)?;
-        let staging = self.device.create_buffer(width.wrapping_mul(height).wrapping_mul(4) as i64 as u64, vk::BufferUsageFlags::TRANSFER_SRC)?;
-        self.device.upload(&image, rgba, &staging)?;
+        let image = self.device.create_image(w, h, UNORM, spec.mipmap)?;
+        let staging = self.device.create_buffer(needed as u64, vk::BufferUsageFlags::TRANSFER_SRC)?;
+        self.device.upload(&image, pixels, &staging)?;
         self.luts.insert(spec.name.clone(), Lut { spec, image: Some(image), staging: Some(staging) });
         Ok(())
     }
 
-    /// A new frame joins the history with its repeated rows, since a slang pass sees the picture as the screen
-    /// would; the rows are repeated on the device (EmuSen_Serenity.md §9.2).
+    /// A new frame joins the history with its repeated rows (EmuSen_Serenity.md §9.2).
     pub fn advance(&mut self, rgba: &[u8], width: i32, height: i32, row_repeat: i32) -> Result<(), Unfed> {
+        let (w, rows, repeat, needed) = checked_advance_shape(width, height, row_repeat, self.device.max_image_dimension_2d(), rgba.len()).ok_or(Unfed::Short)?;
         self.device.phase(point::ADVANCE_BEGIN);
         self.device.settle()?;
         self.flush_upload()?;
         self.let_go_of_lend();
-        let repeat = row_repeat.max(1) as u32;
-        let (w, rows) = (width as u32, height as u32);
-        let bytes = w.wrapping_mul(rows).wrapping_mul(4);
         self.shape(w, rows, repeat)?;
         self.head = (self.head + self.history.len() - 1) % self.history.len();
-        let picture = usize::try_from(bytes as i32).ok().and_then(|length| rgba.get(..length)).ok_or(Unfed::Short)?;
+        let picture = &rgba[..needed];
         let (Some(_), Some(staging)) = (&self.history[self.head], &self.staging) else { return Err(Unfed::Device("The chain has no frame to write.".to_string())) };
         self.device.write_staging(staging, picture);
         (self.upload_pending, self.from_lend, self.from_ring) = (true, None, None);
@@ -680,7 +699,7 @@ impl Chain {
                 self.history[i] = Some(cleared(&self.device, w, h, UNORM, self.passes[0].spec.mipmap_input)?);
             }
             self.staging = None;
-            self.staging = Some(self.device.create_buffer(w.wrapping_mul(rows).wrapping_mul(4) as u64, vk::BufferUsageFlags::TRANSFER_SRC)?);
+            self.staging = Some(self.device.create_buffer(u64::from(w) * u64::from(rows) * 4, vk::BufferUsageFlags::TRANSFER_SRC)?);
             self.rows = None;
             self.rows = if repeat > 1 { Some(self.device.create_image(w, rows, UNORM, false)?) } else { None };
             (self.original_width, self.original_height, self.upload_rows, self.upload_repeat) = (w, h, rows, repeat);
@@ -888,12 +907,16 @@ impl Chain {
             self.bind(i, vw, vh)?;
         }
         self.device.phase(point::BOUND);
+        let blank = self.blank_pending;
         let upload = std::mem::take(&mut self.upload_pending);
         self.take_pending(upload)?;
         let wait = self.upload_wait(upload);
         let device = &self.device;
         device.run_unwaited(
             |commands| {
+                if blank {
+                    device.record_upload(commands, &self.blank, &self.blank_staging);
+                }
                 self.record_pending_upload(commands, upload);
                 for i in 0..count {
                     self.draw_pass(commands, i);
@@ -915,6 +938,7 @@ impl Chain {
             wait,
             None,
         )?;
+        self.blank_pending = false;
         self.give_back_pending(upload)?;
         self.device.phase(point::RAN);
         Ok(())
@@ -942,6 +966,7 @@ impl Chain {
             self.bind(i, vw, vh)?;
         }
         self.device.phase(point::BOUND);
+        let blank = self.blank_pending;
         let upload = std::mem::take(&mut self.upload_pending);
         self.take_pending(upload)?;
         let wait = self.upload_wait(upload);
@@ -950,6 +975,9 @@ impl Chain {
         let Some((image, view)) = last else { return Err("The last pass has no output.".to_string()) };
         device.run_unwaited(
             |commands| {
+                if blank {
+                    device.record_upload(commands, &self.blank, &self.blank_staging);
+                }
                 self.record_pending_upload(commands, upload);
                 for i in 0..count {
                     self.draw_pass(commands, i);
@@ -961,6 +989,7 @@ impl Chain {
             wait,
             None,
         )?;
+        self.blank_pending = false;
         self.give_back_pending(upload)?;
         self.device.phase(point::RAN);
         let format = self.passes[count - 1].format;
@@ -1023,11 +1052,15 @@ impl Chain {
         }
         self.device.phase(point::BOUND);
 
+        let blank = self.blank_pending;
         let upload = std::mem::take(&mut self.upload_pending);
         self.take_pending(upload)?;
         let wait = self.upload_wait(upload);
         let device = &self.device;
         device.run_timed(|commands| {
+            if blank {
+                device.record_upload(commands, &self.blank, &self.blank_staging);
+            }
             self.record_pending_upload(commands, upload);
             for i in 0..count {
                 self.draw_pass(commands, i);
@@ -1042,6 +1075,7 @@ impl Chain {
             device.host_read_barrier(commands, readback);
             device.transition(commands, &last.image, READ, 0, None, None);
         }, wait, None)?;
+        self.blank_pending = false;
         self.give_back_pending(upload)?;
 
         self.device.phase(point::RAN);
@@ -1298,5 +1332,20 @@ mod tests {
         assert!(!locked(&slot.state).held);
         assert!(!release(slot.id));
         assert!(!release(0));
+    }
+
+    #[test]
+    fn image_and_advance_bounds_reject_zero_negative_overflow_and_short_buffers() {
+        assert_eq!(checked_image_bytes(4, 3, 16384, 48), Some((4, 3, 48)));
+        assert_eq!(checked_image_bytes(4, 3, 16384, 47), None);
+        assert_eq!(checked_image_bytes(0, 3, 16384, 64), None);
+        assert_eq!(checked_image_bytes(4, -1, 16384, 64), None);
+        assert_eq!(checked_image_bytes(-4, -4, 16384, 64), None);
+        assert_eq!(checked_image_bytes(16384, 65536, 16384, 1024), None);
+        assert_eq!(checked_image_bytes(16385, 1, 16384, 16385 * 4), None);
+        assert_eq!(checked_advance_shape(4, 3, 2, 16384, 48), Some((4, 3, 2, 48)));
+        assert_eq!(checked_advance_shape(4, 3, 0, 16384, 48), Some((4, 3, 1, 48)));
+        assert_eq!(checked_advance_shape(4, 3, 10_000, 16384, 48), None);
+        assert_eq!(checked_advance_shape(16384, 65536, 1, 65536, 0), None);
     }
 }

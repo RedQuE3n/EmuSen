@@ -129,6 +129,11 @@ pub mod qobject {
         #[cxx_name = "titleOf"]
         fn title_of(self: &LibraryModel, path: &QString) -> QString;
 
+        /// A game's scraped cover URL from the current library catalog, or empty when none is found.
+        #[qinvokable]
+        #[cxx_name = "coverOf"]
+        fn cover_of(self: &LibraryModel, path: &QString) -> QString;
+
         /// The facts Settings' panes name, as SettingsModel.facts reads them: every game counted, each system's, and the running game's title.
         #[qinvokable]
         #[cxx_name = "settingsFacts"]
@@ -588,6 +593,12 @@ impl qobject::LibraryModel {
         QString::from(crate::library::title_of(&path.to_string()).as_str())
     }
 
+    pub fn cover_of(&self, path: &QString) -> QString {
+        let path = path.to_string();
+        let art = self.view.catalog.covers.iter().find(|(p, _)| *p == path).map_or("", |(_, f)| f.as_str());
+        QString::from(crate::game_model::cover_url(art).as_str())
+    }
+
     pub fn settings_facts(&self, running: &QString) -> QString {
         let running = running.to_string();
         let title = if running.is_empty() { String::new() } else { crate::library::title_of(&running) };
@@ -1032,4 +1043,30 @@ impl qobject::LibraryModel {
 /// A refresh's ES-DE texts as QStrings, made on the thread that read them.
 fn texts_of(refreshed: &Refreshed) -> Option<EsdeTexts> {
     refreshed.as_ref().ok().map(|read| EsdeTexts::of(&read.esde_settings, &read.esde))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cover_of_returns_catalog_cover_url_or_empty() {
+        let dir = std::env::temp_dir().join(format!("emusen-lib-cover-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cover = dir.join("Aurora.png");
+        let qml = dir.join("LibCoverScene.qml");
+        std::fs::write(&qml, "import QtQuick\nimport EmuSen.Models\nWindow {\n    LibraryModel { id: lib; objectName: \"lib\" }\n}\n").unwrap();
+        let mut harness = emusen_qt_test::Harness::new();
+        let mut scene = harness.load(&format!("file://{}", qml.display()), 320, 240);
+        let ptr = scene.object("lib");
+        assert!(!ptr.is_null());
+        let mut lib = unsafe { Pin::new_unchecked(&mut *(ptr as *mut qobject::LibraryModel)) };
+        assert_eq!(lib.cover_of(&QString::from("/roms/snes/Aurora.sfc")).to_string(), "");
+        lib.as_mut().rust_mut().view.catalog.covers.push(("/roms/snes/Aurora.sfc".to_owned(), cover.to_string_lossy().into_owned()));
+        let url = lib.cover_of(&QString::from("/roms/snes/Aurora.sfc")).to_string();
+        assert!(url.starts_with("file://") && url.ends_with("/Aurora.png"), "got {url}");
+        assert_eq!(lib.cover_of(&QString::from("/roms/snes/Other.sfc")).to_string(), "");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

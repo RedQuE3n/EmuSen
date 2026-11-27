@@ -9,18 +9,26 @@ Kit.NormalizedCanvas {
     objectName: "resumeCanvas"
     required property SessionModel session
     required property int padFamily
-    visible: resumeCanvas.session.resumeAsked
+    property bool bigScreen: true
+    property LibraryModel library: null
+    property Clock clock: null
+    property int battery: -1
+    readonly property bool eclipseMode: Kit.Tokens.coronaRim > 0
+    readonly property bool sheetOpen: resumeCanvas.eclipseMode && resumeFrame.controller.sheetOpen
+    readonly property string subjectTitle: resumeCanvas.library && resumeCanvas.session.game.length > 0 && resumeCanvas.library.titleOf(resumeCanvas.session.game).length > 0 ? resumeCanvas.library.titleOf(resumeCanvas.session.game) : resumeCanvas.session.resumeSubject
+    readonly property string coverUrl: (resumeCanvas.library && resumeCanvas.library.places >= 0 && resumeCanvas.library.recent.length >= 0 && !resumeCanvas.library.loading && resumeCanvas.session.game.length > 0) ? resumeCanvas.library.coverOf(resumeCanvas.session.game) : ""
+    visible: resumeCanvas.session.resumeAsked || resumeCanvas.sheetOpen
     QuestionModel {
         id: resumeWords
-        subject: resumeCanvas.session.resumeSubject
+        subject: resumeCanvas.subjectTitle
     }
     Kit.Frame {
         id: resumeFrame
         anchors.fill: parent
-        form: Kit.Forms.BigScreen
+        form: resumeCanvas.bigScreen ? Kit.Forms.BigScreen : Kit.Forms.Desktop
         surfaceDrawn: false
         helpShown: false
-        focus: resumeCanvas.session.resumeAsked
+        focus: resumeCanvas.session.resumeAsked || resumeCanvas.sheetOpen
         controller.navigationShown: false
         QuestionHost {
             id: resumeQuestion
@@ -40,8 +48,31 @@ Kit.NormalizedCanvas {
             help: HelpModel {
                 screen: HelpModel.QuestionBack
             }
-            showing: resumeCanvas.session.resumeAsked
+            visible: !resumeCanvas.eclipseMode
+            showing: !resumeCanvas.eclipseMode && resumeCanvas.session.resumeAsked
             onChosen: (index) => resumeCanvas.session.answerResume(index)
+        }
+        Loader {
+            id: eclipseResumeLoader
+            active: resumeCanvas.eclipseMode
+            sourceComponent: ResumeEclipse {
+                id: eclipseResume
+                controller: resumeFrame.controller
+                session: resumeCanvas.session
+                question: resumeWords
+                titleText: resumeCanvas.subjectTitle
+                cover: resumeCanvas.coverUrl
+                library: resumeCanvas.library
+                clock: resumeCanvas.clock
+                battery: resumeCanvas.battery
+                padFamily: resumeCanvas.padFamily
+                bigScreen: resumeCanvas.bigScreen
+                showing: resumeCanvas.eclipseMode && resumeCanvas.session.resumeAsked
+                onChosen: (index) => resumeCanvas.session.answerResume(index)
+                Binding {
+                    eclipseResume.visible: resumeCanvas.eclipseMode && resumeCanvas.session.resumeAsked
+                }
+            }
         }
     }
 }

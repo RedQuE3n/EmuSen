@@ -83,11 +83,14 @@ fn assert_light_border(tree: &emusen_qt_test::tree::Tree, name: &str, expected: 
 fn contrasting_light_theme_reskins_program_eclipse_screens() {
     std::env::set_var("LC_ALL", "en_US.UTF-8");
     let world = sandbox("qt-app-eclipse-tokens-agnostic", &[("SNES", "Aurora Drift.sfc"), ("psx", "Tower Set.iso")]);
+    let rom_resume = world.dir("Roms/test").join("Resume Light (USA).tst");
+    std::fs::write(&rom_resume, emusen_client_fixture::image(&[1, 2, 3, 4])).unwrap();
     let light_dir = write_light_eclipse_theme(&world.root);
 
     let sdl = Sdl::open();
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
     let mut harness = emusen_qt_test::Harness::new();
+    let (rt_resume, sid_resume, _) = crate::eclipse_resume_oracle::prepare_testcore_slot0(&world, &mut harness, &rom_resume, None);
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
@@ -236,4 +239,16 @@ fn contrasting_light_theme_reskins_program_eclipse_screens() {
     assert_light_paint(&shaders_tree, "presetHeading", "#FF181512", "ShadersEclipse");
     assert_light_paint(&shaders_tree, "presetSubtitle", "#FF39342D", "ShadersEclipse");
     assert_light_paint(&shaders_tree, "help", "#FF39342D", "ShadersEclipse");
+
+    // ResumeEclipse under contrasting light Eclipse tokens.
+    crate::eclipse_resume_oracle::attach_resume_session(&mut scene, rt_resume, sid_resume, &rom_resume);
+    let resume_tree = scene.tree();
+    assert_light_paint(&resume_tree, "eclipseResumeBottomBar", "#FFF6F1E7", "ResumeEclipse");
+    assert_light_paint(&resume_tree, "eclipseResumeAnswerBg.0", "#FFC85A32", "ResumeEclipse");
+    assert_light_paint(&resume_tree, "eclipseResumeAnswerLabel.0", "#FFFFFFFF", "ResumeEclipse");
+    assert_light_paint(&resume_tree, "eclipseResumeAnswerLabel.1", "#FF181512", "ResumeEclipse");
+    assert_light_paint(&resume_tree, "eclipseResumePromptTitle", "#FFC85A32", "ResumeEclipse");
+    assert_light_paint(&resume_tree, "eclipseResumeStageMetaPill", "#FFF6F1E7", "ResumeEclipse");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "session", "resumeAsked", "false", 2000);
 }

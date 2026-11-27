@@ -27,6 +27,12 @@ pub mod qobject {
         #[qproperty(QString, name, READ, CONSTANT)]
         #[qproperty(QString, continue_entry, cxx_name = "continueEntry", READ, CONSTANT)]
         #[qproperty(QString, key_pair, cxx_name = "keyPair", READ, CONSTANT)]
+        #[qproperty(QString, resume_launch, cxx_name = "resumeLaunch", READ, CONSTANT)]
+        #[qproperty(QString, resume_here, cxx_name = "resumeHere", READ, CONSTANT)]
+        #[qproperty(QString, resume_start_again_sub, cxx_name = "resumeStartAgainSub", READ, CONSTANT)]
+        #[qproperty(QString, resume_continue_fallback_sub, cxx_name = "resumeContinueFallbackSub", READ, CONSTANT)]
+        #[qproperty(QString, resume_no_preview, cxx_name = "resumeNoPreview", READ, CONSTANT)]
+        #[qproperty(QString, resume_state_ready, cxx_name = "resumeStateReady", READ, CONSTANT)]
         type Words = super::WordsRust;
     }
 
@@ -49,6 +55,31 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "questionBackLabel"]
         fn question_back_label(self: &Words, choices: &QStringList, back_index: i32) -> QString;
+
+        /// Eclipse Resume Card saved pill line ("Saved Today, 9:42 PM" or "Saved state ready").
+        #[qinvokable]
+        #[cxx_name = "resumeSavedLine"]
+        fn resume_saved_line(self: &Words, when: &QString) -> QString;
+
+        /// Console prefix before CardPlanet on the Eclipse Resume Card eyebrow.
+        #[qinvokable]
+        #[cxx_name = "resumeEyebrowLeft"]
+        fn resume_eyebrow_left(self: &Words, console: &QString, has_core: bool) -> QString;
+
+        /// Core label after CardPlanet on the Eclipse Resume Card eyebrow ("<CORE> CORE").
+        #[qinvokable]
+        #[cxx_name = "resumeEyebrowCore"]
+        fn resume_eyebrow_core(self: &Words, core: &QString) -> QString;
+
+        /// Eclipse Resume Card stage footer copy naming the saved slot timestamp.
+        #[qinvokable]
+        #[cxx_name = "resumeFootLine"]
+        fn resume_foot_line(self: &Words, when: &QString) -> QString;
+
+        /// Reduced aspect ratio and dimensions pill ("8:7 · 256×224") or "STATE READY".
+        #[qinvokable]
+        #[cxx_name = "resumeStageMeta"]
+        fn resume_stage_meta(self: &Words, width: i32, height: i32) -> QString;
     }
 }
 
@@ -71,6 +102,12 @@ pub struct WordsRust {
     name: QString,
     continue_entry: QString,
     key_pair: QString,
+    resume_launch: QString,
+    resume_here: QString,
+    resume_start_again_sub: QString,
+    resume_continue_fallback_sub: QString,
+    resume_no_preview: QString,
+    resume_state_ready: QString,
 }
 
 impl Default for WordsRust {
@@ -91,6 +128,12 @@ impl Default for WordsRust {
             name: QString::from(words::NAME),
             continue_entry: QString::from(words::CONTINUE_ENTRY),
             key_pair: QString::from(words::KEY_PAIR),
+            resume_launch: QString::from(words::RESUME_LAUNCH),
+            resume_here: QString::from(words::RESUME_HERE),
+            resume_start_again_sub: QString::from(words::RESUME_START_AGAIN_SUB),
+            resume_continue_fallback_sub: QString::from(words::RESUME_CONTINUE_FALLBACK_SUB),
+            resume_no_preview: QString::from(words::RESUME_NO_PREVIEW),
+            resume_state_ready: QString::from(words::RESUME_STATE_READY),
         }
     }
 }
@@ -111,5 +154,25 @@ impl qobject::Words {
     pub fn question_back_label(&self, choices: &QStringList, back_index: i32) -> QString {
         let items: Vec<String> = choices.iter().map(|s| s.to_string()).collect();
         QString::from(crate::question::back_label(&items, back_index).as_str())
+    }
+
+    pub fn resume_saved_line(&self, when: &QString) -> QString {
+        QString::from(words::resume_saved_line(&when.to_string()).as_str())
+    }
+
+    pub fn resume_eyebrow_left(&self, console: &QString, has_core: bool) -> QString {
+        QString::from(words::resume_eyebrow_left(&console.to_string(), has_core).as_str())
+    }
+
+    pub fn resume_eyebrow_core(&self, core: &QString) -> QString {
+        QString::from(words::resume_eyebrow_core(&core.to_string()).as_str())
+    }
+
+    pub fn resume_foot_line(&self, when: &QString) -> QString {
+        QString::from(words::resume_foot_line(&when.to_string()).as_str())
+    }
+
+    pub fn resume_stage_meta(&self, width: i32, height: i32) -> QString {
+        QString::from(words::resume_stage_meta(width, height).as_str())
     }
 }

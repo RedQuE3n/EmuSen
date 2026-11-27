@@ -379,19 +379,21 @@ impl Vdp {
         self.regs[1] & 0x40 != 0
     }
 
-    /// Lines in a frame, the active lines, and the line of the vertical interrupt (240 in PAL's V30).
-    /// Interlace alternates fields of 262 and 263 lines (NTSC) or 313 and 312 (PAL), the odd field the longer, and
-    /// NTSC's V30 lets the V counter run its 512 lines (measured on Nuked-MD's board, Nephrite_Disputes.md D-4).
-    pub(in crate::genesis) fn lines(&self) -> u32 {
-        if !self.pal && self.regs[1] & 0x0C == 0x0C {
+    /// Lines in a frame for given PAL, mode register 1, interlace, and odd-field state (D-4).
+    pub(in crate::genesis) fn lines_for(pal: bool, reg1: u8, interlace: u8, odd: bool) -> u32 {
+        if !pal && reg1 & 0x0C == 0x0C {
             return 512;
         }
-        match (self.pal, self.interlace != 0) {
+        match (pal, interlace != 0) {
             (false, false) => 262,
-            (false, true) => 262 + self.odd as u32,
+            (false, true) => 262 + odd as u32,
             (true, false) => 313,
-            (true, true) => 312 + self.odd as u32,
+            (true, true) => 312 + odd as u32,
         }
+    }
+
+    pub(in crate::genesis) fn lines(&self) -> u32 {
+        Self::lines_for(self.pal, self.regs[1], self.interlace, self.odd)
     }
 
     /// With the frame interrupt the interlace setting is latched and, interlaced, the field changes.

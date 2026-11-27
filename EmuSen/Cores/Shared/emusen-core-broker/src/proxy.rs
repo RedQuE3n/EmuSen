@@ -458,7 +458,7 @@ pub fn guard<R: emusen_native::ffi::PanicFallback>(f: impl FnOnce() -> R) -> R {
 }
 
 fn files_of(w: &mut Writer, files: *const FileEntry, count: usize, size: usize) {
-    if count == 0 || files.is_null() || size < FileEntry::SIZE_1_0 || count.checked_mul(size).is_none() {
+    if count == 0 || files.is_null() || size < FileEntry::SIZE_1_0 || u32::try_from(count).is_err() || count.checked_mul(size).is_none() {
         w.u32(0);
         return;
     }

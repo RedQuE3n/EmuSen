@@ -1199,8 +1199,9 @@ impl<A> Genesis<A> {
     }
 
     pub(crate) fn check_state(&self, s: &Saved) -> Result<(), crate::state::StateError> {
+        let saved_lines = crate::genesis::vdp::Vdp::lines_for(self.hw.vdp.pal, s.vdp.regs[1], s.vdp.interlace, s.vdp.odd);
         let o = &s.open_line;
-        if o.open[0] != 0 && (o.open[0] as usize - 1) >= self.hw.vdp.lines() as usize {
+        if o.open[0] != 0 && (o.open[0] as usize - 1) >= saved_lines as usize {
             return Err(crate::state::StateError::Corrupt);
         }
         if o.open[1] as usize > crate::genesis::render::MAX_W {
@@ -1211,7 +1212,7 @@ impl<A> Genesis<A> {
         {
             return Err(crate::state::StateError::Corrupt);
         }
-        if s.line >= self.hw.vdp.lines() || s.clock.saturating_sub(s.ram_refresh_at) > 10_000_000 {
+        if s.line >= saved_lines || s.clock.saturating_sub(s.ram_refresh_at) > 10_000_000 {
             return Err(crate::state::StateError::Corrupt);
         }
         if let Some(p) = s.eeprom {
@@ -1487,6 +1488,41 @@ mod tests {
         g.hw.clock = 10_000_000_000_000;
         g.hw.ram_refresh();
         assert!(g.hw.ram_refresh_at > g.hw.clock);
+    }
+
+    #[test]
+    fn saved_vdp_mode_governs_line_validation_across_mode_transitions() {
+        use emusen_native::ffi::StateMachine;
+        let rom = crate::media::cartridge("SEGA GENESIS", "U", None);
+        let save_with = |reg1: u8, interlace: u8, odd: bool, line: u32| -> Vec<u8> {
+            let mut m = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+            m.hw_mut().vdp.regs[1] = reg1;
+            m.hw_mut().vdp.interlace = interlace;
+            m.hw_mut().vdp.odd = odd;
+            m.hw_mut().line = line;
+            let mut raw = vec![0u8; m.state_size()];
+            m.save_state(&mut raw).unwrap();
+            raw
+        };
+
+        // (a) Valid NTSC odd-field interlace (line 262) and V30 (line 400) load into a 262-line machine.
+        let mut target = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+        assert_eq!(target.hw().vdp.lines(), 262);
+        let odd_interlace = save_with(0, 1, true, 262);
+        target.load_state(&odd_interlace).unwrap();
+        assert_eq!(target.hw().line, 262);
+
+        let mut target262 = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+        let v30 = save_with(0x0C, 0, false, 400);
+        target262.load_state(&v30).unwrap();
+        assert_eq!(target262.hw().line, 400);
+
+        // (b) Corrupt 262-line state (line 300) is rejected when loaded into a 512-line machine.
+        let corrupt_262 = save_with(0, 0, false, 300);
+        let mut target512 = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+        target512.hw_mut().vdp.regs[1] |= 0x0C;
+        assert_eq!(target512.hw().vdp.lines(), 512);
+        assert!(matches!(target512.load_state(&corrupt_262), Err(crate::state::StateError::Corrupt)));
     }
 }
 

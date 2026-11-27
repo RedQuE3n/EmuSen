@@ -292,16 +292,18 @@ impl Machine {
 
 impl Drop for Machine {
     fn drop(&mut self) {
-        // Release host-side Vulkan child objects before any negotiated device teardown, then destroy the instance.
+        // Keep shared.gpu populated across destroy/unload/deinit, then release resources before device teardown.
         let hw = *self.shared.hw.lock().unwrap_or_else(|e| e.into_inner());
         let negotiation = *self.shared.negotiation.lock().unwrap_or_else(|e| e.into_inner());
-        let gpu = self.shared.gpu.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let gpu = self.shared.gpu();
         if gpu.is_some()
             && let Some(destroy) = hw.and_then(|h| h.destroy)
         {
             unsafe { destroy() };
         }
         unsafe { (self.lib.api.unload_game)() };
+        unsafe { (self.lib.api.deinit)() };
+        *self.shared.gpu.lock().unwrap_or_else(|e| e.into_inner()) = None;
         if let Some(ref g) = gpu {
             g.release_resources();
         }
@@ -311,7 +313,6 @@ impl Drop for Machine {
             g.mark_device_destroyed();
             unsafe { destroy() };
         }
-        unsafe { (self.lib.api.deinit)() };
         drop(gpu);
         front::with_declared(|d| d.initialised = false);
         front::bind(None);

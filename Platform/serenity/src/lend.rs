@@ -209,7 +209,7 @@ impl Lend {
         let slot = &mut ring.slots[i];
         unsafe {
             if slot.in_flight {
-                vk_device.wait_for_fences(&[slot.fence], true, u64::MAX).check("vkWaitForFences")?;
+                device.wait_fence(slot.fence)?;
                 vk_device.reset_fences(&[slot.fence]).check("vkResetFences")?;
                 slot.in_flight = false;
             }
@@ -310,10 +310,8 @@ impl Lend {
         let mut ring = locked(&self.inner.ring);
         for slot in &mut ring.slots {
             if slot.in_flight {
-                unsafe {
-                    vk_device.wait_for_fences(&[slot.fence], true, u64::MAX).check("vkWaitForFences")?;
-                    vk_device.reset_fences(&[slot.fence]).check("vkResetFences")?;
-                }
+                self.inner.device.wait_fence(slot.fence)?;
+                unsafe { vk_device.reset_fences(&[slot.fence]).check("vkResetFences")? };
                 slot.in_flight = false;
             }
         }

@@ -1,10 +1,10 @@
-//! A stage's Vulkan GLSL to SPIR-V through Shaderc, unoptimised so the names reflection reads survive: the C#
-//! `SlangCompiler`. Shaderc is the library the program ships, opened from its file or lent by a host that has it
-//! loaded. See EmuSen_Serenity.md §7.3 and EmuSen_RustPlatform.md §2.8 and §16.2.
+//! A stage's Vulkan GLSL to SPIR-V through Shaderc, optimised for performance while keeping reflection names.
 
 use sha2::{Digest, Sha256};
+use std::cell::RefCell;
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::mem::ManuallyDrop;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
@@ -22,8 +22,8 @@ impl Stage {
     }
 }
 
-// `shaderc_optimization_level_zero`, `shaderc_target_env_vulkan`, `shaderc_env_version_vulkan_1_1`, `shaderc_source_language_glsl`.
-const OPTIMIZATION_ZERO: c_int = 0;
+// `shaderc_optimization_level_performance`, `shaderc_target_env_vulkan`, `shaderc_env_version_vulkan_1_1`, `shaderc_source_language_glsl`.
+const OPTIMIZATION_PERFORMANCE: c_int = 2;
 const TARGET_VULKAN: c_int = 0;
 const VULKAN_1_1: u32 = (1 << 22) | (1 << 12);
 const LANGUAGE_GLSL: c_int = 0;
@@ -32,8 +32,8 @@ const KIND_FRAGMENT: c_int = 1;
 const STATUS_SUCCESS: c_int = 0;
 const ENTRY: &CStr = c"main";
 
-/// Every option a compile is given, in the words the C# gives them; the cache's key carries them.
-pub const OPTIONS: &str = "optimization=Zero target=Vulkan/Vulkan11 language=Glsl entry=main defines=none";
+/// Every option a compile is given; the cache's key carries them.
+pub const OPTIONS: &str = "optimization=Performance target=Vulkan/Vulkan11 language=Glsl entry=main defines=none";
 
 macro_rules! functions {
     ($($field:ident = $name:literal: fn($($arg:ty),*) $(-> $ret:ty)?;)*) => {
@@ -64,6 +64,7 @@ functions! {
     options_initialize = "shaderc_compile_options_initialize": fn() -> *mut c_void;
     options_release = "shaderc_compile_options_release": fn(*mut c_void);
     options_set_optimization_level = "shaderc_compile_options_set_optimization_level": fn(*mut c_void, c_int);
+    options_set_generate_debug_info = "shaderc_compile_options_set_generate_debug_info": fn(*mut c_void);
     options_set_target_env = "shaderc_compile_options_set_target_env": fn(*mut c_void, c_int, u32);
     options_set_source_language = "shaderc_compile_options_set_source_language": fn(*mut c_void, c_int);
     compile_into_spv = "shaderc_compile_into_spv": fn(*mut c_void, *const c_char, usize, c_int, *const c_char, *const c_char, *mut c_void) -> *mut c_void;
@@ -75,15 +76,46 @@ functions! {
     get_spv_version = "shaderc_get_spv_version": fn(*mut u32, *mut u32);
 }
 
-/// Shaderc and what its output can depend on.
-pub struct Shaderc {
+struct Runtime {
     f: Functions,
     _library: ManuallyDrop<libloading::Library>,
     owned: bool,
     identity: String,
 }
 
-// A compile makes its own compiler and options and shares nothing, as the C# compiles from several threads at once.
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        if self.owned {
+            unsafe { ManuallyDrop::drop(&mut self._library) };
+        }
+    }
+}
+
+struct ThreadCompiler {
+    runtime: Arc<Runtime>,
+    compiler: *mut c_void,
+    options: *mut c_void,
+}
+
+impl Drop for ThreadCompiler {
+    fn drop(&mut self) {
+        unsafe {
+            (self.runtime.f.options_release)(self.options);
+            (self.runtime.f.compiler_release)(self.compiler);
+        }
+    }
+}
+
+thread_local! {
+    static COMPILER: RefCell<Option<ThreadCompiler>> = const { RefCell::new(None) };
+}
+
+/// Shaderc and what its output can depend on.
+pub struct Shaderc {
+    runtime: Arc<Runtime>,
+}
+
+// Each worker thread keeps its own compiler and options handles so concurrent compiles share nothing.
 unsafe impl Send for Shaderc {}
 unsafe impl Sync for Shaderc {}
 
@@ -143,49 +175,62 @@ impl Shaderc {
         let (mut version, mut revision) = (0u32, 0u32);
         unsafe { (f.get_spv_version)(&mut version, &mut revision) };
         let identity = format!("shaderc {}; spv {version:X}.{revision}; binding {} {}; {OPTIONS}", digest(path), env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-        Shaderc { f, _library: ManuallyDrop::new(library), owned, identity }
+        Shaderc { runtime: Arc::new(Runtime { f, _library: ManuallyDrop::new(library), owned, identity }) }
     }
 
-    /// The compiler itself, as far as its output can depend on it: the library's own bytes, its SPIR-V version, this
-    /// binding and the options. The C#'s names its own binding, so the two never serve each other's rows.
+    /// The compiler itself: the library's own bytes, its SPIR-V version, this binding and the options.
     pub fn identity(&self) -> &str {
-        &self.identity
+        &self.runtime.identity
     }
 
-    /// The stage's SPIR-V, or the C#'s words for a stage that does not compile, with Shaderc's own after them.
+    fn take_thread_compiler(&self) -> Result<ThreadCompiler, String> {
+        if let Some(existing) = COMPILER.with_borrow_mut(|slot| slot.take().filter(|tc| Arc::ptr_eq(&tc.runtime, &self.runtime))) {
+            return Ok(existing);
+        }
+        unsafe {
+            let f = &self.runtime.f;
+            let compiler = (f.compiler_initialize)();
+            let options = (f.options_initialize)();
+            if compiler.is_null() || options.is_null() {
+                if !options.is_null() {
+                    (f.options_release)(options);
+                }
+                if !compiler.is_null() {
+                    (f.compiler_release)(compiler);
+                }
+                return Err("Shaderc could not initialize compiler state".to_string());
+            }
+            (f.options_set_optimization_level)(options, OPTIMIZATION_PERFORMANCE);
+            (f.options_set_generate_debug_info)(options);
+            (f.options_set_target_env)(options, TARGET_VULKAN, VULKAN_1_1);
+            (f.options_set_source_language)(options, LANGUAGE_GLSL);
+            Ok(ThreadCompiler { runtime: self.runtime.clone(), compiler, options })
+        }
+    }
+
+    /// The stage's SPIR-V, or the error words for a stage that does not compile, with Shaderc's own after them.
     pub fn compile(&self, source: &str, stage: Stage, name: &str) -> Result<Vec<u8>, String> {
         // The file name is handed over up to its first NUL, as the C# binding hands it.
         let file = CString::new(name.split('\0').next().unwrap_or_default()).expect("no NUL is left");
         let kind = if stage == Stage::Vertex { KIND_VERTEX } else { KIND_FRAGMENT };
-        unsafe {
-            let compiler = (self.f.compiler_initialize)();
-            let options = (self.f.options_initialize)();
-            (self.f.options_set_optimization_level)(options, OPTIMIZATION_ZERO);
-            (self.f.options_set_target_env)(options, TARGET_VULKAN, VULKAN_1_1);
-            (self.f.options_set_source_language)(options, LANGUAGE_GLSL);
-            let result = (self.f.compile_into_spv)(compiler, source.as_ptr().cast(), source.len(), kind, file.as_ptr(), ENTRY.as_ptr(), options);
-            let answer = if (self.f.result_get_compilation_status)(result) != STATUS_SUCCESS {
-                let words = (self.f.result_get_error_message)(result);
+        let tc = self.take_thread_compiler()?;
+        let f = &self.runtime.f;
+        let answer = unsafe {
+            let result = (f.compile_into_spv)(tc.compiler, source.as_ptr().cast(), source.len(), kind, file.as_ptr(), ENTRY.as_ptr(), tc.options);
+            let answer = if (f.result_get_compilation_status)(result) != STATUS_SUCCESS {
+                let words = (f.result_get_error_message)(result);
                 let words = if words.is_null() { String::new() } else { String::from_utf8_lossy(CStr::from_ptr(words).to_bytes()).into_owned() };
                 Err(format!("{name} ({}) does not compile:\n{words}", stage.name()))
             } else {
-                let bytes = (self.f.result_get_bytes)(result);
-                let length = (self.f.result_get_length)(result);
+                let bytes = (f.result_get_bytes)(result);
+                let length = (f.result_get_length)(result);
                 Ok(if bytes.is_null() || length == 0 { Vec::new() } else { std::slice::from_raw_parts(bytes.cast::<u8>(), length).to_vec() })
             };
-            (self.f.result_release)(result);
-            (self.f.options_release)(options);
-            (self.f.compiler_release)(compiler);
+            (f.result_release)(result);
             answer
-        }
-    }
-}
-
-impl Drop for Shaderc {
-    fn drop(&mut self) {
-        if self.owned {
-            unsafe { ManuallyDrop::drop(&mut self._library) };
-        }
+        };
+        COMPILER.with_borrow_mut(|slot| *slot = Some(tc));
+        answer
     }
 }
 
@@ -249,11 +294,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_stage_names_and_the_options_are_the_csharps_words() {
+    fn the_stage_names_and_the_options_use_performance_optimization() {
         assert_eq!((Stage::Vertex.name(), Stage::Fragment.name()), ("Vertex", "Fragment"));
         assert_eq!(VULKAN_1_1, 4_198_400);
-        assert_eq!(OPTIONS, "optimization=Zero target=Vulkan/Vulkan11 language=Glsl entry=main defines=none");
-        assert_eq!(NAMES.len(), 14);
+        assert_eq!(OPTIMIZATION_PERFORMANCE, 2);
+        assert_eq!(OPTIONS, "optimization=Performance target=Vulkan/Vulkan11 language=Glsl entry=main defines=none");
+        assert_eq!(NAMES.len(), 15);
     }
 
     #[test]
@@ -262,7 +308,14 @@ mod tests {
             Ok(shaderc) => {
                 assert!(shaderc.identity().starts_with("shaderc "), "{}", shaderc.identity());
                 assert!(cfg!(not(unix)) || !shaderc.identity().contains("unfound"), "{}", shaderc.identity());
-                assert!(shaderc.compile("#version 450\nvoid main() {}\n", Stage::Fragment, "a.slang").is_ok());
+                let frag = "#version 450\nlayout(std140, set=0, binding=0) uniform UBO { mat4 MVP; float gain; };\nlayout(push_constant) uniform Push { vec4 SourceSize; };\nlayout(set=0, binding=1) uniform sampler2D Source;\nlayout(location=0) in vec2 vTex;\nlayout(location=0) out vec4 FragColor;\nvoid main() { FragColor = texture(Source, vTex) * gain * SourceSize.x + MVP[0]; }\n";
+                let first = shaderc.compile(frag, Stage::Fragment, "a.slang").unwrap();
+                let second = shaderc.compile(frag, Stage::Fragment, "a.slang").unwrap();
+                assert_eq!(first, second, "thread-local compiler reuse produces identical SPIR-V");
+                let reflected = crate::reflection::read(&first).unwrap();
+                assert!(reflected.uniforms.as_ref().is_some_and(|u| u.find("MVP").is_some() && u.find("gain").is_some()), "{reflected:?}");
+                assert!(reflected.push_constants.as_ref().is_some_and(|p| p.find("SourceSize").is_some()), "{reflected:?}");
+                assert!(reflected.samplers.iter().any(|s| s.name == "Source" && s.binding == 1), "{reflected:?}");
             }
             Err(words) => assert!(words.contains(&format!("/nowhere/at/all/{FILE_NAME} is not there")), "{words}"),
         }

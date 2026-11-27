@@ -7,7 +7,7 @@
 //! words. A readback lent to a picture is the one pointer into the library's memory that crosses, given back by its
 //! number from any thread. See EmuSen_RustPlatform.md §3.3 and §17.
 
-use crate::serenity::{CacheHandle, bytes, document, failure, fault_json, leave, list, number, object, out_json, parameter_json, shaderc};
+use crate::serenity::{CacheHandle, bytes, document, failure, fault_json, guard, leave, list, number, object, out_json, parameter_json, shaderc};
 use crate::{fail, put, required, status, text};
 use serde_json::Value;
 use emusen_serenity::cache;
@@ -52,8 +52,7 @@ unsafe fn device(h: *const DeviceHandle) -> Result<Device, i32> {
 /// `name` valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_new(name: *const u8, len: usize, validate: i32) -> *mut DeviceHandle {
-    // SAFETY: the caller's name; no extension lists, which is the device a host that adopts none needs.
-    unsafe { emusen_serenity_device_new_for(name, len, validate, std::ptr::null(), 0, std::ptr::null(), 0) }
+    guard(|_| std::ptr::null_mut(), || unsafe { emusen_serenity_device_new_for(name, len, validate, std::ptr::null(), 0, std::ptr::null(), 0) })
 }
 
 /// The same, with the extensions a host's own renderer needs enabled, Vulkan's names separated by spaces: `instance`
@@ -64,19 +63,21 @@ pub unsafe extern "C" fn emusen_serenity_device_new(name: *const u8, len: usize,
 /// `name`, `instance` and `device` valid for their lengths, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_new_for(name: *const u8, len: usize, validate: i32, instance: *const u8, instance_len: usize, device: *const u8, device_len: usize) -> *mut DeviceHandle {
-    let (Ok(name), Ok(instance), Ok(device)) = (unsafe { text(name, len) }, unsafe { text(instance, instance_len) }, unsafe { text(device, device_len) }) else { return std::ptr::null_mut() };
-    let names = |list: Option<&str>| list.unwrap_or_default().split_whitespace().filter_map(|n| std::ffi::CString::new(n).ok()).collect();
-    let host = emusen_serenity::vulkan::Host { instance: names(instance), device: names(device) };
-    match Device::create_for(name, validate != 0, &host) {
-        Ok(device) => {
-            let findings = device.findings();
-            Box::into_raw(Box::new(DeviceHandle { device: Mutex::new(Some(device)), findings, heard: Mutex::default(), marks: Mutex::default() }))
+    guard(|_| std::ptr::null_mut(), || {
+        let (Ok(name), Ok(instance), Ok(device)) = (unsafe { text(name, len) }, unsafe { text(instance, instance_len) }, unsafe { text(device, device_len) }) else { return std::ptr::null_mut() };
+        let names = |list: Option<&str>| list.unwrap_or_default().split_whitespace().filter_map(|n| std::ffi::CString::new(n).ok()).collect();
+        let host = emusen_serenity::vulkan::Host { instance: names(instance), device: names(device) };
+        match Device::create_for(name, validate != 0, &host) {
+            Ok(device) => {
+                let findings = device.findings();
+                Box::into_raw(Box::new(DeviceHandle { device: Mutex::new(Some(device)), findings, heard: Mutex::default(), marks: Mutex::default() }))
+            }
+            Err(report) => {
+                fail(status::DEVICE, report);
+                std::ptr::null_mut()
+            }
         }
-        Err(report) => {
-            fail(status::DEVICE, report);
-            std::ptr::null_mut()
-        }
-    }
+    })
 }
 
 /// Lets go of the device, which is destroyed once no chain and no lent readback made on it is left; what its layer
@@ -86,20 +87,24 @@ pub unsafe extern "C" fn emusen_serenity_device_new_for(name: *const u8, len: us
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_close(h: *const DeviceHandle) -> i32 {
-    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no handle") };
-    let device = locked(&handle.device).take();
-    drop(device);
-    0
+    guard(|s| s, || {
+        let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no handle") };
+        let device = locked(&handle.device).take();
+        drop(device);
+        0
+    })
 }
 
 /// # Safety
 /// `h` from `emusen_serenity_device_new`, not freed, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_free(h: *mut DeviceHandle) -> i32 {
-    if !h.is_null() {
-        drop(unsafe { Box::from_raw(h) });
-    }
-    0
+    guard(|s| s, || {
+        if !h.is_null() {
+            drop(unsafe { Box::from_raw(h) });
+        }
+        0
+    })
 }
 
 /// The device's name, as Vulkan gives it.
@@ -108,10 +113,10 @@ pub unsafe extern "C" fn emusen_serenity_device_free(h: *mut DeviceHandle) -> i3
 /// `h` live; `out` valid for `cap` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_name(h: *const DeviceHandle, out: *mut u8, cap: usize) -> i64 {
-    match unsafe { device(h) } {
+    guard(|s| s as i64, || match unsafe { device(h) } {
         Ok(device) => unsafe { put(device.name().as_bytes(), out, cap) },
         Err(status) => status as i64,
-    }
+    })
 }
 
 /// What the validation layer has said of the device's calls, each finding ended by a NUL, removed once a buffer has
@@ -121,14 +126,16 @@ pub unsafe extern "C" fn emusen_serenity_device_name(h: *const DeviceHandle, out
 /// `h` live; `out` valid for `cap` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_findings(h: *const DeviceHandle, out: *mut u8, cap: usize) -> i64 {
-    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no handle") as i64 };
-    let mut heard = locked(&handle.heard);
-    heard.extend(crate::join_nul(&handle.findings.take()));
-    let length = unsafe { put(&heard, out, cap) };
-    if !out.is_null() && heard.len() <= cap {
-        heard.clear();
-    }
-    length
+    guard(|s| s as i64, || {
+        let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no handle") as i64 };
+        let mut heard = locked(&handle.heard);
+        heard.extend(crate::join_nul(&handle.findings.take()));
+        let length = unsafe { put(&heard, out, cap) };
+        if !out.is_null() && heard.len() <= cap {
+            heard.clear();
+        }
+        length
+    })
 }
 
 pub const RAW_INSTANCE: u32 = 0;
@@ -146,14 +153,14 @@ pub const RAW_QUEUE_FAMILY: u32 = 4;
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_raw(h: *const DeviceHandle, which: u32) -> u64 {
-    match (unsafe { device(h) }, which) {
+    guard(|_| 0, || match (unsafe { device(h) }, which) {
         (Ok(device), RAW_INSTANCE) => device.raw_instance(),
         (Ok(device), RAW_DEVICE) => device.raw_device(),
         (Ok(device), RAW_PHYSICAL) => device.raw_physical(),
         (Ok(device), RAW_QUEUE) => device.raw_queue(),
         (Ok(device), RAW_QUEUE_FAMILY) => device.family() as u64,
         _ => 0,
-    }
+    })
 }
 
 /// The device's UUID into `uuid` (16 bytes), and 1 when it can export images and semaphores as opaque file
@@ -163,15 +170,17 @@ pub unsafe extern "C" fn emusen_serenity_device_raw(h: *const DeviceHandle, whic
 /// `h` live; `uuid` valid for 16 bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_identity(h: *const DeviceHandle, uuid: *mut u8) -> i32 {
-    let device = match unsafe { device(h) } {
-        Ok(device) => device,
-        Err(status) => return status,
-    };
-    if uuid.is_null() {
-        return fail(status::NULL, "nowhere to put the UUID");
-    }
-    unsafe { std::ptr::copy_nonoverlapping(device.uuid().as_ptr(), uuid, 16) };
-    device.exports() as i32
+    guard(|s| s, || {
+        let device = match unsafe { device(h) } {
+            Ok(device) => device,
+            Err(status) => return status,
+        };
+        if uuid.is_null() {
+            return fail(status::NULL, "nowhere to put the UUID");
+        }
+        unsafe { std::ptr::copy_nonoverlapping(device.uuid().as_ptr(), uuid, 16) };
+        device.exports() as i32
+    })
 }
 
 /// `emusen_serenity_shown_info`: a target's size and its three descriptors, each the caller's.
@@ -201,23 +210,25 @@ pub struct ShownHandle {
 /// `d` live; `out` valid, with its size set.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_shown_new(d: *const DeviceHandle, width: i32, height: i32, flags: u32, out: *mut ShownInfo) -> *mut ShownHandle {
-    let made = (|| {
-        let device = unsafe { device(d) }?;
-        let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the target"))?;
-        if (out.size as usize) < std::mem::size_of::<ShownInfo>() {
-            return Err(fail(status::BAD_ARGUMENT, "the target's struct is too small"));
+    guard(|_| std::ptr::null_mut(), || {
+        let made = (|| {
+            let device = unsafe { device(d) }?;
+            let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the target"))?;
+            if (out.size as usize) < std::mem::size_of::<ShownInfo>() {
+                return Err(fail(status::BAD_ARGUMENT, "the target's struct is too small"));
+            }
+            if width < 1 || height < 1 {
+                return Err(fail(status::BAD_ARGUMENT, "a target is at least one by one"));
+            }
+            let (shown, fds) = device.create_target(width as u32, height as u32, flags & SHOWN_LINEAR != 0).map_err(|words| fail(status::DEVICE, words))?;
+            (out.width, out.height, out.memory_fd, out.memory_bytes, out.ready_fd, out.free_fd) = (width, height, fds.memory, shown.memory_bytes, fds.ready, fds.free);
+            Ok(ShownHandle { shown })
+        })();
+        match made {
+            Ok(handle) => Box::into_raw(Box::new(handle)),
+            Err(_) => std::ptr::null_mut(),
         }
-        if width < 1 || height < 1 {
-            return Err(fail(status::BAD_ARGUMENT, "a target is at least one by one"));
-        }
-        let (shown, fds) = device.create_target(width as u32, height as u32, flags & SHOWN_LINEAR != 0).map_err(|words| fail(status::DEVICE, words))?;
-        (out.width, out.height, out.memory_fd, out.memory_bytes, out.ready_fd, out.free_fd) = (width, height, fds.memory, shown.memory_bytes, fds.ready, fds.free);
-        Ok(ShownHandle { shown })
-    })();
-    match made {
-        Ok(handle) => Box::into_raw(Box::new(handle)),
-        Err(_) => std::ptr::null_mut(),
-    }
+    })
 }
 
 /// Frees a target, waiting for the device to finish with it first.
@@ -226,10 +237,12 @@ pub unsafe extern "C" fn emusen_serenity_shown_new(d: *const DeviceHandle, width
 /// `h` from `emusen_serenity_shown_new`, not freed, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_shown_free(h: *mut ShownHandle) -> i32 {
-    if !h.is_null() {
-        drop(unsafe { Box::from_raw(h) });
-    }
-    0
+    guard(|s| s, || {
+        if !h.is_null() {
+            drop(unsafe { Box::from_raw(h) });
+        }
+        0
+    })
 }
 
 /// `emusen_serenity_lend_info`: what a core is lent, as the core ABI's `emusen_device_lend` holds it.
@@ -283,22 +296,24 @@ pub(crate) fn lend_settle(h: Option<&LendHandle>) -> Result<(), (i32, String)> {
 /// `d` live; `out` valid, with its size set.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_lend_new(d: *const DeviceHandle, out: *mut LendInfo) -> *mut LendHandle {
-    let made = (|| {
-        let device = unsafe { device(d) }?;
-        let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the lend"))?;
-        if (out.size as usize) < std::mem::size_of::<LendInfo>() {
-            return Err(fail(status::BAD_ARGUMENT, "the lend's struct is too small"));
+    guard(|_| std::ptr::null_mut(), || {
+        let made = (|| {
+            let device = unsafe { device(d) }?;
+            let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the lend"))?;
+            if (out.size as usize) < std::mem::size_of::<LendInfo>() {
+                return Err(fail(status::BAD_ARGUMENT, "the lend's struct is too small"));
+            }
+            let handle = lend_on(&device).map_err(|(code, words)| fail(code, words))?;
+            let l = handle.lend.lent();
+            (out.api_version, out.get_instance_proc_addr, out.instance, out.physical_device, out.device) = (l.api, l.get_instance_proc_addr as u64, l.instance, l.physical, l.device);
+            (out.queue_family, out.queue_index, out.host_queue_family, out.reserved, out.done) = (l.family, l.queue, l.host_family, 0, l.done);
+            Ok(handle)
+        })();
+        match made {
+            Ok(handle) => Box::into_raw(handle),
+            Err(_) => std::ptr::null_mut(),
         }
-        let handle = lend_on(&device).map_err(|(code, words)| fail(code, words))?;
-        let l = handle.lend.lent();
-        (out.api_version, out.get_instance_proc_addr, out.instance, out.physical_device, out.device) = (l.api, l.get_instance_proc_addr as u64, l.instance, l.physical, l.device);
-        (out.queue_family, out.queue_index, out.host_queue_family, out.reserved, out.done) = (l.family, l.queue, l.host_family, 0, l.done);
-        Ok(handle)
-    })();
-    match made {
-        Ok(handle) => Box::into_raw(handle),
-        Err(_) => std::ptr::null_mut(),
-    }
+    })
 }
 
 /// The core's picture taken: 1, 0 for one not newer than the last, or a status.
@@ -307,10 +322,10 @@ pub unsafe extern "C" fn emusen_serenity_lend_new(d: *const DeviceHandle, out: *
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_lend_take(h: *const LendHandle, buffer: u64, offset: u64, width: i32, height: i32, stride: i32, ready: u64, value: u64) -> i32 {
-    match lend_take(unsafe { h.as_ref() }, buffer, offset, width, height, stride, ready, value) {
+    guard(|s| s, || match lend_take(unsafe { h.as_ref() }, buffer, offset, width, height, stride, ready, value) {
         Ok(taken) => taken as i32,
         Err((code, words)) => fail(code, words),
-    }
+    })
 }
 
 /// Waits for every copy taken.
@@ -319,20 +334,22 @@ pub unsafe extern "C" fn emusen_serenity_lend_take(h: *const LendHandle, buffer:
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_lend_settle(h: *const LendHandle) -> i32 {
-    match lend_settle(unsafe { h.as_ref() }) {
+    guard(|s| s, || match lend_settle(unsafe { h.as_ref() }) {
         Ok(()) => 0,
         Err((code, words)) => fail(code, words),
-    }
+    })
 }
 
 /// # Safety
 /// `h` from `emusen_serenity_lend_new`, not freed, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_lend_free(h: *mut LendHandle) -> i32 {
-    if !h.is_null() {
-        drop(unsafe { Box::from_raw(h) });
-    }
-    0
+    guard(|s| s, || {
+        if !h.is_null() {
+            drop(unsafe { Box::from_raw(h) });
+        }
+        0
+    })
 }
 
 /// Turns the device's probe on, its clock started as the call returns, or off.
@@ -341,11 +358,13 @@ pub unsafe extern "C" fn emusen_serenity_lend_free(h: *mut LendHandle) -> i32 {
 /// `h` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_probe(h: *const DeviceHandle, on: i32) -> i32 {
-    let made = (|| unsafe { device(h) }?.probe(on != 0).map_err(|words| fail(status::DEVICE, words)))();
-    if let Some(handle) = unsafe { h.as_ref() } {
-        locked(&handle.marks).clear();
-    }
-    made.err().unwrap_or(0)
+    guard(|s| s, || {
+        let made = (|| unsafe { device(h) }?.probe(on != 0).map_err(|words| fail(status::DEVICE, words)))();
+        if let Some(handle) = unsafe { h.as_ref() } {
+            locked(&handle.marks).clear();
+        }
+        made.err().unwrap_or(0)
+    })
 }
 
 /// What the probe saw since the last taking, in order: their count, copied and removed when `out` holds them all.
@@ -354,17 +373,19 @@ pub unsafe extern "C" fn emusen_serenity_device_probe(h: *const DeviceHandle, on
 /// `h` live; `out` valid for `cap` marks, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_marks(h: *const DeviceHandle, out: *mut Mark, cap: usize) -> i64 {
-    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no handle") as i64 };
-    let mut marks = locked(&handle.marks);
-    if let Some(device) = locked(&handle.device).as_ref() {
-        marks.extend(device.take_marks());
-    }
-    let count = marks.len();
-    if !out.is_null() && count <= cap {
-        unsafe { std::ptr::copy_nonoverlapping(marks.as_ptr(), out, count) };
-        marks.clear();
-    }
-    count as i64
+    guard(|s| s as i64, || {
+        let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no handle") as i64 };
+        let mut marks = locked(&handle.marks);
+        if let Some(device) = locked(&handle.device).as_ref() {
+            marks.extend(device.take_marks());
+        }
+        let count = marks.len();
+        if !out.is_null() && count <= cap {
+            unsafe { std::ptr::copy_nonoverlapping(marks.as_ptr(), out, count) };
+            marks.clear();
+        }
+        count as i64
+    })
 }
 
 fn integer(value: Option<&Value>) -> Option<i32> {
@@ -472,32 +493,36 @@ pub struct ChainHandle {
 /// `d` live; `preset` valid for `len` bytes; `cache` live or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_new(d: *const DeviceHandle, preset: *const u8, len: usize, cache: *const CacheHandle, now: i64, builders: i32) -> *mut ChainHandle {
-    leave(None);
-    let made = (|| {
-        let device = unsafe { device(d) }?;
-        let preset = preset_of(&unsafe { document(preset, len) }?).ok_or_else(|| fail(status::PARSE, "not a preset with a pass"))?;
-        let shaderc = shaderc()?;
-        let cache = unsafe { cache.as_ref() };
-        let compile = |text: &str, stage: Stage, name: &str| match cache {
-            Some(handle) => cache::compile(&handle.cache, &shaderc, text, stage, name, now),
-            None => shaderc.compile(text, stage, name),
-        };
-        Chain::new(&device, &preset, &compile, usize::try_from(builders).unwrap_or(0)).map_err(|why| refuse(&why))
-    })();
-    match made {
-        Ok(chain) => Box::into_raw(Box::new(ChainHandle { chain: Mutex::new(chain) })),
-        Err(_) => std::ptr::null_mut(),
-    }
+    guard(|_| std::ptr::null_mut(), || {
+        leave(None);
+        let made = (|| {
+            let device = unsafe { device(d) }?;
+            let preset = preset_of(&unsafe { document(preset, len) }?).ok_or_else(|| fail(status::PARSE, "not a preset with a pass"))?;
+            let shaderc = shaderc()?;
+            let cache = unsafe { cache.as_ref() };
+            let compile = |text: &str, stage: Stage, name: &str| match cache {
+                Some(handle) => cache::compile(&handle.cache, &shaderc, text, stage, name, now),
+                None => shaderc.compile(text, stage, name),
+            };
+            Chain::new(&device, &preset, &compile, usize::try_from(builders).unwrap_or(0)).map_err(|why| refuse(&why))
+        })();
+        match made {
+            Ok(chain) => Box::into_raw(Box::new(ChainHandle { chain: Mutex::new(chain) })),
+            Err(_) => std::ptr::null_mut(),
+        }
+    })
 }
 
 /// # Safety
 /// `h` from `emusen_serenity_chain_new`, not freed, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_free(h: *mut ChainHandle) -> i32 {
-    if !h.is_null() {
-        drop(unsafe { Box::from_raw(h) });
-    }
-    0
+    guard(|s| s, || {
+        if !h.is_null() {
+            drop(unsafe { Box::from_raw(h) });
+        }
+        0
+    })
 }
 
 macro_rules! chain {
@@ -516,8 +541,17 @@ macro_rules! chain {
 /// `h` live; `out` valid for `cap` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_parameters(h: *const ChainHandle, out: *mut u8, cap: usize) -> i64 {
-    let chain = chain!(h);
-    unsafe { out_json(&Value::Array(chain.parameters().iter().map(parameter_json).collect()), out, cap) }
+    guard(|s| s as i64, || {
+        let chain = chain!(h);
+        unsafe { out_json(&Value::Array(chain.parameters().iter().map(parameter_json).collect()), out, cap) }
+    })
+}
+
+fn lut_pixels(width: i32, height: i32, rgba: &[u8]) -> Option<&[u8]> {
+    let w = usize::try_from(width).ok().filter(|&w| w > 0)?;
+    let h = usize::try_from(height).ok().filter(|&h| h > 0)?;
+    let needed = w.checked_mul(h)?.checked_mul(4)?;
+    rgba.get(..needed)
 }
 
 /// The preset's lookup image at `index`, decoded by the host: `width` by `height` pixels of RGBA8, a row after a row.
@@ -526,15 +560,16 @@ pub unsafe extern "C" fn emusen_serenity_chain_parameters(h: *const ChainHandle,
 /// `h` live; `rgba` valid for `len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_lut(h: *const ChainHandle, index: u32, width: i32, height: i32, rgba: *const u8, len: usize) -> i32 {
-    let mut chain = chain!(h);
-    let needed = width.wrapping_mul(height).wrapping_mul(4);
-    let Some(pixels) = usize::try_from(needed).ok().and_then(|needed| unsafe { bytes(rgba, len) }.get(..needed)) else {
-        return fail(status::BAD_ARGUMENT, "fewer bytes than the image's size says");
-    };
-    match chain.load_lut(index as usize, width, height, pixels) {
-        Ok(()) => 0,
-        Err(words) => fail(status::DEVICE, words),
-    }
+    guard(|s| s, || {
+        let mut chain = chain!(h);
+        let Some(pixels) = lut_pixels(width, height, unsafe { bytes(rgba, len) }) else {
+            return fail(status::BAD_ARGUMENT, "fewer bytes than the image's size says");
+        };
+        match chain.load_lut(index as usize, width, height, pixels) {
+            Ok(()) => 0,
+            Err(words) => fail(status::DEVICE, words),
+        }
+    })
 }
 
 /// A value for each parameter, in the order `emusen_serenity_chain_parameters` gives them, read by the next render.
@@ -544,9 +579,11 @@ pub unsafe extern "C" fn emusen_serenity_chain_lut(h: *const ChainHandle, index:
 /// `h` live; `values` valid for `count` floats.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_set_parameters(h: *const ChainHandle, values: *const f32, count: usize) -> i32 {
-    let mut chain = chain!(h);
-    let values = if values.is_null() || count == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(values, count) } };
-    if chain.set_values(values) { 0 } else { fail(status::BAD_ARGUMENT, "not one value for each parameter") }
+    guard(|s| s, || {
+        let mut chain = chain!(h);
+        let values = if values.is_null() || count == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(values, count) } };
+        if chain.set_values(values) { 0 } else { fail(status::BAD_ARGUMENT, "not one value for each parameter") }
+    })
 }
 
 /// A parameter's value by its id: 1 with it in `out`, or 0 for an id no pass declares.
@@ -555,19 +592,21 @@ pub unsafe extern "C" fn emusen_serenity_chain_set_parameters(h: *const ChainHan
 /// `h` live; `id` valid for `len` bytes; `out` valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_value(h: *const ChainHandle, id: *const u8, len: usize, out: *mut f32) -> i32 {
-    let chain = chain!(h);
-    let id = match unsafe { required(id, len) } {
-        Ok(id) => id,
-        Err(status) => return status,
-    };
-    match (chain.value_of(id), unsafe { out.as_mut() }) {
-        (Some(value), Some(out)) => {
-            *out = value;
-            1
+    guard(|s| s, || {
+        let chain = chain!(h);
+        let id = match unsafe { required(id, len) } {
+            Ok(id) => id,
+            Err(status) => return status,
+        };
+        match (chain.value_of(id), unsafe { out.as_mut() }) {
+            (Some(value), Some(out)) => {
+                *out = value;
+                1
+            }
+            (Some(_), None) => fail(status::NULL, "nowhere to put the value"),
+            (None, _) => 0,
         }
-        (Some(_), None) => fail(status::NULL, "nowhere to put the value"),
-        (None, _) => 0,
-    }
+    })
 }
 
 /// A new frame, `width` by `height` pixels of RGBA8, each row shown `row_repeat` times. BAD_ARGUMENT for fewer bytes
@@ -577,12 +616,14 @@ pub unsafe extern "C" fn emusen_serenity_chain_value(h: *const ChainHandle, id: 
 /// `h` live; `rgba` valid for `len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_advance(h: *const ChainHandle, rgba: *const u8, len: usize, width: i32, height: i32, row_repeat: i32) -> i32 {
-    let mut chain = chain!(h);
-    match chain.advance(unsafe { bytes(rgba, len) }, width, height, row_repeat) {
-        Ok(()) => 0,
-        Err(Unfed::Short) => fail(status::BAD_ARGUMENT, "fewer bytes than the frame's size says"),
-        Err(Unfed::Device(words)) => fail(status::DEVICE, words),
-    }
+    guard(|s| s, || {
+        let mut chain = chain!(h);
+        match chain.advance(unsafe { bytes(rgba, len) }, width, height, row_repeat) {
+            Ok(()) => 0,
+            Err(Unfed::Short) => fail(status::BAD_ARGUMENT, "fewer bytes than the frame's size says"),
+            Err(Unfed::Device(words)) => fail(status::DEVICE, words),
+        }
+    })
 }
 
 /// Runs every pass for the viewport's size and copies the last one's pixels, RGBA8, a row after a row: their length,
@@ -593,18 +634,20 @@ pub unsafe extern "C" fn emusen_serenity_chain_advance(h: *const ChainHandle, rg
 /// `h` live; `out` valid for `cap` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_render(h: *const ChainHandle, width: i32, height: i32, out: *mut u8, cap: usize) -> i64 {
-    let mut chain = chain!(h);
-    let needed = width.max(1) as u64 * height.max(1) as u64 * 4;
-    if out.is_null() || (cap as u64) < needed {
-        return fail(status::BAD_ARGUMENT, format!("the picture needs {needed} bytes")) as i64;
-    }
-    match chain.render(width, height) {
-        Ok(pixels) => {
-            unsafe { std::ptr::copy_nonoverlapping(pixels.as_ptr(), out, pixels.len()) };
-            pixels.len() as i64
+    guard(|s| s as i64, || {
+        let mut chain = chain!(h);
+        let needed = width.max(1) as u64 * height.max(1) as u64 * 4;
+        if out.is_null() || (cap as u64) < needed {
+            return fail(status::BAD_ARGUMENT, format!("the picture needs {needed} bytes")) as i64;
         }
-        Err(words) => fail(status::DEVICE, words) as i64,
-    }
+        match chain.render(width, height) {
+            Ok(pixels) => {
+                unsafe { std::ptr::copy_nonoverlapping(pixels.as_ptr(), out, pixels.len()) };
+                pixels.len() as i64
+            }
+            Err(words) => fail(status::DEVICE, words) as i64,
+        }
+    })
 }
 
 /// `emusen_serenity_lent`: a picture over a readback.
@@ -628,18 +671,20 @@ pub struct LentOut {
 /// `h` live; `out` valid, with its size set.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_render_lent(h: *const ChainHandle, width: i32, height: i32, out: *mut LentOut) -> i32 {
-    let mut chain = chain!(h);
-    let Some(out) = (unsafe { out.as_mut() }) else { return fail(status::NULL, "nowhere to put the picture") };
-    if (out.size as usize) < std::mem::size_of::<LentOut>() {
-        return fail(status::BAD_ARGUMENT, "the picture's struct is too small");
-    }
-    match chain.render_lent(width, height) {
-        Ok(lent) => {
-            (out.pixels, out.bytes, out.width, out.height, out.row_bytes, out.slot) = (lent.pixels, lent.bytes, lent.width, lent.height, lent.row_bytes, lent.slot);
-            0
+    guard(|s| s, || {
+        let mut chain = chain!(h);
+        let Some(out) = (unsafe { out.as_mut() }) else { return fail(status::NULL, "nowhere to put the picture") };
+        if (out.size as usize) < std::mem::size_of::<LentOut>() {
+            return fail(status::BAD_ARGUMENT, "the picture's struct is too small");
         }
-        Err(words) => fail(status::DEVICE, words),
-    }
+        match chain.render_lent(width, height) {
+            Ok(lent) => {
+                (out.pixels, out.bytes, out.width, out.height, out.row_bytes, out.slot) = (lent.pixels, lent.bytes, lent.width, lent.height, lent.row_bytes, lent.slot);
+                0
+            }
+            Err(words) => fail(status::DEVICE, words),
+        }
+    })
 }
 
 /// Runs every pass for a view of `width` by `height`, no larger than the target, and copies the last one's picture into
@@ -651,12 +696,14 @@ pub unsafe extern "C" fn emusen_serenity_chain_render_lent(h: *const ChainHandle
 /// `h` and `target` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_present(h: *const ChainHandle, target: *const ShownHandle, width: i32, height: i32, wait_free: i32) -> i32 {
-    let mut chain = chain!(h);
-    let Some(target) = (unsafe { target.as_ref() }) else { return fail(status::NULL, "no target") };
-    match chain.present(&target.shown, width, height, wait_free != 0) {
-        Ok(()) => 0,
-        Err(words) => fail(status::DEVICE, words),
-    }
+    guard(|s| s, || {
+        let mut chain = chain!(h);
+        let Some(target) = (unsafe { target.as_ref() }) else { return fail(status::NULL, "no target") };
+        match chain.present(&target.shown, width, height, wait_free != 0) {
+            Ok(()) => 0,
+            Err(words) => fail(status::DEVICE, words),
+        }
+    })
 }
 
 /// `emusen_serenity_drawn`: the image a draw left its picture in.
@@ -680,18 +727,20 @@ pub struct Drawn {
 /// `h` live; `out` valid, its `size` set.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_draw(h: *const ChainHandle, width: i32, height: i32, out: *mut Drawn) -> i32 {
-    let Some(out) = (unsafe { out.as_mut() }) else { return fail(status::NULL, "no out") };
-    if (out.size as usize) < std::mem::size_of::<Drawn>() {
-        return fail(status::BAD_ARGUMENT, "the drawn struct is too short");
-    }
-    let mut chain = chain!(h);
-    match chain.draw(width, height) {
-        Ok(d) => {
-            (out.width, out.height, out.format, out.layout, out.image, out.view) = (d.width, d.height, d.format, d.layout, d.image, d.view);
-            0
+    guard(|s| s, || {
+        let Some(out) = (unsafe { out.as_mut() }) else { return fail(status::NULL, "no out") };
+        if (out.size as usize) < std::mem::size_of::<Drawn>() {
+            return fail(status::BAD_ARGUMENT, "the drawn struct is too short");
         }
-        Err(words) => fail(status::DEVICE, words),
-    }
+        let mut chain = chain!(h);
+        match chain.draw(width, height) {
+            Ok(d) => {
+                (out.width, out.height, out.format, out.layout, out.image, out.view) = (d.width, d.height, d.format, d.layout, d.image, d.view);
+                0
+            }
+            Err(words) => fail(status::DEVICE, words),
+        }
+    })
 }
 
 /// The newest picture taken through `lend` as the chain's new frame: 1, 0 when there is none newer, or a status.
@@ -700,12 +749,14 @@ pub unsafe extern "C" fn emusen_serenity_chain_draw(h: *const ChainHandle, width
 /// `h` and `lend` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_advance_lent(h: *const ChainHandle, lend: *const LendHandle) -> i32 {
-    let mut chain = chain!(h);
-    let Some(lend) = (unsafe { lend.as_ref() }) else { return fail(status::NULL, "no lend") };
-    match chain.advance_lent(&lend.lend) {
-        Ok(advanced) => advanced as i32,
-        Err(words) => fail(status::DEVICE, words),
-    }
+    guard(|s| s, || {
+        let mut chain = chain!(h);
+        let Some(lend) = (unsafe { lend.as_ref() }) else { return fail(status::NULL, "no lend") };
+        match chain.advance_lent(&lend.lend) {
+            Ok(advanced) => advanced as i32,
+            Err(words) => fail(status::DEVICE, words),
+        }
+    })
 }
 
 /// `emusen_serenity_ring_info`: the ring's count, its two semaphores' descriptors and the UUIDs a core matches.
@@ -756,20 +807,22 @@ pub(crate) fn ring_new(d: Option<&DeviceHandle>, width: u32, height: u32, count:
 /// `d` live; `out` valid, with its size set.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_ring_new(d: *const DeviceHandle, width: u32, height: u32, count: u32, out: *mut RingInfo) -> *mut RingHandle {
-    let made = (|| {
-        let device = unsafe { device(d) }?;
-        let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the ring"))?;
-        if (out.size as usize) < std::mem::size_of::<RingInfo>() {
-            return Err(fail(status::BAD_ARGUMENT, "the ring's struct is too small"));
+    guard(|_| std::ptr::null_mut(), || {
+        let made = (|| {
+            let device = unsafe { device(d) }?;
+            let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the ring"))?;
+            if (out.size as usize) < std::mem::size_of::<RingInfo>() {
+                return Err(fail(status::BAD_ARGUMENT, "the ring's struct is too small"));
+            }
+            let handle = ring_on(&device, width, height, count).map_err(|(code, words)| fail(code, words))?;
+            (out.count, out.ready, out.done, out.device_uuid, out.driver_uuid) = (count, handle.ring.ready_fd as i64, handle.ring.done_fd as i64, handle.ring.device_uuid, handle.ring.driver_uuid);
+            Ok(handle)
+        })();
+        match made {
+            Ok(handle) => Box::into_raw(handle),
+            Err(_) => std::ptr::null_mut(),
         }
-        let handle = ring_on(&device, width, height, count).map_err(|(code, words)| fail(code, words))?;
-        (out.count, out.ready, out.done, out.device_uuid, out.driver_uuid) = (count, handle.ring.ready_fd as i64, handle.ring.done_fd as i64, handle.ring.device_uuid, handle.ring.driver_uuid);
-        Ok(handle)
-    })();
-    match made {
-        Ok(handle) => Box::into_raw(handle),
-        Err(_) => std::ptr::null_mut(),
-    }
+    })
 }
 
 /// The ring's image `index`, its descriptor the ring's.
@@ -778,14 +831,16 @@ pub unsafe extern "C" fn emusen_serenity_ring_new(d: *const DeviceHandle, width:
 /// `h` live; `out` valid, with its size set.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_ring_image(h: *const RingHandle, index: u32, out: *mut RingImageInfo) -> i32 {
-    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no ring") };
-    let Some(out) = (unsafe { out.as_mut() }) else { return fail(status::NULL, "nowhere to put the image") };
-    if (out.size as usize) < std::mem::size_of::<RingImageInfo>() {
-        return fail(status::BAD_ARGUMENT, "the image's struct is too small");
-    }
-    let Some(i) = handle.ring.images.get(index as usize) else { return fail(status::BAD_ARGUMENT, "the ring has no such image") };
-    (out.memory_type, out.handle, out.allocation_size, out.width, out.height, out.format, out.usage) = (i.memory_type, i.handle as u64, i.allocation_size, i.width, i.height, i.format, i.usage);
-    0
+    guard(|s| s, || {
+        let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no ring") };
+        let Some(out) = (unsafe { out.as_mut() }) else { return fail(status::NULL, "nowhere to put the image") };
+        if (out.size as usize) < std::mem::size_of::<RingImageInfo>() {
+            return fail(status::BAD_ARGUMENT, "the image's struct is too small");
+        }
+        let Some(i) = handle.ring.images.get(index as usize) else { return fail(status::BAD_ARGUMENT, "the ring has no such image") };
+        (out.memory_type, out.handle, out.allocation_size, out.width, out.height, out.format, out.usage) = (i.memory_type, i.handle as u64, i.allocation_size, i.width, i.height, i.format, i.usage);
+        0
+    })
 }
 
 /// Frees a ring once the device is done with it; no chain may hold a frame advanced from it and not yet rendered.
@@ -794,10 +849,12 @@ pub unsafe extern "C" fn emusen_serenity_ring_image(h: *const RingHandle, index:
 /// `h` from `emusen_serenity_ring_new`, not freed, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_ring_free(h: *mut RingHandle) -> i32 {
-    if !h.is_null() {
-        drop(unsafe { Box::from_raw(h) });
-    }
-    0
+    guard(|s| s, || {
+        if !h.is_null() {
+            drop(unsafe { Box::from_raw(h) });
+        }
+        0
+    })
 }
 
 /// The picture `frame_ring` answered, `value` in `slot`, as the chain's new frame, read on the device by its next render
@@ -807,23 +864,25 @@ pub unsafe extern "C" fn emusen_serenity_ring_free(h: *mut RingHandle) -> i32 {
 /// `h` and `ring` live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_advance_ring(h: *const ChainHandle, ring: *const RingHandle, slot: u32, value: u64, width: i32, height: i32) -> i32 {
-    let mut chain = chain!(h);
-    let Some(ring) = (unsafe { ring.as_ref() }) else { return fail(status::NULL, "no ring") };
-    let Some(image) = ring.ring.images.get(slot as usize) else { return fail(status::BAD_ARGUMENT, "the ring has no such slot") };
-    if width < 1 || height < 1 || width as u32 > image.width || height as u32 > image.height {
-        return fail(status::BAD_ARGUMENT, "the picture does not fit the ring's images");
-    }
-    match chain.advance_ring(ring.ring.picture(slot as usize, value, width as u32, height as u32)) {
-        Ok(()) => 0,
-        Err(words) => fail(status::DEVICE, words),
-    }
+    guard(|s| s, || {
+        let mut chain = chain!(h);
+        let Some(ring) = (unsafe { ring.as_ref() }) else { return fail(status::NULL, "no ring") };
+        let Some(image) = ring.ring.images.get(slot as usize) else { return fail(status::BAD_ARGUMENT, "the ring has no such slot") };
+        if width < 1 || height < 1 || width as u32 > image.width || height as u32 > image.height {
+            return fail(status::BAD_ARGUMENT, "the picture does not fit the ring's images");
+        }
+        match chain.advance_ring(ring.ring.picture(slot as usize, value, width as u32, height as u32)) {
+            Ok(()) => 0,
+            Err(words) => fail(status::DEVICE, words),
+        }
+    })
 }
 
 /// Gives a lent readback back, from any thread, once: its chain may write it again, or, if the chain was freed
 /// meanwhile, it is freed. ABSENT for a number that names no lent readback.
 #[unsafe(no_mangle)]
 pub extern "C" fn emusen_serenity_lent_release(slot: u64) -> i32 {
-    if chain::release(slot) { 0 } else { status::ABSENT }
+    guard(|s| s, || if chain::release(slot) { 0 } else { status::ABSENT })
 }
 
 pub const CHAIN_COPIED_IMAGES: u32 = 0;
@@ -837,15 +896,17 @@ pub const CHAIN_MAX_LENT: u32 = 2;
 /// `h` live, or null for the last.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_chain_get(h: *const ChainHandle, which: u32) -> i64 {
-    if which == CHAIN_MAX_LENT {
-        return chain::MAX_LENT as i64;
-    }
-    let chain = chain!(h);
-    match which {
-        CHAIN_COPIED_IMAGES => chain.copied_images() as i64,
-        CHAIN_READBACKS => chain.readback_count() as i64,
-        _ => fail(status::BAD_ARGUMENT, "no such number") as i64,
-    }
+    guard(|s| s as i64, || {
+        if which == CHAIN_MAX_LENT {
+            return chain::MAX_LENT as i64;
+        }
+        let chain = chain!(h);
+        match which {
+            CHAIN_COPIED_IMAGES => chain.copied_images() as i64,
+            CHAIN_READBACKS => chain.readback_count() as i64,
+            _ => fail(status::BAD_ARGUMENT, "no such number") as i64,
+        }
+    })
 }
 
 /// The format a pass's `#pragma format` names, as the C# resolves it: `out` is the format's value, or `fallback`
@@ -855,17 +916,19 @@ pub unsafe extern "C" fn emusen_serenity_chain_get(h: *const ChainHandle, which:
 /// `name` valid for `len` bytes; `out` valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_parse_format(name: *const u8, len: usize, fallback: i32, out: *mut i32) -> i32 {
-    let name = match unsafe { required(name, len) } {
-        Ok(name) => name,
-        Err(status) => return status,
-    };
-    match unsafe { out.as_mut() } {
-        Some(out) => {
-            *out = format::parse(name).unwrap_or(fallback);
-            0
+    guard(|s| s, || {
+        let name = match unsafe { required(name, len) } {
+            Ok(name) => name,
+            Err(status) => return status,
+        };
+        match unsafe { out.as_mut() } {
+            Some(out) => {
+                *out = format::parse(name).unwrap_or(fallback);
+                0
+            }
+            None => fail(status::NULL, "nowhere to put the format"),
         }
-        None => fail(status::NULL, "nowhere to put the format"),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -950,5 +1013,17 @@ mod tests {
         assert_eq!(format, -7);
         assert_eq!(unsafe { emusen_serenity_parse_format(b"".as_ptr(), 0, 43, &mut format) }, 0);
         assert_eq!(format, 43);
+    }
+
+    #[test]
+    fn lut_pixels_rejects_negative_zero_overflow_and_short_buffers() {
+        let data = [0u8; 64];
+        assert!(lut_pixels(2, 2, &data).is_some());
+        assert!(lut_pixels(0, 2, &data).is_none());
+        assert!(lut_pixels(2, -1, &data).is_none());
+        assert!(lut_pixels(-2, -2, &data).is_none());
+        assert!(lut_pixels(16384, 65536, &[]).is_none());
+        assert!(lut_pixels(i32::MAX, i32::MAX, &data).is_none());
+        assert!(lut_pixels(5, 4, &data).is_none());
     }
 }

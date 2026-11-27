@@ -1,11 +1,16 @@
 //! Galaxia's C layer: the tree, the save library's names, atomic files, the migration and the ROM hash.
 
 use std::path::{Path, PathBuf};
+use crate::serenity::guard;
 use crate::{diagnostics_rewind, diagnostics_waiting, fail, fail_io, join_nul, put, report, required, status, text};
 use emusen_galaxia::migration::{self, Copied};
 use emusen_galaxia::tree::{self, Directory, Override};
 use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::{atomic, claims, package, rom_hash, saves};
+
+thread_local! {
+    static WAITING: crate::reply::Waiting = const { std::cell::RefCell::new(None) };
+}
 
 /// What `emusen_galaxia_save_path` names.
 pub mod save {
@@ -47,11 +52,13 @@ fn absent() -> i32 {
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_init(base: *const u8, base_len: usize, application_data: *const u8, application_data_len: usize) -> i32 {
-    let arguments = || -> Result<(&str, Option<&str>), i32> { Ok((unsafe { required(base, base_len) }?, unsafe { text(application_data, application_data_len) }?)) };
-    match arguments() {
-        Ok((base, application_data)) => i32::from(!tree::init(Path::new(base), application_data.map(Path::new))),
-        Err(status) => status,
-    }
+    guard(|s| s, || {
+        let arguments = || -> Result<(&str, Option<&str>), i32> { Ok((unsafe { required(base, base_len) }?, unsafe { text(application_data, application_data_len) }?)) };
+        match arguments() {
+            Ok((base, application_data)) => i32::from(!tree::init(Path::new(base), application_data.map(Path::new))),
+            Err(status) => status,
+        }
+    })
 }
 
 /// A directory of the process's tree, by its `EMUSEN_GALAXIA_DIR_*` number; `ABSENT` for a seed directory outside a bundle.
@@ -60,8 +67,10 @@ pub unsafe extern "C" fn emusen_galaxia_init(base: *const u8, base_len: usize, a
 /// `out` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_directory(which: u32, out: *mut u8, len: usize) -> i64 {
-    let directory = Directory::from_u32(which).ok_or_else(|| fail(status::BAD_ARGUMENT, format!("no directory {which}")));
-    answer(directory.and_then(|which| tree::tree().directory(which).map(|d| d.to_string_lossy().into_owned()).ok_or_else(absent)), out, len)
+    guard(|s| s as i64, || {
+        let directory = Directory::from_u32(which).ok_or_else(|| fail(status::BAD_ARGUMENT, format!("no directory {which}")));
+        answer(directory.and_then(|which| tree::tree().directory(which).map(|d| d.to_string_lossy().into_owned()).ok_or_else(absent)), out, len)
+    })
 }
 
 /// A file of Galaxia's by its `EMUSEN_GALAXIA_FILE_*` number: the settings file or a store, as a path in the process's tree.
@@ -70,8 +79,10 @@ pub unsafe extern "C" fn emusen_galaxia_directory(which: u32, out: *mut u8, len:
 /// `out` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_file(which: u32, out: *mut u8, len: usize) -> i64 {
-    let file = emusen_galaxia::stores::File::from_u32(which).ok_or_else(|| fail(status::BAD_ARGUMENT, format!("no file {which}")));
-    answer(file.map(|file| file.path(&tree::tree()).to_string_lossy().into_owned()), out, len)
+    guard(|s| s as i64, || {
+        let file = emusen_galaxia::stores::File::from_u32(which).ok_or_else(|| fail(status::BAD_ARGUMENT, format!("no file {which}")));
+        answer(file.map(|file| file.path(&tree::tree()).to_string_lossy().into_owned()), out, len)
+    })
 }
 
 /// Moves one of the redirects, or with a null path restores the real location.
@@ -80,16 +91,18 @@ pub unsafe extern "C" fn emusen_galaxia_file(which: u32, out: *mut u8, len: usiz
 /// `directory` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_set_override(which: u32, directory: *const u8, len: usize) -> i32 {
-    let Some(which) = Override::from_u32(which) else {
-        return fail(status::BAD_ARGUMENT, format!("no override {which}"));
-    };
-    match unsafe { text(directory, len) } {
-        Ok(directory) => {
-            tree::tree_mut().set_override(which, directory.map(PathBuf::from));
-            0
+    guard(|s| s, || {
+        let Some(which) = Override::from_u32(which) else {
+            return fail(status::BAD_ARGUMENT, format!("no override {which}"));
+        };
+        match unsafe { text(directory, len) } {
+            Ok(directory) => {
+                tree::tree_mut().set_override(which, directory.map(PathBuf::from));
+                0
+            }
+            Err(status) => status,
         }
-        Err(status) => status,
-    }
+    })
 }
 
 /// A test's scope, on the calling thread only: the three redirects every call on this thread resolves against until it is scoped again; all three null return it to the process tree. Never called by a program, and never seen by the library's own threads - see EmuSen_Galaxia.md §3.14.
@@ -98,17 +111,19 @@ pub unsafe extern "C" fn emusen_galaxia_set_override(which: u32, directory: *con
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_thread_scope(config: *const u8, config_len: usize, data: *const u8, data_len: usize, legacy: *const u8, legacy_len: usize) -> i32 {
-    let scope = || -> Result<Option<tree::ThreadScope>, i32> {
-        let (config, data, legacy) = (unsafe { text(config, config_len) }?, unsafe { text(data, data_len) }?, unsafe { text(legacy, legacy_len) }?);
-        Ok((config.is_some() || data.is_some() || legacy.is_some()).then(|| tree::ThreadScope { config: config.map(PathBuf::from), data: data.map(PathBuf::from), legacy: legacy.map(PathBuf::from) }))
-    };
-    match scope() {
-        Ok(scope) => {
-            tree::set_thread_scope(scope);
-            0
+    guard(|s| s, || {
+        let scope = || -> Result<Option<tree::ThreadScope>, i32> {
+            let (config, data, legacy) = (unsafe { text(config, config_len) }?, unsafe { text(data, data_len) }?, unsafe { text(legacy, legacy_len) }?);
+            Ok((config.is_some() || data.is_some() || legacy.is_some()).then(|| tree::ThreadScope { config: config.map(PathBuf::from), data: data.map(PathBuf::from), legacy: legacy.map(PathBuf::from) }))
+        };
+        match scope() {
+            Ok(scope) => {
+                tree::set_thread_scope(scope);
+                0
+            }
+            Err(status) => status,
         }
-        Err(status) => status,
-    }
+    })
 }
 
 /// A config file's path, in a category's subdirectory when one is given.
@@ -117,11 +132,13 @@ pub unsafe extern "C" fn emusen_galaxia_thread_scope(config: *const u8, config_l
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_config_path(category: *const u8, category_len: usize, file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> {
-        let (category, file) = (unsafe { text(category, category_len) }?, unsafe { required(file, file_len) }?);
-        Ok(tree::tree().config_path(category, file).to_string_lossy().into_owned())
-    };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> {
+            let (category, file) = (unsafe { text(category, category_len) }?, unsafe { required(file, file_len) }?);
+            Ok(tree::tree().config_path(category, file).to_string_lossy().into_owned())
+        };
+        answer(result(), out, len)
+    })
 }
 
 /// Where a config file sat before Galaxia, to migrate out of; `ABSENT` when config is redirected and the legacy directory is not.
@@ -130,8 +147,10 @@ pub unsafe extern "C" fn emusen_galaxia_config_path(category: *const u8, categor
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_legacy_config_path(file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> { tree::tree().legacy_config_path(unsafe { required(file, file_len) }?).map(|p| p.to_string_lossy().into_owned()).ok_or_else(absent) };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> { tree::tree().legacy_config_path(unsafe { required(file, file_len) }?).map(|p| p.to_string_lossy().into_owned()).ok_or_else(absent) };
+        answer(result(), out, len)
+    })
 }
 
 /// The root a program in `base` would have, with the platform and the home directory given so every branch can be asked on any host.
@@ -140,11 +159,13 @@ pub unsafe extern "C" fn emusen_galaxia_legacy_config_path(file: *const u8, file
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_root_for(base: *const u8, base_len: usize, mac_os: i32, user_home: *const u8, user_home_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> {
-        let (base, user_home) = (unsafe { required(base, base_len) }?, unsafe { required(user_home, user_home_len) }?);
-        Ok(tree::root_for(Path::new(base), mac_os != 0, Path::new(user_home)).to_string_lossy().into_owned())
-    };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> {
+            let (base, user_home) = (unsafe { required(base, base_len) }?, unsafe { required(user_home, user_home_len) }?);
+            Ok(tree::root_for(Path::new(base), mac_os != 0, Path::new(user_home)).to_string_lossy().into_owned())
+        };
+        answer(result(), out, len)
+    })
 }
 
 /// The bundle's `Contents` when `base` is its `Contents/MacOS`, else `ABSENT`.
@@ -153,8 +174,10 @@ pub unsafe extern "C" fn emusen_galaxia_root_for(base: *const u8, base_len: usiz
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_bundle_contents_for(base: *const u8, base_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> { tree::bundle_contents_for(Path::new(unsafe { required(base, base_len) }?)).map(|p| p.to_string_lossy().into_owned()).ok_or_else(absent) };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> { tree::bundle_contents_for(Path::new(unsafe { required(base, base_len) }?)).map(|p| p.to_string_lossy().into_owned()).ok_or_else(absent) };
+        answer(result(), out, len)
+    })
 }
 
 /// The skeleton a bundle carries, `Contents/Resources/home`; `ABSENT` outside a bundle or off macOS.
@@ -163,8 +186,10 @@ pub unsafe extern "C" fn emusen_galaxia_bundle_contents_for(base: *const u8, bas
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_seed_directory_for(base: *const u8, base_len: usize, mac_os: i32, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> { tree::seed_directory_for(Path::new(unsafe { required(base, base_len) }?), mac_os != 0).map(|p| p.to_string_lossy().into_owned()).ok_or_else(absent) };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> { tree::seed_directory_for(Path::new(unsafe { required(base, base_len) }?), mac_os != 0).map(|p| p.to_string_lossy().into_owned()).ok_or_else(absent) };
+        answer(result(), out, len)
+    })
 }
 
 /// `Library/Application Support/EmuSen` under a home directory.
@@ -173,8 +198,10 @@ pub unsafe extern "C" fn emusen_galaxia_seed_directory_for(base: *const u8, base
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_mac_data_directory_for(user_home: *const u8, user_home_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> { Ok(tree::mac_data_directory_for(std::path::Path::new(unsafe { required(user_home, user_home_len) }?)).to_string_lossy().into_owned()) };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> { Ok(tree::mac_data_directory_for(std::path::Path::new(unsafe { required(user_home, user_home_len) }?)).to_string_lossy().into_owned()) };
+        answer(result(), out, len)
+    })
 }
 
 /// Where the tree lived under a root before it collapsed to `<root>/home`.
@@ -183,8 +210,10 @@ pub unsafe extern "C" fn emusen_galaxia_mac_data_directory_for(user_home: *const
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_legacy_root_for(config_root: *const u8, config_root_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> { Ok(tree::legacy_root_for(Path::new(unsafe { required(config_root, config_root_len) }?)).to_string_lossy().into_owned()) };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> { Ok(tree::legacy_root_for(Path::new(unsafe { required(config_root, config_root_len) }?)).to_string_lossy().into_owned()) };
+        answer(result(), out, len)
+    })
 }
 
 /// A package kind's `extra`: the patch list's save key, or none for the game opened unpatched; anything but hex digits refused.
@@ -201,22 +230,24 @@ fn save_key(extra: Option<&str>) -> Result<Option<&str>, i32> {
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_save_path(kind: u32, rom: *const u8, rom_len: usize, extra: *const u8, extra_len: usize, slot: i32, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> {
-        let (rom, extra) = (unsafe { required(rom, rom_len) }?, unsafe { text(extra, extra_len) }?);
-        let tree = tree::tree();
-        Ok(match kind {
-            save::SRAM => saves::sram_path(&tree, rom, extra.ok_or_else(|| fail(status::NULL, "a save needs its console"))?).to_string_lossy().into_owned(),
-            save::FLAT_SRAM => saves::flat_sram_path(&tree, rom).to_string_lossy().into_owned(),
-            save::STATE => saves::state_path(&tree, rom, slot, extra).to_string_lossy().into_owned(),
-            save::RESUME_STATE => saves::resume_state_path(&tree, rom, extra).to_string_lossy().into_owned(),
-            save::PICTURE => saves::picture_path(rom).to_string_lossy().into_owned(),
-            save::PACKAGE_SRAM => saves::package_sram_path(rom, save_key(extra)?).to_string_lossy().into_owned(),
-            save::PACKAGE_STATE => saves::package_state_path(rom, slot, save_key(extra)?).to_string_lossy().into_owned(),
-            save::PACKAGE_RESUME_STATE => saves::package_resume_state_path(rom, save_key(extra)?).to_string_lossy().into_owned(),
-            _ => return Err(fail(status::BAD_ARGUMENT, format!("no save kind {kind}"))),
-        })
-    };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> {
+            let (rom, extra) = (unsafe { required(rom, rom_len) }?, unsafe { text(extra, extra_len) }?);
+            let tree = tree::tree();
+            Ok(match kind {
+                save::SRAM => saves::sram_path(&tree, rom, extra.ok_or_else(|| fail(status::NULL, "a save needs its console"))?).to_string_lossy().into_owned(),
+                save::FLAT_SRAM => saves::flat_sram_path(&tree, rom).to_string_lossy().into_owned(),
+                save::STATE => saves::state_path(&tree, rom, slot, extra).to_string_lossy().into_owned(),
+                save::RESUME_STATE => saves::resume_state_path(&tree, rom, extra).to_string_lossy().into_owned(),
+                save::PICTURE => saves::picture_path(rom).to_string_lossy().into_owned(),
+                save::PACKAGE_SRAM => saves::package_sram_path(rom, save_key(extra)?).to_string_lossy().into_owned(),
+                save::PACKAGE_STATE => saves::package_state_path(rom, slot, save_key(extra)?).to_string_lossy().into_owned(),
+                save::PACKAGE_RESUME_STATE => saves::package_resume_state_path(rom, save_key(extra)?).to_string_lossy().into_owned(),
+                _ => return Err(fail(status::BAD_ARGUMENT, format!("no save kind {kind}"))),
+            })
+        };
+        answer(result(), out, len)
+    })
 }
 
 /// A file's bytes: its whole length, with `out` holding the file when that length is no more than `len`. A null `out` asks the length; `ABSENT` for no file; a file that will not read is `IO` with a diagnostic.
@@ -225,22 +256,24 @@ pub unsafe extern "C" fn emusen_galaxia_save_path(kind: u32, rom: *const u8, rom
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_file_read(file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
-    let file = match unsafe { required(file, file_len) } {
-        Ok(file) => file,
-        Err(status) => return status as i64,
-    };
-    if out.is_null() {
-        return atomic::length(file).map_or(status::ABSENT as i64, |length| length as i64);
-    }
-    let buffer = if len == 0 { &mut [][..] } else { unsafe { std::slice::from_raw_parts_mut(out, len) } };
-    match atomic::read_into(file, buffer) {
-        Ok(Some(length)) => length as i64,
-        Ok(None) => status::ABSENT as i64,
-        Err(diagnostic) => {
-            report(diagnostic.clone());
-            fail(status::IO, diagnostic) as i64
+    guard(|s| s as i64, || {
+        let file = match unsafe { required(file, file_len) } {
+            Ok(file) => file,
+            Err(status) => return status as i64,
+        };
+        if out.is_null() {
+            return atomic::length(file).map_or(status::ABSENT as i64, |length| length as i64);
         }
-    }
+        let buffer = if len == 0 { &mut [][..] } else { unsafe { std::slice::from_raw_parts_mut(out, len) } };
+        match atomic::read_into(file, buffer) {
+            Ok(Some(length)) => length as i64,
+            Ok(None) => status::ABSENT as i64,
+            Err(diagnostic) => {
+                report(diagnostic.clone());
+                fail(status::IO, diagnostic) as i64
+            }
+        }
+    })
 }
 
 /// The bytes written beside the file and renamed over it. A failure is `IO` with a diagnostic, and the live file is as it was.
@@ -249,18 +282,20 @@ pub unsafe extern "C" fn emusen_galaxia_file_read(file: *const u8, file_len: usi
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_file_write(file: *const u8, file_len: usize, data: *const u8, len: usize) -> i32 {
-    let file = match unsafe { required(file, file_len) } {
-        Ok(file) => file,
-        Err(status) => return status,
-    };
-    let contents = if data.is_null() || len == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(data, len) } };
-    match atomic::write(file, contents) {
-        Ok(()) => 0,
-        Err(diagnostic) => {
-            report(diagnostic.clone());
-            fail(status::IO, diagnostic)
+    guard(|s| s, || {
+        let file = match unsafe { required(file, file_len) } {
+            Ok(file) => file,
+            Err(status) => return status,
+        };
+        let contents = if data.is_null() || len == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(data, len) } };
+        match atomic::write(file, contents) {
+            Ok(()) => 0,
+            Err(diagnostic) => {
+                report(diagnostic.clone());
+                fail(status::IO, diagnostic)
+            }
         }
-    }
+    })
 }
 
 /// A migration by its `EMUSEN_GALAXIA_MIGRATE_*` kind: how many files it copied, with a diagnostic for each it could not. A directory that will not list is a failing status.
@@ -269,31 +304,33 @@ pub unsafe extern "C" fn emusen_galaxia_file_write(file: *const u8, file_len: us
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_migrate(what: u32, source: *const u8, source_len: usize, destination: *const u8, destination_len: usize) -> i64 {
-    let run = || -> Result<std::io::Result<Copied>, i32> {
-        let source = unsafe { text(source, source_len) }?;
-        let destination = unsafe { text(destination, destination_len) }?;
-        let both = || -> Result<(&str, &str), i32> { Ok((source.ok_or_else(|| fail(status::NULL, "no source"))?, destination.ok_or_else(|| fail(status::NULL, "no destination"))?)) };
-        Ok(match what {
-            migrate::OWN => migration::run_own(&tree::tree().clone()),
-            migrate::OWN_CONFIG => migration::run_config(&tree::tree().clone()),
-            migrate::OWN_SEED => {
-                let tree = tree::tree().clone();
-                migration::seed_from_bundle(tree.seed.as_deref(), &tree.home())
+    guard(|s| s as i64, || {
+        let run = || -> Result<std::io::Result<Copied>, i32> {
+            let source = unsafe { text(source, source_len) }?;
+            let destination = unsafe { text(destination, destination_len) }?;
+            let both = || -> Result<(&str, &str), i32> { Ok((source.ok_or_else(|| fail(status::NULL, "no source"))?, destination.ok_or_else(|| fail(status::NULL, "no destination"))?)) };
+            Ok(match what {
+                migrate::OWN => migration::run_own(&tree::tree().clone()),
+                migrate::OWN_CONFIG => migration::run_config(&tree::tree().clone()),
+                migrate::OWN_SEED => {
+                    let tree = tree::tree().clone();
+                    migration::seed_from_bundle(tree.seed.as_deref(), &tree.home())
+                }
+                migrate::BETWEEN => both().map(|(source, destination)| migration::run(Path::new(source), Path::new(destination)))?,
+                migrate::TREE => both().map(|(source, destination)| migration::copy_tree(source, destination))?,
+                migrate::SEED => migration::seed_from_bundle(source.map(Path::new), Path::new(destination.ok_or_else(|| fail(status::NULL, "no destination"))?)),
+                _ => return Err(fail(status::BAD_ARGUMENT, format!("no migration {what}"))),
+            })
+        };
+        match run() {
+            Ok(Ok(copied)) => {
+                copied.diagnostics.into_iter().for_each(report);
+                copied.files as i64
             }
-            migrate::BETWEEN => both().map(|(source, destination)| migration::run(Path::new(source), Path::new(destination)))?,
-            migrate::TREE => both().map(|(source, destination)| migration::copy_tree(source, destination))?,
-            migrate::SEED => migration::seed_from_bundle(source.map(Path::new), Path::new(destination.ok_or_else(|| fail(status::NULL, "no destination"))?)),
-            _ => return Err(fail(status::BAD_ARGUMENT, format!("no migration {what}"))),
-        })
-    };
-    match run() {
-        Ok(Ok(copied)) => {
-            copied.diagnostics.into_iter().for_each(report);
-            copied.files as i64
+            Ok(Err(error)) => fail_io(&error) as i64,
+            Err(status) => status as i64,
         }
-        Ok(Err(error)) => fail_io(&error) as i64,
-        Err(status) => status as i64,
-    }
+    })
 }
 
 /// The old ROM folders under a legacy root that still hold files, each path ended by a NUL; a null root asks about the process's own.
@@ -302,20 +339,22 @@ pub unsafe extern "C" fn emusen_galaxia_migrate(what: u32, source: *const u8, so
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_remaining_library(legacy_root: *const u8, legacy_root_len: usize, out: *mut u8, len: usize) -> i64 {
-    let legacy_root = match unsafe { text(legacy_root, legacy_root_len) } {
-        Ok(Some(root)) => PathBuf::from(root),
-        Ok(None) => tree::legacy_root_for(&tree::tree().root),
-        Err(status) => return status as i64,
-    };
-    let waiting = diagnostics_waiting();
-    let (found, diagnostics) = migration::remaining_library_directories(&legacy_root);
-    diagnostics.into_iter().for_each(report);
-    let joined = join_nul(&found.iter().map(|f| f.to_string_lossy().into_owned()).collect::<Vec<_>>());
-    if !joined.is_empty() && (out.is_null() || joined.len() > len) {
-        // The caller comes back with room, and the walk reports again then.
-        diagnostics_rewind(waiting);
-    }
-    unsafe { put(&joined, out, len) }
+    guard(|s| s as i64, || {
+        let legacy_root = match unsafe { text(legacy_root, legacy_root_len) } {
+            Ok(Some(root)) => PathBuf::from(root),
+            Ok(None) => tree::legacy_root_for(&tree::tree().root),
+            Err(status) => return status as i64,
+        };
+        let waiting = diagnostics_waiting();
+        let (found, diagnostics) = migration::remaining_library_directories(&legacy_root);
+        diagnostics.into_iter().for_each(report);
+        let joined = join_nul(&found.iter().map(|f| f.to_string_lossy().into_owned()).collect::<Vec<_>>());
+        if !joined.is_empty() && (out.is_null() || joined.len() > len) {
+            // The caller comes back with room, and the walk reports again then.
+            diagnostics_rewind(waiting);
+        }
+        unsafe { put(&joined, out, len) }
+    })
 }
 
 /// A file's MD5 as 32 lower-case hexadecimal digits.
@@ -324,8 +363,13 @@ pub unsafe extern "C" fn emusen_galaxia_remaining_library(legacy_root: *const u8
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_rom_md5(file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> { rom_hash::md5(unsafe { required(file, file_len) }?).map_err(|error| fail_io(&error)) };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let path = match unsafe { required(file, file_len) } {
+            Ok(path) => path,
+            Err(s) => return s as i64,
+        };
+        unsafe { crate::reply::answer(&WAITING, 1, path, out, len, || rom_hash::md5(path).map_err(|e| fail_io(&e)), |s| s) }
+    })
 }
 
 /// A dump's hashes as the JSON object `{"crc32","md5","sha1","size"}`.
@@ -353,12 +397,15 @@ fn fail_hash(error: &std::io::Error) -> i32 {
 /// Each pointer must be valid for its length, or null; `stop`, when not null, must stay valid for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_rom_hashes(file: *const u8, file_len: usize, offset: u64, length: u64, stop: *const i32, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> {
-        let path = unsafe { required(file, file_len) }?;
+    guard(|s| s as i64, || {
+        let path = match unsafe { required(file, file_len) } {
+            Ok(path) => path,
+            Err(s) => return s as i64,
+        };
+        let key = format!("{offset}:{length}:{path}");
         let range = (offset != 0 || length != u64::MAX).then_some((offset, length));
-        rom_hash::hashes_with(path, range, true, &stopped(stop)).map(|h| hashes_json(&h)).map_err(|e| fail_hash(&e))
-    };
-    answer(result(), out, len)
+        unsafe { crate::reply::answer(&WAITING, 2, &key, out, len, || rom_hash::hashes_with(path, range, true, &stopped(stop)).map(|h| hashes_json(&h)).map_err(|e| fail_hash(&e)), |s| s) }
+    })
 }
 
 /// The three hashes of bytes the host holds, as JSON: a system pack's comparable form of a dump.
@@ -367,7 +414,7 @@ pub unsafe extern "C" fn emusen_galaxia_rom_hashes(file: *const u8, file_len: us
 /// `data` must be valid for `data_len` bytes, or null with no length; `out` for `len`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_rom_hashes_of(data: *const u8, data_len: usize, out: *mut u8, len: usize) -> i64 {
-    answer(unsafe { crate::bytes(data, data_len) }.map(|b| hashes_json(&rom_hash::hashes_of(b))), out, len)
+    guard(|s| s as i64, || answer(unsafe { crate::bytes(data, data_len) }.map(|b| hashes_json(&rom_hash::hashes_of(b))), out, len))
 }
 
 /// Each track of a cue sheet hashed where `emusen-disc` places it, as a JSON array of
@@ -377,19 +424,24 @@ pub unsafe extern "C" fn emusen_galaxia_rom_hashes_of(data: *const u8, data_len:
 /// As `emusen_galaxia_rom_hashes`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_rom_tracks(sheet: *const u8, sheet_len: usize, stop: *const i32, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> {
-        let path = unsafe { required(sheet, sheet_len) }?;
-        let tracks = rom_hash::tracks(path, &stopped(stop)).map_err(|e| fail_hash(&e))?;
-        let items: Vec<String> = tracks
-            .iter()
-            .map(|t| {
-                let h = hashes_json(&t.hashes);
-                format!(r#"{{"track":{},"file":{},"offset":{},{}"#, t.number, serde_json::json!(&t.file).to_string(), t.offset, &h[1..])
-            })
-            .collect();
-        Ok(format!("[{}]", items.join(",")))
-    };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let path = match unsafe { required(sheet, sheet_len) } {
+            Ok(path) => path,
+            Err(s) => return s as i64,
+        };
+        let result = || -> Result<String, i32> {
+            let tracks = rom_hash::tracks(path, &stopped(stop)).map_err(|e| fail_hash(&e))?;
+            let items: Vec<String> = tracks
+                .iter()
+                .map(|t| {
+                    let h = hashes_json(&t.hashes);
+                    format!(r#"{{"track":{},"file":{},"offset":{},{}"#, t.number, serde_json::json!(&t.file).to_string(), t.offset, &h[1..])
+                })
+                .collect();
+            Ok(format!("[{}]", items.join(",")))
+        };
+        unsafe { crate::reply::answer(&WAITING, 3, path, out, len, result, |s| s) }
+    })
 }
 
 /// A manifest's refusal as its status: `NEWER_FILE` for a newer major, `PARSE` for the rest, with the words.
@@ -406,11 +458,13 @@ fn fail_package(refusal: &package::Refusal) -> i32 {
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_package_read(file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> {
-        let doc = package::read(unsafe { required(file, file_len) }?).map_err(|e| fail_io(&e))?.map_err(|r| fail_package(&r))?;
-        Ok(doc.to_string())
-    };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> {
+            let doc = package::read(unsafe { required(file, file_len) }?).map_err(|e| fail_io(&e))?.map_err(|r| fail_package(&r))?;
+            Ok(doc.to_string())
+        };
+        answer(result(), out, len)
+    })
 }
 
 /// A manifest checked and written atomically; a refused one is not written, and a failed write queues its diagnostic.
@@ -419,18 +473,20 @@ pub unsafe extern "C" fn emusen_galaxia_package_read(file: *const u8, file_len: 
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_package_write(file: *const u8, file_len: usize, manifest: *const u8, manifest_len: usize) -> i32 {
-    let result = || -> Result<(), i32> {
-        let path = unsafe { required(file, file_len) }?;
-        let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
-        match package::write(path, &doc).map_err(|r| fail_package(&r))? {
-            Ok(()) => Ok(()),
-            Err(diagnostic) => {
-                report(diagnostic.clone());
-                Err(fail(status::IO, diagnostic))
+    guard(|s| s, || {
+        let result = || -> Result<(), i32> {
+            let path = unsafe { required(file, file_len) }?;
+            let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
+            match package::write(path, &doc).map_err(|r| fail_package(&r))? {
+                Ok(()) => Ok(()),
+                Err(diagnostic) => {
+                    report(diagnostic.clone());
+                    Err(fail(status::IO, diagnostic))
+                }
             }
-        }
-    };
-    result().map_or_else(|status| status, |()| 0)
+        };
+        result().map_or_else(|status| status, |()| 0)
+    })
 }
 
 /// A manifest checked and laid out as it is written.
@@ -439,11 +495,13 @@ pub unsafe extern "C" fn emusen_galaxia_package_write(file: *const u8, file_len:
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_package_format(manifest: *const u8, manifest_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> {
-        let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
-        Ok(package::format(&doc))
-    };
-    answer(result(), out, len)
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> {
+            let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
+            Ok(package::format(&doc))
+        };
+        answer(result(), out, len)
+    })
 }
 
 fn roots_from<'a>(packages: &'a str, library: Option<&'a str>, compressed: &'a str) -> claims::Roots<'a> {
@@ -477,24 +535,26 @@ pub unsafe extern "C" fn emusen_galaxia_package_index(
     out: *mut u8,
     len: usize,
 ) -> i64 {
-    let result = || -> Result<String, i32> {
-        let (p, l, c) = (unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?);
-        let index = claims::index(&roots_from(p, l, c));
-        let mut j = String::from("{\"folders\":");
-        strings(&mut j, &index.folders);
-        j.push_str(",\"packages\":[");
-        for (i, pkg) in index.packages.iter().enumerate() {
-            if i > 0 {
-                j.push(',');
+    guard(|s| s as i64, || {
+        let result = || -> Result<String, i32> {
+            let (p, l, c) = (unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?);
+            let index = claims::index(&roots_from(p, l, c));
+            let mut j = String::from("{\"folders\":");
+            strings(&mut j, &index.folders);
+            j.push_str(",\"packages\":[");
+            for (i, pkg) in index.packages.iter().enumerate() {
+                if i > 0 {
+                    j.push(',');
+                }
+                j.push_str(&format!("{{\"folder\":{},\"system\":{},\"game\":{},\"claims\":", serde_json::json!(&pkg.folder).to_string(), serde_json::json!(&pkg.system).to_string(), serde_json::json!(&pkg.game).to_string()));
+                strings(&mut j, &pkg.claims);
+                j.push('}');
             }
-            j.push_str(&format!("{{\"folder\":{},\"system\":{},\"game\":{},\"claims\":", serde_json::json!(&pkg.folder).to_string(), serde_json::json!(&pkg.system).to_string(), serde_json::json!(&pkg.game).to_string()));
-            strings(&mut j, &pkg.claims);
-            j.push('}');
-        }
-        j.push_str("]}");
-        Ok(j)
-    };
-    answer(result(), out, len)
+            j.push_str("]}");
+            Ok(j)
+        };
+        answer(result(), out, len)
+    })
 }
 
 /// What `at` opens as: `{"game", "package" | null, "moved"}`; IO with words for a package that refuses it (a changed
@@ -516,25 +576,24 @@ pub unsafe extern "C" fn emusen_galaxia_package_resolve(
     out: *mut u8,
     len: usize,
 ) -> i64 {
-    thread_local! {
-        static WAITING: crate::reply::Waiting = const { std::cell::RefCell::new(None) };
-    }
-    let given = || -> Result<(&str, &str, Option<&str>, &str), i32> {
-        let at = unsafe { required(at, at_len) }?;
-        Ok((at, unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?))
-    };
-    let (at, p, l, c) = match given() {
-        Ok(g) => g,
-        Err(s) => return s as i64,
-    };
-    let key = [at, p, l.unwrap_or(""), c].join("\0");
-    // Done once: the length query resolves, rewriting a moved game's manifest, and the fill takes its answer - see EmuSen_RustPlatform.md §47.25.
-    let result = || -> Result<String, i32> {
-        let r = claims::resolve(&roots_from(p, l, c), at).map_err(|words| fail(status::IO, words))?;
-        let package = serde_json::json!(r.package).to_string();
-        Ok(format!("{{\"game\":{},\"package\":{package},\"moved\":{}}}", serde_json::json!(&r.game).to_string(), r.moved))
-    };
-    unsafe { crate::reply::answer(&WAITING, 0, &key, out, len, result, |s| s) }
+    guard(|s| s as i64, || {
+        let given = || -> Result<(&str, &str, Option<&str>, &str), i32> {
+            let at = unsafe { required(at, at_len) }?;
+            Ok((at, unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?))
+        };
+        let (at, p, l, c) = match given() {
+            Ok(g) => g,
+            Err(s) => return s as i64,
+        };
+        let key = [at, p, l.unwrap_or(""), c].join("\0");
+        // Done once: the length query resolves, rewriting a moved game's manifest, and the fill takes its answer - see EmuSen_RustPlatform.md §47.25.
+        let result = || -> Result<String, i32> {
+            let r = claims::resolve(&roots_from(p, l, c), at).map_err(|words| fail(status::IO, words))?;
+            let package = serde_json::json!(r.package).to_string();
+            Ok(format!("{{\"game\":{},\"package\":{package},\"moved\":{}}}", serde_json::json!(&r.game).to_string(), r.moved))
+        };
+        unsafe { crate::reply::answer(&WAITING, 0, &key, out, len, result, |s| s) }
+    })
 }
 
 /// Maps the file whole and read-only, its handle in `mapped`; the bytes stay in place until `emusen_galaxia_unmap`.
@@ -543,20 +602,22 @@ pub unsafe extern "C" fn emusen_galaxia_package_resolve(
 /// `file` must be valid for `file_len` bytes, or null; `mapped` must be valid to write, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_map(file: *const u8, file_len: usize, mapped: *mut *mut Mapped) -> i32 {
-    if mapped.is_null() {
-        return fail(status::NULL, "no place for the mapping's handle");
-    }
-    let path = match unsafe { required(file, file_len) } {
-        Ok(path) => path,
-        Err(status) => return status,
-    };
-    match Mapped::open(path) {
-        Ok(map) => {
-            unsafe { *mapped = Box::into_raw(Box::new(map)) };
-            0
+    guard(|s| s, || {
+        if mapped.is_null() {
+            return fail(status::NULL, "no place for the mapping's handle");
         }
-        Err(error) => fail_io(&error),
-    }
+        let path = match unsafe { required(file, file_len) } {
+            Ok(path) => path,
+            Err(status) => return status,
+        };
+        match Mapped::open(path) {
+            Ok(map) => {
+                unsafe { *mapped = Box::into_raw(Box::new(map)) };
+                0
+            }
+            Err(error) => fail_io(&error),
+        }
+    })
 }
 
 /// The mapped bytes' length, and their address in `bytes`; null and zero for an empty file.
@@ -565,12 +626,14 @@ pub unsafe extern "C" fn emusen_galaxia_map(file: *const u8, file_len: usize, ma
 /// `mapped` must come from `emusen_galaxia_map` and not have been unmapped, or be null; `bytes` must be valid to write, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_mapped_bytes(mapped: *const Mapped, bytes: *mut *const u8) -> i64 {
-    let Some(map) = (unsafe { mapped.as_ref() }) else { return fail(status::NULL, "no mapping") as i64 };
-    let held = map.bytes();
-    if !bytes.is_null() {
-        unsafe { *bytes = if held.is_empty() { std::ptr::null() } else { held.as_ptr() } };
-    }
-    held.len() as i64
+    guard(|s| s as i64, || {
+        let Some(map) = (unsafe { mapped.as_ref() }) else { return fail(status::NULL, "no mapping") as i64 };
+        let held = map.bytes();
+        if !bytes.is_null() {
+            unsafe { *bytes = if held.is_empty() { std::ptr::null() } else { held.as_ptr() } };
+        }
+        held.len() as i64
+    })
 }
 
 /// Advises the system that `len` bytes of the mapping from `offset` will be read soon (`Mapped::advise`): 1 where it
@@ -580,8 +643,10 @@ pub unsafe extern "C" fn emusen_galaxia_mapped_bytes(mapped: *const Mapped, byte
 /// As `emusen_galaxia_mapped_bytes`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_mapped_advise(mapped: *const Mapped, offset: u64, len: u64) -> i32 {
-    let Some(map) = (unsafe { mapped.as_ref() }) else { return fail(status::NULL, "no mapping") };
-    map.advise(offset, len) as i32
+    guard(|s| s, || {
+        let Some(map) = (unsafe { mapped.as_ref() }) else { return fail(status::NULL, "no mapping") };
+        map.advise(offset, len) as i32
+    })
 }
 
 /// Releases a mapping; null is nothing to release.
@@ -590,10 +655,12 @@ pub unsafe extern "C" fn emusen_galaxia_mapped_advise(mapped: *const Mapped, off
 /// As `emusen_galaxia_mapped_bytes`, and no address the mapping gave may be read afterwards.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_unmap(mapped: *mut Mapped) -> i32 {
-    if !mapped.is_null() {
-        drop(unsafe { Box::from_raw(mapped) });
-    }
-    0
+    guard(|s| s, || {
+        if !mapped.is_null() {
+            drop(unsafe { Box::from_raw(mapped) });
+        }
+        0
+    })
 }
 
 #[cfg(test)]
@@ -779,5 +846,22 @@ mod tests {
         for (name, value) in [("OWN", migrate::OWN), ("OWN_CONFIG", migrate::OWN_CONFIG), ("OWN_SEED", migrate::OWN_SEED), ("BETWEEN", migrate::BETWEEN), ("TREE", migrate::TREE), ("SEED", migrate::SEED)] {
             defines(&format!("EMUSEN_GALAXIA_MIGRATE_{name}"), value);
         }
+    }
+
+    #[test]
+    fn rom_hashing_caches_between_length_query_and_fill() {
+        let dir = std::env::temp_dir().join(format!("emusen-platform-rom-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let rom = dir.join("game.bin").to_string_lossy().into_owned();
+        std::fs::write(&rom, b"123456789").unwrap();
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_rom_md5(rom.as_ptr(), rom.len(), out, len) }).unwrap(), "25f9e794323b453885f5181f1b624d0b");
+        let n = unsafe { emusen_galaxia_rom_hashes(rom.as_ptr(), rom.len(), 0, u64::MAX, std::ptr::null(), std::ptr::null_mut(), 0) };
+        assert!(n > 0);
+        std::fs::remove_file(&rom).unwrap();
+        let mut out = vec![0u8; n as usize];
+        assert_eq!(unsafe { emusen_galaxia_rom_hashes(rom.as_ptr(), rom.len(), 0, u64::MAX, std::ptr::null(), out.as_mut_ptr(), out.len()) }, n);
+        assert!(std::str::from_utf8(&out).unwrap().contains(r#""md5":"25f9e794323b453885f5181f1b624d0b""#));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

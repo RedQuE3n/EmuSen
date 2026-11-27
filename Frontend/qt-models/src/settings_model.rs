@@ -1055,11 +1055,12 @@ impl qobject::SettingsModel {
         let thread = self.qt_thread();
         let clients = self.clients.clone();
         let (cores, world) = (self.cores.to_string(), self.world.to_string());
+        let (open, world_empty) = (self.open, world.is_empty());
         let manifests: Vec<String> = self.built_ins.iter().map(|m| m.to_string()).collect();
         let board_snap = self.shaders_state.clone();
         self.clients.spawn(move || {
             let read = ClientSettings::open(&library).and_then(|source| {
-                let mut read = settings::read(&source)?;
+                let mut read = settings::read_with(&source, open)?;
                 read.consoles = if world.is_empty() {
                     crate::consoles::read(&clients.consoles(&library, &cores, true)?)?
                 } else {
@@ -1110,7 +1111,11 @@ impl qobject::SettingsModel {
                         }
                         let mut r = model.as_mut().rust_mut();
                         let (note, pending) = (r.view.scrape.status_note.clone(), r.view.scrape.pending_user.clone());
+                        let prev_outputs = std::mem::take(&mut r.view.read.outputs);
                         r.view.read = read;
+                        if !open && world_empty {
+                            r.view.read.outputs = prev_outputs;
+                        }
                         r.view.chooser = Some(chooser);
                         r.view.themes = Some(listing);
                         r.view.scrape = scrape;

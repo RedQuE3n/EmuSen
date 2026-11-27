@@ -132,6 +132,7 @@ struct NormWrite {
 /// Interactive state for Eclipse `#21` Cheats.
 pub struct State {
     pub read: Option<EclipseRead>,
+    pub read_target: Option<String>,
     pub requested_game: String,
     pub session_game: String,
     pub master_on: bool,
@@ -159,6 +160,7 @@ impl Default for State {
     fn default() -> Self {
         State {
             read: None,
+            read_target: None,
             requested_game: String::new(),
             session_game: String::new(),
             master_on: true,
@@ -627,7 +629,8 @@ impl State {
         }
     }
 
-    pub fn take_read(&mut self, read: EclipseRead) {
+    pub fn take_read(&mut self, read: EclipseRead, read_target: Option<String>) {
+        self.read_target = read_target.filter(|s| !s.is_empty());
         self.read = Some(read);
         self.apply_requested_game();
         self.clamp_focus();
@@ -641,7 +644,11 @@ impl State {
     }
 
     pub fn needs_refresh(&self) -> bool {
-        !self.requested_game.is_empty() && self.read.as_ref().is_some_and(|r| !r.games.iter().any(|g| g.path == self.requested_game))
+        let Some(read) = self.read.as_ref() else { return false };
+        match self.read_target.as_deref() {
+            Some(loaded) if !loaded.is_empty() => loaded != self.requested_game,
+            _ => !self.requested_game.is_empty() && !read.games.iter().any(|g| g.path == self.requested_game),
+        }
     }
 
     fn apply_requested_game(&mut self) {
@@ -1746,15 +1753,18 @@ mod tests {
 
     fn state_with_sample() -> State {
         let mut s = State::default();
-        s.take_read(EclipseRead {
-            directory: "/db".to_owned(),
-            exists: true,
-            attribution: "Cheat data comes from the libretro cheat database, licensed CC BY-SA 4.0.".to_owned(),
-            files: 19412,
-            newest: Some(1_763_600_000),
-            codecs: CheatCodecs::default(),
-            games: vec![sample_game()],
-        });
+        s.take_read(
+            EclipseRead {
+                directory: "/db".to_owned(),
+                exists: true,
+                attribution: "Cheat data comes from the libretro cheat database, licensed CC BY-SA 4.0.".to_owned(),
+                files: 19412,
+                newest: Some(1_763_600_000),
+                codecs: CheatCodecs::default(),
+                games: vec![sample_game()],
+            },
+            None,
+        );
         s
     }
 
@@ -1869,7 +1879,7 @@ mod tests {
         assert!(decoded_none.is_empty(), "overview mode must defer .cht decoding");
 
         let mut state = State::default();
-        state.take_read(overview);
+        state.take_read(overview, None);
         state.ensure_current_cht(&source);
         let (_, decoded_one) = test_counters::snapshot();
         assert_eq!(decoded_one.len(), 1);

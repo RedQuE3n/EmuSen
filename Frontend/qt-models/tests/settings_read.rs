@@ -25,6 +25,35 @@ fn chmod(path: &std::path::Path, mode: u32) {
     std::fs::set_permissions(path, perms).unwrap();
 }
 
+struct RestorePerms {
+    dir: std::path::PathBuf,
+    files: Vec<std::path::PathBuf>,
+}
+
+impl RestorePerms {
+    fn lock(dir: &std::path::Path) -> Self {
+        let files: Vec<_> = std::fs::read_dir(dir).unwrap().filter_map(Result::ok).map(|e| e.path()).filter(|p| p.is_file()).collect();
+        for f in &files {
+            chmod(f, 0o444);
+        }
+        chmod(dir, 0o555);
+        RestorePerms { dir: dir.to_path_buf(), files }
+    }
+}
+
+impl Drop for RestorePerms {
+    fn drop(&mut self) {
+        if self.dir.exists() {
+            let _ = std::fs::set_permissions(&self.dir, std::fs::Permissions::from_mode(0o755));
+        }
+        for f in &self.files {
+            if f.exists() {
+                let _ = std::fs::set_permissions(f, std::fs::Permissions::from_mode(0o644));
+            }
+        }
+    }
+}
+
 /// The Display section's index and its Appearance row's, as the model's view numbers them over the stored files.
 fn appearance() -> (usize, usize) {
     let source = ClientSettings::open(&library().display().to_string()).unwrap();
@@ -70,11 +99,7 @@ fn qt_7_7_h7_a_save_made_while_the_opening_read_is_out_is_not_undone_by_it() {
 
     // Regression: Outcome::Saved failure reverts in-memory toggle without wiping `problem`, and late close still emits `saved`.
     let config = world.root.join("Config");
-    let config_files: Vec<_> = std::fs::read_dir(&config).unwrap().filter_map(Result::ok).map(|e| e.path()).filter(|p| p.is_file()).collect();
-    for f in &config_files {
-        chmod(f, 0o444);
-    }
-    chmod(&config, 0o555);
+    let config_guard = RestorePerms::lock(&config);
     assert!(scene.set_property_now("scene", "turn", "2"));
     let mut waited = 0;
     while !scene.property("scene", "problem").starts_with("The settings could not be saved:") && waited < 3000 {
@@ -89,10 +114,7 @@ fn qt_7_7_h7_a_save_made_while_the_opening_read_is_out_is_not_undone_by_it() {
     }
     assert_eq!(scene.property("scene", "light"), "true", "failed disk save reverted in-memory toggle");
     assert!(scene.property("scene", "problem").starts_with("The settings could not be saved:"), "revert kept failure notice");
-    chmod(&config, 0o755);
-    for f in &config_files {
-        chmod(f, 0o644);
-    }
+    drop(config_guard);
 
     // Regression: SettingsModel::refresh_scrape stores `scrape_asked` and applies updated snapshots.
     let library_sec = settings_model(&mut scene).view().sections().iter().position(|s| s == "Library").unwrap();
@@ -134,4 +156,60 @@ fn qt_7_7_h7_a_save_made_while_the_opening_read_is_out_is_not_undone_by_it() {
         waited += 25;
     }
     assert_eq!(scene.property("scene", "savedCount").parse::<i32>().unwrap(), before_saved + 1);
+}
+
+#[test]
+fn qt_shaders_loading_favourites_delta_and_save_error_propagate() {
+    let world = World::new("models-settings-read-shader-favs");
+    let config = world.root.join("Config");
+    std::fs::create_dir_all(&config).unwrap();
+    let fav_file = config.join("shader_favourites.json");
+    std::fs::write(&fav_file, serde_json::json!({ "favourites": ["Existing"] }).to_string()).unwrap();
+
+    let source = ClientSettings::open(&library().to_str().unwrap()).unwrap();
+    let mut view = SettingsView::new();
+    view.read = settings::read(&source).unwrap();
+    let display_sec = view.sections().iter().position(|s| s == "Display").unwrap();
+    view.choose_section(display_sec);
+    let shaders_row = view.rows().iter().position(|r| r.id == "shaders").expect("shaders row");
+
+    let mut harness = Harness::new();
+    let scene_file = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/SettingsScene.qml");
+    let mut scene = harness.load(&format!("file://{scene_file}"), 640, 480);
+    assert!(scene.set_property("scene", "platformLibrary", library().to_str().unwrap()));
+    assert!(scene.set_property("settings", "themedSettings", "true"));
+    assert!(scene.set_property("scene", "open", "true"));
+    wait_for(&mut scene, "ready", "true");
+    assert!(scene.set_property("scene", "section", &display_sec.to_string()));
+
+    assert!(settings_model(&mut scene).choose(shaders_row as i32));
+    assert_eq!(scene.property("settings", "shadersShown"), "true");
+    assert_eq!(scene.property("settings", "shadersLoading"), "true");
+
+    let presets: serde_json::Value = serde_json::from_str(&scene.property("settings", "shadersPresetsJson")).unwrap();
+    let first_stored = presets[0]["stored"].as_str().expect("first preset stored key").to_owned();
+    settings_model(&mut scene).shaders_toggle_favourite(0);
+
+    let mut waited = 0;
+    while (scene.property("settings", "shadersLoading") != "false"
+        || !std::fs::read_to_string(&fav_file).unwrap_or_default().contains(&first_stored))
+        && waited < 5000
+    {
+        scene.wait(25);
+        waited += 25;
+    }
+    assert_eq!(scene.property("settings", "shadersLoading"), "false");
+    let stored: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&fav_file).unwrap()).unwrap();
+    let favs = stored["favourites"].as_array().unwrap();
+    assert!(favs.iter().any(|x| x == "Existing"), "pre-existing disk favourite must not be lost: {stored}");
+    assert!(favs.iter().any(|x| x == &first_stored), "delta favourite must merge and save: {stored}");
+
+    let _lock = RestorePerms::lock(&config);
+    settings_model(&mut scene).shaders_toggle_favourite(0);
+    waited = 0;
+    while !scene.property("scene", "problem").starts_with("The shader favourites could not be saved:") && waited < 3000 {
+        scene.wait(25);
+        waited += 25;
+    }
+    assert!(scene.property("scene", "problem").starts_with("The shader favourites could not be saved:"));
 }

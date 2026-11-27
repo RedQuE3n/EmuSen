@@ -702,20 +702,10 @@ pub fn is_safe_pack_rel(rel: &str) -> bool {
     if rel.is_empty() || rel.starts_with(['/', '\\']) || rel.contains('\0') {
         return false;
     }
-    let mut saw_normal = false;
-    for comp in std::path::Path::new(rel).components() {
-        match comp {
-            std::path::Component::Normal(s) => {
-                if s.to_string_lossy().split('\\').any(|part| part == "..") {
-                    return false;
-                }
-                saw_normal = true;
-            }
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_) => return false,
-        }
+    if rel.split(['/', '\\']).any(|part| part.is_empty() || part == "." || part == "..") {
+        return false;
     }
-    saw_normal
+    std::path::Path::new(rel).components().all(|c| matches!(c, std::path::Component::Normal(_)))
 }
 
 /// True when a `DIR_SHADERS`-relative path belongs to the managed libretro pack folder.
@@ -746,6 +736,8 @@ pub struct ShadersBoard {
     pub comparing: bool,
     pub confirm_remove: bool,
     pub favourites: Vec<String>,
+    pub favourites_loaded: bool,
+    pub pending_fav_deltas: std::collections::BTreeMap<String, bool>,
     pub pack_dir: Option<std::path::PathBuf>,
     pub pack_bytes: u64,
     pub pack_date: String,
@@ -793,6 +785,8 @@ impl ShadersBoard {
             comparing: false,
             confirm_remove: false,
             favourites: Vec::new(),
+            favourites_loaded: false,
+            pending_fav_deltas: std::collections::BTreeMap::new(),
             pack_dir: None,
             pack_bytes: 0,
             pack_date: String::new(),
@@ -841,11 +835,16 @@ impl ShadersBoard {
         data
     }
 
-    /// Merges background-loaded pack scan and preset metadata into `self`.
-    pub fn apply_open_data(&mut self, data: ShadersOpenData, view: &SettingsView) {
+    /// Merges background-loaded pack scan and preset metadata into `self`; returns updated favourites when pending deltas merged.
+    pub fn apply_open_data(&mut self, data: ShadersOpenData, view: &SettingsView) -> Option<Vec<String>> {
+        let mut persist = None;
         if let Some(favs) = data.favourites {
-            if self.favourites.is_empty() {
-                self.favourites = favs;
+            self.favourites_loaded = true;
+            let deltas = std::mem::take(&mut self.pending_fav_deltas);
+            let had_deltas = !deltas.is_empty();
+            self.favourites = merge_fav_deltas(favs, deltas);
+            if had_deltas {
+                persist = Some(self.favourites.clone());
             }
         }
         if data.pack_dir.is_some() {
@@ -855,6 +854,7 @@ impl ShadersBoard {
         }
         self.meta_cache.extend(data.meta_cache);
         self.sync_preview_stored_in_memory(view);
+        persist
     }
 
     /// Opens `#20 Shaders` synchronously (loading `Platform` once) for direct model tests.
@@ -863,10 +863,11 @@ impl ShadersBoard {
         if !platform_library.is_empty() {
             if let Ok(p) = emusen_platform_client::Platform::load(platform_library) {
                 let data = Self::collect_open_data(Some(&p), view, &board, true);
-                board.apply_open_data(data, view);
+                let _ = board.apply_open_data(data, view);
                 return board;
             }
         }
+        board.favourites_loaded = true;
         board.sync_preview_stored_in_memory(view);
         board
     }
@@ -1411,23 +1412,28 @@ impl ShadersBoard {
         }
         if !platform_library.is_empty() {
             if let Ok(p) = emusen_platform_client::Platform::load(platform_library) {
-                save_favourites_on(&p, &self.favourites);
+                let _ = save_favourites_on(&p, &self.favourites);
             }
         }
         self.sync_preview_stored(view, platform_library);
         true
     }
 
-    /// Toggles favourite state in memory and returns the updated list for background persistence.
-    pub fn toggle_favourite_in_memory(&mut self, view: &SettingsView) -> Option<Vec<String>> {
+    /// Toggles favourite state in memory and returns `(favourites, loaded_from_disk)` for persistence gating.
+    pub fn toggle_favourite_in_memory(&mut self, view: &SettingsView) -> Option<(Vec<String>, bool)> {
         let stored = self.preview_stored.clone()?;
-        if let Some(pos) = self.favourites.iter().position(|f| f == &stored) {
+        let added = if let Some(pos) = self.favourites.iter().position(|f| f == &stored) {
             self.favourites.remove(pos);
+            false
         } else {
-            self.favourites.push(stored);
+            self.favourites.push(stored.clone());
+            true
+        };
+        if !self.favourites_loaded {
+            self.pending_fav_deltas.insert(stored, added);
         }
         self.sync_preview_stored_in_memory(view);
-        Some(self.favourites.clone())
+        Some((self.favourites.clone(), self.favourites_loaded))
     }
 
     pub fn step_split(&mut self, delta: f64) -> bool {
@@ -1533,6 +1539,7 @@ impl ShadersBoard {
         view.read.levers.retain(|k, _| !is_managed_pack_stored(k));
         self.meta_cache.retain(|k, _| !is_managed_pack_stored(k));
         self.favourites.retain(|s| !is_managed_pack_stored(s));
+        self.pending_fav_deltas.retain(|k, _| !is_managed_pack_stored(k));
         let dirty = clear_managed_pack_graphics(&mut view.read.graphics);
         self.pack_bytes = 0;
         self.pack_date.clear();
@@ -1541,24 +1548,54 @@ impl ShadersBoard {
         dirty
     }
 
-    /// Deletes only `DIR_SHADERS/pack/` and clears dangling `slang:pack/...` references synchronously for tests.
-    pub fn remove_pack(&mut self, view: &mut SettingsView, platform_library: &str) -> Result<(), String> {
-        let loaded = (!platform_library.is_empty()).then(|| emusen_platform_client::Platform::load(platform_library)).transpose().map_err(|e| e.to_string())?;
-        let dir = self.pack_dir.clone().or_else(|| loaded.as_ref().and_then(|p| scan_pack_dir_on(p).0));
+    /// Deletes `DIR_SHADERS/pack/` on disk and writes pruned favourites and graphics config.
+    pub fn persist_remove_pack(
+        platform: Option<&emusen_platform_client::Platform>,
+        pack_dir: Option<std::path::PathBuf>,
+        favs_loaded: bool,
+        favs: &[String],
+        pending_deltas: &std::collections::BTreeMap<String, bool>,
+        graphics_dirty: bool,
+        graphics_doc: &Value,
+    ) -> Result<(), String> {
+        let dir = pack_dir.or_else(|| platform.and_then(|p| scan_pack_dir_on(p).0));
         if let Some(dir) = dir {
             Self::remove_pack_dir(&dir)?;
         }
-        let dirty = self.finish_remove_pack(view);
-        if let Some(p) = loaded.as_ref() {
-            save_favourites_on(p, &self.favourites);
-            if dirty {
-                if let Ok(file) = p.file(emusen_platform_client::galaxia::consts::FILE_GRAPHICS) {
-                    if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
-                        let _ = p.model_save(emusen_platform_client::galaxia::consts::MODEL_GRAPHICS_CONFIG, None, name, &view.read.graphics);
-                    }
-                }
+        if let Some(p) = platform {
+            let mut next_favs = if favs_loaded {
+                favs.to_vec()
+            } else {
+                merge_fav_deltas(load_favourites_on(p), pending_deltas.clone())
+            };
+            next_favs.retain(|s| !is_managed_pack_stored(s));
+            save_favourites_on(p, &next_favs)?;
+            if graphics_dirty {
+                let file = p.file(emusen_platform_client::galaxia::consts::FILE_GRAPHICS).map_err(|e| e.to_string())?;
+                let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| "missing graphics config file name".to_owned())?;
+                p.model_save(emusen_platform_client::galaxia::consts::MODEL_GRAPHICS_CONFIG, None, name, graphics_doc)
+                    .map_err(|e| e.to_string())?;
             }
         }
+        Ok(())
+    }
+
+    /// Deletes only `DIR_SHADERS/pack/` and clears dangling `slang:pack/...` references synchronously for tests.
+    pub fn remove_pack(&mut self, view: &mut SettingsView, platform_library: &str) -> Result<(), String> {
+        let loaded = (!platform_library.is_empty()).then(|| emusen_platform_client::Platform::load(platform_library)).transpose().map_err(|e| e.to_string())?;
+        let mut next_view = view.clone();
+        let mut next_board = self.clone();
+        let dirty = next_board.finish_remove_pack(&mut next_view);
+        Self::persist_remove_pack(
+            loaded.as_deref(),
+            self.pack_dir.clone(),
+            self.favourites_loaded,
+            &next_board.favourites,
+            &self.pending_fav_deltas,
+            dirty,
+            &next_view.read.graphics,
+        )?;
+        self.finish_remove_pack(view);
         Ok(())
     }
 
@@ -1583,8 +1620,6 @@ impl ShadersBoard {
     /// Builds decoupled virtualized list JSON strings and lightweight metadata purely from cached memory.
     pub fn to_parts_in_memory(&self, view: &SettingsView, comparing: bool, include_board: bool) -> ShadersParts {
         let emusen_total = self.source_items(view, 0).len();
-        let pack_items = self.source_items(view, 1);
-        let libretro_total = pack_items.len();
         let managed_total = view.read.pack.iter().filter(|p| is_managed_pack_rel(p)).count();
         let counts = self.category_counts(view);
         let visible = self.visible_items(view);
@@ -1611,7 +1646,7 @@ impl ShadersBoard {
         };
         let pack_installed = self.has_managed_pack(view);
         let pack_status = if pack_installed {
-            let filters_words = crate::words::counted(managed_total.max(libretro_total), "filter", "filters");
+            let filters_words = crate::words::counted(managed_total, "filter", "filters");
             let size_words = format_bytes(self.pack_bytes);
             if self.pack_date.is_empty() {
                 format!("{size_words} on disk · {filters_words}.")
@@ -1715,7 +1750,7 @@ impl ShadersBoard {
             },
             {
                 "index": 1,
-                "text": format!("libretro · {}", crate::words::grouped(libretro_total)),
+                "text": format!("libretro · {}", crate::words::grouped(managed_total)),
                 "pillName": "sourceTab.1",
                 "ringName": "sourceRing.1",
                 "textName": "sourceWords.1",
@@ -2079,6 +2114,19 @@ fn favourites_file_on(p: &emusen_platform_client::Platform) -> Option<std::path:
     Some(graphics.parent()?.join("shader_favourites.json"))
 }
 
+fn merge_fav_deltas(mut merged: Vec<String>, deltas: std::collections::BTreeMap<String, bool>) -> Vec<String> {
+    for (stored, want) in deltas {
+        if want {
+            if !merged.iter().any(|f| f == &stored) {
+                merged.push(stored);
+            }
+        } else {
+            merged.retain(|f| f != &stored);
+        }
+    }
+    merged
+}
+
 pub fn load_favourites_on(p: &emusen_platform_client::Platform) -> Vec<String> {
     let Some(path) = favourites_file_on(p) else { return Vec::new() };
     let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
@@ -2088,16 +2136,17 @@ pub fn load_favourites_on(p: &emusen_platform_client::Platform) -> Vec<String> {
         .unwrap_or_default()
 }
 
-pub fn save_favourites_on(p: &emusen_platform_client::Platform, favourites: &[String]) {
-    let Some(path) = favourites_file_on(p) else { return };
+pub fn save_favourites_on(p: &emusen_platform_client::Platform, favourites: &[String]) -> Result<(), String> {
+    let Some(path) = favourites_file_on(p) else {
+        return Err("Could not locate shader favourites file".to_owned());
+    };
     if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let tmp = path.with_extension("json.tmp");
-    let body = serde_json::to_string_pretty(&json!({ "favourites": favourites })).unwrap_or_default();
-    if std::fs::write(&tmp, body).is_ok() {
-        let _ = std::fs::rename(&tmp, &path);
-    }
+    let body = serde_json::to_string_pretty(&json!({ "favourites": favourites })).map_err(|e| e.to_string())?;
+    std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
 pub fn scan_pack_dir_on(p: &emusen_platform_client::Platform) -> (Option<std::path::PathBuf>, u64, String) {

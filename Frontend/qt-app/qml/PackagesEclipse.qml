@@ -762,11 +762,20 @@ FocusScope {
             preferredHighlightBegin: 84 * root.unit
             preferredHighlightEnd: height - 84 * root.unit
             highlightRangeMode: ListView.ApplyRange
+            readonly property int targetFocusIndex: root.tool && root.tool.eclipseScreen === 5 && root.tool.eclipseFocusedIndex >= 0 && root.tool.eclipseFocusedIndex < rowsModel.count ? root.tool.eclipseFocusedIndex : -1
             model: rowsModel
             Binding {
                 target: gamesList
                 property: "currentIndex"
-                value: root.tool && root.tool.eclipseScreen === 5 ? root.tool.eclipseFocusedIndex : -1
+                value: gamesList.targetFocusIndex
+            }
+            onCountChanged: {
+                if (gamesList.currentIndex !== gamesList.targetFocusIndex) gamesList.currentIndex = gamesList.targetFocusIndex
+                if (gamesList.targetFocusIndex >= 0) gamesList.positionViewAtIndex(gamesList.targetFocusIndex, ListView.Contain)
+            }
+            onCurrentIndexChanged: {
+                if (gamesList.currentIndex !== gamesList.targetFocusIndex) gamesList.currentIndex = gamesList.targetFocusIndex
+                if (gamesList.currentIndex >= 0) gamesList.positionViewAtIndex(gamesList.currentIndex, ListView.Contain)
             }
 
             delegate: Item {

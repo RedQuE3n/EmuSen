@@ -63,18 +63,33 @@ Window {
     property alias rows: listModel.rows
     property int resets: 0
     property int row0Kind: -1
+    property int rowCountAtReset: -1
+    property int validParentRowCount: -1
+    property int targetFocus: 1
+    property alias currentIdx: listView.currentIndex
     EclipseListModel {
         id: listModel
         objectName: "listModel"
         onModelReset: {
             win.resets += 1
+            win.rowCountAtReset = listModel.count
+            win.validParentRowCount = listModel.rowCount(listModel.index(0, 0))
             win.row0Kind = listModel.data(listModel.index(0, 0), 1)
         }
         onDataChanged: win.row0Kind = listModel.data(listModel.index(0, 0), 1)
     }
     ListView {
+        id: listView
         anchors.fill: parent
         model: listModel
+        readonly property int targetFocusIndex: win.targetFocus >= 0 && win.targetFocus < listModel.count ? win.targetFocus : -1
+        Binding {
+            target: listView
+            property: "currentIndex"
+            value: listView.targetFocusIndex
+        }
+        onCountChanged: if (listView.currentIndex !== listView.targetFocusIndex) listView.currentIndex = listView.targetFocusIndex
+        onCurrentIndexChanged: if (listView.currentIndex !== listView.targetFocusIndex) listView.currentIndex = listView.targetFocusIndex
         delegate: DelegateChooser {
             role: "kind"
             DelegateChoice {
@@ -95,6 +110,9 @@ Window {
     assert!(list_scene.set_property_now("listScene", "rows", r#"[{"kind":0,"name":"alpha"},{"kind":1,"name":"beta"}]"#));
     list_scene.wait(50);
     assert_eq!(list_scene.property("listScene", "resets"), "1");
+    assert_eq!(list_scene.property("listScene", "rowCountAtReset"), "2");
+    assert_eq!(list_scene.property("listScene", "validParentRowCount"), "0");
+    assert_eq!(list_scene.property("listScene", "currentIdx"), "1");
     assert_eq!(list_scene.property("listScene", "row0Kind"), "0");
     assert!(list_scene.tree().find_named("kind0").is_some());
 
@@ -109,10 +127,17 @@ Window {
     list_scene.wait(50);
     assert_eq!(list_scene.property("listScene", "resets"), "2", "kind change at equal length triggers modelReset");
     assert_eq!(list_scene.property("listScene", "row0Kind"), "1", "ROLE_KIND updated after reset");
+    assert_eq!(list_scene.property("listScene", "currentIdx"), "1", "equal-index focus restored across modelReset");
     let tree = list_scene.tree();
     assert!(tree.find_named("kind0").is_none(), "old DelegateChoice removed");
     let node1 = tree.find_named("kind1").expect("DelegateChooser switched to kind1") as usize;
     assert_eq!(tree.nodes[node1].text.as_deref(), Some("alpha2"));
+
+    assert!(list_scene.set_property_now("listScene", "rows", r#"[{"kind":1,"name":"one"},{"kind":1,"name":"two"},{"kind":1,"name":"three"}]"#));
+    list_scene.wait(50);
+    assert_eq!(list_scene.property("listScene", "resets"), "3");
+    assert_eq!(list_scene.property("listScene", "rowCountAtReset"), "3", "count updated before modelReset");
+    assert_eq!(list_scene.property("listScene", "validParentRowCount"), "0");
 }
 
 #[test]

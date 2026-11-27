@@ -161,7 +161,11 @@ fn with_shaders_world(tag: &str, with_host: bool, f: impl FnOnce(&mut Scene<'_>,
         press(&mut scene, &sdl, &pad, PadControl::Down);
         settle(&mut scene);
     }
-    press_handoff(&mut scene, &sdl, &pad, PadControl::South, "#20 shaders shown", |s| s.property("settingsModel", "shadersShown") == "true" && shown(s, "shadersEclipseCanvas"));
+    press_handoff(&mut scene, &sdl, &pad, PadControl::South, "#20 shaders shown", |s| {
+        s.property("settingsModel", "shadersShown") == "true"
+            && s.property("settingsModel", "shadersLoading") == "false"
+            && shown(s, "shadersEclipseCanvas")
+    });
     f(&mut scene, &sdl, &pad, &platform);
     sdl.detach(pad);
     drop(scene);

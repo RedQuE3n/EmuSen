@@ -988,12 +988,22 @@ impl qobject::ToolModel {
             self.as_mut().rust_mut().eclipse_state = next_state;
             self.as_mut().eclipse_state_changed();
         }
-        put!(self, eclipse_rows_json, QString::from(split.rows_json.as_str()), eclipse_rows_json_changed);
-        put!(self, eclipse_aux_rows_json, QString::from(split.aux_rows_json.as_str()), eclipse_aux_rows_json_changed);
+        let next_rows = QString::from(split.rows_json.as_str());
+        let next_aux = QString::from(split.aux_rows_json.as_str());
+        let rows_changed = self.eclipse_rows_json != next_rows;
+        let aux_changed = self.eclipse_aux_rows_json != next_aux;
+        put!(self, eclipse_rows_json, next_rows, eclipse_rows_json_changed);
+        put!(self, eclipse_aux_rows_json, next_aux, eclipse_aux_rows_json_changed);
         put!(self, eclipse_focused_index, split.focused_index, eclipse_focused_index_changed);
+        if rows_changed && self.eclipse_focused_index == split.focused_index {
+            self.as_mut().eclipse_focused_index_changed();
+        }
         put!(self, eclipse_focused_zone, split.focused_zone, eclipse_focused_zone_changed);
         put!(self, eclipse_filter_index, split.filter_index, eclipse_filter_index_changed);
         put!(self, eclipse_aux_index, split.aux_index, eclipse_aux_index_changed);
+        if aux_changed && self.eclipse_aux_index == split.aux_index {
+            self.as_mut().eclipse_aux_index_changed();
+        }
         put!(self, eclipse_focused_key, QString::from(split.focused_key.as_str()), eclipse_focused_key_changed);
         put!(self, eclipse_counter, QString::from(split.counter.as_str()), eclipse_counter_changed);
         let closed = self.card_open && card.is_none();

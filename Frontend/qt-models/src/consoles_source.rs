@@ -64,23 +64,34 @@ fn cores_mtimes(platform: &Platform, cores: &str) -> Vec<Option<SystemTime>> {
 }
 
 impl ConsolesClients {
-    /// Queues `work` on this client pool's persistent FIFO background thread.
+    /// Queues `work` on this client pool's persistent FIFO background thread, recovering if a prior task panicked.
     pub fn spawn(&self, work: impl FnOnce() + Send + 'static) {
-        let tx = {
-            let mut w = self.worker.lock().unwrap_or_else(|p| p.into_inner());
-            if w.is_none() {
-                let (tx, rx) = std::sync::mpsc::channel::<Box<dyn FnOnce() + Send>>();
-                let handle = std::thread::spawn(move || {
-                    while let Ok(task) = rx.recv() {
-                        task();
+        let mut pending = Some(Box::new(work) as Box<dyn FnOnce() + Send>);
+        for attempt in 0..2 {
+            let (tx, replaced) = {
+                let mut w = self.worker.lock().unwrap_or_else(|p| p.into_inner());
+                let replaced = if attempt == 1 || w.is_none() {
+                    let (tx, rx) = std::sync::mpsc::channel::<Box<dyn FnOnce() + Send>>();
+                    let handle = std::thread::spawn(move || {
+                        while let Ok(task) = rx.recv() {
+                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(task));
+                        }
+                    });
+                    w.replace(Arc::new(SharedWorker { tx: Some(tx), handle: Some(handle) }))
+                } else {
+                    None
+                };
+                (w.as_ref().and_then(|s| s.tx.clone()), replaced)
+            };
+            drop(replaced);
+            if let Some(tx) = tx {
+                if let Some(task) = pending.take() {
+                    match tx.send(task) {
+                        Ok(()) => return,
+                        Err(std::sync::mpsc::SendError(returned)) => pending = Some(returned),
                     }
-                });
-                *w = Some(Arc::new(SharedWorker { tx: Some(tx), handle: Some(handle) }));
+                }
             }
-            w.as_ref().and_then(|s| s.tx.clone())
-        };
-        if let Some(tx) = tx {
-            let _ = tx.send(Box::new(work));
         }
     }
     /// Returns the shared `Arc<Platform>` for `platform_library`, loading it at most once per library path.
@@ -256,5 +267,21 @@ impl ConsoleSource for ScriptedConsoles {
 
     fn open_card(&self, path: &str) -> Value {
         self.world["opened"][path].clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spawn_recovers_after_task_panic() {
+        let clients = ConsolesClients::default();
+        clients.spawn(|| panic!("simulated worker panic"));
+        let (tx, rx) = std::sync::mpsc::channel();
+        clients.spawn(move || {
+            let _ = tx.send(42u32);
+        });
+        assert_eq!(rx.recv_timeout(std::time::Duration::from_secs(2)), Ok(42));
     }
 }

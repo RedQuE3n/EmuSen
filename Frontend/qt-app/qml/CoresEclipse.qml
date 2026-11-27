@@ -482,11 +482,20 @@ FocusScope {
         reuseItems: true
         boundsBehavior: Flickable.StopAtBounds
         highlightMoveDuration: 0
+        readonly property int targetFocusIndex: root.focusedConsoleIndex >= 0 && root.focusedConsoleIndex < cardsModel.count ? root.focusedConsoleIndex : -1
         model: cardsModel
         Binding {
             target: grid
             property: "currentIndex"
-            value: Math.max(0, root.focusedConsoleIndex)
+            value: grid.targetFocusIndex
+        }
+        onCountChanged: {
+            if (grid.currentIndex !== grid.targetFocusIndex) grid.currentIndex = grid.targetFocusIndex
+            if (grid.targetFocusIndex >= 0) grid.positionViewAtIndex(grid.targetFocusIndex, GridView.Contain)
+        }
+        onCurrentIndexChanged: {
+            if (grid.currentIndex !== grid.targetFocusIndex) grid.currentIndex = grid.targetFocusIndex
+            if (grid.currentIndex >= 0) grid.positionViewAtIndex(grid.currentIndex, GridView.Contain)
         }
         delegate: Item {
             id: cardCell
@@ -759,7 +768,22 @@ FocusScope {
             clip: contentHeight > height - 48 * root.unit
             interactive: contentHeight > height - 48 * root.unit
             boundsBehavior: Flickable.StopAtBounds
+            readonly property int targetFocusIndex: root.focusedAsideIndex >= 0 && root.focusedAsideIndex < asideModel.count ? root.focusedAsideIndex : -1
             model: asideModel
+            Binding {
+                target: asideFlick
+                property: "currentIndex"
+                value: asideFlick.targetFocusIndex
+            }
+            onCountChanged: {
+                if (asideFlick.currentIndex !== asideFlick.targetFocusIndex) asideFlick.currentIndex = asideFlick.targetFocusIndex
+                if (asideFlick.targetFocusIndex < 0) asideFlick.contentY = -24 * root.unit
+                else asideFlick.positionViewAtIndex(asideFlick.targetFocusIndex, ListView.Contain)
+            }
+            onCurrentIndexChanged: {
+                if (asideFlick.currentIndex !== asideFlick.targetFocusIndex) asideFlick.currentIndex = asideFlick.targetFocusIndex
+                if (asideFlick.currentIndex >= 0) asideFlick.positionViewAtIndex(asideFlick.currentIndex, ListView.Contain)
+            }
             delegate: DelegateChooser {
                 role: "kind"
 

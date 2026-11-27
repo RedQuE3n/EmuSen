@@ -298,7 +298,7 @@ fn qt_7_7_pack_path_traversal_and_symlink_guards() {
 
     assert!(is_safe_pack_rel("pack/crt/a.slangp"));
     assert!(is_safe_pack_rel("custom/user.slangp"));
-    for bad in ["", "/pack/a.slangp", "\\pack\\a.slangp", "pack/../user.slangp", "../etc/passwd", "pack\\..\\user.slangp"] {
+    for bad in ["", ".", "/pack/a.slangp", "\\pack\\a.slangp", "./pack/crt/a.slangp", ".\\pack\\crt\\a.slangp", "pack/./crt/a.slangp", "pack\\.\\crt\\a.slangp", "pack/../user.slangp", "../etc/passwd", "pack\\..\\user.slangp"] {
         assert!(!is_safe_pack_rel(bad), "expected unsafe: {bad:?}");
         assert!(!is_managed_pack_rel(bad), "expected non-managed: {bad:?}");
     }
@@ -316,4 +316,45 @@ fn qt_7_7_pack_path_traversal_and_symlink_guards() {
 
     let source = emusen_qt_models::settings_source::ClientSettings::open(&emusen_client_fixture::library().display().to_string()).unwrap();
     assert!(source.preset_parameters("../outside.slangp").is_err(), "preset_parameters must reject parent traversal");
+}
+
+#[test]
+fn favourites_toggled_while_loading_merge_with_disk_on_open() {
+    use emusen_qt_models::settings_shaders::{ShadersBoard, ShadersOpenData};
+
+    let source = Fake {
+        graphics: json!({
+            "Consoles": { "SNES": { "ScreenFilter": "None" } },
+            "ConsoleShaders": {},
+            "ShaderParameters": {},
+            "RecentShaders": {},
+        }),
+    };
+    let mut v = SettingsView::new();
+    v.read = settings::read(&source).unwrap();
+    v.read.catalogue = json!({
+        "filters": [
+            { "key": "CRT", "name": "CRT", "passes": [], "settings": [] },
+            { "key": "Scanlines", "name": "Scanlines", "passes": [], "settings": [] }
+        ]
+    });
+
+    let mut board = ShadersBoard::open_immediate(&v, 2);
+    assert!(!board.favourites_loaded);
+    board.scope = 0;
+    board.category = 1;
+    board.focused_preset = 0;
+    let first_stored = board.visible_items(&v)[0].stored.clone();
+    let (pre_favs, loaded) = board.toggle_favourite_in_memory(&v).expect("pre-open delta");
+    assert!(!loaded);
+    assert_eq!(pre_favs, vec![first_stored.clone()]);
+
+    let data = ShadersOpenData {
+        favourites: Some(vec!["Existing".to_owned()]),
+        ..Default::default()
+    };
+    let to_persist = board.apply_open_data(data, &v).expect("merged deltas must persist after open scan");
+    assert!(board.favourites_loaded);
+    assert_eq!(to_persist, vec!["Existing".to_owned(), first_stored.clone()]);
+    assert_eq!(board.favourites, vec!["Existing".to_owned(), first_stored]);
 }

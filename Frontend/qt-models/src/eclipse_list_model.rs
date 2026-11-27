@@ -167,8 +167,8 @@ impl qobject::EclipseListModel {
         roles
     }
 
-    pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
-        self.items.len() as i32
+    pub fn row_count(&self, parent: &QModelIndex) -> i32 {
+        if parent.is_valid() { 0 } else { self.items.len() as i32 }
     }
 
     fn sync_rows(mut self: Pin<&mut Self>) {
@@ -194,17 +194,18 @@ impl qobject::EclipseListModel {
             SyncPlan::Reset => {
                 let kinds: Vec<QVariant> = parsed.iter().map(kind_of).collect();
                 let items: Vec<QVariant> = parsed.iter().map(value_to_variant).collect();
+                let next_count = items.len() as i32;
+                let count_changed = self.count != next_count;
                 self.as_mut().begin_reset_model();
                 {
                     let mut r = self.as_mut().rust_mut();
                     r.raw = parsed;
                     r.kinds = kinds;
                     r.items = items;
+                    r.count = next_count;
                 }
                 self.as_mut().end_reset_model();
-                let count = self.items.len() as i32;
-                if self.count != count {
-                    self.as_mut().rust_mut().count = count;
+                if count_changed {
                     self.count_changed();
                 }
             }

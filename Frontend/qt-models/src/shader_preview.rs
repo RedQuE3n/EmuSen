@@ -311,8 +311,14 @@ impl ShaderPreview {
 
     /// Commits any pending preset change through Serenity's preset reader onto the preview `PictureFeed`.
     pub fn commit(&mut self, platform_library: &str) -> bool {
-        let platform = self.ensure_platform(platform_library).ok().flatten();
-        self.commit_with_platform(platform.as_deref())
+        match self.ensure_platform(platform_library) {
+            Ok(platform) => self.commit_with_platform(platform.as_deref()),
+            Err(words) => {
+                self.pending_target = None;
+                self.problem = words;
+                false
+            }
+        }
     }
 
     /// Commits any pending preset change using an already-loaded `Platform` handle.
@@ -371,7 +377,7 @@ fn resolve_preset_on(platform: Option<&Platform>, presets_dir: Option<&std::path
     }
     let root = presets_dir
         .map(std::path::Path::to_path_buf)
-        .unwrap_or_else(|| std::env::temp_dir().join("emusen-shader-preview"));
+        .unwrap_or_else(|| std::env::temp_dir().join(format!("emusen-shader-preview-{}", std::process::id())));
     let chosen = serde_json::to_value(&target.values).ok();
     let key = if target.stored == "None" || target.stored.is_empty() { PLAIN } else { target.stored.as_str() };
     let preset = serenity::filter_preset(platform, key, target.console.as_deref(), chosen.as_ref(), &root.to_string_lossy()).map_err(|e| e.to_string())?;

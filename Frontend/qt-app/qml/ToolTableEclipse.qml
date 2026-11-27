@@ -480,7 +480,21 @@ FocusScope {
                 reuseItems: true
                 clip: contentHeight > height
                 boundsBehavior: Flickable.StopAtBounds
+                readonly property int targetFocusIndex: root.focusedIndex >= 0 && root.focusedIndex < rowsModel.count ? root.focusedIndex : -1
                 model: rowsModel
+                Binding {
+                    target: tableFlick
+                    property: "currentIndex"
+                    value: tableFlick.targetFocusIndex
+                }
+                onCountChanged: {
+                    if (tableFlick.currentIndex !== tableFlick.targetFocusIndex) tableFlick.currentIndex = tableFlick.targetFocusIndex
+                    if (tableFlick.targetFocusIndex >= 0) tableFlick.positionViewAtIndex(tableFlick.targetFocusIndex, ListView.Contain)
+                }
+                onCurrentIndexChanged: {
+                    if (tableFlick.currentIndex !== tableFlick.targetFocusIndex) tableFlick.currentIndex = tableFlick.targetFocusIndex
+                    if (tableFlick.currentIndex >= 0) tableFlick.positionViewAtIndex(tableFlick.currentIndex, ListView.Contain)
+                }
                 delegate: Item {
                     id: rowItem
                     required property int index

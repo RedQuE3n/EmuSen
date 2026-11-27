@@ -641,7 +641,21 @@ FocusScope {
             reuseItems: true
             clip: true
             boundsBehavior: Flickable.StopAtBounds
+            readonly property int targetFocusIndex: root.focusedFlatIndex >= 0 && root.focusedFlatIndex < rowsModel.count ? root.focusedFlatIndex : -1
             model: rowsModel
+            Binding {
+                target: cheatsFlick
+                property: "currentIndex"
+                value: cheatsFlick.targetFocusIndex
+            }
+            onCountChanged: {
+                if (cheatsFlick.currentIndex !== cheatsFlick.targetFocusIndex) cheatsFlick.currentIndex = cheatsFlick.targetFocusIndex
+                if (cheatsFlick.targetFocusIndex >= 0) cheatsFlick.positionViewAtIndex(cheatsFlick.targetFocusIndex, ListView.Contain)
+            }
+            onCurrentIndexChanged: {
+                if (cheatsFlick.currentIndex !== cheatsFlick.targetFocusIndex) cheatsFlick.currentIndex = cheatsFlick.targetFocusIndex
+                if (cheatsFlick.currentIndex >= 0) cheatsFlick.positionViewAtIndex(cheatsFlick.currentIndex, ListView.Contain)
+            }
 
             Rectangle {
                 visible: rowsModel.count === 0
@@ -1470,7 +1484,21 @@ FocusScope {
                     reuseItems: true
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
+                    readonly property int targetFocusIndex: root.browseCursor >= 0 && root.browseCursor < browseModel.count ? root.browseCursor : -1
                     model: browseModel
+                    Binding {
+                        target: browseListView
+                        property: "currentIndex"
+                        value: browseListView.targetFocusIndex
+                    }
+                    onCountChanged: {
+                        if (browseListView.currentIndex !== browseListView.targetFocusIndex) browseListView.currentIndex = browseListView.targetFocusIndex
+                        if (browseListView.targetFocusIndex >= 0) browseListView.positionViewAtIndex(browseListView.targetFocusIndex, ListView.Contain)
+                    }
+                    onCurrentIndexChanged: {
+                        if (browseListView.currentIndex !== browseListView.targetFocusIndex) browseListView.currentIndex = browseListView.targetFocusIndex
+                        if (browseListView.currentIndex >= 0) browseListView.positionViewAtIndex(browseListView.currentIndex, ListView.Contain)
+                    }
                     delegate: Item {
                         id: chtRow
                         required property int index

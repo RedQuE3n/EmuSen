@@ -150,6 +150,7 @@ pub mod qobject {
         #[qproperty(bool, themed_settings, cxx_name = "themedSettings")]
         /// Eclipse `#20` Shaders overlay state and live Serenity preview feed.
         #[qproperty(bool, shaders_shown, cxx_name = "shadersShown", READ, NOTIFY = shaders_changed)]
+        #[qproperty(bool, shaders_loading, cxx_name = "shadersLoading", READ, NOTIFY = shaders_changed)]
         #[qproperty(QString, shaders_board, cxx_name = "shadersBoard", READ, NOTIFY = shaders_changed)]
         #[qproperty(QString, shaders_help, cxx_name = "shadersHelp", READ, NOTIFY = shaders_changed)]
         #[qproperty(QVariant, shaders_meta, cxx_name = "shadersMeta", READ, NOTIFY = shaders_changed)]
@@ -600,10 +601,14 @@ pub struct SettingsModelRust {
     asked: u64,
     /// The scrape mutations asked for, so an older scrape task finishing late is dropped.
     scrape_asked: u64,
+    /// The theme mutations asked for, so an older theme write finishing late skips stale state updates.
+    theme_write_gen: u64,
     /// The typing prompts asked for, so a deferred `typeWords` from a closed prompt is dropped.
     type_asked: u64,
     /// Whether the last read asked for is still to come back.
     reading: bool,
+    read_in_flight: usize,
+    reread_pending: usize,
     game_pads: u64,
     bindings_shown: bool,
     bindings_keys: bool,
@@ -640,6 +645,7 @@ pub struct SettingsModelRust {
     built_ins: QStringList,
     themed_settings: bool,
     shaders_shown: bool,
+    shaders_loading: bool,
     shaders_board: QString,
     shaders_help: QString,
     shaders_meta: QVariant,
@@ -736,8 +742,11 @@ impl Default for SettingsModelRust {
             view,
             asked: 0,
             scrape_asked: 0,
+            theme_write_gen: 0,
             type_asked: 0,
             reading: false,
+            read_in_flight: 0,
+            reread_pending: 0,
             game_pads: 0,
             bindings_shown: false,
             bindings_keys: false,
@@ -774,6 +783,7 @@ impl Default for SettingsModelRust {
             built_ins: QStringList::default(),
             themed_settings: false,
             shaders_shown: false,
+            shaders_loading: false,
             shaders_board: QString::from("{}"),
             shaders_help: QString::from("[]"),
             shaders_meta: QVariant::default(),
@@ -979,14 +989,65 @@ impl qobject::SettingsModel {
         self.refresh_inner(true);
     }
 
+    fn begin_reread_guard(mut self: Pin<&mut Self>) -> (bool, u64) {
+        let was_reading = self.reading;
+        let asked = if was_reading {
+            let next = self.asked.wrapping_add(1);
+            let mut r = self.as_mut().rust_mut();
+            r.asked = next;
+            r.reread_pending += 1;
+            next
+        } else {
+            self.asked
+        };
+        (was_reading, asked)
+    }
+
+    fn finish_async_save(mut self: Pin<&mut Self>, was_reading: bool, asked: u64) -> bool {
+        if was_reading {
+            let mut r = self.as_mut().rust_mut();
+            r.reread_pending = r.reread_pending.saturating_sub(1);
+        }
+        if self.open {
+            self.as_mut().rust_mut().saved_since_open = true;
+        } else {
+            self.as_mut().rust_mut().saved_since_open = false;
+            self.as_mut().saved();
+        }
+        if (was_reading && self.asked == asked) || self.read_in_flight > 0 {
+            self.refresh();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn end_reread_guard_err(mut self: Pin<&mut Self>, was_reading: bool, asked: u64) {
+        if was_reading {
+            let mut r = self.as_mut().rust_mut();
+            r.reread_pending = r.reread_pending.saturating_sub(1);
+            if r.asked == asked && r.read_in_flight == 0 && r.reread_pending == 0 {
+                r.reading = false;
+            }
+        }
+    }
+
     fn refresh_inner(mut self: Pin<&mut Self>, clear_said: bool) {
         let library = self.platform_library.to_string();
         if library.is_empty() {
+            let mut r = self.as_mut().rust_mut();
+            if r.read_in_flight == 0 && r.reread_pending == 0 {
+                r.reading = false;
+            }
             return;
         }
         let asked = self.asked.wrapping_add(1);
-        self.as_mut().rust_mut().asked = asked;
-        self.as_mut().rust_mut().reading = true;
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.asked = asked;
+            r.reading = true;
+            r.read_in_flight += 1;
+        }
         // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
         if clear_said {
             self.as_mut().said(String::new());
@@ -1025,10 +1086,19 @@ impl qobject::SettingsModel {
                 Ok((read, source.chooser()?, listing, scrape, shader_data))
             });
             let _ = thread.queue(move |mut model| {
-                if model.asked != asked {
-                    return;
+                {
+                    let mut r = model.as_mut().rust_mut();
+                    r.read_in_flight = r.read_in_flight.saturating_sub(1);
+                    if r.asked != asked {
+                        if r.read_in_flight == 0 && r.reread_pending == 0 {
+                            r.reading = false;
+                        }
+                        return;
+                    }
+                    r.reading = r.read_in_flight > 0 || r.reread_pending > 0;
                 }
-                model.as_mut().rust_mut().reading = false;
+                let mut persist_favs = None;
+                let mut cleared_loading = false;
                 match read {
                     Ok((read, chooser, mut listing, scrape, shader_data)) => {
                         if let Some(prev) = model.view.themes.as_ref() {
@@ -1047,8 +1117,10 @@ impl qobject::SettingsModel {
                         r.view.scrape.status_note = note;
                         r.view.scrape.pending_user = pending;
                         if let (Some(mut board), Some(data)) = (r.shaders_state.take(), shader_data) {
-                            board.apply_open_data(data, &r.view);
+                            persist_favs = board.apply_open_data(data, &r.view);
                             r.shaders_state = Some(board);
+                            cleared_loading = r.shaders_loading;
+                            r.shaders_loading = false;
                         }
                         if clear_said {
                             model.as_mut().said(String::new());
@@ -1059,10 +1131,16 @@ impl qobject::SettingsModel {
                 model.as_mut().applied();
                 model.as_mut().shown(false);
                 if model.shaders_state.is_some() {
-                    model.as_mut().sync_shaders_view();
+                    let changed = model.as_mut().sync_shaders_view_changed();
+                    if cleared_loading && !changed {
+                        model.as_mut().shaders_changed();
+                    }
                     if model.shaders_shown {
                         model.as_mut().sync_shaders_preview(false);
                     }
+                }
+                if let Some(favs) = persist_favs {
+                    model.as_mut().spawn_save_favourites(favs);
                 }
             });
         });
@@ -1198,14 +1276,7 @@ impl qobject::SettingsModel {
         match outcome {
             Outcome::Nothing => {}
             Outcome::Saved(model, document) => {
-                let was_reading = self.reading;
-                let asked = if was_reading {
-                    let next = self.asked.wrapping_add(1);
-                    self.as_mut().rust_mut().asked = next;
-                    next
-                } else {
-                    self.asked
-                };
+                let (was_reading, asked) = self.as_mut().begin_reread_guard();
                 self.as_mut().applied();
                 self.as_mut().shown(false);
                 let library = self.platform_library.to_string();
@@ -1223,17 +1294,13 @@ impl qobject::SettingsModel {
                     });
                     let _ = qt.queue(move |mut model| match saved {
                         Ok(()) => {
-                            if model.open {
-                                model.as_mut().rust_mut().saved_since_open = true;
-                            } else {
-                                model.as_mut().rust_mut().saved_since_open = false;
-                                model.as_mut().saved();
-                            }
-                            if was_reading && model.asked == asked {
-                                model.refresh();
-                            }
+                            let _ = model.finish_async_save(was_reading, asked);
                         }
                         Err(e) => {
+                            if was_reading {
+                                let mut r = model.as_mut().rust_mut();
+                                r.reread_pending = r.reread_pending.saturating_sub(1);
+                            }
                             model.as_mut().said(format!("The settings could not be saved: {e}"));
                             model.as_mut().refresh_inner(false);
                         }
@@ -1269,14 +1336,7 @@ impl qobject::SettingsModel {
             Outcome::Set { console, key, value } => {
                 let page_changed = list(self.view.trail().into_iter()) != self.trail;
                 self.as_mut().shown(page_changed);
-                let was_reading = self.reading;
-                let asked = if was_reading {
-                    let next = self.asked.wrapping_add(1);
-                    self.as_mut().rust_mut().asked = next;
-                    next
-                } else {
-                    self.asked
-                };
+                let (was_reading, asked) = self.as_mut().begin_reread_guard();
                 let (library, cores) = (self.platform_library.to_string(), self.cores.to_string());
                 let clients = self.clients.clone();
                 let qt = self.qt_thread();
@@ -1284,10 +1344,14 @@ impl qobject::SettingsModel {
                 self.clients.spawn(move || {
                     let set = clients.consoles(&library, &cores, false).and_then(|c| c.set(&console, &key, value.as_deref()));
                     let _ = qt.queue(move |mut model| {
+                        if was_reading {
+                            let mut r = model.as_mut().rust_mut();
+                            r.reread_pending = r.reread_pending.saturating_sub(1);
+                        }
                         let failed = set.is_err();
                         model.as_mut().said(set.err().map(|e| format!("The console's setting could not be stored: {e}")).unwrap_or_default());
                         if failed || engine_change || model.reading || (was_reading && model.asked == asked) {
-                            model.refresh();
+                            model.refresh_inner(!failed);
                         }
                     });
                 });
@@ -1913,7 +1977,7 @@ impl qobject::SettingsModel {
     }
 
     /// Uses a checked theme chosen on Settings -> Library -> Themes (#61).
-    fn use_theme_in_settings(self: Pin<&mut Self>, id: String) {
+    fn use_theme_in_settings(mut self: Pin<&mut Self>, id: String) {
         let Some((kind, store, folder)) = self.view.themes.as_ref().and_then(|l| {
             let row = l.rows.iter().find(|r| r.id == id && r.usable())?;
             let folder = l.store.as_ref().filter(|_| !crate::themes::is_built_in(&row.id)).map(|s| s.join(&row.id));
@@ -1921,12 +1985,13 @@ impl qobject::SettingsModel {
         }) else {
             return;
         };
+        let (was_reading, asked) = self.as_mut().begin_reread_guard();
+        let write_gen = self.theme_write_gen.wrapping_add(1);
+        self.as_mut().rust_mut().theme_write_gen = write_gen;
         let root = folder.as_deref().map(emusen_esde::check::theme_root);
         let library = self.platform_library.to_string();
         let clients = self.clients.clone();
         let qt = self.qt_thread();
-        let expected_section = self.section;
-        let _ = expected_section;
         self.clients.spawn(move || {
             let saved = clients.platform(&library).and_then(|p| {
                 crate::clients::change_app_settings(&p, |settings| match (kind, &root) {
@@ -1934,29 +1999,32 @@ impl qobject::SettingsModel {
                     _ => crate::themes::choose_own(settings, &id),
                 })
             });
-            let _ = qt.queue(move |mut model| {
-                let settings = match saved {
-                    Ok(s) => s,
-                    Err(words) => return model.said(format!("The theme could not be stored: {words}")),
-                };
-                {
-                    let mut r = model.as_mut().rust_mut();
-                    r.view.read.app = settings.clone();
-                    r.saved_since_open = true;
-                    if let Some(listing) = r.view.themes.as_mut() {
-                        listing.esde = crate::themes::mark(&mut listing.rows, &settings, store.as_deref());
-                        listing.chosen = crate::themes::chosen_of(&settings);
+            let _ = qt.queue(move |mut model| match saved {
+                Ok(settings) => {
+                    if model.theme_write_gen == write_gen {
+                        if model.asked == asked {
+                            {
+                                let mut r = model.as_mut().rust_mut();
+                                r.view.read.app = settings.clone();
+                                if let Some(listing) = r.view.themes.as_mut() {
+                                    listing.esde = crate::themes::mark(&mut listing.rows, &settings, store.as_deref());
+                                    listing.chosen = crate::themes::chosen_of(&settings);
+                                }
+                            }
+                            model.as_mut().shown(false);
+                        }
+                        if kind == crate::themes::Kind::EmuSen {
+                            let host_folder = crate::themes::resolve(&id, store.as_deref()).host_folder();
+                            model.as_mut().theme_used(QString::from(host_folder.as_str()));
+                        }
+                        model.as_mut().theme_restyled(kind == crate::themes::Kind::Esde);
                     }
+                    let _ = model.finish_async_save(was_reading, asked);
                 }
-                model.as_mut().shown(false);
-                if model.reading {
-                    model.as_mut().refresh();
+                Err(words) => {
+                    model.as_mut().end_reread_guard_err(was_reading, asked);
+                    model.said(format!("The theme could not be stored: {words}"));
                 }
-                if kind == crate::themes::Kind::EmuSen {
-                    let host_folder = crate::themes::resolve(&id, store.as_deref()).host_folder();
-                    model.as_mut().theme_used(QString::from(host_folder.as_str()));
-                }
-                model.theme_restyled(kind == crate::themes::Kind::Esde);
             });
         });
     }
@@ -1990,11 +2058,14 @@ impl qobject::SettingsModel {
     }
 
     /// Steps an active ES-DE theme choice off the GUI thread on Settings -> Library -> Themes (#61).
-    fn step_theme_choice(self: Pin<&mut Self>, index: usize, by: i32) {
+    fn step_theme_choice(mut self: Pin<&mut Self>, index: usize, by: i32) {
         let Some((root, mut choice)) = self.view.themes.as_ref().and_then(|l| l.esde.as_ref()).and_then(|e| Some((e.root.clone(), e.choices.get(index)?.clone()))) else {
             return;
         };
         let value = choice.step(by).to_owned();
+        let (was_reading, asked) = self.as_mut().begin_reread_guard();
+        let write_gen = self.theme_write_gen.wrapping_add(1);
+        self.as_mut().rust_mut().theme_write_gen = write_gen;
         let library = self.platform_library.to_string();
         let clients = self.clients.clone();
         let qt = self.qt_thread();
@@ -2004,21 +2075,25 @@ impl qobject::SettingsModel {
                 .and_then(|p| crate::clients::change_app_settings(&p, |settings| crate::themes::store_choice(settings, &root, choice.key, &value)));
             let _ = qt.queue(move |mut model| match saved {
                 Ok(settings) => {
-                    let mut r = model.as_mut().rust_mut();
-                    r.view.read.app = settings;
-                    r.saved_since_open = true;
-                    if let Some(esde) = r.view.themes.as_mut().and_then(|l| l.esde.as_mut()) {
-                        if let Some(slot) = esde.choices.get_mut(index) {
-                            *slot = choice;
+                    if model.theme_write_gen == write_gen {
+                        if model.asked == asked {
+                            let mut r = model.as_mut().rust_mut();
+                            r.view.read.app = settings;
+                            if let Some(esde) = r.view.themes.as_mut().and_then(|l| l.esde.as_mut()) {
+                                if let Some(slot) = esde.choices.get_mut(index) {
+                                    *slot = choice;
+                                }
+                            }
+                            model.as_mut().shown(false);
                         }
+                        model.as_mut().theme_restyled(true);
                     }
-                    model.as_mut().shown(false);
-                    if model.reading {
-                        model.as_mut().refresh();
-                    }
-                    model.theme_restyled(true);
+                    let _ = model.finish_async_save(was_reading, asked);
                 }
-                Err(words) => model.said(format!("The choice could not be stored: {words}")),
+                Err(words) => {
+                    model.as_mut().end_reread_guard_err(was_reading, asked);
+                    model.said(format!("The choice could not be stored: {words}"));
+                }
             });
         });
     }
@@ -2030,19 +2105,22 @@ impl qobject::SettingsModel {
         let library = self.platform_library.to_string();
         let qt = self.qt_thread();
         std::thread::spawn(move || {
-            let snap = ClientSettings::open(&library).map(|s| s.scrape_snapshot()).ok();
+            let snap = ClientSettings::open(&library).map(|s| s.scrape_snapshot());
             let _ = qt.queue(move |mut model| {
                 if model.scrape_asked != asked {
                     return;
                 }
-                if let Some(snap) = snap {
-                    let mut r = model.as_mut().rust_mut();
-                    let (note, pending) = (r.view.scrape.status_note.clone(), r.view.scrape.pending_user.clone());
-                    r.view.scrape = snap;
-                    r.view.scrape.status_note = note;
-                    r.view.scrape.pending_user = pending;
+                match snap {
+                    Ok(snap) => {
+                        let mut r = model.as_mut().rust_mut();
+                        let (note, pending) = (r.view.scrape.status_note.clone(), r.view.scrape.pending_user.clone());
+                        r.view.scrape = snap;
+                        r.view.scrape.status_note = note;
+                        r.view.scrape.pending_user = pending;
+                        model.shown(false);
+                    }
+                    Err(words) => model.said(format!("The scraping settings could not be read: {words}")),
                 }
-                model.shown(false);
             });
         });
     }
@@ -2175,14 +2253,22 @@ impl qobject::SettingsModel {
     }
 
     pub(crate) fn open_shaders_board(mut self: Pin<&mut Self>, return_row: usize) {
-        let board = crate::settings_shaders::ShadersBoard::open_immediate(&self.view, return_row);
+        let mut board = crate::settings_shaders::ShadersBoard::open_immediate(&self.view, return_row);
+        let has_lib = !self.platform_library.is_empty();
+        board.favourites_loaded = !has_lib;
         let gen = self.shaders_open_gen.wrapping_add(1);
-        {
+        let loading_changed = {
             let mut r = self.as_mut().rust_mut();
+            let changed = r.shaders_loading != has_lib;
             r.shaders_open_gen = gen;
+            r.shaders_loading = has_lib;
             r.shaders_state = Some(board);
+            changed
+        };
+        let view_changed = self.as_mut().sync_shaders_view_changed();
+        if loading_changed && !view_changed {
+            self.as_mut().shaders_changed();
         }
-        self.as_mut().sync_shaders_view();
         self.as_mut().spawn_shaders_open(gen, true);
     }
 
@@ -2198,29 +2284,71 @@ impl qobject::SettingsModel {
         let clients = self.clients.clone();
         let qt = self.qt_thread();
         self.clients.spawn(move || {
-            let platform = clients.platform(&library).ok();
-            let data = crate::settings_shaders::ShadersBoard::collect_open_data(platform.as_deref(), &view, &board, include_scan);
+            let loaded = clients
+                .platform(&library)
+                .map(|p| crate::settings_shaders::ShadersBoard::collect_open_data(Some(&p), &view, &board, include_scan));
             let _ = qt.queue(move |mut model| {
                 if model.shaders_open_gen != open_gen || (!include_scan && model.shaders_meta_gen != meta_gen) {
                     return;
                 }
-                let took = {
+                let data = match loaded {
+                    Ok(d) => d,
+                    Err(words) => {
+                        if include_scan && model.shaders_loading {
+                            model.as_mut().rust_mut().shaders_loading = false;
+                            model.as_mut().shaders_changed();
+                        }
+                        model.said(format!("The shader presets could not be read: {words}"));
+                        return;
+                    }
+                };
+                let (took, persist_favs, cleared_loading) = {
                     let mut r = model.as_mut().rust_mut();
-                    if let Some(mut b) = r.shaders_state.take() {
-                        b.apply_open_data(data, &r.view);
-                        r.shaders_state = Some(b);
-                        true
+                    let cleared = if include_scan {
+                        let was = r.shaders_loading;
+                        r.shaders_loading = false;
+                        was
                     } else {
                         false
+                    };
+                    if let Some(mut b) = r.shaders_state.take() {
+                        let persist = b.apply_open_data(data, &r.view);
+                        r.shaders_state = Some(b);
+                        (true, persist, cleared)
+                    } else {
+                        (false, None, cleared)
                     }
                 };
                 if took {
-                    model.as_mut().sync_shaders_view();
+                    let view_changed = model.as_mut().sync_shaders_view_changed();
+                    if cleared_loading && !view_changed {
+                        model.as_mut().shaders_changed();
+                    }
                     if model.shaders_shown {
                         model.as_mut().sync_shaders_preview(false);
                     }
+                } else if cleared_loading {
+                    model.as_mut().shaders_changed();
+                }
+                if let Some(favs) = persist_favs {
+                    model.as_mut().spawn_save_favourites(favs);
                 }
             });
+        });
+    }
+
+    fn spawn_save_favourites(self: Pin<&mut Self>, favs: Vec<String>) {
+        let library = self.platform_library.to_string();
+        if library.is_empty() {
+            return;
+        }
+        let clients = self.clients.clone();
+        let qt = self.qt_thread();
+        self.clients.spawn(move || {
+            let saved = clients.platform(&library).and_then(|p| crate::settings_shaders::save_favourites_on(&p, &favs));
+            if let Err(words) = saved {
+                let _ = qt.queue(move |model| model.said(format!("The shader favourites could not be saved: {words}")));
+            }
         });
     }
 
@@ -2245,12 +2373,13 @@ impl qobject::SettingsModel {
     }
 
     fn close_shaders_state(mut self: Pin<&mut Self>) {
-        let had = self.shaders_state.is_some() || self.shaders_shown || self.shader_preview_feed != 0;
+        let had = self.shaders_state.is_some() || self.shaders_shown || self.shaders_loading || self.shader_preview_feed != 0;
         {
             let mut r = self.as_mut().rust_mut();
             r.shaders_open_gen = r.shaders_open_gen.wrapping_add(1);
             r.shaders_state = None;
             r.shaders_shown = false;
+            r.shaders_loading = false;
             r.shader_preview.release();
             r.shader_preview_feed = 0;
             r.shader_preview_pending = false;
@@ -2316,14 +2445,18 @@ impl qobject::SettingsModel {
         }
     }
 
-    fn sync_shaders_view(mut self: Pin<&mut Self>) {
+    fn sync_shaders_view(self: Pin<&mut Self>) {
+        let _ = self.sync_shaders_view_changed();
+    }
+
+    fn sync_shaders_view_changed(mut self: Pin<&mut Self>) -> bool {
         let (shown, parts, board_ref) = {
             let mut r = self.as_mut().rust_mut();
             let Some(board) = r.shaders_state.take() else {
                 r.shaders_shown = false;
                 r.shaders_board = QString::from("{}");
                 r.shaders_help = QString::from("[]");
-                return;
+                return false;
             };
             let shown = !board.return_params;
             let parts = board.to_parts_in_memory(&r.view, board.comparing, true);
@@ -2395,6 +2528,7 @@ impl qobject::SettingsModel {
             }
             self.as_mut().shaders_changed();
         }
+        view_changed
     }
 
     fn sync_shaders_preview(mut self: Pin<&mut Self>, immediate: bool) {
@@ -2679,20 +2813,13 @@ impl qobject::SettingsModel {
             r.shaders_state = Some(board);
             favs
         };
-        let Some(favs) = updated else { return };
+        let Some((favs, loaded)) = updated else { return };
         self.as_mut().sync_shaders_view();
         self.as_mut().maybe_fetch_shaders_meta();
         self.as_mut().sync_shaders_preview(false);
-        let library = self.platform_library.to_string();
-        if library.is_empty() {
-            return;
+        if loaded {
+            self.as_mut().spawn_save_favourites(favs);
         }
-        let clients = self.clients.clone();
-        self.clients.spawn(move || {
-            if let Ok(platform) = clients.platform(&library) {
-                crate::settings_shaders::save_favourites_on(&platform, &favs);
-            }
-        });
     }
 
     pub fn shaders_search(self: Pin<&mut Self>) {
@@ -2725,47 +2852,65 @@ impl qobject::SettingsModel {
             return;
         }
         let library = self.platform_library.to_string();
-        let (pack_dir, favs, graphics_dirty, graphics_doc) = {
+        let (open_gen, pack_dir, favs_loaded, favs, deltas, graphics_dirty, graphics_doc) = {
             let mut r = self.as_mut().rust_mut();
             let Some(mut board) = r.shaders_state.take() else { return };
+            board.confirm_remove = false;
+            let mut probe_view = r.view.clone();
+            let mut probe_board = board.clone();
+            let dirty = probe_board.finish_remove_pack(&mut probe_view);
             let dir = board.pack_dir.clone();
-            let dirty = board.finish_remove_pack(&mut r.view);
-            let favs = board.favourites.clone();
-            let doc = r.view.read.graphics.clone();
+            let favs_loaded = board.favourites_loaded;
+            let deltas = board.pending_fav_deltas.clone();
             r.shaders_state = Some(board);
-            (dir, favs, dirty, doc)
+            (r.shaders_open_gen, dir, favs_loaded, probe_board.favourites, deltas, dirty, probe_view.read.graphics)
         };
         self.as_mut().said(String::new());
         self.as_mut().sync_shaders_view();
-        self.as_mut().sync_shaders_preview(true);
+        let (was_reading, asked) = self.as_mut().begin_reread_guard();
         let clients = self.clients.clone();
         let qt = self.qt_thread();
         self.clients.spawn(move || {
-            let platform = if library.is_empty() { None } else { clients.platform(&library).ok() };
-            let dir = pack_dir.or_else(|| platform.as_deref().and_then(|p| crate::settings_shaders::scan_pack_dir_on(p).0));
-            let deleted = match dir {
-                Some(d) => crate::settings_shaders::ShadersBoard::remove_pack_dir(&d),
-                None => Ok(()),
+            let outcome = if library.is_empty() {
+                crate::settings_shaders::ShadersBoard::persist_remove_pack(None, pack_dir, favs_loaded, &favs, &deltas, graphics_dirty, &graphics_doc)
+            } else {
+                clients.platform(&library).and_then(|p| {
+                    crate::settings_shaders::ShadersBoard::persist_remove_pack(Some(&p), pack_dir, favs_loaded, &favs, &deltas, graphics_dirty, &graphics_doc)
+                })
             };
-            if deleted.is_ok() {
-                if let Some(p) = platform.as_deref() {
-                    crate::settings_shaders::save_favourites_on(p, &favs);
-                    if graphics_dirty {
-                        if let Ok(file) = p.file(FILE_GRAPHICS) {
-                            if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
-                                let _ = p.model_save(MODEL_GRAPHICS_CONFIG, None, name, &graphics_doc);
+            let _ = qt.queue(move |mut model| match outcome {
+                Err(words) => {
+                    model.as_mut().end_reread_guard_err(was_reading, asked);
+                    model.as_mut().said(format!("The shader pack could not be removed: {words}"));
+                    model.as_mut().refresh_inner(false);
+                    if model.shaders_open_gen == open_gen && model.shaders_state.is_some() {
+                        model.as_mut().spawn_shaders_open(open_gen, true);
+                        model.as_mut().sync_shaders_view();
+                    }
+                }
+                Ok(()) => {
+                    if model.shaders_open_gen == open_gen {
+                        let took = {
+                            let mut r = model.as_mut().rust_mut();
+                            if let Some(mut board) = r.shaders_state.take() {
+                                board.finish_remove_pack(&mut r.view);
+                                r.shaders_state = Some(board);
+                                true
+                            } else {
+                                false
+                            }
+                        };
+                        if took {
+                            model.as_mut().sync_shaders_view();
+                            if model.shaders_shown {
+                                model.as_mut().sync_shaders_preview(true);
                             }
                         }
                     }
-                }
-            }
-            let _ = qt.queue(move |mut model| {
-                if let Err(words) = deleted {
-                    model.as_mut().said(words);
-                    model.as_mut().sync_shaders_view();
-                } else {
-                    model.as_mut().rust_mut().saved_since_open = true;
-                    model.refresh();
+                    let refreshed = model.as_mut().finish_async_save(was_reading, asked);
+                    if !refreshed {
+                        model.refresh();
+                    }
                 }
             });
         });

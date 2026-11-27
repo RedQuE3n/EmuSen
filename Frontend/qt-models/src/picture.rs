@@ -111,17 +111,18 @@ struct BuilderQueue<C> {
     building: Option<Through>,
     ready: Option<(Through, std::result::Result<(C, Vec<(String, f32)>), String>)>,
     retired: Vec<C>,
+    has_worker: bool,
     stop: bool,
 }
 
 impl<C> BuilderQueue<C> {
     fn new(initial: &Through) -> Self {
         let initial = (!initial.preset.is_empty()).then(|| initial.clone());
-        Self { last_queued: initial.clone(), pending: initial, building: None, ready: None, retired: Vec::new(), stop: false }
+        Self { last_queued: initial.clone(), pending: initial, building: None, ready: None, retired: Vec::new(), has_worker: false, stop: false }
     }
 
     fn enqueue(&mut self, next: Through) -> bool {
-        if self.last_queued.as_ref() == Some(&next) {
+        if next.preset.is_empty() || self.last_queued.as_ref() == Some(&next) {
             return false;
         }
         self.last_queued = Some(next.clone());
@@ -223,6 +224,7 @@ impl PictureFeed {
             .name("serenity-builder".into())
             .spawn(move || builder_loop(worker_builder))
             .ok();
+        locked(&builder.state).has_worker = builder_thread.is_some();
         let shared = Arc::new(Shared {
             newest: Mutex::default(),
             swaps: Mutex::new(0),
@@ -416,19 +418,45 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
     }
     let ring = matches!(render.current.source, Source::Ring { .. });
     let swap_allowed = !(ring && render.advanced);
+    let running = context.shared.running.load(Ordering::Relaxed);
     let (retired, ready) = {
         let builder = &context.shared.builder;
         let mut st = locked(&builder.state);
-        if swap_allowed && render.chain.is_none() && st.ready.is_none() {
-            if st.pending.is_none() && st.building.is_none() && render.problem.is_none() {
-                if st.enqueue(render.through.clone()) {
-                    builder.wake.notify_all();
+        if swap_allowed {
+            if !st.has_worker {
+                if st.pending.is_some()
+                    || (render.chain.is_none() && st.ready.is_none() && render.problem.is_none() && !render.through.preset.is_empty())
+                {
+                    let target = st.take_next().unwrap_or_else(|| render.through.clone());
+                    drop(st);
+                    let result = build(&render.device, &target).map_err(|e| e.to_string());
+                    st = locked(&builder.state);
+                    st.finish(target, result);
+                }
+            } else {
+                if render.chain.is_none()
+                    && st.ready.is_none()
+                    && st.pending.is_none()
+                    && st.building.is_none()
+                    && render.problem.is_none()
+                    && !render.through.preset.is_empty()
+                {
+                    if st.enqueue(render.through.clone()) {
+                        builder.wake.notify_all();
+                    }
+                }
+                if !running {
+                    st = builder
+                        .wake
+                        .wait_while(st, |s| !s.stop && (s.pending.is_some() || s.building.is_some()))
+                        .unwrap_or_else(PoisonError::into_inner);
+                } else if render.chain.is_none() && st.ready.is_none() {
+                    st = builder
+                        .wake
+                        .wait_while(st, |s| !s.stop && s.ready.is_none() && (s.pending.is_some() || s.building.is_some()))
+                        .unwrap_or_else(PoisonError::into_inner);
                 }
             }
-            st = builder
-                .wake
-                .wait_while(st, |s| !s.stop && s.ready.is_none() && (s.pending.is_some() || s.building.is_some()))
-                .unwrap_or_else(PoisonError::into_inner);
         }
         st.take_for_render(swap_allowed)
     };
@@ -588,5 +616,22 @@ mod tests {
         let (retired2, ready) = q.take_for_render(true);
         assert!(retired2.is_empty());
         assert!(matches!(ready, Some((t, Ok((2, _)))) if t == a));
+    }
+
+    #[test]
+    fn builder_queue_rejects_empty_preset_and_tracks_worker_flag() {
+        let empty = through(b"");
+        let mut q: BuilderQueue<u32> = BuilderQueue::new(&empty);
+        assert!(!q.has_worker);
+        assert_eq!(q.take_next(), None);
+        assert!(!q.enqueue(empty));
+        q.has_worker = true;
+        let valid = through(b"preset");
+        assert!(q.enqueue(valid.clone()));
+        assert_eq!(q.take_next(), Some(valid.clone()));
+        assert_eq!(q.building, Some(valid.clone()));
+        q.finish(valid, Ok((7, Vec::new())));
+        assert_eq!(q.building, None);
+        assert!(q.ready.is_some());
     }
 }

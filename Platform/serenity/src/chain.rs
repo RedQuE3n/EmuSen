@@ -699,7 +699,7 @@ impl Chain {
                 self.history[i] = Some(cleared(&self.device, w, h, UNORM, self.passes[0].spec.mipmap_input)?);
             }
             self.staging = None;
-            self.staging = Some(self.device.create_buffer(w.wrapping_mul(rows).wrapping_mul(4) as u64, vk::BufferUsageFlags::TRANSFER_SRC)?);
+            self.staging = Some(self.device.create_buffer(u64::from(w) * u64::from(rows) * 4, vk::BufferUsageFlags::TRANSFER_SRC)?);
             self.rows = None;
             self.rows = if repeat > 1 { Some(self.device.create_image(w, rows, UNORM, false)?) } else { None };
             (self.original_width, self.original_height, self.upload_rows, self.upload_repeat) = (w, h, rows, repeat);
@@ -907,7 +907,7 @@ impl Chain {
             self.bind(i, vw, vh)?;
         }
         self.device.phase(point::BOUND);
-        let blank = std::mem::take(&mut self.blank_pending);
+        let blank = self.blank_pending;
         let upload = std::mem::take(&mut self.upload_pending);
         self.take_pending(upload)?;
         let wait = self.upload_wait(upload);
@@ -938,6 +938,7 @@ impl Chain {
             wait,
             None,
         )?;
+        self.blank_pending = false;
         self.give_back_pending(upload)?;
         self.device.phase(point::RAN);
         Ok(())
@@ -965,7 +966,7 @@ impl Chain {
             self.bind(i, vw, vh)?;
         }
         self.device.phase(point::BOUND);
-        let blank = std::mem::take(&mut self.blank_pending);
+        let blank = self.blank_pending;
         let upload = std::mem::take(&mut self.upload_pending);
         self.take_pending(upload)?;
         let wait = self.upload_wait(upload);
@@ -988,6 +989,7 @@ impl Chain {
             wait,
             None,
         )?;
+        self.blank_pending = false;
         self.give_back_pending(upload)?;
         self.device.phase(point::RAN);
         let format = self.passes[count - 1].format;
@@ -1050,7 +1052,7 @@ impl Chain {
         }
         self.device.phase(point::BOUND);
 
-        let blank = std::mem::take(&mut self.blank_pending);
+        let blank = self.blank_pending;
         let upload = std::mem::take(&mut self.upload_pending);
         self.take_pending(upload)?;
         let wait = self.upload_wait(upload);
@@ -1073,6 +1075,7 @@ impl Chain {
             device.host_read_barrier(commands, readback);
             device.transition(commands, &last.image, READ, 0, None, None);
         }, wait, None)?;
+        self.blank_pending = false;
         self.give_back_pending(upload)?;
 
         self.device.phase(point::RAN);

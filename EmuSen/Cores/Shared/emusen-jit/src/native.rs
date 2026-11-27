@@ -11,6 +11,7 @@ const DATA: usize = COLD + RESERVED / 4;
 /// A code memory, owned by the one thread that places in it and runs its code.
 pub struct Memory {
     base: *mut u8,
+    rw: *mut u8,
     page: usize,
     hot: usize,
     cold: usize,
@@ -28,10 +29,8 @@ fn up(n: usize, to: usize) -> usize {
 impl Memory {
     /// A memory with `stubs` placed first, each reached by its index; a stub reaches the stubs before it.
     pub fn new(stubs: Vec<Code>) -> Memory {
-        let (base, page) = os::reserve(RESERVED);
-        // SAFETY: the data arena, inside the reservation, from which nothing is ever run.
-        unsafe { os::protect(base.add(DATA), RESERVED - DATA, false) };
-        let mut m = Memory { base, page, hot: 0, cold: COLD, data: DATA, stubs: Vec::new() };
+        let (base, rw, page) = os::reserve(RESERVED, DATA);
+        let mut m = Memory { base, rw, page, hot: 0, cold: COLD, data: DATA, stubs: Vec::new() };
         for s in stubs {
             assert!(s.cold.is_empty() && s.data.is_empty(), "a stub is hot code alone");
             let e = m.place(s).expect("the stubs fit an empty memory");
@@ -72,9 +71,17 @@ impl Memory {
         Some(entry)
     }
 
-    /// `bytes` at `at`, the pages they fall on writable for the copy and executable after: W^X with the block laid beside the last, so that a block costs its bytes, not two pages.
+    /// `bytes` written at `at` through the writable alias when dual-mapped, else via page-protection toggling.
     fn write(&mut self, at: usize, bytes: &[u8]) {
         if bytes.is_empty() {
+            return;
+        }
+        if !self.rw.is_null() {
+            // SAFETY: `at..at + bytes.len()` lies inside the shared `0..DATA` mapping; `base` remains RX.
+            unsafe {
+                std::ptr::copy_nonoverlapping(bytes.as_ptr(), self.rw.add(at), bytes.len());
+                os::flush_icache(self.base.add(at), bytes.len());
+            }
             return;
         }
         let from = at / self.page * self.page;
@@ -91,43 +98,80 @@ impl Memory {
 impl Drop for Memory {
     fn drop(&mut self) {
         // SAFETY: the reservation made in `new`; the owner has forgotten every address in it.
-        unsafe { os::release(self.base, RESERVED) };
+        unsafe { os::release(self.base, self.rw, RESERVED, DATA) };
     }
 }
 
-/// The code memory's reservation and protection: Unix's calls; elsewhere the tailored code is never placed, and asking panics.
-#[cfg(unix)]
+/// The code memory's reservation and protection: Linux dual-mapped W^X via memfd, Unix fallback elsewhere.
+#[cfg(target_os = "linux")]
 mod os {
-    pub(super) fn reserve(bytes: usize) -> (*mut u8, usize) {
-        // SAFETY: an anonymous reservation, no access until a batch is written.
-        let base = unsafe { libc::mmap(std::ptr::null_mut(), bytes, libc::PROT_NONE, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_NORESERVE, -1, 0) };
-        assert!(base != libc::MAP_FAILED, "the code reservation");
-        // SAFETY: sysconf has no preconditions.
+    pub(super) fn reserve(bytes: usize, data_offset: usize) -> (*mut u8, *mut u8, usize) {
+        let fd = unsafe { libc::memfd_create(c"emusen-jit".as_ptr(), libc::MFD_CLOEXEC) };
+        assert!(fd >= 0, "the code memfd");
+        assert_eq!(unsafe { libc::ftruncate(fd, bytes as libc::off_t) }, 0, "the code memfd size");
+        // SAFETY: `0..data_offset` stays R-X and `data_offset..bytes` becomes RW- for the data arena.
+        let rx = unsafe { libc::mmap(std::ptr::null_mut(), bytes, libc::PROT_READ | libc::PROT_EXEC, libc::MAP_SHARED, fd, 0) };
+        assert!(rx != libc::MAP_FAILED, "the code rx mapping");
+        assert_eq!(unsafe { libc::mprotect(rx.cast::<u8>().add(data_offset).cast(), bytes - data_offset, libc::PROT_READ | libc::PROT_WRITE) }, 0, "the data arena protection");
+        let rw = unsafe { libc::mmap(std::ptr::null_mut(), data_offset, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_SHARED, fd, 0) };
+        assert!(rw != libc::MAP_FAILED, "the code rw mapping");
+        unsafe { libc::close(fd) };
         let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
-        (base.cast(), page)
+        (rx.cast(), rw.cast(), page)
     }
 
-    /// # Safety
-    /// `at..at + bytes` is inside a reservation and pages no code runs from while they are writable.
+    pub(super) unsafe fn protect(_at: *mut u8, _bytes: usize, _exec: bool) {}
+
+    pub(super) unsafe fn flush_icache(at: *mut u8, bytes: usize) {
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+        unsafe {
+            unsafe extern "C" {
+                fn __clear_cache(start: *mut libc::c_void, end: *mut libc::c_void);
+            }
+            __clear_cache(at.cast(), at.add(bytes).cast());
+        }
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        let _ = (at, bytes);
+    }
+
+    pub(super) unsafe fn release(base: *mut u8, rw: *mut u8, bytes: usize, rw_bytes: usize) {
+        unsafe {
+            if !rw.is_null() {
+                libc::munmap(rw.cast(), rw_bytes);
+            }
+            libc::munmap(base.cast(), bytes);
+        }
+    }
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+mod os {
+    pub(super) fn reserve(bytes: usize, data_offset: usize) -> (*mut u8, *mut u8, usize) {
+        let base = unsafe { libc::mmap(std::ptr::null_mut(), bytes, libc::PROT_NONE, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_NORESERVE, -1, 0) };
+        assert!(base != libc::MAP_FAILED, "the code reservation");
+        unsafe { protect(base.cast::<u8>().add(data_offset), bytes - data_offset, false) };
+        let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
+        (base.cast(), std::ptr::null_mut(), page)
+    }
+
     pub(super) unsafe fn protect(at: *mut u8, bytes: usize, exec: bool) {
         let p = if exec { libc::PROT_READ | libc::PROT_EXEC } else { libc::PROT_READ | libc::PROT_WRITE };
-        // SAFETY: the caller's.
         assert_eq!(unsafe { libc::mprotect(at.cast(), bytes, p) }, 0, "the code's protection");
     }
 
-    /// # Safety
-    /// A reservation of `bytes` from `reserve`, whose addresses nothing holds.
-    pub(super) unsafe fn release(base: *mut u8, bytes: usize) {
-        // SAFETY: the caller's.
+    pub(super) unsafe fn flush_icache(_at: *mut u8, _bytes: usize) {}
+
+    pub(super) unsafe fn release(base: *mut u8, _rw: *mut u8, bytes: usize, _rw_bytes: usize) {
         unsafe { libc::munmap(base.cast(), bytes) };
     }
 }
 
 #[cfg(not(unix))]
 mod os {
-    pub(super) fn reserve(_: usize) -> (*mut u8, usize) {
+    pub(super) fn reserve(_: usize, _: usize) -> (*mut u8, *mut u8, usize) {
         panic!("the tailored code memory is made on Unix hosts only")
     }
     pub(super) unsafe fn protect(_: *mut u8, _: usize, _: bool) {}
-    pub(super) unsafe fn release(_: *mut u8, _: usize) {}
+    pub(super) unsafe fn flush_icache(_: *mut u8, _: usize) {}
+    pub(super) unsafe fn release(_: *mut u8, _: *mut u8, _: usize, _: usize) {}
 }

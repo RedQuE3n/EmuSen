@@ -74,6 +74,8 @@ fn lender() -> Option<Lender> {
         family,
         queue,
         host_family: graphics,
+        int64: false,
+        float_controls: false,
     };
     let (lent, host) = (lend(family, index), lend(graphics, 0));
     Some(Lender { _entry: entry, instance, device, lent, host })

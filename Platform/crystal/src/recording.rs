@@ -23,14 +23,23 @@ impl Session {
 
     /// The recording ended and its video encoded where an encoder is installed; the folder it wrote into.
     pub fn stop_recording(&self) -> Result<String, Refused> {
-        self.change(|e, _| {
-            let mut said = Vec::new();
-            let Some(folder) = e.debug.recorder.stop(&mut said) else { return Err((svc::ABSENT, format!("session {} is not recording", self.id))) };
-            for line in said {
-                e.say(line);
+        let mut detached = self.change(|e, _| {
+            if !e.debug.recorder.is_recording() {
+                return Err((svc::ABSENT, format!("session {} is not recording", self.id)));
             }
-            Ok(folder.to_string_lossy().into_owned())
-        })
+            Ok(std::mem::take(&mut e.debug.recorder))
+        })?;
+        let mut said = Vec::new();
+        let folder = detached.stop(&mut said).ok_or_else(|| (svc::ABSENT, format!("session {} is not recording", self.id)))?;
+        if !said.is_empty() {
+            let _ = self.change(|e, _| {
+                for line in said {
+                    e.say(line);
+                }
+                Ok(())
+            });
+        }
+        Ok(folder.to_string_lossy().into_owned())
     }
 }
 

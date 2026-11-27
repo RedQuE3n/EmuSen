@@ -18,11 +18,12 @@ fn given_now(s: &ScraperInner, r: &Value) -> Result<(i64, i64), Error> {
 }
 
 fn offset_written(text: &str) -> i64 {
-    let tail = &text[text.len().saturating_sub(6)..];
-    let b = tail.as_bytes();
-    if b.len() == 6 && (b[0] == b'+' || b[0] == b'-') && b[3] == b':' {
-        let minutes = tail[1..3].parse::<i64>().unwrap_or(0) * 60 + tail[4..6].parse::<i64>().unwrap_or(0);
-        return if b[0] == b'-' { -minutes * 60 } else { minutes * 60 };
+    let b = text.as_bytes();
+    let tail = &b[b.len().saturating_sub(6)..];
+    if tail.len() == 6 && (tail[0] == b'+' || tail[0] == b'-') && tail[3] == b':' {
+        let parse2 = |s: &[u8]| std::str::from_utf8(s).ok().and_then(|t| t.parse::<i64>().ok()).unwrap_or(0);
+        let minutes = parse2(&tail[1..3]) * 60 + parse2(&tail[4..6]);
+        return if tail[0] == b'-' { -minutes * 60 } else { minutes * 60 };
     }
     0
 }
@@ -91,4 +92,17 @@ pub(crate) fn change(s: &Arc<ScraperInner>, r: &Value) -> Result<String, Error> 
         _ => return Err(Error::BadRequest(format!("The request's op, {op}, is not one the scraper makes."))),
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::offset_written;
+
+    #[test]
+    fn offset_written_handles_multibyte_utf8_at_tail_boundary() {
+        assert_eq!(offset_written("2026-01-01T00:00:00é"), 0);
+        assert_eq!(offset_written("2026-01-01T00:00:00🦀"), 0);
+        assert_eq!(offset_written("2026-01-01T00:00:00+02:30"), 9000);
+        assert_eq!(offset_written("2026-01-01T00:00:00-05:00"), -18000);
+    }
 }

@@ -59,9 +59,9 @@ typedef struct dianash_host_commands {
     uint32_t size;
     dianash_bytes manifest;
     void *ctx;
-    int32_t (*run)(void *ctx, const dianash_call *call, dianash_result *result);
+    int32_t (*run)(void *ctx, const dianash_call *call, dianash_host_result *result);
     int32_t (*jobs)(void *ctx, const dianash_call *call);
-    int32_t (*kill)(void *ctx, const dianash_call *call, const uint8_t *id, size_t id_len, dianash_result *result);
+    int32_t (*kill)(void *ctx, const dianash_call *call, const uint8_t *id, size_t id_len, dianash_host_result *result);
 } dianash_host_commands;
 
 uint32_t dianash_abi_version(void);

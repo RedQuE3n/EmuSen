@@ -105,11 +105,14 @@ impl Library {
             hashed.push((path, bytes, modified, md5));
         }
         let db = self.db()?;
-        for (path, bytes, modified, md5) in &hashed {
-            if let Some(md5) = md5 {
-                records::store_hash(&db, path, *bytes, *modified, md5)?;
+        crate::db::transaction(&db, |db| {
+            for (path, bytes, modified, md5) in &hashed {
+                if let Some(md5) = md5 {
+                    records::store_hash(db, path, *bytes, *modified, md5)?;
+                }
             }
-        }
+            Ok(())
+        })?;
         let mut claimed: HashSet<&str> = HashSet::new();
         let mut moved = 0;
         for (from, md5, _) in &orphans {

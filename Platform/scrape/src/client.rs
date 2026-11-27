@@ -377,19 +377,25 @@ impl Client {
     }
 }
 
-/// SHA-1 taken as a body streams, as `IncrementalHash` takes it.
-#[derive(Default)]
-struct Sha1Stream {
-    bytes: Vec<u8>,
+/// SHA-1 taken incrementally as a body streams, without buffering bytes in memory.
+struct Sha1Stream(sha1::Sha1);
+
+impl Default for Sha1Stream {
+    fn default() -> Self {
+        use sha1::Digest;
+        Sha1Stream(sha1::Sha1::new())
+    }
 }
 
 impl Sha1Stream {
     fn update(&mut self, chunk: &[u8]) {
-        self.bytes.extend_from_slice(chunk);
+        use sha1::Digest;
+        self.0.update(chunk);
     }
 
     fn hex(&self) -> String {
-        emusen_galaxia::rom_hash::hashes_of(&self.bytes).sha1.unwrap_or_default()
+        use sha1::Digest;
+        self.0.clone().finalize().iter().map(|b| format!("{b:02x}")).collect()
     }
 }
 
@@ -416,6 +422,19 @@ pub fn sign_in_result(status: Status, body: &str) -> (&'static str, Option<Membe
 /// Seconds as ticks, for the clock.
 pub fn ticks(d: Duration) -> i64 {
     d.as_nanos() as i64 / 100
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Sha1Stream;
+
+    #[test]
+    fn sha1_stream_hashes_incrementally_across_chunks() {
+        let mut s = Sha1Stream::default();
+        s.update(b"hello ");
+        s.update(b"world");
+        assert_eq!(s.hex(), "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed");
+    }
 }
 
 pub const _TICKS: i64 = TICKS_PER_SECOND;

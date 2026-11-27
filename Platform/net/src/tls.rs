@@ -2,7 +2,7 @@
 //! cannot take a verifier, and a test's extra root needs one (EmuSen_Backend.md §16.1).
 
 use std::io::{self, Read, Write};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::client::verify_server_name;
@@ -12,20 +12,32 @@ use rustls::{CertificateError, ClientConfig, ClientConnection, DigitallySignedSt
 use ureq::Error;
 use ureq::unversioned::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport, TransportAdapter};
 
-/// The client's TLS settings: the system's roots, and a test's own root beside them when one is given.
+static DEFAULT_CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
+
+/// The client's TLS settings: the system's roots (cached once), and a test's own root beside them when given.
 pub fn config(test_roots: &[CertificateDer<'static>]) -> Result<Arc<ClientConfig>, rustls::Error> {
+    if test_roots.is_empty()
+        && let Some(cached) = DEFAULT_CONFIG.get()
+    {
+        return Ok(cached.clone());
+    }
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let verifier = if test_roots.is_empty() {
         rustls_platform_verifier::Verifier::new(provider.clone())?
     } else {
         rustls_platform_verifier::Verifier::new_with_extra_roots(test_roots.iter().cloned(), provider.clone())?
     };
-    let config = ClientConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()?
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(Chains(verifier)))
-        .with_no_client_auth();
-    Ok(Arc::new(config))
+    let built = Arc::new(
+        ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()?
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(Chains(verifier)))
+            .with_no_client_auth(),
+    );
+    if test_roots.is_empty() {
+        let _ = DEFAULT_CONFIG.set(built.clone());
+    }
+    Ok(built)
 }
 
 /// A chain no store trusts, in the words .NET's `AuthenticationException` gives it, where rustls says only "unknown issuer".
@@ -196,5 +208,17 @@ impl Transport for TlsTransport {
 
     fn is_tls(&self) -> bool {
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_tls_config_is_cached_across_calls() {
+        let a = config(&[]).unwrap();
+        let b = config(&[]).unwrap();
+        assert!(Arc::ptr_eq(&a, &b));
     }
 }

@@ -19,12 +19,9 @@ fn stem(rom_path: &str) -> Cow<'_, str> {
     Path::new(rom_path).file_stem().unwrap_or_default().to_string_lossy()
 }
 
-/// The states' directory: the caller's, unless it is absent or blank. A parameter and never a settings read; see §5.1.
+/// The states' directory: checked via `setting_folders` when set, else the tree's default.
 fn state_directory(tree: &Tree, directory_override: Option<&str>) -> PathBuf {
-    match directory_override {
-        Some(directory) if !directory.trim().is_empty() => PathBuf::from(directory),
-        _ => tree.save_states(),
-    }
+    crate::setting_folders::checked(directory_override, crate::tree::user_home()).path.map(PathBuf::from).unwrap_or_else(|| tree.save_states())
 }
 
 /// `Saves/<console>/<stem>.srm`.
@@ -128,6 +125,8 @@ mod tests {
         assert_eq!(state_path(&tree(), "/roms/a.nes", 1, Some("/elsewhere")), Path::new("/elsewhere/a.state"));
         assert_eq!(resume_state_path(&tree(), "/roms/a.nes", None), Path::new("/r/home/Saves/Save States/a.resume.state"));
         assert_eq!(resume_state_path(&tree(), "/roms/a.nes", Some("/elsewhere")), Path::new("/elsewhere/a.resume.state"));
+        assert_eq!(state_path(&tree(), "/roms/a.nes", 1, Some("relative/states")), Path::new("/r/home/Saves/Save States/a.state"));
+        assert_eq!(state_path(&tree(), "/roms/a.nes", 1, Some("~/states")), crate::tree::user_home().join("states/a.state"));
     }
 
     #[test]

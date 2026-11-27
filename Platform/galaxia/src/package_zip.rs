@@ -120,10 +120,12 @@ pub fn manifest_in(zip: impl AsRef<Path>) -> Result<Option<(String, Value)>, Str
     }
     let manifest = entries.iter().find(|e| e.full_name == format!("{top}/{}", package::FILE_NAME)).ok_or("no manifest")?;
     let mut bytes = Vec::new();
-    reader.copy(manifest, &mut bytes).map_err(|e| format!("{zip}: {e}"))?;
+    reader.copy_bounded(manifest, &mut bytes, MAX_MANIFEST_BYTES).map_err(|e| format!("{zip}: {e}"))?;
     let doc = package::parse(&crate::text_file::decode(&bytes)).map_err(|r| format!("{zip}: {}", r.words()))?;
     Ok(Some((top, doc)))
 }
+
+const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
 
 /// Where a package's zip is unpacked: beside it where it lies under `packages`, else straight under `packages`; never
 /// beside a zip elsewhere, which may be in the library.
@@ -301,5 +303,18 @@ mod tests {
         for bad in ["Game.sfc/../x", "Other/x", "Game.sfc/a\\..\\b", "Game.sfc//x", "Game.sfc/./x", "/Game.sfc/x"] {
             assert!(!safe(bad, "Game.sfc"), "{bad}");
         }
+    }
+
+    #[test]
+    fn oversized_manifest_in_zip_is_refused_without_buffering() {
+        let t = TempDir::new("package-zip-limit");
+        let zip_path = t.join("bomb.zip");
+        let big = t.join("big.json");
+        std::fs::write(&big, vec![b' '; (MAX_MANIFEST_BYTES as usize) + 64]).unwrap();
+        let mut w = ZipWriter::create(&zip_path).unwrap();
+        w.add("Game.sfc/package.json", &big, std::time::UNIX_EPOCH, false, &|| false).unwrap();
+        w.finish().unwrap();
+        let err = manifest_in(&zip_path).unwrap_err();
+        assert!(err.contains("exceeds"), "{err}");
     }
 }

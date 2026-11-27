@@ -38,14 +38,31 @@ fn table<R>(f: impl FnOnce(&mut HashMap<PathBuf, Taken>) -> R) -> R {
     f(held.get_or_insert_with(HashMap::new))
 }
 
+#[cfg(unix)]
+fn same_inode(file: &File, path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let (Ok(opened), Ok(on_disk)) = (file.metadata(), std::fs::metadata(path)) else {
+        return false;
+    };
+    opened.dev() == on_disk.dev() && opened.ino() == on_disk.ino()
+}
+
 /// The lock file opened and locked, or none when another holds it; the folder is made where it is missing.
 fn open(key: &Path) -> Option<File> {
     if let Some(folder) = key.parent().filter(|f| !f.as_os_str().is_empty()) {
         std::fs::create_dir_all(folder).ok()?;
     }
-    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(beside(key, SUFFIX)).ok()?;
-    file.try_lock().ok()?;
-    Some(file)
+    let lock_path = beside(key, SUFFIX);
+    for _ in 0..16 {
+        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&lock_path).ok()?;
+        file.try_lock().ok()?;
+        #[cfg(unix)]
+        if !same_inode(&file, &lock_path) {
+            continue;
+        }
+        return Some(file);
+    }
+    None
 }
 
 /// `MediumLock.TryTake`: the lock on `file` for `holder`, or none where another program holds it or this one holds it unshared.
@@ -94,9 +111,10 @@ pub fn holder_of(file: impl AsRef<Path>) -> Option<String> {
         if !file_exists(&lock) {
             return None;
         }
-        let probe = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&lock);
+        let probe = std::fs::OpenOptions::new().read(true).write(true).create(false).truncate(false).open(&lock);
         match probe {
             Ok(f) if f.try_lock().is_ok() => None,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             _ => Some("another program".to_string()),
         }
     })
@@ -166,5 +184,21 @@ mod tests {
         assert!(release(taken.id));
         assert!(!release(taken.id));
         std::mem::forget(taken);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unlinked_lock_inode_is_rejected_and_holder_of_never_creates_lock() {
+        let dir = TempDir::new("medium-lock-race");
+        let card = dir.join("c.mcr");
+        let lock_path = beside(&card, SUFFIX);
+        assert_eq!(holder_of(&card), None);
+        assert!(!file_exists(&lock_path));
+        let stale = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&lock_path).unwrap();
+        std::fs::remove_file(&lock_path).unwrap();
+        assert!(!same_inode(&stale, &lock_path));
+        let fresh = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&lock_path).unwrap();
+        assert!(!same_inode(&stale, &lock_path));
+        assert!(same_inode(&fresh, &lock_path));
     }
 }

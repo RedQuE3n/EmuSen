@@ -177,7 +177,9 @@ fn fetch(wire: &Wire, url: &str, target: &str, stop: &crate::clock::Stop) -> std
         return Err(None);
     }
     let request = wire.request(url, TIMEOUT);
-    let Some(fetched) = crate::clock::detached(stop, move || emusen_net::fetch_answer(&request, &emusen_net::Progress::default())) else { return Err(None) };
+    let cancel = Arc::new(emusen_net::Progress::default());
+    let _link = stop.link(&cancel);
+    let Some(fetched) = crate::clock::detached(stop, move || emusen_net::fetch_answer(&request, &cancel)) else { return Err(None) };
     let answer = fetched.map_err(|f| Some(f.message))?;
     if answer.status != 200 {
         return Ok(None);

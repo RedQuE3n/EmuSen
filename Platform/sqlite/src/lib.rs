@@ -22,6 +22,7 @@ pub const LOCKED: i32 = 6;
 pub const CORRUPT: i32 = 11;
 pub const NOT_A_DATABASE: i32 = 26;
 const OK: c_int = 0;
+const TOOBIG: c_int = 18;
 const ROW: c_int = 100;
 const DONE: c_int = 101;
 const OPEN_READONLY: c_int = 0x1;
@@ -76,6 +77,7 @@ functions! {
     column_double = "sqlite3_column_double": fn(*mut c_void, c_int) -> f64;
     column_text = "sqlite3_column_text": fn(*mut c_void, c_int) -> *const u8;
     changes = "sqlite3_changes": fn(*mut c_void) -> c_int;
+    busy_timeout = "sqlite3_busy_timeout": fn(*mut c_void, c_int) -> c_int;
     errmsg = "sqlite3_errmsg": fn(*mut c_void) -> *const c_char;
     errstr = "sqlite3_errstr": fn(c_int) -> *const c_char;
 }
@@ -264,6 +266,32 @@ pub struct Connection {
 
 unsafe impl Send for Connection {}
 
+struct Statement<'a> {
+    f: &'a Functions,
+    raw: *mut c_void,
+}
+
+impl Drop for Statement<'_> {
+    fn drop(&mut self) {
+        if !self.raw.is_null() {
+            unsafe { (self.f.finalize)(self.raw) };
+        }
+    }
+}
+
+struct RollbackGuard<'a> {
+    db: &'a Connection,
+    active: bool,
+}
+
+impl Drop for RollbackGuard<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            let _ = self.db.execute("ROLLBACK;");
+        }
+    }
+}
+
 impl Connection {
     /// Opens the file for reading and writing, making it when it is not there.
     pub fn open(sqlite: Arc<Sqlite>, path: &str) -> Result<Connection, Failure> {
@@ -279,10 +307,11 @@ impl Connection {
         let Ok(name) = CString::new(path) else { return Err(Failure { code: 14, message: "SQLite Error 14: 'unable to open database file'.".to_string() }) };
         let mut db = std::ptr::null_mut();
         let code = unsafe { (sqlite.f.open_v2)(name.as_ptr(), &mut db, flags, std::ptr::null()) };
-        let connection = Connection { sqlite, db, timeout: TIMEOUT };
+        let mut connection = Connection { sqlite, db, timeout: TIMEOUT };
         if code != OK {
             return Err(connection.failure(code));
         }
+        connection.set_timeout(TIMEOUT);
         Ok(connection)
     }
 
@@ -295,9 +324,25 @@ impl Connection {
         Failure { code: code & 0xFF, message: format!("SQLite Error {}: '{words}'.", code & 0xFF) }
     }
 
+    fn errstr_failure(&self, code: c_int) -> Failure {
+        let words = unsafe {
+            let text = (self.sqlite.f.errstr)(code);
+            if text.is_null() { String::new() } else { String::from_utf8_lossy(CStr::from_ptr(text).to_bytes()).into_owned() }
+        };
+        Failure { code: code & 0xFF, message: format!("SQLite Error {}: '{words}'.", code & 0xFF) }
+    }
+
+    fn checked_bind_len(&self, len: usize) -> Result<c_int, Failure> {
+        c_int::try_from(len).map_err(|_| self.errstr_failure(TOOBIG))
+    }
+
     /// How long a busy database is tried again before the statement fails.
     pub fn set_timeout(&mut self, timeout: Duration) {
         self.timeout = timeout;
+        if !self.db.is_null() {
+            let ms = c_int::try_from(timeout.as_millis()).unwrap_or(c_int::MAX);
+            unsafe { (self.sqlite.f.busy_timeout)(self.db, ms) };
+        }
     }
 
     fn busy(code: c_int) -> bool {
@@ -330,11 +375,11 @@ impl Connection {
         let mut changed = 0;
         unsafe {
             while *rest != 0 {
-                let mut statement = std::ptr::null_mut();
+                let mut raw_stmt = std::ptr::null_mut();
                 let mut tail = std::ptr::null();
                 let mut code;
                 loop {
-                    code = (f.prepare_v2)(self.db, rest, -1, &mut statement, &mut tail);
+                    code = (f.prepare_v2)(self.db, rest, -1, &mut raw_stmt, &mut tail);
                     if !Self::busy(code) || started.elapsed() >= self.timeout {
                         break;
                     }
@@ -345,43 +390,52 @@ impl Connection {
                 }
                 rest = tail;
                 // White space or a comment after the last statement prepares to nothing.
-                if statement.is_null() {
+                if raw_stmt.is_null() {
                     continue;
                 }
+                let stmt = Statement { f, raw: raw_stmt };
                 for (name, value) in parameters {
                     let name = CString::new(*name).expect("a parameter's name has no NUL");
-                    let index = (f.bind_parameter_index)(statement, name.as_ptr());
+                    let index = (f.bind_parameter_index)(stmt.raw, name.as_ptr());
                     if index == 0 {
                         continue;
                     }
-                    match value {
-                        Bound::Blob(bytes) => (f.bind_blob)(statement, index, if bytes.is_empty() { c"".as_ptr().cast() } else { bytes.as_ptr().cast() }, bytes.len() as c_int, TRANSIENT),
-                        Bound::Integer(number) => (f.bind_int64)(statement, index, *number),
-                        Bound::Real(number) => (f.bind_double)(statement, index, *number),
-                        Bound::Text(text) => (f.bind_text)(statement, index, if text.is_empty() { c"".as_ptr() } else { text.as_ptr().cast() }, text.len() as c_int, TRANSIENT),
-                        Bound::Null => (f.bind_null)(statement, index),
+                    let bind_code = match value {
+                        Bound::Blob(bytes) => {
+                            let len = self.checked_bind_len(bytes.len())?;
+                            (f.bind_blob)(stmt.raw, index, if bytes.is_empty() { c"".as_ptr().cast() } else { bytes.as_ptr().cast() }, len, TRANSIENT)
+                        }
+                        Bound::Integer(number) => (f.bind_int64)(stmt.raw, index, *number),
+                        Bound::Real(number) => (f.bind_double)(stmt.raw, index, *number),
+                        Bound::Text(text) => {
+                            let len = self.checked_bind_len(text.len())?;
+                            (f.bind_text)(stmt.raw, index, if text.is_empty() { c"".as_ptr() } else { text.as_ptr().cast() }, len, TRANSIENT)
+                        }
+                        Bound::Null => (f.bind_null)(stmt.raw, index),
                     };
+                    if bind_code != OK {
+                        return Err(self.failure(bind_code));
+                    }
                 }
+                let mut yielded = false;
                 loop {
-                    code = (f.step)(statement);
+                    code = (f.step)(stmt.raw);
                     if code == ROW {
-                        row(&Row { f, statement });
+                        yielded = true;
+                        row(&Row { f, statement: stmt.raw });
                         continue;
                     }
-                    if Self::busy(code) && started.elapsed() < self.timeout {
-                        (f.reset)(statement);
+                    if !yielded && Self::busy(code) && started.elapsed() < self.timeout {
+                        (f.reset)(stmt.raw);
                         std::thread::sleep(PAUSE);
                         continue;
                     }
                     break;
                 }
                 if code != DONE {
-                    let failure = self.failure(code);
-                    (f.finalize)(statement);
-                    return Err(failure);
+                    return Err(self.failure(code));
                 }
                 changed = (f.changes)(self.db);
-                (f.finalize)(statement);
             }
         }
         Ok(changed)
@@ -390,6 +444,16 @@ impl Connection {
     /// A statement with no parameters and no rows wanted.
     pub fn execute(&self, sql: &str) -> Result<i32, Failure> {
         self.run(sql, &[], |_| {})
+    }
+
+    /// Runs `work` inside a transaction begun with `begin_sql`, rolling back on error or panic.
+    pub fn in_transaction<T, E: From<Failure>>(&self, begin_sql: &str, work: impl FnOnce(&Connection) -> Result<T, E>) -> Result<T, E> {
+        self.execute(begin_sql)?;
+        let mut guard = RollbackGuard { db: self, active: true };
+        let value = work(self)?;
+        self.execute("COMMIT;")?;
+        guard.active = false;
+        Ok(value)
     }
 }
 
@@ -422,4 +486,47 @@ pub fn for_tests() -> Arc<Sqlite> {
         }
     }
     panic!("no sqlite could be loaded (set EMUSEN_SQLITE or install system libsqlite3): {errors:?}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bind_length_exceeding_c_int_is_refused() {
+        let db = Connection::open(for_tests(), ":memory:").unwrap();
+        let too_long = (c_int::MAX as usize) + 1;
+        let err = db.checked_bind_len(too_long).unwrap_err();
+        assert_eq!(err.code, TOOBIG);
+        assert_eq!(db.checked_bind_len(0).unwrap(), 0);
+        assert_eq!(db.checked_bind_len(c_int::MAX as usize).unwrap(), c_int::MAX);
+    }
+
+    #[test]
+    fn transaction_rolls_back_and_statement_finalizes_on_panic() {
+        let db = Connection::open(for_tests(), ":memory:").unwrap();
+        db.execute("CREATE TABLE t (v INTEGER); INSERT INTO t VALUES (1);").unwrap();
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _: Result<(), Failure> = db.in_transaction("BEGIN IMMEDIATE;", |db| {
+                db.execute("INSERT INTO t VALUES (2);")?;
+                db.query("SELECT v FROM t", &[], |_| panic!("abort inside row callback"))?;
+                Ok(())
+            });
+        }));
+        assert!(res.is_err());
+        let mut seen = Vec::new();
+        db.query("SELECT v FROM t ORDER BY v", &[], |r| seen.push(r.int64(0))).unwrap();
+        assert_eq!(seen, [1]);
+    }
+
+    #[test]
+    fn busy_timeout_pragma_tracks_connection_timeout() {
+        let mut db = Connection::open(for_tests(), ":memory:").unwrap();
+        let mut ms = -1;
+        db.query("PRAGMA busy_timeout;", &[], |r| ms = r.int64(0)).unwrap();
+        assert_eq!(ms, 1000);
+        db.set_timeout(Duration::from_millis(2500));
+        db.query("PRAGMA busy_timeout;", &[], |r| ms = r.int64(0)).unwrap();
+        assert_eq!(ms, 2500);
+    }
 }

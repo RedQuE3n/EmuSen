@@ -658,7 +658,9 @@ mod tests {
         let game = t.text("Roms/SNES/Game.sfc");
         put(&game, bytes);
         let folder = linked(&t, "SNES/Game.sfc", "SNES/Game.sfc", bytes, &game);
-        std::fs::create_dir_all(format!("{folder}/package.json.tmp")).unwrap();
+        let mut perms = std::fs::metadata(&folder).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&folder, perms.clone()).unwrap();
 
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(7200);
         std::fs::File::options().write(true).open(&game).unwrap().set_modified(later).unwrap();
@@ -669,5 +671,7 @@ mod tests {
         std::fs::rename(&game, &moved).unwrap();
         assert!(resolve(&roots, &folder).is_err(), "opening moved package must fail when manifest cannot be written");
         assert!(resolve(&roots, &moved).is_err(), "resolving moved file must fail when manifest cannot be written");
+        perms.set_readonly(false);
+        std::fs::set_permissions(&folder, perms).unwrap();
     }
 }

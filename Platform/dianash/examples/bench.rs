@@ -1,11 +1,11 @@
 //! A line's round trip through the shell core alone: run with `cargo run --release -p emusen-dianash --example bench`.
 
-use emusen_dianash::abi::{dianash_bytes, dianash_call, dianash_host_commands, dianash_result};
+use emusen_dianash::abi::{dianash_bytes, dianash_call, dianash_host_commands, dianash_host_result};
 use emusen_dianash::shell::{Config, Shell};
 use std::ffi::c_void;
 use std::time::Instant;
 
-unsafe extern "C" fn nothing(_: *mut c_void, _: *const dianash_call, _: *mut dianash_result) -> i32 {
+unsafe extern "C" fn nothing(_: *mut c_void, _: *const dianash_call, _: *mut dianash_host_result) -> i32 {
     0
 }
 

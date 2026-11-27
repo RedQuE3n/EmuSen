@@ -50,7 +50,7 @@ fn context() -> Context {
     let tree = tree::tree().clone();
     let (settings, _) = config::load_or_new::<AppSettings>(&tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
     let library = setting_folders::checked(settings.rom_directory.as_deref(), &tree::user_home()).path;
-    let states = settings.state_directory.filter(|s| !s.trim().is_empty());
+    let states = setting_folders::checked(settings.state_directory.as_deref(), &tree::user_home()).path;
     let beside = Path::new(&tree::base_directory()).join(emusen_sqlite::SHIPPED_NAME).to_string_lossy().into_owned();
     let sqlite = emusen_sqlite::Sqlite::of_process(&[beside]).ok().map(std::sync::Arc::new);
     let output = settings.chd_output_directory.filter(|s| !s.trim().is_empty());

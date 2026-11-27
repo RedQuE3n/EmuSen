@@ -14,9 +14,9 @@ mod common;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use common::corpus::{fell, measure_corpus, repo, worsened};
 use common::Scratch;
 use cxx_qt_lib::{QDateTime, QImage};
-use emusen_esde::check::{self, Table};
 use emusen_qt_test::corpus::{self, Change, Cover, Recording, is_rise, record};
 use emusen_qt_test::mockup::{self, Edge};
 use emusen_qt_test::tree::Node;
@@ -26,14 +26,6 @@ const SIZES: [(i32, i32); 2] = [(1280, 800), (1920, 1200)];
 /// The themes the media viewer was captured over (Testing/esde-oracle/README.md); the viewer is ES-DE's, not the theme's.
 const VIEWER_THEMES: [&str; 2] = ["caralt-es-de", "artflix-revisited-es-de"];
 const STATES: [(&str, &str); 2] = [("system", "system"), ("gamelist", "gamelist-1")];
-
-/// Boxes off ES-DE's that the tester has named: (theme, state, the spec's key), at both sizes. Empty since 2026-11-09
-/// (EmuSen_Qt.md §4.8.7); an entry no longer seen fails, so the list cannot outlive its findings.
-const NAMED_BOXES: [(&str, &str, &str); 0] = [];
-
-fn repo() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 /// Every pixel of a picture as RGB, row by row, read through Qt's own decoder.
 fn pixels(path: &Path) -> Option<(i32, i32, Vec<[u8; 3]>)> {
@@ -271,33 +263,6 @@ fn today() -> String {
     format!("{:04}-{:02}-{:02}", d.year(), d.month(), d.day())
 }
 
-/// Rows that worsened from `old` to `new`: a theme that stops loading, more unknown or unsupported pairs, an undrawn kind
-/// gained, a watched MAE or count of boxes off that rose. A theme new to the corpus is not a worsening.
-fn worsened(old: &str, new: &str) -> Vec<String> {
-    let (old, new) = (corpus::rows(old), corpus::rows(new));
-    let mut out = vec![];
-    for (theme, now) in &new {
-        let Some(was) = old.get(theme) else { continue };
-        let num = |r: &BTreeMap<String, String>, c: &str| r.get(c).and_then(|v| v.parse::<f64>().ok());
-        if was.get("loads").map(String::as_str) == Some("yes") && now["loads"] != "yes" {
-            out.push(format!("{theme}: no longer loads"));
-        }
-        for c in ["unknown", "unsupported", "mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off", "mae_viewer_1280", "mae_viewer_1920", "viewer_off"] {
-            if let (Some(a), Some(b)) = (num(was, c), num(now, c)) {
-                // MAE moves by up to 0.02 between runs (measured on 2026-11-09); a count by one.
-                if b > a + if c.starts_with("mae") { 0.05 } else { 0.5 } {
-                    out.push(format!("{theme}: {c} {a} → {b}"));
-                }
-            }
-        }
-        let kinds = |r: &BTreeMap<String, String>| r.get("undrawn").map(|v| v.split(',').filter(|k| *k != "-").map(str::to_owned).collect::<Vec<_>>()).unwrap_or_default();
-        for k in kinds(now).into_iter().filter(|k| !kinds(was).contains(k)) {
-            out.push(format!("{theme}: {k} undrawn"));
-        }
-    }
-    out
-}
-
 #[test]
 fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     assert!(emusen_esde_qt::marks::mark_named("star").is_some(), "the module is linked into this test");
@@ -321,7 +286,6 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let mut failures = vec![];
     let mut table = vec!["theme\tstate\tsize\tqt_mae\tcs_mae\trects_off".to_owned()];
     let mut watched: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
-    let mut boxes_seen = vec![false; NAMED_BOXES.len()];
     let (w0, h0) = SIZES[0];
     let mut scene: Scene<'_> = harness.load(common::VIEW, w0, h0);
     for (theme, variant, scheme, font) in common::watched() {
@@ -374,10 +338,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 let (off, noted) = rects(&spec, &qt);
                 for (key, what) in &off {
                     eprintln!("{at}: off: {key} {what}");
-                    match NAMED_BOXES.iter().position(|(t, s, k)| *t == theme && *s == state && k == key) {
-                        Some(i) => boxes_seen[i] = true,
-                        None => failures.push(format!("{at}: {key} {what}")),
-                    }
+                    failures.push(format!("{at}: {key} {what}"));
                 }
                 off_count += off.len();
                 if !noted.is_empty() {
@@ -546,125 +507,78 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
         }
     }
     scene.assert_quiet();
-    for (i, seen) in boxes_seen.iter().enumerate() {
-        if !seen {
-            failures.push(format!("named but no longer seen: {:?}", NAMED_BOXES[i]));
-        }
-    }
     std::fs::write(out.join("oracle.tsv"), table.join("\n") + "\n").unwrap();
 
-    // The corpus measure with the watched columns, held against the last committed one (today's too, when a re-measure).
-    let corpus = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/emusen/bigpicture/corpus/xml");
-    let measured = check::measures(&[corpus], &check::SYSTEMS);
-    let report = check::report_of(&measured, Table::Summary);
-    // Each theme's type.property pairs and their states, for what a ruling's settings account for.
-    let pairs: BTreeMap<String, BTreeMap<String, String>> =
-        measured.iter().map(|m| (m.theme.clone(), m.properties.iter().map(|(p, s)| (p.clone(), (*s).to_owned())).collect())).collect();
-    let columns = ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off", "mae_viewer_1280", "mae_viewer_1920", "viewer_off"];
-    let measure: Vec<String> = report
-        .text
-        .lines()
-        .enumerate()
-        .map(|(i, l)| {
-            if l.starts_with('#') {
-                l.to_owned()
-            } else if i == 0 {
-                format!("{l}\t{}", columns.join("\t"))
-            } else {
-                let theme = l.split('\t').next().unwrap();
-                let row = watched.get(theme);
-                let cells: Vec<String> = columns.iter().map(|c| row.and_then(|r| r.get(*c)).cloned().unwrap_or_else(|| "-".to_owned())).collect();
-                format!("{l}\t{}", cells.join("\t"))
-            }
-        })
-        .collect();
-    let measure = measure.join("\n") + "\n";
     let committed = repo().join("Testing/esde-corpus");
     let file = format!("{}.tsv", today());
     let how = Recording::of(std::env::var("EMUSEN_ESDE_CORPUS").ok().as_deref());
     let (mut rises, mut rise_lines, mut notes) = (vec![], vec![], vec![]);
     let mut earlier: Vec<PathBuf> = std::fs::read_dir(&committed).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "tsv")).collect();
     earlier.sort();
-    if let Some(last) = earlier.last() {
-        let last_text = std::fs::read_to_string(last).unwrap();
-        let against = last.file_name().unwrap().to_string_lossy().into_owned();
-        for w in worsened(&last_text, &measure) {
-            let line = format!("against {against}: {w}");
-            match Change::parse(&w).filter(|_| is_rise(&w)) {
-                Some(c) => {
-                    rises.push(c);
-                    notes.push(format!("rise: {line}"));
-                    rise_lines.push(line);
-                }
-                None => failures.push(line),
+    let watched_cols = ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off", "mae_viewer_1280", "mae_viewer_1920", "viewer_off"];
+    if how == Recording::Off {
+        if let Some(last) = earlier.last() {
+            let last_text = std::fs::read_to_string(last).unwrap();
+            let against = last.file_name().unwrap().to_string_lossy().into_owned();
+            let mut lines = vec![format!("theme\t{}", watched_cols.join("\t"))];
+            for (theme, row) in &watched {
+                let cells: Vec<String> = watched_cols.iter().map(|c| row.get(*c).cloned().unwrap_or_else(|| "-".to_owned())).collect();
+                lines.push(format!("{theme}\t{}", cells.join("\t")));
             }
-        }
-        // A fall in a count, or a theme gone, is said in every mode; it fails a run that does not write, and a theme gone fails any.
-        for f in corpus::falls(&last_text, &measure) {
-            let line = format!("against {against}: {f}");
-            if how == Recording::Off || f.ends_with("missing from the new measure") {
-                failures.push(format!("{line}: a fall (EmuSen_Qt.md §4.4)"));
+            let watched_table = lines.join("\n") + "\n";
+            for w in worsened(&last_text, &watched_table) {
+                failures.push(format!("against {against}: {w}"));
             }
-            notes.push(format!("fall: {line}"));
-        }
-        // The ceiling falls with the figure: a lower one is committed by the run that measures it.
-        if how == Recording::Off {
-            for w in fell(&last_text, &measure) {
+            for w in fell(&last_text, &watched_table) {
                 failures.push(format!("against {against}: {w}: commit the lower measure (EMUSEN_ESDE_CORPUS=1)"));
             }
         }
-    }
-    if !report.all_load {
-        failures.push("a theme of the corpus does not load".to_owned());
-    }
-    std::fs::write(out.join("corpus.tsv"), &measure).unwrap();
-    // A rise fails unless the named ruling's settings account for it, theme by theme; then the run may write.
-    match &how {
-        Recording::Ruled(id) if !id.is_empty() => match Cover::read(&committed, id) {
-            Ok(cover) => failures.extend(cover.uncovered(&rises, &pairs).into_iter().map(|u| format!("not covered by {id}: {u}"))),
-            Err(e) => failures.push(e),
-        },
-        _ => failures.extend(rise_lines),
-    }
-    for n in &notes {
-        eprintln!("{n}");
-    }
-    if !record(&committed, &file, &measure, &notes, &failures, &how) {
-        if let Recording::Ruled(id) = &how {
-            failures.push(format!("EMUSEN_ESDE_CORPUS=ruled:{id}: nothing written ({} failures{})", failures.len(), if id.is_empty() { ", no ruling named" } else { "" }));
-        }
-    }
-    eprintln!("{}", measure.lines().last().unwrap_or_default());
-    eprintln!("{} failures\n{}", failures.len(), failures.join("\n"));
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
-}
-
-/// Watched figures that fell from `old` to `new` by more than a run's noise, so the committed ceiling would lag them.
-fn fell(old: &str, new: &str) -> Vec<String> {
-    let (old, new) = (corpus::rows(old), corpus::rows(new));
-    let mut out = vec![];
-    for (theme, now) in &new {
-        let Some(was) = old.get(theme) else { continue };
-        for c in ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "mae_viewer_1280", "mae_viewer_1920"] {
-            let num = |r: &BTreeMap<String, String>| r.get(c).and_then(|v| v.parse::<f64>().ok());
-            if let (Some(a), Some(b)) = (num(was), num(now)) {
-                if b < a - 0.05 {
-                    out.push(format!("{theme}: {c} {a} → {b}"));
+    } else {
+        let (measure, all_load, pairs) = measure_corpus(&watched);
+        if let Some(last) = earlier.last() {
+            let last_text = std::fs::read_to_string(last).unwrap();
+            let against = last.file_name().unwrap().to_string_lossy().into_owned();
+            for w in worsened(&last_text, &measure) {
+                let line = format!("against {against}: {w}");
+                match Change::parse(&w).filter(|_| is_rise(&w)) {
+                    Some(c) => {
+                        rises.push(c);
+                        notes.push(format!("rise: {line}"));
+                        rise_lines.push(line);
+                    }
+                    None => failures.push(line),
                 }
+            }
+            for f in corpus::falls(&last_text, &measure) {
+                let line = format!("against {against}: {f}");
+                if f.ends_with("missing from the new measure") {
+                    failures.push(format!("{line}: a fall (EmuSen_Qt.md §4.4)"));
+                }
+                notes.push(format!("fall: {line}"));
+            }
+        }
+        if !all_load {
+            failures.push("a theme of the corpus does not load".to_owned());
+        }
+        std::fs::write(out.join("corpus.tsv"), &measure).unwrap();
+        match &how {
+            Recording::Ruled(id) if !id.is_empty() => match Cover::read(&committed, id) {
+                Ok(cover) => failures.extend(cover.uncovered(&rises, &pairs).into_iter().map(|u| format!("not covered by {id}: {u}"))),
+                Err(e) => failures.push(e),
+            },
+            _ => failures.extend(rise_lines),
+        }
+        for n in &notes {
+            eprintln!("{n}");
+        }
+        if !record(&committed, &file, &measure, &notes, &failures, &how) {
+            if let Recording::Ruled(id) = &how {
+                failures.push(format!("EMUSEN_ESDE_CORPUS=ruled:{id}: nothing written ({} failures{})", failures.len(), if id.is_empty() { ", no ruling named" } else { "" }));
             }
         }
     }
-    out
-}
-
-#[test]
-fn a_row_that_worsens_is_named() {
-    let old = "theme\tloads\tunknown\tunsupported\tundrawn\tmae_system_1280\nA\tyes\t0\t5\t-\t1.00\nB\tyes\t0\t2\t-\t-\n";
-    let new = "theme\tloads\tunknown\tunsupported\tundrawn\tmae_system_1280\nA\tno\t0\t6\tvideo\t1.20\nB\tyes\t0\t2\t-\t3.00\nC\tno\t1\t9\t-\t-\n";
-    assert_eq!(worsened(old, new), ["A: no longer loads", "A: unsupported 5 → 6", "A: mae_system_1280 1 → 1.2", "A: video undrawn"]);
-    assert!(worsened(new, new).is_empty());
-    assert_eq!(fell(new, old), ["A: mae_system_1280 1.2 → 1"]);
-    assert!(fell(old, new).is_empty());
+    eprintln!("{} failures\n{}", failures.len(), failures.join("\n"));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]

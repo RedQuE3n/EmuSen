@@ -3,7 +3,7 @@
 
 use core::ffi::c_void;
 
-/// The image a feed drew: Vulkan's `VkImage` as an integer, its size, `VkFormat` and `VkImageLayout`.
+/// The image a feed drew: Vulkan's `VkImage`, its size, `VkFormat`, `VkImageLayout` and chain generation.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Picture {
@@ -12,6 +12,7 @@ pub struct Picture {
     pub height: u32,
     pub format: u32,
     pub layout: u32,
+    pub generation: u64,
 }
 
 /// A host's picture. `draw` is called on the render thread at the item's sync, 1 with `out` filled and anything else
@@ -90,8 +91,9 @@ mod tests {
 
     #[test]
     fn the_feed_and_the_picture_are_laid_out_as_the_header_declares() {
-        assert_eq!(size_of::<Picture>(), 24);
+        assert_eq!(size_of::<Picture>(), 32);
         assert_eq!(core::mem::offset_of!(Picture, layout), 20);
+        assert_eq!(core::mem::offset_of!(Picture, generation), 24);
         assert_eq!(size_of::<Feed>(), 3 * size_of::<usize>());
         assert_eq!(core::mem::offset_of!(Feed, swapped), 2 * size_of::<usize>());
     }

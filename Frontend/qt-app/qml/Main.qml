@@ -113,7 +113,7 @@ Window {
     onSaid: (words, attention, overGame) => { if (words.length > 0) notices.raise(words, attention, overGame) }
     signal settleFocus()
     onSettleFocus: {
-        if (program.splashShown)
+        if (program.splashShown || player.session.resumeAsked || launch.asking)
             return
         if (!program.bigScreen) {
             if (chosenTheme.active && chosenTheme.focus)
@@ -445,7 +445,8 @@ Window {
         }
         Connections {
             target: program
-            function onBigScreenChanged() { if (!program.bigScreen) desktopModel.refresh() }
+            enabled: !program.bigScreen
+            function onBigScreenChanged() { desktopModel.refresh() }
         }
         Connections {
             target: library
@@ -681,7 +682,7 @@ Window {
             platformLibrary: program.platformLibrary
             cores: library.cores
             builtIns: BuiltInThemes.manifests
-            themedSettings: program.bigScreen ? (program.themeHost?.settings ?? false) : (program.themeHost?.desktopSettings ?? false)
+            themedSettings: Kit.Tokens.coronaRim > 0 && (program.bigScreen ? (program.themeHost?.settings ?? false) : (program.themeHost?.desktopSettings ?? false))
             open: (program.bigScreen && (screens.shown === Screens.Settings || program.pauseShown)) || (!program.bigScreen && (desktopModel.view === 2 || program.gameShown || program.pauseShown))
             facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
             gamePads: pads.gamePads

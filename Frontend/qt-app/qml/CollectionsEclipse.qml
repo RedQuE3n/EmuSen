@@ -33,6 +33,7 @@ Kit.NormalizedCanvas {
     focus: !canvas.splashShown && canvas.visible
     onVisibleChanged: {
         if (canvas.visible && canvas.library) canvas.library.ensureMetadata()
+        if (canvas.visible) collectionsModel.refresh()
         if (canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
     }
     onActiveFocusChanged: if (canvas.activeFocus && !collectionsModel.dialogOpen && !collectionsModel.typingOpen) mainFocus.forceActiveFocus()
@@ -55,14 +56,17 @@ Kit.NormalizedCanvas {
 
     Connections {
         target: canvas.library
+        enabled: canvas.visible
         function onLoadingChanged() { collectionsModel.refresh() }
     }
     Connections {
         target: canvas.library
+        enabled: canvas.visible
         function onCollectionsChanged() { collectionsModel.refresh() }
     }
     Connections {
         target: canvas.library
+        enabled: canvas.visible
         function onMetadataChanged() { collectionsModel.refresh() }
     }
     Connections {

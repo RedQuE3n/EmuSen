@@ -71,7 +71,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_che
     assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Drawn), "each checked by its mapping case (§4.5.9)");
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Drawn));
     // Heard, not seen: proven by the test that hears it (R-20261112-26).
-    assert!(matches!(mapping::status("sound", "path"), Some(Mapped::Heard(t)) if t.starts_with("qt-app/tests/esde.rs::")));
+    assert!(matches!(mapping::status("sound", "path"), Some(Mapped::Heard(t)) if t.starts_with("qt-app/tests/reference_gpu/esde.rs::")));
     assert!(matches!(mapping::status("video", "audio"), Some(Mapped::Heard(t)) if t.starts_with("esde-qt/tests/theme_video.rs::")));
     assert!(mapping::is_supported("sound", "path") && !mapping::is_supported("video", "scanlines"));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));

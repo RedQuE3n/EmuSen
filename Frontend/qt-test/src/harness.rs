@@ -1,7 +1,7 @@
 //! The harness: one offscreen application per process, scenes loaded from a QML URL, the audit over their trees, and the pad through the router (EmuSen_Kit.md §7.9).
 
 use core::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use cxx_qt::casting::Upcast;
@@ -131,6 +131,25 @@ pub fn tests_only_lines(messages: &[String]) -> Vec<String> {
 /// The sizes the gate runs at, kit-core's, whose type rule holds its floor at each (EmuSen_Kit.md §7.121).
 pub use emusen_kit_core::audit::SIZES;
 
+static HARNESS_LIVE: AtomicBool = AtomicBool::new(false);
+
+struct HarnessSlot;
+
+impl HarnessSlot {
+    fn acquire() -> Result<Self, &'static str> {
+        if HARNESS_LIVE.swap(true, Ordering::SeqCst) {
+            return Err("Harness::new() cannot run concurrently in one process; use cargo nextest or -- --test-threads=1");
+        }
+        Ok(HarnessSlot)
+    }
+}
+
+impl Drop for HarnessSlot {
+    fn drop(&mut self) {
+        HARNESS_LIVE.store(false, Ordering::SeqCst);
+    }
+}
+
 /// The engine and the held clock are declared first so they drop before the application, as Qt requires.
 pub struct Harness {
     /// Qt's animation clock while the harness holds it (EmuSen_Kit.md §7.36).
@@ -139,6 +158,7 @@ pub struct Harness {
     app: cxx::UniquePtr<QGuiApplication>,
     created: Arc<AtomicUsize>,
     now_ms: i32,
+    _slot: HarnessSlot,
 }
 
 impl Default for Harness {
@@ -151,6 +171,7 @@ impl Harness {
     /// Offscreen, the software backend, Qt's log on the console (Fedora's Qt sends it to journald when stderr is no TTY) and the EmuSen style, set before Qt starts; one per process.
     /// Always one device pixel a window pixel, whatever the desktop's scale, so a grab is the size its state names.
     pub fn new() -> Harness {
+        let slot = HarnessSlot::acquire().unwrap_or_else(|e| panic!("{e}"));
         std::env::set_var("QT_ENABLE_HIGHDPI_SCALING", "0");
         std::env::set_var("QT_SCALE_FACTOR", "1");
         std::env::remove_var("QT_SCREEN_SCALE_FACTORS");
@@ -169,11 +190,11 @@ impl Harness {
         let app = QGuiApplication::new();
         let mut engine = QQmlApplicationEngine::new();
         let created = Arc::new(AtomicUsize::new(0));
-        let slot = Arc::clone(&created);
+        let slot_created = Arc::clone(&created);
         if let Some(engine) = engine.as_mut() {
-            engine.on_object_created(move |_, object, _| slot.store(object as usize, Ordering::SeqCst)).release();
+            engine.on_object_created(move |_, object, _| slot_created.store(object as usize, Ordering::SeqCst)).release();
         }
-        Harness { clock: None, engine, app, created, now_ms: 0 }
+        Harness { clock: None, engine, app, created, now_ms: 0, _slot: slot }
     }
 
     /// Loads a scene whose root is a Window and shows it at a size; the window must come up exposed and active.
@@ -964,4 +985,17 @@ impl Measures {
 /// The colours a state may paint: the variant's eighteen tokens.
 pub fn palette(variant: Variant) -> Vec<Colour> {
     ColourToken::ALL.iter().map(|t| tokens::colour(variant, *t)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HarnessSlot;
+
+    #[test]
+    fn harness_slot_rejects_concurrent_instances() {
+        let first = HarnessSlot::acquire().expect("initial slot acquisition succeeds");
+        assert!(HarnessSlot::acquire().is_err(), "concurrent Harness acquisition must fail");
+        drop(first);
+        assert!(HarnessSlot::acquire().is_ok(), "dropping restores single-instance slot");
+    }
 }

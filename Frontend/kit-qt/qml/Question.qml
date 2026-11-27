@@ -55,6 +55,7 @@ Kit.Sheet {
         choiceList.currentIndex = 0
         state.answered = false
     }
+    onOpened: choiceList.forceActiveFocus()
     onChosen: state.answered = true
     onClosed: if (!state.answered) state.pick(root.backIndex)
     Connections {

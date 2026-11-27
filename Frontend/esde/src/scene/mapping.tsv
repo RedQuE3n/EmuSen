@@ -473,4 +473,4 @@ clock	backgroundVerticalPadding	drawn
 clock	backgroundCornerRadius	drawn
 clock	format	drawn
 clock	opacity	drawn
-sound	path	heard:qt-app/tests/esde.rs::an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist
+sound	path	heard:qt-app/tests/reference_gpu/esde.rs::an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist

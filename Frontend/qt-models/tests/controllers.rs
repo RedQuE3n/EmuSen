@@ -559,12 +559,20 @@ fn qt_7_7_h8_no_controllers_page_shows_a_row_that_only_saves() {
 
 #[test]
 fn qt_7_7_h8_every_test_the_acts_list_names_is_in_the_tree() {
+    fn collect_rs(dir: &std::path::Path, out: &mut String) {
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_rs(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                out.push_str(&std::fs::read_to_string(path).unwrap());
+            }
+        }
+    }
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let mut sources = String::new();
     for dir in ["qt-models/tests", "qt-app/tests", "qt-endymion/tests"] {
-        for file in std::fs::read_dir(root.join(dir)).unwrap().flatten().filter(|f| f.path().extension().is_some_and(|e| e == "rs")) {
-            sources.push_str(&std::fs::read_to_string(file.path()).unwrap());
-        }
+        collect_rs(&root.join(dir), &mut sources);
     }
     for page in ["controllers", "players", "hotkeys"] {
         for (row, test) in acts(page) {

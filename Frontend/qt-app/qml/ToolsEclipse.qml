@@ -43,22 +43,27 @@ Kit.NormalizedCanvas {
 
     Connections {
         target: canvas.library
+        enabled: canvas.visible
         function onLoadingChanged() { toolsModel.refresh() }
     }
     Connections {
         target: canvas.library
+        enabled: canvas.visible
         function onToolSummariesChanged() { toolsModel.refresh() }
     }
     Connections {
         target: canvas.library
+        enabled: canvas.visible
         function onMetadataChanged() { toolsModel.refresh() }
     }
     Connections {
         target: canvas.settings
+        enabled: canvas.visible
         function onReadyChanged() { toolsModel.refresh() }
     }
     Connections {
         target: canvas.settings
+        enabled: canvas.visible
         function onSaved() { toolsModel.refresh() }
     }
 

@@ -45,13 +45,10 @@ gate-pad = ["dep:emusen-qt-test"]
 [dev-dependencies]
 emusen-crystal-client = { path = "../crystal-client" }
 emusen-client-fixture = { path = "../client-fixture" }
+emusen-qt-app-testlib = { path = "../qt-app-testlib" }
 emusen-qt-test.workspace = true
 # The theme profile the reference package is held to, as theme-check holds every theme.
 emusen-qml-rules.workspace = true
-
-[[test]]
-name = "eclipse_pad"
-path = "tests/eclipse_bindings.rs"
 
 [build-dependencies]
 cxx-qt-build.workspace = true

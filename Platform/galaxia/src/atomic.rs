@@ -5,10 +5,12 @@
 //! promise against power loss; EmuSen_RustPlatform.md §10.4 records why that was left as it is.
 
 use crate::files::file_exists;
+use std::io::{Read, Write};
 use std::path::Path;
-use std::io::Read;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub const TEMP_SUFFIX: &str = ".tmp";
+static NEXT_TEMP: AtomicU64 = AtomicU64::new(1);
 
 /// An error's words as a sentence, for a diagnostic that goes on to say what was done about it.
 pub fn words(error: &std::io::Error) -> String {
@@ -57,16 +59,26 @@ pub fn read_into(file: impl AsRef<Path>, out: &mut [u8]) -> Result<Option<usize>
     read().map(Some).map_err(|error| format!("{}: {} Treating it as absent.", file.display(), words(&error)))
 }
 
-/// The bytes written beside the file and renamed over it; the diagnostic when any step failed, the live file then being as it was.
+/// The bytes written to a unique synced temp file beside the target and renamed over it; the live file is unchanged on failure.
 pub fn write(file: impl AsRef<Path>, contents: &[u8]) -> Result<(), String> {
     let file = file.as_ref();
     let write = || -> std::io::Result<()> {
         if let Some(directory) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(directory)?;
         }
-        let temp = beside(file, TEMP_SUFFIX);
-        std::fs::write(&temp, contents)?;
-        std::fs::rename(&temp, file)
+        let seq = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+        let temp = beside(file, &format!(".{}.{seq}{TEMP_SUFFIX}", std::process::id()));
+        let wrote = (|| -> std::io::Result<()> {
+            let mut handle = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+            handle.write_all(contents)?;
+            handle.sync_all()?;
+            drop(handle);
+            std::fs::rename(&temp, file)
+        })();
+        if wrote.is_err() {
+            let _ = std::fs::remove_file(&temp);
+        }
+        wrote
     };
     write().map_err(|error| format!("{}: {} The previous file is unchanged.", file.display(), words(&error)))
 }
@@ -135,13 +147,38 @@ mod tests {
     }
 
     #[test]
-    fn the_bytes_go_to_the_temp_file_first_which_a_write_over_a_directory_strands() {
+    fn the_bytes_go_to_the_temp_file_first_leaving_a_directory_and_temps_clean_on_failure() {
         let temp = TempDir::new("atomic");
         let taken = temp.join("taken.srm");
         std::fs::create_dir_all(&taken).unwrap();
         assert!(write(&taken, b"bytes").is_err());
-        assert_eq!(std::fs::read(beside(&taken, TEMP_SUFFIX)).unwrap(), b"bytes");
         assert!(crate::files::directory_exists(&taken));
+        let leftover: Vec<_> = std::fs::read_dir(temp.path()).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().ends_with(TEMP_SUFFIX)).collect();
+        assert!(leftover.is_empty(), "failed write should clean up temp files");
+    }
+
+    #[test]
+    fn concurrent_writers_do_not_collide_on_temp_paths() {
+        let temp = TempDir::new("atomic-concurrent");
+        let file = temp.join("shared.srm");
+        let payloads = [vec![b'A'; 4096], vec![b'B'; 4096], vec![b'C'; 4096], vec![b'D'; 4096]];
+        let workers: Vec<_> = payloads
+            .iter()
+            .cloned()
+            .map(|data| {
+                let target = file.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..25 {
+                        write(&target, &data).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for w in workers {
+            w.join().unwrap();
+        }
+        let final_bytes = try_read(&file).unwrap().unwrap();
+        assert!(payloads.contains(&final_bytes), "final file must be one complete payload");
     }
 
     #[test]

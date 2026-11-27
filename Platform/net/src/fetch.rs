@@ -5,21 +5,20 @@
 
 use std::io::{self, Read};
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use rustls::pki_types::CertificateDer;
 use ureq::config::AutoHeaderValue;
 use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
-use ureq::unversioned::transport::NextTimeout;
-use ureq::unversioned::transport::{ConnectProxyConnector, Connector, TcpConnector};
-use ureq::{Agent, Body, Error, http};
+use ureq::unversioned::transport::{ConnectProxyConnector, Connector, NextTimeout, TcpConnector};
+use ureq::{Body, Error, http};
 
 use crate::failure::{Failure, Kind, LIMIT};
 use crate::location::{Refusal, Url};
 use crate::tls::{self, Tls};
-use crate::wire::{self, Record, Seen, Watch};
+use crate::wire::{self, Record, RecordGuard, Seen, Watch};
 
 /// What to fetch, and the one timeout over the whole call, redirects and body included (for [`fetch_into`], up to the
 /// answer's head).
@@ -211,6 +210,8 @@ impl Deadlines {
     }
 }
 
+static DEFAULT_CLIENT: OnceLock<ureq::Agent> = OnceLock::new();
+
 /// The request and its redirects, as `HttpClientHandler` follows them; the final answer whatever its status.
 fn exchange(request: &Request, deadlines: &Deadlines, progress: &Progress) -> Result<(http::Response<Body>, Record), Failure> {
     let mut url = Url::parse(&request.url).map_err(refused)?;
@@ -219,10 +220,16 @@ fn exchange(request: &Request, deadlines: &Deadlines, progress: &Progress) -> Re
     }
     let config = tls::config(&request.test_roots).map_err(|e| Failure::tls(e.to_string()))?;
     let record = Record::default();
-    let agent = agent(config, record.clone(), request.test_connect);
+    let custom;
+    let client = if request.test_roots.is_empty() && request.test_connect.is_none() {
+        DEFAULT_CLIENT.get_or_init(|| build_client(config))
+    } else {
+        custom = custom_client(config, record.clone(), request.test_connect);
+        &custom
+    };
     let mut redirects = 0;
     loop {
-        let response = send(&agent, &record, &url, &request.headers, deadlines, progress)?;
+        let response = send(client, &record, &url, &request.headers, deadlines, progress)?;
         let status = response.status().as_u16();
         if redirects < REDIRECTS && matches!(status, 300 | 301 | 302 | 303 | 307 | 308) {
             if let Some(next) = target(&response, &url) {
@@ -261,18 +268,26 @@ impl Resolver for Fixed {
     }
 }
 
-fn agent(tls: Arc<rustls::ClientConfig>, record: Record, test_connect: Option<SocketAddr>) -> Agent {
-    let config = Agent::config_builder()
+fn client_config() -> ureq::config::Config {
+    ureq::Agent::config_builder()
         .http_status_as_error(false)
         .max_redirects(0)
         .user_agent(AutoHeaderValue::None)
         .accept(AutoHeaderValue::None)
         .accept_encoding(AutoHeaderValue::None)
-        .build();
-    let connector = ().chain(ConnectProxyConnector::default()).chain(TcpConnector::default()).chain(Tls { config: tls }).chain(Watch { record });
+        .build()
+}
+
+fn build_client(tls: Arc<rustls::ClientConfig>) -> ureq::Agent {
+    let connector = ().chain(ConnectProxyConnector::default()).chain(TcpConnector::default()).chain(Tls { config: tls }).chain(Watch { record: None });
+    ureq::Agent::with_parts(client_config(), connector, DefaultResolver::default())
+}
+
+fn custom_client(tls: Arc<rustls::ClientConfig>, record: Record, test_connect: Option<SocketAddr>) -> ureq::Agent {
+    let connector = ().chain(ConnectProxyConnector::default()).chain(TcpConnector::default()).chain(Tls { config: tls }).chain(Watch { record: Some(record) });
     match test_connect {
-        Some(address) => Agent::with_parts(config, connector, Fixed(address)),
-        None => Agent::with_parts(config, connector, DefaultResolver::default()),
+        Some(address) => ureq::Agent::with_parts(client_config(), connector, Fixed(address)),
+        None => ureq::Agent::with_parts(client_config(), connector, DefaultResolver::default()),
     }
 }
 
@@ -281,7 +296,7 @@ fn seen(record: &Record) -> Seen {
 }
 
 /// One request and its answer's head, sent again while no byte answers it, as .NET does.
-fn send(agent: &Agent, record: &Record, url: &Url, headers: &[(String, String)], deadlines: &Deadlines, progress: &Progress) -> Result<http::Response<Body>, Failure> {
+fn send(client: &ureq::Agent, record: &Record, url: &Url, headers: &[(String, String)], deadlines: &Deadlines, progress: &Progress) -> Result<http::Response<Body>, Failure> {
     let mut retries = 0;
     loop {
         if progress.is_cancelled() {
@@ -290,7 +305,7 @@ fn send(agent: &Agent, record: &Record, url: &Url, headers: &[(String, String)],
         let whole = Deadlines::remaining(deadlines.whole).map_err(|_| deadlines.passed())?;
         let head = Deadlines::remaining(deadlines.head.map(|(at, _)| at)).map_err(|_| deadlines.passed())?;
         *record.lock().unwrap_or_else(|p| p.into_inner()) = Seen::default();
-        let mut builder = agent.get(url.request_text());
+        let mut builder = client.get(url.request_text());
         for (name, value) in headers {
             builder = builder.header(name.as_str(), value.as_str());
         }
@@ -298,6 +313,7 @@ fn send(agent: &Agent, record: &Record, url: &Url, headers: &[(String, String)],
         if head.is_some() {
             config = config.timeout_resolve(head).timeout_connect(head).timeout_send_request(head).timeout_recv_response(head);
         }
+        let _guard = RecordGuard::enter(record.clone());
         match config.build().call() {
             Ok(response) => return Ok(response),
             Err(error) => {

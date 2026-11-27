@@ -2,6 +2,7 @@
 //! carry the server's reason phrase and an invalid line as written, and it sends again a request no byte answered, so
 //! the client watches each connection's first line after a request (EmuSen_Backend.md §16.1).
 
+use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use ureq::Error;
@@ -20,16 +21,39 @@ pub struct Seen {
 
 pub type Record = Arc<Mutex<Seen>>;
 
+thread_local! {
+    static THREAD_RECORD: RefCell<Option<Record>> = const { RefCell::new(None) };
+}
+
+pub struct RecordGuard(Option<Record>);
+
+impl RecordGuard {
+    pub fn enter(record: Record) -> Self {
+        RecordGuard(THREAD_RECORD.with_borrow_mut(|slot| slot.replace(record)))
+    }
+}
+
+impl Drop for RecordGuard {
+    fn drop(&mut self) {
+        let prev = self.0.take();
+        THREAD_RECORD.with_borrow_mut(|slot| *slot = prev);
+    }
+}
+
 #[derive(Debug)]
 pub struct Watch {
-    pub record: Record,
+    pub record: Option<Record>,
 }
 
 impl<In: Transport> Connector<In> for Watch {
     type Out = Watched<In>;
 
     fn connect(&self, _: &ConnectionDetails, chained: Option<In>) -> Result<Option<Self::Out>, Error> {
-        Ok(chained.map(|inner| Watched { inner, record: self.record.clone(), watching: false }))
+        let (record, from_thread) = match &self.record {
+            Some(record) => (record.clone(), false),
+            None => (Record::default(), true),
+        };
+        Ok(chained.map(|inner| Watched { inner, record, from_thread, watching: false }))
     }
 }
 
@@ -37,6 +61,7 @@ impl<In: Transport> Connector<In> for Watch {
 pub struct Watched<T> {
     inner: T,
     record: Record,
+    from_thread: bool,
     watching: bool,
 }
 
@@ -48,6 +73,11 @@ impl<T: Transport> Transport for Watched<T> {
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
         if !self.watching {
             self.watching = true;
+            if self.from_thread {
+                if let Some(active) = THREAD_RECORD.with_borrow(|slot| slot.clone()) {
+                    self.record = active;
+                }
+            }
             *self.record.lock().unwrap_or_else(|p| p.into_inner()) = Seen { sent: true, ..Seen::default() };
         }
         self.inner.transmit_output(amount, timeout)

@@ -68,20 +68,9 @@ pub fn begin(db: &Connection) -> Result<(), Error> {
     Ok(())
 }
 
-/// Runs `work` in a transaction, committed when it succeeds and rolled back when it fails, as a disposed
-/// `SqliteTransaction` rolls back.
+/// Runs `work` in a transaction, committed when it succeeds and rolled back on error or panic.
 pub fn transaction<T>(db: &Connection, work: impl FnOnce(&Connection) -> Result<T, Error>) -> Result<T, Error> {
-    begin(db)?;
-    match work(db) {
-        Ok(value) => {
-            db.execute("COMMIT;")?;
-            Ok(value)
-        }
-        Err(e) => {
-            let _ = db.execute("ROLLBACK;");
-            Err(e)
-        }
-    }
+    db.in_transaction("PRAGMA read_uncommitted = 0; BEGIN IMMEDIATE;", work)
 }
 
 /// The first column of the first row, as `ExecuteScalar` gives it.
@@ -112,8 +101,8 @@ pub fn open(sqlite: Arc<Sqlite>, path: &str) -> Result<Connection, Error> {
         std::fs::create_dir_all(&folder).map_err(|e| Error::Io(format!("{}: {}", folder, e)))?;
     }
     let mut db = Connection::open(sqlite, path)?;
+    db.execute("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;")?;
     db.set_timeout(emusen_sqlite::COMMAND_TIMEOUT);
-    db.execute("PRAGMA foreign_keys = ON")?;
     migrate(&db)?;
     Ok(db)
 }

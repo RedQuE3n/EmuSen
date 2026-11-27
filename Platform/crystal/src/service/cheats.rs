@@ -507,17 +507,26 @@ fn answered(provider: &Provider, o: u32, result: (Option<Vec<u8>>, i64), room: O
     result
 }
 
-/// A session's cheat op, under its gate; `room` is the caller's buffer, none for a length query.
+/// A session's cheat op, under its gate for game-bound ops and unlocked for game-free ops; `room` is the caller's buffer.
 pub fn cheat_op(c: &Call, o: u32, raw: Raw, room: Option<usize>) -> Answer<(Option<Vec<u8>>, i64)> {
-    let result = c.gated(|e, _| {
-        let bytes = raw.bytes()?;
+    let result = if game_free(o) {
         c.target()?;
-        let (auto, explicit) = session_codecs(e);
-        let (d, m) = dm(e);
-        let spaces = m.map(|m| d.spaces(m).into_iter().map(|s| s.name).collect()).unwrap_or_default();
-        let mut cc = Cheats { rt: c.rt, provider: &c.s.provider, registry: &mut d.cheats, auto, explicit, spaces, read_only: c.read_only };
-        run(&mut cc, o, bytes)
-    })?;
+        let bytes = raw.bytes()?;
+        let (auto, explicit) = if matches!(o, op::CHT_PARSE | op::DB_PARSE) { c.read(|e, _| Ok(session_codecs(e)))? } else { (None, None) };
+        let mut fresh = CheatRegistry::new();
+        let mut cc = Cheats { rt: c.rt, provider: &c.s.provider, registry: &mut fresh, auto, explicit, spaces: Vec::new(), read_only: c.read_only };
+        run(&mut cc, o, bytes)?
+    } else {
+        c.gated(|e, _| {
+            let bytes = raw.bytes()?;
+            c.target()?;
+            let (auto, explicit) = session_codecs(e);
+            let (d, m) = dm(e);
+            let spaces = m.map(|m| d.spaces(m).into_iter().map(|s| s.name).collect()).unwrap_or_default();
+            let mut cc = Cheats { rt: c.rt, provider: &c.s.provider, registry: &mut d.cheats, auto, explicit, spaces, read_only: c.read_only };
+            run(&mut cc, o, bytes)
+        })?
+    };
     Ok(answered(&c.s.provider, o, result, room))
 }
 

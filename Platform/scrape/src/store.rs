@@ -428,24 +428,8 @@ pub struct Store {
     pub root: String,
 }
 
-fn begin(db: &Connection) -> Result<(), Error> {
-    db.execute("PRAGMA read_uncommitted = 0;")?;
-    db.execute("BEGIN IMMEDIATE;")?;
-    Ok(())
-}
-
 fn transaction<T>(db: &Connection, work: impl FnOnce(&Connection) -> Result<T, Error>) -> Result<T, Error> {
-    begin(db)?;
-    match work(db) {
-        Ok(v) => {
-            db.execute("COMMIT;")?;
-            Ok(v)
-        }
-        Err(e) => {
-            let _ = db.execute("ROLLBACK;");
-            Err(e)
-        }
-    }
+    db.in_transaction("PRAGMA read_uncommitted = 0; BEGIN IMMEDIATE;", work)
 }
 
 fn scalar_i64(db: &Connection, sql: &str, parameters: &[(&str, Bound)]) -> Result<Option<i64>, Error> {
@@ -483,6 +467,7 @@ impl Store {
 
     fn open_at(sqlite: Arc<Sqlite>, root: &str, path: &str) -> Result<Store, Error> {
         let mut db = Connection::open(sqlite, path)?;
+        db.execute("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;")?;
         db.set_timeout(emusen_sqlite::COMMAND_TIMEOUT);
         let mut version = scalar_i64(&db, "PRAGMA user_version", &[])?.unwrap_or(0);
         if version > SCHEMA_VERSION {
@@ -505,13 +490,32 @@ impl Store {
 
     // --- the queue ---
 
-    /// A game already queued keeps its place unless the new priority is higher; a new one goes to the back of its priority.
-    pub fn enqueue(&self, path: &str, system: &str, priority: Priority) -> Result<bool, Error> {
-        Ok(self.write(
+    fn enqueue_in(db: &Connection, path: &str, system: &str, priority: Priority) -> Result<bool, Error> {
+        Ok(db.query(
             "INSERT INTO scrape_queue (path, system, priority, seq) VALUES ($path, $system, $priority, (SELECT COALESCE(MAX(seq), 0) + 1 FROM scrape_queue))
 ON CONFLICT(path) DO UPDATE SET priority = MIN(priority, excluded.priority), next_try = CASE WHEN excluded.priority < priority THEN NULL ELSE next_try END",
             &[("$path", Bound::Text(path)), ("$system", Bound::Text(system)), ("$priority", Bound::Integer(priority as i64))],
+            |_| {},
         )? > 0)
+    }
+
+    /// A game already queued keeps its place unless the new priority is higher; a new one goes to the back of its priority.
+    pub fn enqueue(&self, path: &str, system: &str, priority: Priority) -> Result<bool, Error> {
+        Self::enqueue_in(&self.db, path, system, priority)
+    }
+
+    /// Replaces the queue in one transaction, optionally clearing unknown or error entries for each game.
+    pub fn replace_queue(&self, games: &[(String, String)], priority: Priority, forget_unfound: bool) -> Result<(), Error> {
+        transaction(&self.db, |db| {
+            db.execute("DELETE FROM scrape_queue")?;
+            for (path, system) in games {
+                if forget_unfound {
+                    Self::forget_unfound_in(db, path)?;
+                }
+                Self::enqueue_in(db, path, system, priority)?;
+            }
+            Ok(())
+        })
     }
 
     /// The first due game by priority then arrival, skipping those another worker holds.
@@ -551,13 +555,18 @@ ON CONFLICT(path) DO UPDATE SET priority = MIN(priority, excluded.priority), nex
         Ok(())
     }
 
-    /// "Scrape this game" asks again even where ScreenScraper once had nothing: an Unknown or Error answer is forgotten.
-    pub fn forget_unfound(&self, path: &str) -> Result<(), Error> {
-        self.write(
+    fn forget_unfound_in(db: &Connection, path: &str) -> Result<(), Error> {
+        db.query(
             &format!("DELETE FROM scrape_game WHERE status <> 'Found' AND EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND {})", joined("scrape_game")),
             &[("$path", Bound::Text(path))],
+            |_| {},
         )?;
         Ok(())
+    }
+
+    /// "Scrape this game" asks again even where ScreenScraper once had nothing: an Unknown or Error answer is forgotten.
+    pub fn forget_unfound(&self, path: &str) -> Result<(), Error> {
+        Self::forget_unfound_in(&self.db, path)
     }
 
     pub fn queue_length(&self) -> Result<i64, Error> {
@@ -871,5 +880,25 @@ ON CONFLICT(day) DO UPDATE SET requests = excluded.requests, ko = excluded.ko, m
             ],
         )?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disk_store_opens_in_wal_mode_and_replaces_queue_in_transaction() {
+        let dir = std::env::temp_dir().join(format!("scrape-store-wal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = Store::open(emusen_sqlite::for_tests(), dir.to_str().unwrap()).unwrap();
+        let mode = scalar_text(&store.db, "PRAGMA journal_mode;", &[]).unwrap();
+        assert_eq!(mode.as_deref(), Some("wal"));
+        store.replace_queue(&[("/roms/a.sfc".into(), "snes".into()), ("/roms/b.sfc".into(), "snes".into())], Priority::Shown, false).unwrap();
+        assert_eq!(store.queue().unwrap().len(), 2);
+        store.replace_queue(&[("/roms/a.sfc".into(), "snes".into())], Priority::Shown, true).unwrap();
+        assert_eq!(store.queue().unwrap().len(), 1);
+        drop(store);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

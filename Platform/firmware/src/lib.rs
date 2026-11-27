@@ -8,7 +8,7 @@ use std::path::Path;
 use serde_json::Value;
 use emusen_galaxia::setting_folders::{self, FolderValue};
 use emusen_galaxia::rom_hash;
-use emusen_galaxia::files::file_exists;
+use emusen_galaxia::files::{file_exists, is_relative_inside};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::SystemTime;
@@ -166,11 +166,17 @@ fn by_content(request: &Request, folder: &str) -> Option<(String, String)> {
 fn search<T: Take>(request: &Request, folders: &[String]) -> Option<(String, Vec<String>, Vec<T::Part>, bool)> {
     for folder in folders {
         for name in std::iter::once(&request.file).chain(&request.alternates) {
+            if !is_relative_inside(name) {
+                continue;
+            }
             if let Some(part) = T::exact(&Path::new(folder).join(name).to_string_lossy().into_owned(), request.size) {
                 return Some((folder.clone(), vec![name.clone()], vec![part], false));
             }
         }
         for form in request.parts.iter().filter(|f| f.len() >= 2) {
+            if !form.iter().all(|name| is_relative_inside(name)) {
+                continue;
+            }
             let parts: Option<Vec<T::Part>> = form.iter().map(|name| T::any(&Path::new(folder).join(name).to_string_lossy().into_owned())).collect();
             let Some(parts) = parts else { continue };
             if request.size > 0 && parts.iter().map(T::len).sum::<u64>() != request.size as u64 {
@@ -199,20 +205,29 @@ pub fn locate(request: &Request, folders: &[String]) -> Option<Located> {
 
 /// The first folder holding a file of the canonical name and the wrong size, for the overview's note.
 pub fn wrong_size_in(request: &Request, folders: &[String]) -> Option<String> {
+    if !is_relative_inside(&request.file) {
+        return None;
+    }
     folders.iter().find(|f| length(&Path::new(f).join(&request.file).to_string_lossy().into_owned()).is_some_and(|n| n != request.size as u64)).cloned()
 }
 
-/// `FirmwareLibrary.PathFor`: where an install writes.
-pub fn path_for(request: &Request, store: &str) -> String {
-    Path::new(store).join(&request.file).to_string_lossy().into_owned()
+/// `FirmwareLibrary.PathFor`: where an install writes, refusing traversal outside `store`.
+pub fn path_for(request: &Request, store: &str) -> Result<String, String> {
+    if !is_relative_inside(&request.file) {
+        return Err(format!("firmware file {:?} escapes store {}", request.file, store));
+    }
+    Ok(Path::new(store).join(&request.file).to_string_lossy().into_owned())
 }
 
 /// `FirmwareLibrary.Install`: the picked file copied into the store under the canonical name when its size is right;
 /// false without words when it is not, the words when the folder or the file could not be written.
 pub fn install(request: &Request, source: &str, store: &str) -> Result<bool, String> {
+    let target = path_for(request, store)?;
     let Some(bytes) = Bytes::exact(source, request.size) else { return Ok(false) };
-    std::fs::create_dir_all(store).map_err(|e| format!("{}: {}", store, e))?;
-    std::fs::write(&path_for(request, store), &bytes).map_err(|e| format!("{}: {e}", path_for(request, store)))?;
+    if let Some(parent) = Path::new(&target).parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
+    }
+    std::fs::write(&target, &bytes).map_err(|e| format!("{target}: {e}"))?;
     Ok(true)
 }
 
@@ -469,5 +484,18 @@ mod tests {
     fn a_request_reads_from_its_json() {
         let v = serde_json::from_str::<Value>(r#"{"file":"a.rom","size":8,"alternates":["b"],"parts":[["c","d"]],"md5":["e"]}"#).unwrap();
         assert_eq!(request_from(&v).unwrap(), Request { file: "a.rom".into(), size: 8, alternates: vec!["b".into()], parts: vec![vec!["c".into(), "d".into()]], md5: vec!["e".into()] });
+    }
+
+    #[test]
+    fn path_traversal_in_firmware_file_is_refused() {
+        let d = Dir::new("fw-escape");
+        let (pick, store) = (d.sub("pick"), d.sub("store"));
+        put(&pick, "bios.bin", 64, 9);
+        for bad in ["../escape.rom", "/tmp/abs.rom", "sub/../../escape.rom", "", "C:drive.rom"] {
+            let req = Request { file: bad.into(), size: 64, ..Request::default() };
+            assert!(path_for(&req, &store).is_err(), "{bad}");
+            assert!(install(&req, &format!("{pick}/bios.bin"), &store).is_err(), "{bad}");
+        }
+        assert!(!d.0.join("escape.rom").exists());
     }
 }

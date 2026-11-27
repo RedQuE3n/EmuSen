@@ -114,6 +114,9 @@ unsafe extern "C" fn io_slot(ctx: *mut c_void, state: *mut *mut c_void, release:
         return status::NULL;
     }
     let call = unsafe { context(ctx) };
+    if call.slots.is_null() {
+        return status::NULL;
+    }
     let slots = unsafe { &mut *call.slots };
     unsafe {
         if (*state).is_null() {
@@ -124,6 +127,10 @@ unsafe extern "C" fn io_slot(ctx: *mut c_void, state: *mut *mut c_void, release:
                 }
                 None => *release = None,
             }
+        } else if let Some(existing) = slots.get_mut(&call.registration)
+            && existing.state == *state
+        {
+            existing.release = *release;
         } else {
             slots.insert(call.registration, Slot { state: *state, release: *release });
         }
@@ -261,7 +268,7 @@ fn failed(context: &CallContext, what: &str, code: i32) -> String {
 pub(crate) fn run(interp: &mut Interp, world: &mut World, registration: usize, command: &str, args: &[String], stdin: Option<&str>) -> Result<Outcome, String> {
     let run = world.hosts[registration].run;
     let mut result = new_result();
-    let (code, context) = call(interp, world, Callee::Host(registration), command, args, stdin, |ctx, call| unsafe { run(ctx, call, &mut result as *mut dianash_host_result as *mut dianash_result) });
+    let (code, context) = call(interp, world, Callee::Host(registration), command, args, stdin, |ctx, call| unsafe { run(ctx, call, &mut result) });
     if code < 0 {
         return Err(failed(&context, command, code));
     }
@@ -305,16 +312,17 @@ pub(crate) fn kill(interp: &mut Interp, world: &mut World, claimant: Kind, id: &
     let (code, context) = match claimant {
         Kind::Module(index) => {
             let module = world.modules[index];
-            call(interp, world, callee(claimant), "kill", &args, None, |_, call| unsafe {
-                dianash_module::kill_module(module, call, id.as_ptr(), id.len(), &mut result as *mut dianash_host_result as *mut dianash_result)
-            })
+            let mut mod_result = dianash_result { size: std::mem::size_of::<dianash_result>() as u32, exit_status: 0 };
+            let res = call(interp, world, callee(claimant), "kill", &args, None, |_, call| unsafe {
+                dianash_module::kill_module(module, call, id.as_ptr(), id.len(), &mut mod_result)
+            });
+            result.exit_status = mod_result.exit_status;
+            res
         }
         _ => {
             let Kind::Host(registration) = claimant else { return Ok(None) };
             let Some(kill) = world.hosts[registration].kill else { return Ok(None) };
-            call(interp, world, callee(claimant), "kill", &args, None, |ctx, call| unsafe {
-                kill(ctx, call, id.as_ptr(), id.len(), &mut result as *mut dianash_host_result as *mut dianash_result)
-            })
+            call(interp, world, callee(claimant), "kill", &args, None, |ctx, call| unsafe { kill(ctx, call, id.as_ptr(), id.len(), &mut result) })
         }
     };
     match code {
@@ -333,4 +341,41 @@ pub(crate) fn run_module(interp: &mut Interp, world: &mut World, index: usize, c
         return Err(failed(&context, command, code));
     }
     Ok(Outcome { output: context.stream(false), errors: context.stream(true), status: result.exit_status, request: None })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn io_slot_ignores_null_slots_and_re_storing_same_pointer_does_not_release() {
+        let mut slots = HashMap::new();
+        let cancel = AtomicBool::new(false);
+        let mut ctx_null = CallContext {
+            written: Vec::new(),
+            sandbox: Sandbox::default(),
+            slots: std::ptr::null_mut(),
+            registration: 1,
+            cancel: &cancel,
+            started: None,
+            budget: Duration::from_secs(1),
+            environment: HashMap::new(),
+            interactive: false,
+        };
+        static RELEASED: AtomicUsize = AtomicUsize::new(0);
+        unsafe extern "C" fn count_release(_: *mut c_void) {
+            RELEASED.fetch_add(1, Ordering::SeqCst);
+        }
+        let mut ptr = 0x1234usize as *mut c_void;
+        let mut rel: Option<ReleaseFn> = Some(count_release);
+        assert_eq!(unsafe { io_slot(&mut ctx_null as *mut _ as *mut c_void, &mut ptr, &mut rel) }, status::NULL);
+
+        ctx_null.slots = &mut slots;
+        assert_eq!(unsafe { io_slot(&mut ctx_null as *mut _ as *mut c_void, &mut ptr, &mut rel) }, status::OK);
+        assert_eq!(unsafe { io_slot(&mut ctx_null as *mut _ as *mut c_void, &mut ptr, &mut rel) }, status::OK);
+        assert_eq!(RELEASED.load(Ordering::SeqCst), 0);
+        drop(slots);
+        assert_eq!(RELEASED.load(Ordering::SeqCst), 1);
+    }
 }

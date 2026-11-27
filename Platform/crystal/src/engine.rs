@@ -483,11 +483,10 @@ impl Engine {
         let package = self.package.clone();
         let key = self.save_key.clone();
         let own = |b: &BatteryFile| BatterySave::open(tree, at, &console, disabled, &b.suffix, package.as_deref(), key.as_deref());
-        let placement = media::place(tree, &console, system.as_ref(), &self.media_choices, &stem, &own, disabled);
-        let save_for = |b: &BatteryFile| placement.file(b.which).cloned().unwrap_or_else(|| BatterySave::open(tree, at, &console, disabled, &b.suffix, package.as_deref(), key.as_deref()));
+        let mut placement = media::place(tree, &console, system.as_ref(), &self.media_choices, &stem, &own, disabled);
         let saves: Vec<(u32, BatterySave)> = match system.as_ref().and_then(|s| s.battery.as_ref()) {
-            Some(listed) => listed.iter().map(|b| (b.which, save_for(b))).collect(),
-            None => vec![(0, BatterySave::open(tree, at, &console, disabled, emusen_galaxia::saves::SRAM_EXTENSION, package.as_deref(), key.as_deref()))],
+            Some(listed) => listed.iter().map(|b| (b.which, placement.file(b.which).cloned().unwrap_or_else(|| placement.lock_save(own(b), &stem, "battery save")))).collect(),
+            None => vec![(0, placement.lock_save(BatterySave::open(tree, at, &console, disabled, emusen_galaxia::saves::SRAM_EXTENSION, package.as_deref(), key.as_deref()), &stem, "battery save"))],
         };
         // The system the file was routed to goes beside the image, so a core of two systems makes that one (EmuSen_CoreAPI.md §6.40).
         let routed = system.as_ref().map(|s| s.id.clone());
@@ -498,7 +497,11 @@ impl Engine {
         let wanted: Vec<(u32, BatterySave)> = mi
             .battery
             .iter()
-            .map(|b| (b.which, save_for(&BatteryFile { which: b.which, suffix: b.suffix.clone(), kind: b.kind, medium: None, label: None, port: None })))
+            .map(|b| {
+                let bf = BatteryFile { which: b.which, suffix: b.suffix.clone(), kind: b.kind, medium: None, label: None, port: None };
+                let save = placement.file(bf.which).cloned().unwrap_or_else(|| placement.lock_save(own(&bf), &stem, "battery save"));
+                (b.which, save)
+            })
             .collect();
         if wanted.iter().any(|(w, s)| s.read().is_some() && !saves.iter().any(|(sw, ss)| sw == w && ss.path == s.path)) {
             drop(machine);
@@ -907,14 +910,15 @@ impl Engine {
         let Some(m) = self.machine.as_ref() else { return Ok(0) };
         self.shape = m.frame_info().map_err(|s| Refused::fault(format!("{} could not describe its picture: {}.", self.display_name, m.words(s as i64))))?;
         let (width, height) = (self.shape.width.max(0) as usize, self.shape.height.max(0) as usize);
-        let stride = if self.shape.stride == 0 { width * 4 } else { self.shape.stride.max(0) as usize };
+        let row = width.checked_mul(4).ok_or_else(|| Refused::fault("picture width overflow".into()))?;
+        let stride = if self.shape.stride == 0 { row } else { self.shape.stride.max(0) as usize };
         let repeat = if repeat_rows { self.shape.row_repeat.max(1) as usize } else { 1 };
-        let bytes = width * 4 * height * repeat;
+        let bytes = row.checked_mul(height).and_then(|b| b.checked_mul(repeat)).ok_or_else(|| Refused::fault("picture size overflow".into()))?;
         if into.len() < bytes {
             return Ok(bytes);
         }
         let held = self.shape.bytes.max(0) as usize;
-        if repeat == 1 && stride == width * 4 && held <= into.len() {
+        if repeat == 1 && stride == row && held <= into.len() {
             let _ = m.frame_copy(&mut into[..held]);
             return Ok(bytes);
         }
@@ -922,13 +926,7 @@ impl Engine {
             self.frame_scratch.resize(held, 0);
         }
         let _ = m.frame_copy(&mut self.frame_scratch[..held]);
-        let row = width * 4;
-        for y in 0..height {
-            let from = &self.frame_scratch[y * stride..y * stride + row];
-            for r in 0..repeat {
-                into[(y * repeat + r) * row..(y * repeat + r + 1) * row].copy_from_slice(from);
-            }
-        }
+        copy_strided_rows(&self.frame_scratch[..held], into, row, height, stride, repeat)?;
         Ok(bytes)
     }
 
@@ -1180,7 +1178,10 @@ impl Engine {
         }
         let disc = match &self.set {
             Some(set) if (index as usize) < set.count() => set.open(tree, index as usize, is_image),
-            _ => DiscSet::of(tree, &self.discs[index as usize], is_image).and_then(|s| s.open(tree, 0, is_image)),
+            _ => {
+                let path = self.discs.get(index as usize).ok_or_else(|| Refused { status: emusen_session_service::abi::status::BAD_ARGUMENT, words: format!("no disc at index {index}") })?;
+                DiscSet::of(tree, path, is_image).and_then(|s| s.open(tree, 0, is_image))
+            }
         }
         .map_err(Refused::io)?;
         let lent = if self.lends() { 2 } else { 0 };
@@ -1385,5 +1386,42 @@ impl Drop for Engine {
     fn drop(&mut self) {
         self.release_machine();
         self.loans.clear();
+    }
+}
+
+fn copy_strided_rows(src: &[u8], into: &mut [u8], row: usize, height: usize, stride: usize, repeat: usize) -> Result<(), Refused> {
+    if height == 0 || row == 0 {
+        return Ok(());
+    }
+    if stride < row {
+        return Err(Refused::fault(format!("picture stride {stride} is narrower than row {row}")));
+    }
+    let needed_src = (height - 1).checked_mul(stride).and_then(|o| o.checked_add(row)).ok_or_else(|| Refused::fault("picture source overflow".into()))?;
+    if src.len() < needed_src {
+        return Err(Refused::fault(format!("picture buffer too short: {} < {needed_src}", src.len())));
+    }
+    let needed_dst = row.checked_mul(height).and_then(|b| b.checked_mul(repeat)).ok_or_else(|| Refused::fault("picture destination overflow".into()))?;
+    if into.len() < needed_dst {
+        return Err(Refused::fault(format!("destination buffer too short: {} < {needed_dst}", into.len())));
+    }
+    for y in 0..height {
+        let from = &src[y * stride..y * stride + row];
+        for r in 0..repeat {
+            into[(y * repeat + r) * row..(y * repeat + r + 1) * row].copy_from_slice(from);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn copy_strided_rows_rejects_short_source_or_narrow_stride() {
+        let mut dst = vec![0u8; 32];
+        assert!(copy_strided_rows(&[1u8; 16], &mut dst, 8, 2, 4, 1).is_err());
+        assert!(copy_strided_rows(&[1u8; 12], &mut dst, 8, 2, 8, 1).is_err());
+        assert!(copy_strided_rows(&[1u8; 16], &mut dst, 8, 2, 8, 2).is_ok());
     }
 }

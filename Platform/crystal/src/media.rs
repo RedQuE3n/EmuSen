@@ -114,7 +114,8 @@ impl SaveMedium {
     }
 
     pub fn path_of(&self, tree: &Tree, name: &str) -> String {
-        self.folder(tree).join(format!("{name}{}", self.extension)).to_string_lossy().into_owned()
+        let safe = if is_name(name) && emusen_galaxia::files::is_relative_inside(name) { name.to_string() } else { self.default_name(0) };
+        self.folder(tree).join(format!("{safe}{}", self.extension)).to_string_lossy().into_owned()
     }
 
     /// The mode a medium has when nothing is stored: a console's own memory shared, as the console does; a removable one
@@ -393,6 +394,23 @@ pub fn media_for(catalog: &crate::catalog::Catalog, console: &str) -> Vec<SaveMe
 pub fn cards_op(catalog: &crate::catalog::Catalog, tree: &Tree, op: u32, args: &str) -> Result<String, Refused> {
     let doc = serde_json::from_str::<serde_json::Value>(if args.is_empty() { "{}" } else { args }).map_err(|e| bad(format!("the argument is not JSON: {e}")))?;
     let text = |k: &str| doc.get(k).and_then(|v| v.as_str()).map(str::to_string).ok_or_else(|| bad(format!("\"{k}\" must be given as a string")));
+    let saves_root = emusen_galaxia::path_key::key(tree.saves());
+    let enclosed = |p: &str| -> Result<String, Refused> {
+        if p.is_empty() || p.contains('\0') || Path::new(p).components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return Err(bad(format!("card path {p:?} is outside the saves folder")));
+        }
+        let norm = emusen_galaxia::path_key::key(p);
+        if !norm.starts_with(&saves_root) || norm == saves_root {
+            return Err(bad(format!("card path {p:?} is outside the saves folder")));
+        }
+        if let Ok(real_root) = std::fs::canonicalize(&saves_root)
+            && let Some(real_target) = std::fs::canonicalize(&norm).ok().or_else(|| norm.parent().and_then(|d| std::fs::canonicalize(d).ok()))
+            && !real_target.starts_with(&real_root)
+        {
+            return Err(bad(format!("card path {p:?} escapes the saves folder")));
+        }
+        Ok(p.to_string())
+    };
     let media = ByExtension { discovery: catalog.discovery };
     let manager = emusen_savemedia::Manager::new(&media);
     use crate::abi as a;
@@ -413,7 +431,7 @@ pub fn cards_op(catalog: &crate::catalog::Catalog, tree: &Tree, op: u32, args: &
             Ok(j.finish())
         }
         a::CARDS_OPEN => {
-            let at = text("path")?;
+            let at = enclosed(&text("path")?)?;
             let card = manager.open(&at).map_err(thrown)?.ok_or_else(|| (emusen_session_service::abi::status::ABSENT, format!("{} is of no medium a system pack names", Path::new(&at).file_name().unwrap_or_default().to_string_lossy())))?;
             let mut j = Json::new();
             j.begin_object()
@@ -433,20 +451,20 @@ pub fn cards_op(catalog: &crate::catalog::Catalog, tree: &Tree, op: u32, args: &
             j.end_array().end_object();
             Ok(j.finish())
         }
-        a::CARDS_COPY => done(manager.copy_save(&text("from")?, &text("save")?, &text("to")?)),
-        a::CARDS_MOVE => done(manager.move_save(&text("from")?, &text("save")?, &text("to")?)),
-        a::CARDS_DELETE => done(manager.delete_save(&text("card")?, &text("save")?)),
+        a::CARDS_COPY => done(manager.copy_save(&enclosed(&text("from")?)?, &text("save")?, &enclosed(&text("to")?)?)),
+        a::CARDS_MOVE => done(manager.move_save(&enclosed(&text("from")?)?, &text("save")?, &enclosed(&text("to")?)?)),
+        a::CARDS_DELETE => done(manager.delete_save(&enclosed(&text("card")?)?, &text("save")?)),
         a::CARDS_IMPORT => {
-            let to = text("to")?;
+            let to = enclosed(&text("to")?)?;
             let from: Vec<String> = match doc.get("from") {
-                Some(serde_json::Value::Array(items)) => items.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect(),
+                Some(serde_json::Value::Array(items)) => items.iter().map(|v| enclosed(v.as_str().unwrap_or(""))).collect::<Result<_, _>>()?,
                 _ => return Err(bad("\"from\" must be given as a list of paths".to_string())),
             };
             done(manager.import(&to, &from))
         }
-        a::CARDS_NEW => Ok(outcome_json(&manager.new_card(&text("path")?))),
-        a::CARDS_DUPLICATE => Ok(outcome_json(&manager.duplicate(&text("from")?, &text("to")?))),
-        a::CARDS_RENAME => done(manager.rename(&text("from")?, &text("to")?)),
+        a::CARDS_NEW => Ok(outcome_json(&manager.new_card(&enclosed(&text("path")?)?))),
+        a::CARDS_DUPLICATE => Ok(outcome_json(&manager.duplicate(&enclosed(&text("from")?)?, &enclosed(&text("to")?)?))),
+        a::CARDS_RENAME => done(manager.rename(&enclosed(&text("from")?)?, &enclosed(&text("to")?)?)),
         _ => Err((emusen_session_service::abi::status::NOT_SUPPORTED, format!("no cards op {op} in {}.{}", crate::abi::MAJOR, crate::abi::MINOR))),
     }
 }
@@ -473,6 +491,25 @@ impl Placement {
         match self.files.iter_mut().find(|(w, _)| *w == which) {
             Some(slot) => slot.1 = save,
             None => self.files.push((which, save)),
+        }
+    }
+
+    pub fn lock_save(&mut self, save: crate::battery::BatterySave, holder: &str, label: &str) -> crate::battery::BatterySave {
+        let Some(at) = save.path.clone() else { return save };
+        let key = emusen_galaxia::path_key::key(&at);
+        if self.locks.iter().any(|l| l.path == key) {
+            return save;
+        }
+        match emusen_galaxia::medium_lock::try_take(&at, holder, true) {
+            Some(held) => {
+                self.locks.push(held);
+                save
+            }
+            None => {
+                let by = emusen_galaxia::medium_lock::holder_of(&at).unwrap_or_else(|| "another program".to_string());
+                self.notices.push(format!("{} is in use by {by}; {label} is disabled until it is free.", Path::new(&at).file_name().unwrap_or_default().to_string_lossy()));
+                crate::battery::BatterySave::NONE
+            }
         }
     }
 }
@@ -516,12 +553,7 @@ pub fn place(
                     continue;
                 }
             }
-            let save = own(&file);
-            if let Some(at) = &save.path
-                && let Some(held) = emusen_galaxia::medium_lock::try_take(at, holder, true)
-            {
-                placed.locks.push(held);
-            }
+            let save = placed.lock_save(own(&file), holder, &medium.slot_label(slot));
             placed.set(file.which, save);
         }
     }
@@ -530,6 +562,10 @@ pub fn place(
 
 #[allow(clippy::too_many_arguments)]
 fn apart(tree: &Tree, medium: &SaveMedium, name: &str, slot: usize, holder: &str, taken: &mut Vec<String>, placed: &mut Placement, disabled: bool, adopts: bool) -> Option<crate::battery::BatterySave> {
+    if !is_name(name) || !emusen_galaxia::files::is_relative_inside(name) {
+        placed.notices.push(format!("{name:?} is not a valid card name; {} keeps the game's own {}.", medium.slot_label(slot), emusen_savemedia::in_text(&medium.noun)));
+        return None;
+    }
     let key = medium.path_of(tree, name);
     let without_module = medium.entry.as_ref().is_none_or(|e| e.module.is_none());
     let adopted = if adopts && medium.is_console() && without_module && !emusen_galaxia::files::file_exists(&key) { newest_own(tree, medium, slot) } else { None };
@@ -608,5 +644,37 @@ mod tests {
         assert!(said.borrow().iter().any(|l| l.contains(&*second.to_string_lossy()) && l.contains("untouched")));
         drop(placed);
         let _ = std::fs::remove_dir_all(tree.home());
+    }
+
+    #[test]
+    fn path_of_rejects_traversal_and_locked_per_game_save_falls_back_to_none() {
+        let t = tree("locked");
+        let sys = system();
+        let m = &media_of("TEST", Some(&sys))[0];
+        let safe_path = m.path_of(&t, "../escape");
+        assert!(Path::new(&safe_path).starts_with(m.folder(&t)), "{safe_path}");
+
+        let save = BatterySave::open(&t, "Game.rom", "TEST", false, ".mem", None, None);
+        let own_path = save.path.clone().unwrap();
+        let _excl = emusen_galaxia::medium_lock::try_take(&own_path, "other", false).unwrap();
+        let choices = vec![(m.id.clone(), Choice { mode: PER_GAME.to_string(), names: Vec::new() })];
+        let placed = place(&t, "TEST", Some(&sys), &choices, "Game", &|_| save.clone(), false);
+        assert_eq!(placed.file(2), Some(&BatterySave::NONE));
+        assert!(!placed.notices.is_empty());
+        let _ = std::fs::remove_dir_all(t.home());
+    }
+
+    #[test]
+    fn cards_op_refuses_paths_outside_saves_folder() {
+        let t = tree("cards-escape");
+        let discovery = emusen_core_host::Discovery::scan(&[], false);
+        let catalog = crate::catalog::Catalog::new(&discovery);
+        let outside = t.home().join("outside.mcr");
+        let err = cards_op(&catalog, &t, crate::abi::CARDS_NEW, &serde_json::json!({ "path": outside }).to_string()).unwrap_err();
+        assert_eq!(err.0, emusen_session_service::abi::status::BAD_ARGUMENT);
+        let traversal = t.saves().join("TEST/../../outside.mcr");
+        let err = cards_op(&catalog, &t, crate::abi::CARDS_OPEN, &serde_json::json!({ "path": traversal }).to_string()).unwrap_err();
+        assert_eq!(err.0, emusen_session_service::abi::status::BAD_ARGUMENT);
+        let _ = std::fs::remove_dir_all(t.home());
     }
 }

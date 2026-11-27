@@ -272,6 +272,27 @@ fn the_listing_with_unpackaged_names_every_game_no_package_claims_with_its_size(
     assert_eq!(listing(&t.at("library")), before, "listing left the library as it was");
 }
 
+#[cfg(unix)]
+struct ReadOnlyDir(PathBuf);
+
+#[cfg(unix)]
+impl ReadOnlyDir {
+    fn new(path: impl AsRef<Path>) -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        let path = path.as_ref().to_path_buf();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o555)).unwrap();
+        Self(path)
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ReadOnlyDir {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+    }
+}
+
 #[test]
 fn pkg_check_reports_failure_when_moved_or_mtime_manifest_write_fails() {
     let t = Temp::new("unwritable-check");
@@ -282,16 +303,20 @@ fn pkg_check_reports_failure_when_moved_or_mtime_manifest_write_fails() {
 
     std::fs::create_dir_all(t.at("library/nes/Moved")).unwrap();
     std::fs::rename(t.at("library/nes/Alpha.nes"), t.at("library/nes/Moved/Alpha.nes")).unwrap();
-    std::fs::create_dir_all(t.at("home/Packages/NES/Alpha.nes/package.json.tmp")).unwrap();
-    let moved_check = run(&ctx, r#"{"op":"pkg-check","paths":["NES/Alpha.nes"]}"#);
+    let moved_check = {
+        let _ro = ReadOnlyDir::new(t.at("home/Packages/NES/Alpha.nes"));
+        run(&ctx, r#"{"op":"pkg-check","paths":["NES/Alpha.nes"]}"#)
+    };
     let ms = summary(&moved_check);
     assert_eq!(state(&moved_check, "NES/Alpha.nes"), "failed", "{ms}");
     assert!(ms.contains("manifest could not be written") && !ms.contains("the package now names it"), "{ms}");
 
     let later = std::time::SystemTime::now() + Duration::from_secs(3600);
     std::fs::File::options().write(true).open(t.at("library/nes/Beta.nes")).unwrap().set_modified(later).unwrap();
-    std::fs::create_dir_all(t.at("home/Packages/NES/Beta.nes/package.json.tmp")).unwrap();
-    let time_check = run(&ctx, r#"{"op":"pkg-check","paths":["NES/Beta.nes"]}"#);
+    let time_check = {
+        let _ro = ReadOnlyDir::new(t.at("home/Packages/NES/Beta.nes"));
+        run(&ctx, r#"{"op":"pkg-check","paths":["NES/Beta.nes"]}"#)
+    };
     let ts = summary(&time_check);
     assert_eq!(state(&time_check, "NES/Beta.nes"), "failed", "{ts}");
     assert!(ts.contains("manifest could not be written") && !ts.contains("the time is recorded"), "{ts}");

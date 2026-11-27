@@ -1,45 +1,73 @@
 //! Time for the pacer and the stop rules, `IScrapeClock`: the system's, or the test clock the settings' `test.clock`
 //! starts, which a delay advances at once and records, as WiseMan's `FakeScrapeClock` does (EmuSen_Backend.md §30.3).
 
-use std::sync::{Condvar, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 use emusen_galaxia::clock::TICKS_PER_SECOND;
 
-/// A wait that a cancel ends at once.
 #[derive(Default)]
-pub struct Stop {
+struct StopInner {
     stopped: Mutex<bool>,
     signal: Condvar,
+    linked: Mutex<Vec<Arc<emusen_net::Progress>>>,
+}
+
+/// A wait that a cancel ends at once.
+#[derive(Clone, Default)]
+pub struct Stop(Arc<StopInner>);
+
+pub struct StopLink {
+    inner: Arc<StopInner>,
+    progress: Arc<emusen_net::Progress>,
+}
+
+impl Drop for StopLink {
+    fn drop(&mut self) {
+        self.inner.linked.lock().unwrap_or_else(|p| p.into_inner()).retain(|p| !Arc::ptr_eq(p, &self.progress));
+    }
 }
 
 impl Stop {
     pub fn stop(&self) {
-        *self.stopped.lock().unwrap_or_else(|p| p.into_inner()) = true;
-        self.signal.notify_all();
+        *self.0.stopped.lock().unwrap_or_else(|p| p.into_inner()) = true;
+        for p in self.0.linked.lock().unwrap_or_else(|p| p.into_inner()).iter() {
+            p.cancel();
+        }
+        self.0.signal.notify_all();
     }
 
     pub fn reset(&self) {
-        *self.stopped.lock().unwrap_or_else(|p| p.into_inner()) = false;
+        *self.0.stopped.lock().unwrap_or_else(|p| p.into_inner()) = false;
     }
 
     pub fn is_stopped(&self) -> bool {
-        *self.stopped.lock().unwrap_or_else(|p| p.into_inner())
+        *self.0.stopped.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Cancels `progress` when `self` stops; unregisters when dropped.
+    pub fn link(&self, progress: &Arc<emusen_net::Progress>) -> StopLink {
+        self.0.linked.lock().unwrap_or_else(|p| p.into_inner()).push(progress.clone());
+        if self.is_stopped() {
+            progress.cancel();
+        }
+        StopLink { inner: self.0.clone(), progress: progress.clone() }
     }
 
     /// Waits up to `wait`, or until stopped or `poke`d; true when stopped.
     pub fn wait(&self, wait: Duration) -> bool {
-        let guard = self.stopped.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = self.0.stopped.lock().unwrap_or_else(|p| p.into_inner());
         if *guard {
             return true;
         }
-        let (guard, _) = self.signal.wait_timeout(guard, wait).unwrap_or_else(|p| p.into_inner());
+        let (guard, _) = self.0.signal.wait_timeout(guard, wait).unwrap_or_else(|p| p.into_inner());
         *guard
     }
 
     /// Wakes a wait without stopping it.
     pub fn poke(&self) {
-        self.signal.notify_all();
+        self.0.signal.notify_all();
     }
 }
 
@@ -94,18 +122,60 @@ impl Clock {
     }
 }
 
-/// `f` run on a thread of its own and waited for, the wait ending at once when `stop` is: the answer, or none when
-/// stopped. A request in flight is then left to end on its own by its timeout, its cancel flag set by the caller.
+/// `f` run on a thread of its own and waited on via `Condvar`, ending at once on completion or `stop`.
 pub fn detached<T: Send + 'static>(stop: &Stop, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(f());
-    });
-    loop {
-        match rx.recv_timeout(Duration::from_millis(20)) {
-            Ok(v) => return Some(v),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) if !stop.is_stopped() => continue,
-            Err(_) => return None,
+    struct NotifyOnDrop {
+        done: Arc<AtomicBool>,
+        wake: Stop,
+    }
+    impl Drop for NotifyOnDrop {
+        fn drop(&mut self) {
+            self.done.store(true, Ordering::Release);
+            let _g = self.wake.0.stopped.lock().unwrap_or_else(|p| p.into_inner());
+            self.wake.0.signal.notify_all();
         }
+    }
+    let slot = Arc::new(Mutex::new(None));
+    let done = Arc::new(AtomicBool::new(false));
+    let (tx, flag, wake) = (slot.clone(), done.clone(), stop.clone());
+    std::thread::spawn(move || {
+        let _notify = NotifyOnDrop { done: flag, wake };
+        let value = f();
+        *tx.lock().unwrap_or_else(|p| p.into_inner()) = Some(value);
+    });
+    let mut guard = stop.0.stopped.lock().unwrap_or_else(|p| p.into_inner());
+    loop {
+        if let Some(v) = slot.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            return Some(v);
+        }
+        if *guard || done.load(Ordering::Acquire) {
+            return None;
+        }
+        guard = stop.0.signal.wait(guard).unwrap_or_else(|p| p.into_inner());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detached_wakes_on_completion_and_stop_cancels_linked_progress() {
+        let stop = Stop::default();
+        assert_eq!(detached(&stop, || 42), Some(42));
+        let progress = Arc::new(emusen_net::Progress::default());
+        let _link = stop.link(&progress);
+        assert!(!progress.is_cancelled());
+        let stop_clone = stop.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(10));
+            stop_clone.stop();
+        });
+        let abandoned = detached(&stop, || {
+            std::thread::sleep(Duration::from_millis(200));
+            1
+        });
+        assert_eq!(abandoned, None);
+        assert!(progress.is_cancelled());
     }
 }

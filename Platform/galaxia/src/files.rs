@@ -58,16 +58,13 @@ pub fn visit_files(folder: impl AsRef<Path>, each: impl FnMut(&Path, &str)) -> s
 /// The ticks of 1 January 1970 in the stored count of 100 ns from the year 1.
 pub const UNIX_EPOCH_TICKS: i64 = 621_355_968_000_000_000;
 
-/// A file's length and modification time in ticks, both of a link as the link's own (`lstat`); none where nothing is
-/// there or it is a folder.
+/// A file's length and modification time in ticks (`stat`); none where nothing is there or it is a folder.
 pub fn file_info(at: impl AsRef<Path>) -> Option<(i64, i64)> {
-    let at = at.as_ref();
-    let own = std::fs::symlink_metadata(at).ok()?;
-    let directory = if own.file_type().is_symlink() { std::fs::metadata(at).is_ok_and(|m| m.is_dir()) } else { own.is_dir() };
-    if directory {
+    let meta = std::fs::metadata(at).ok()?;
+    if meta.is_dir() {
         return None;
     }
-    Some((own.len() as i64, write_ticks(&own)))
+    Some((meta.len() as i64, write_ticks(&meta)))
 }
 
 /// A modification time as ticks since the year 1, in UTC.
@@ -94,6 +91,16 @@ pub fn directory_exists(at: impl AsRef<Path>) -> bool {
 /// A file, or a link to one; a folder is not.
 pub fn file_exists(at: impl AsRef<Path>) -> bool {
     std::fs::metadata(at).is_ok_and(|m| !m.is_dir())
+}
+
+/// Whether `path` is a non-empty relative path with no `.`, `..`, NUL, drive prefix, or empty segments.
+pub fn is_relative_inside(path: &str) -> bool {
+    let b = path.as_bytes();
+    !path.is_empty()
+        && !path.contains('\0')
+        && !path.starts_with(['/', '\\'])
+        && !(b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':')
+        && !path.split(['/', '\\']).any(|p| p.is_empty() || p == "." || p == "..")
 }
 
 #[cfg(test)]
@@ -156,5 +163,21 @@ mod tests {
         assert!(ticks > UNIX_EPOCH_TICKS);
         assert_eq!(file_info(temp.path()), None);
         assert_eq!(file_info(&temp.join("absent")), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_file_info_reports_target_size_not_link_length() {
+        let temp = TempDir::new("info-link");
+        let target = temp.join("target.bin");
+        let payload = vec![0x5Au8; 4096];
+        std::fs::write(&target, &payload).unwrap();
+        let link = temp.join("alias.bin");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let (length, _) = file_info(&link).unwrap();
+        assert_eq!(length, payload.len() as i64);
+        let dangling = temp.join("dangling.bin");
+        std::os::unix::fs::symlink(temp.join("missing.bin"), &dangling).unwrap();
+        assert_eq!(file_info(&dangling), None);
     }
 }

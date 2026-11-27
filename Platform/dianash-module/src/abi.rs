@@ -169,9 +169,9 @@ pub struct dianash_host_result {
     pub request: u64,
 }
 
-pub type HostRunFn = unsafe extern "C" fn(ctx: *mut c_void, call: *const dianash_call, result: *mut dianash_result) -> i32;
+pub type HostRunFn = unsafe extern "C" fn(ctx: *mut c_void, call: *const dianash_call, result: *mut dianash_host_result) -> i32;
 pub type HostJobsFn = unsafe extern "C" fn(ctx: *mut c_void, call: *const dianash_call) -> i32;
-pub type HostKillFn = unsafe extern "C" fn(ctx: *mut c_void, call: *const dianash_call, id: *const u8, id_len: usize, result: *mut dianash_result) -> i32;
+pub type HostKillFn = unsafe extern "C" fn(ctx: *mut c_void, call: *const dianash_call, id: *const u8, id_len: usize, result: *mut dianash_host_result) -> i32;
 
 /// How a host builds a shell (`dianash.h`).
 #[repr(C)]

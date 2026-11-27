@@ -75,16 +75,39 @@ impl<R: Read + Seek> Zip<R> {
         Ok(out)
     }
 
-    /// An entry copied out whole into `out`; refused where its bytes are not the length and CRC-32 the zip records, so
-    /// that a damaged zip is never taken for its files.
-    pub fn copy(&mut self, e: &ZipEntry, out: &mut dyn Write) -> Result<(), String> {
+    fn copy_with_limit(&mut self, e: &ZipEntry, out: &mut dyn Write, limit: Option<u64>) -> Result<(), String> {
+        if let Some(max) = limit
+            && e.length > max
+        {
+            return Err(format!("{} exceeds the {max}-byte limit ({} bytes)", e.full_name, e.length));
+        }
         let mut file = self.archive.by_index(e.index).map_err(|x| format!("{}: {x}", e.full_name))?;
         let damaged = |why: String| format!("{} is damaged ({why}): the zip records {} bytes with CRC-32 {:08x}", e.full_name, e.length, e.crc32);
-        let copied = std::io::copy(&mut file, out).map_err(|x| damaged(x.to_string()))?;
+        let copied = match limit {
+            Some(max) => {
+                let mut bounded = file.take(max.saturating_add(1));
+                let n = std::io::copy(&mut bounded, out).map_err(|x| damaged(x.to_string()))?;
+                if n > max {
+                    return Err(format!("{} exceeds the {max}-byte limit", e.full_name));
+                }
+                n
+            }
+            None => std::io::copy(&mut file, out).map_err(|x| damaged(x.to_string()))?,
+        };
         if copied != e.length {
             return Err(damaged(format!("it holds {copied} bytes")));
         }
         Ok(())
+    }
+
+    /// An entry copied out whole into `out`; refused where its bytes are not the length and CRC-32 the zip records.
+    pub fn copy(&mut self, e: &ZipEntry, out: &mut dyn Write) -> Result<(), String> {
+        self.copy_with_limit(e, out, None)
+    }
+
+    /// An entry copied out into `out` up to `max_bytes`, rejecting oversized headers or streams.
+    pub fn copy_bounded(&mut self, e: &ZipEntry, out: &mut dyn Write, max_bytes: u64) -> Result<(), String> {
+        self.copy_with_limit(e, out, Some(max_bytes))
     }
 
     /// An entry's modification time: the NTFS extra field's, to the tick, else the extended timestamp's, to the second;
@@ -94,8 +117,8 @@ impl<R: Read + Seek> Zip<R> {
         let mut seconds = None;
         for field in file.extra_data_fields() {
             match field {
-                zip::ExtraField::Ntfs(ntfs) => return Some(from_filetime(ntfs.mtime())),
-                zip::ExtraField::ExtendedTimestamp(t) => seconds = t.mod_time().map(|s| from_unix_seconds(s as i32 as i64)),
+                zip::ExtraField::Ntfs(ntfs) => return from_filetime(ntfs.mtime()),
+                zip::ExtraField::ExtendedTimestamp(t) => seconds = t.mod_time().and_then(|s| from_unix_seconds(s as i32 as i64)),
                 _ => {}
             }
         }
@@ -106,15 +129,16 @@ impl<R: Read + Seek> Zip<R> {
 /// FILETIME's count of ticks from 1601 to 1970.
 const FILETIME_1970: u64 = 116_444_736_000_000_000;
 
-fn from_filetime(ft: u64) -> std::time::SystemTime {
+fn from_filetime(ft: u64) -> Option<std::time::SystemTime> {
     let unix_ticks = ft as i128 - FILETIME_1970 as i128;
-    let span = std::time::Duration::from_nanos((unix_ticks.unsigned_abs() * 100) as u64);
-    if unix_ticks >= 0 { std::time::UNIX_EPOCH + span } else { std::time::UNIX_EPOCH - span }
+    let nanos = u64::try_from(unix_ticks.unsigned_abs().checked_mul(100)?).ok()?;
+    let span = std::time::Duration::from_nanos(nanos);
+    if unix_ticks >= 0 { std::time::UNIX_EPOCH.checked_add(span) } else { std::time::UNIX_EPOCH.checked_sub(span) }
 }
 
-fn from_unix_seconds(s: i64) -> std::time::SystemTime {
+fn from_unix_seconds(s: i64) -> Option<std::time::SystemTime> {
     let span = std::time::Duration::from_secs(s.unsigned_abs());
-    if s >= 0 { std::time::UNIX_EPOCH + span } else { std::time::UNIX_EPOCH - span }
+    if s >= 0 { std::time::UNIX_EPOCH.checked_add(span) } else { std::time::UNIX_EPOCH.checked_sub(span) }
 }
 
 /// The entries of an archive held whole in memory.
@@ -240,5 +264,19 @@ impl ZipWriter {
     /// The central directory and the end record written, and the file flushed to the disk.
     pub fn finish(self) -> Result<(), String> {
         self.zip.finish().map_err(|e| e.to_string())?.sync_all().map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extreme_zip_timestamps_return_none_without_panicking() {
+        assert_eq!(from_filetime(u64::MAX), None);
+        assert!(from_unix_seconds(i64::MAX).is_some());
+        assert!(from_unix_seconds(i64::MIN).is_some());
+        assert_eq!(from_filetime(FILETIME_1970), Some(std::time::UNIX_EPOCH));
+        assert_eq!(from_unix_seconds(0), Some(std::time::UNIX_EPOCH));
     }
 }

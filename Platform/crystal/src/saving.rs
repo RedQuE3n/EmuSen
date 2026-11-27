@@ -3,7 +3,6 @@
 //! machine's, and the history cleared after the jump (EmuSen_Backend.md §14.12, §29.5).
 
 use std::path::Path;
-use emusen_galaxia::path_key;
 use emusen_galaxia::tree::Tree;
 use emusen_session_service::abi::status as svc;
 
@@ -32,26 +31,37 @@ fn check_slot(slot: u32) -> Result<i32, Refused> {
 }
 
 impl Session {
-    pub fn state_path(&self, tree: &Tree, slot: i32) -> String {
+    fn state_path_in(&self, tree: &Tree, slot: i32, folder: Option<&str>) -> String {
         match &self.package {
             Some(root) => emusen_galaxia::saves::package_state_path(root, slot, self.save_key.as_deref()).to_string_lossy().into_owned(),
-            None => emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, state_folder(tree).as_deref()).to_string_lossy().into_owned(),
+            None => emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, folder).to_string_lossy().into_owned(),
         }
     }
 
-    pub fn resume_path(&self, tree: &Tree) -> String {
+    fn resume_path_in(&self, tree: &Tree, folder: Option<&str>) -> String {
         match &self.package {
             Some(root) => emusen_galaxia::saves::package_resume_state_path(root, self.save_key.as_deref()).to_string_lossy().into_owned(),
-            None => emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), state_folder(tree).as_deref()).to_string_lossy().into_owned(),
+            None => emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), folder).to_string_lossy().into_owned(),
         }
+    }
+
+    pub fn state_path(&self, tree: &Tree, slot: i32) -> String {
+        let folder = if self.package.is_none() { state_folder(tree) } else { None };
+        self.state_path_in(tree, slot, folder.as_deref())
+    }
+
+    pub fn resume_path(&self, tree: &Tree) -> String {
+        let folder = if self.package.is_none() { state_folder(tree) } else { None };
+        self.resume_path_in(tree, folder.as_deref())
     }
 
     /// `[{"slot","path","exists","saved_at"}]`, the resume state as slot 0.
     pub fn slots_json(&self, tree: &Tree) -> String {
+        let folder = if self.package.is_none() { state_folder(tree) } else { None };
         let mut j = Json::new();
         j.begin_array();
         for slot in 0..=SLOTS as i32 {
-            let at = if slot == 0 { self.resume_path(tree) } else { self.state_path(tree, slot) };
+            let at = if slot == 0 { self.resume_path_in(tree, folder.as_deref()) } else { self.state_path_in(tree, slot, folder.as_deref()) };
             let exists = emusen_galaxia::files::file_exists(&at);
             j.begin_object().int("slot", slot as i64).str("path", &at).bool("exists", exists);
             match emusen_galaxia::clock::last_write(&at).filter(|_| exists) {
@@ -94,12 +104,8 @@ impl Session {
 
     /// The state written whole and its record kept, `ManagedSession.SaveState`; with a picture beside it when asked.
     pub(crate) fn save_in(&self, e: &mut Engine, at: &str, records: Option<&StateRecords>, picture: bool) -> Result<(), Refused> {
-        let full = path_key::key_text(at);
-        if let Some(folder) = Path::new(&full).parent().map(|d| d.to_string_lossy().into_owned()).filter(|f| !f.is_empty()) {
-            std::fs::create_dir_all(&folder).map_err(|err| (abi::status::IO, format!("{}: {}", folder, err)))?;
-        }
         let bytes = e.state_bytes().map_err(|r| (r.status, r.words))?;
-        std::fs::write(at, &bytes).map_err(|err| (abi::status::IO, format!("{}: {}", at, err)))?;
+        emusen_galaxia::atomic::write(at, &bytes).map_err(|err| (abi::status::IO, err))?;
         crate::states::write(records, at, &self.record(e))?;
         self.events.raise(self.id, abi::EVENT_STATE, "state", |j| {
             j.str("op", "saved").str("path", at);

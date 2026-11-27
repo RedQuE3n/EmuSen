@@ -206,7 +206,14 @@ impl ScraperInner {
         let cover = media_type == kinds::COVER.esde_type;
         let file = !game.folder;
         let title = Path::new(game.file).file_stem().unwrap_or_default().to_string_lossy().to_string();
-        let console = if file { self.console_for(game.file, cores) } else { None };
+        let console = if file && cover {
+            consoles::by_esde(esde_system)
+                .and_then(|s| consoles::core_of(cores, &s.id))
+                .map(|c| c.console.clone())
+                .or_else(|| self.console_for(game.file, cores))
+        } else {
+            None
+        };
         if cover {
             if let Some(console) = &console {
                 if let Some(hand) = self.art().find(Some(console), &title) {

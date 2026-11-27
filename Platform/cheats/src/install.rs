@@ -28,10 +28,12 @@ pub enum Refusal {
     NotOurs(String),
 }
 
-/// One `.cht` entry written whole at `destination`, its folders made, its time the zip's where it records one.
+const MAX_CHT_BYTES: u64 = 4 * 1024 * 1024;
+
+/// One `.cht` entry written whole at `destination`, bounded by `MAX_CHT_BYTES`, with its zip timestamp.
 fn extract(zip: &mut Zip<Cursor<&[u8]>>, e: &ZipEntry, destination: &Path) -> Result<(), String> {
     let mut bytes = Vec::new();
-    zip.copy(e, &mut bytes)?;
+    zip.copy_bounded(e, &mut bytes, MAX_CHT_BYTES)?;
     if let Some(folder) = destination.parent() {
         std::fs::create_dir_all(folder).map_err(|x| x.to_string())?;
     }
@@ -158,6 +160,9 @@ pub fn install_staged(bytes: &[u8], target: &str) -> Result<Installed, Refusal> 
     if target.file_name().is_none() {
         return Err(Refusal::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, "the folder has no name")));
     }
+    let Some(_lock) = emusen_galaxia::medium_lock::try_take(target, "cheat database installer", false) else {
+        return Err(Refusal::Io(std::io::Error::new(std::io::ErrorKind::WouldBlock, format!("{} is already being updated", target.display()))));
+    };
     let (part, old) = (beside(target, ".part"), beside(target, ".old"));
     recover(target, &part, &old)?;
     if let Some(parent) = part.parent() {
@@ -339,6 +344,24 @@ mod tests {
         assert_eq!(std::fs::metadata(&written).unwrap().modified().unwrap(), when);
         assert!(target.join("Sega/Other.CHT").exists());
         assert!(!at.join("outside.cht").exists());
+        std::fs::remove_dir_all(&at).unwrap();
+    }
+
+    #[test]
+    fn oversized_cht_entry_is_skipped_and_concurrent_staged_install_is_locked() {
+        let at = scratch("cap-and-lock");
+        let big = at.join("big.cht");
+        std::fs::write(&big, vec![b'a'; (MAX_CHT_BYTES as usize) + 128]).unwrap();
+        let zip_path = at.join("big.zip");
+        let mut w = ZipWriter::create(zip_path.to_str().unwrap()).unwrap();
+        w.add("Sega/Big.cht", big.to_str().unwrap(), std::time::UNIX_EPOCH, false, &|| false).unwrap();
+        w.finish().unwrap();
+        let target = at.join("db");
+        let done = install(&std::fs::read(&zip_path).unwrap(), target.to_str().unwrap()).unwrap();
+        assert_eq!(done, Installed { installed: 0, skipped: 1 });
+        let _held = emusen_galaxia::medium_lock::try_take(&target, "other", false).unwrap();
+        assert!(matches!(install_staged(&std::fs::read(&zip_path).unwrap(), target.to_str().unwrap()), Err(Refusal::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock));
+        drop(_held);
         std::fs::remove_dir_all(&at).unwrap();
     }
 }

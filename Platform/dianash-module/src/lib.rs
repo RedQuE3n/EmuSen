@@ -141,7 +141,11 @@ impl<'a> Call<'a> {
             return None;
         }
         let raw = unsafe { &*raw };
-        (raw.size as usize >= std::mem::size_of::<dianash_call>() && !raw.io.is_null()).then_some(Call { raw })
+        let valid = raw.size as usize >= std::mem::size_of::<dianash_call>()
+            && !raw.io.is_null()
+            && (raw.argc == 0 || !raw.argv.is_null())
+            && (raw.service_count == 0 || !raw.services.is_null());
+        valid.then_some(Call { raw })
     }
 
     fn io(&self) -> &dianash_io {
@@ -155,6 +159,9 @@ impl<'a> Call<'a> {
 
     /// argv as text, `args()[0]` the name as typed.
     pub fn args(&self) -> Vec<String> {
+        if self.raw.argc == 0 || self.raw.argv.is_null() {
+            return Vec::new();
+        }
         (0..self.raw.argc).map(|i| String::from_utf8_lossy(unsafe { text(*self.raw.argv.add(i)) }.unwrap_or_default()).into_owned()).collect()
     }
 
@@ -287,6 +294,9 @@ pub unsafe fn run_module(module: &dyn Module, call: *const dianash_call, result:
     if result.is_null() {
         return status::NULL;
     }
+    if (unsafe { (*result).size } as usize) < std::mem::size_of::<dianash_result>() {
+        return status::BAD_STRUCT;
+    }
     let Some(view) = (unsafe { Call::from_raw(call) }) else { return status::BAD_STRUCT };
     match catch_unwind(AssertUnwindSafe(|| module.run(&view))) {
         Ok(exit) => {
@@ -326,6 +336,9 @@ pub unsafe fn jobs_module(module: &dyn Module, call: *const dianash_call) -> i32
 pub unsafe fn kill_module(module: &dyn Module, call: *const dianash_call, id: *const u8, id_len: usize, result: *mut dianash_result) -> i32 {
     if result.is_null() || id.is_null() {
         return status::NULL;
+    }
+    if (unsafe { (*result).size } as usize) < std::mem::size_of::<dianash_result>() {
+        return status::BAD_STRUCT;
     }
     let Some(view) = (unsafe { Call::from_raw(call) }) else { return status::BAD_STRUCT };
     let id = String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(id, id_len) }).into_owned();
@@ -558,5 +571,36 @@ mod tests {
                 assert!(catch_unwind(AssertUnwindSafe(|| drop(call.slot(String::new)))).is_err());
             }
         });
+    }
+
+    #[test]
+    fn from_raw_and_module_entry_reject_null_argv_and_undersized_result() {
+        let mut bad_call = dianash_call {
+            size: std::mem::size_of::<dianash_call>() as u32,
+            command: dianash_bytes::ABSENT,
+            argv: std::ptr::null(),
+            argc: 1,
+            stdin_data: dianash_bytes::ABSENT,
+            stdin_present: 0,
+            flags: 0,
+            cwd: dianash_bytes::ABSENT,
+            user: dianash_bytes::ABSENT,
+            io: 1usize as *const dianash_io,
+            services: std::ptr::null(),
+            service_count: 0,
+        };
+        assert!(unsafe { Call::from_raw(&bad_call) }.is_none());
+        bad_call.argc = 0;
+        bad_call.service_count = 1;
+        assert!(unsafe { Call::from_raw(&bad_call) }.is_none());
+
+        struct Dummy;
+        impl Module for Dummy {
+            fn manifest(&self) -> &'static str { "{}" }
+            fn run(&self, _: &Call) -> i32 { 0 }
+        }
+        let mut small = dianash_result { size: 4, exit_status: 0 };
+        assert_eq!(unsafe { run_module(&Dummy, std::ptr::null(), &mut small) }, status::BAD_STRUCT);
+        assert_eq!(unsafe { kill_module(&Dummy, std::ptr::null(), b"1".as_ptr(), 1, &mut small) }, status::BAD_STRUCT);
     }
 }

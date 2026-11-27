@@ -304,17 +304,15 @@ impl ScraperInner {
         let queued = {
             let store = self.store();
             if !resume {
-                store.clear_queue()?;
-                for (rom, system) in games {
-                    if one {
-                        store.forget_unfound(rom)?;
+                if one {
+                    for (rom, _) in games {
                         if let Ok(library) = self.library() {
                             let _ = library.change_request(&serde_json::json!({ "op": "forget_cover_lookup", "path": rom }).to_string());
                         }
                         self.runs.failover.lock().unwrap_or_else(|p| p.into_inner()).asked.remove(rom);
                     }
-                    store.enqueue(rom, system, priority)?;
                 }
+                store.replace_queue(games, priority, one)?;
             }
             store.queue()?
         };
@@ -732,7 +730,7 @@ impl ScraperInner {
         self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
         let file_name = Path::new(rom).file_name().unwrap_or_default().to_string_lossy().to_string();
         // A patched package sends the dump's hashes, the file's, unless its identity is "patched": then the patched image's first, and the dump's after a miss (EmuSen_GamePackages.md §5.5).
-        let patched = if by_name { None } else { patched_first(rom) };
+        let patched = if by_name { None } else { patched_first(&settings, rom) };
         let first = patched.clone().unwrap_or_else(|| own.clone());
         let Some(mut answer) = self.ask(w, lane, system_id, first, &file_name, if by_name { known.as_ref().and_then(|k| k.game_id) } else { None }) else { return Ok(None) };
         let mut matched_by = if by_name { "name" } else if patched.is_some() { "patched" } else { by_file };
@@ -885,7 +883,7 @@ impl ScraperInner {
         let root = self.root();
         let folder = settings.folder_of(rom);
         // A packaged game's art is written into its package, never over or in place of the store's (EmuSen_GamePackages.md §18.3).
-        let package = package_of(rom);
+        let package = settings.package_of(rom);
         for kind in wanted {
             let kept = stored.iter().find(|s| s.ty == kind.esde_type && file_exists(&Path::new(&root).join(&s.relative_path).to_string_lossy().into_owned()));
             if kept.is_some() && !refresh {
@@ -1267,15 +1265,10 @@ fn local_day_time(utc: i64) -> String {
     format!("{} {}", names[emusen_galaxia::clock::weekday(days) as usize], emusen_galaxia::clock::text(local, emusen_galaxia::clock::CLOCK))
 }
 
-/// The package `rom` opens as, as the runtime resolves it, `Scraper.PackageOf`.
-fn package_of(rom: &str) -> Option<String> {
-    emusen_galaxia::claims::root_for(&emusen_galaxia::tree::tree(), rom)
-}
-
-/// The patched image's hashes where `rom` opens as a package whose identity is `patched`, as the runtime resolves it.
-fn patched_first(rom: &str) -> Option<Hashes> {
-    let folder = package_of(rom)?;
-    let doc = emusen_galaxia::package::read(&Path::new(&folder).join(emusen_galaxia::package::FILE_NAME).to_string_lossy().into_owned()).ok()?.ok()?;
+/// The patched image's hashes where `rom` opens as a package whose identity is `patched`, as the host resolved it.
+fn patched_first(settings: &crate::Settings, rom: &str) -> Option<Hashes> {
+    let folder = settings.package_of(rom)?;
+    let doc = emusen_galaxia::package::read(&Path::new(folder).join(emusen_galaxia::package::FILE_NAME).to_string_lossy().into_owned()).ok()?.ok()?;
     scraped_first(&doc)
 }
 

@@ -12,7 +12,7 @@ use cxx_qt_lib::{DateFormat, QByteArray, QDateTime, QRectF, QString};
 use crate::input::GameInput;
 use crate::pause::{self, SlotFact};
 use crate::resume::{self, Answer, Start};
-use crate::pictures::{self, PictureSource, Shown};
+use crate::pictures::{self, PictureSource, Shown, Slots};
 use cxx_qt::casting::Upcast;
 use emusen_crystal_client::{Api, Config, Runtime};
 use crate::play::PlaySettings;
@@ -201,6 +201,11 @@ pub mod qobject {
         #[qsignal]
         fn played(self: Pin<&mut SessionModel>, path: QString, seconds: f64);
 
+        /// The game actually started running (after any Launch/Resume prompts resolved).
+        #[qsignal]
+        #[cxx_name = "startedPlaying"]
+        fn started_playing(self: Pin<&mut SessionModel>, path: QString);
+
         /// The game or console named did not open, or stopped on a failure: `problem` says why.
         #[qsignal]
         #[cxx_name = "openFailed"]
@@ -386,6 +391,8 @@ pub struct SessionModelRust {
     from_state: Option<String>,
     /// The session the card's pictures are read from, shared with the picture provider.
     shown: Shown,
+    /// State slot picture paths indexed by slot number, shared with the picture provider.
+    slot_pictures: Slots,
     /// Read again at each pause, so a picture's address names the pause it was read in.
     serial: u64,
     /// Whether the picture provider is served in this model's engine.
@@ -457,6 +464,7 @@ impl Default for SessionModelRust {
             holding: None,
             from_state: None,
             shown: Shown::default(),
+            slot_pictures: Slots::default(),
             serial: 0,
             served: false,
             jobs: 0,
@@ -521,17 +529,21 @@ impl qobject::SessionModel {
         if self.running == value {
             return;
         }
-        let game = self.game.clone();
-        let ran = if value {
-            self.as_mut().rust_mut().playing = Some((game, std::time::Instant::now())).filter(|(g, _)| !g.is_empty());
-            None
-        } else {
-            self.as_mut().rust_mut().playing.take()
-        };
+        let ran = if value { None } else { self.as_mut().rust_mut().playing.take() };
         self.as_mut().rust_mut().running = value;
         self.as_mut().running_changed();
         if let Some((path, since)) = ran {
             self.played(path, since.elapsed().as_secs_f64());
+        }
+    }
+
+    fn begin_play(mut self: Pin<&mut Self>) {
+        if self.playing.is_none() {
+            let game = self.game.clone();
+            if !game.is_empty() {
+                self.as_mut().rust_mut().playing = Some((game.clone(), std::time::Instant::now()));
+                self.started_playing(game);
+            }
         }
     }
 
@@ -659,7 +671,7 @@ impl qobject::SessionModel {
         // A console started empty has no game to resume, so nothing is asked (Mistress's `StartConsole`).
         let from_state = from_state.filter(|_| matches!(opening, Opening::Game(_)));
         let setting = if matches!(opening, Opening::Game(_)) { self.as_mut().resume_setting() } else { resume::Setting::Never };
-        let holding = (from_state.is_none() && setting != resume::Setting::Never).then_some(setting);
+        let holding = holding_for(matches!(opening, Opening::Game(_)), from_state.is_some(), setting);
         self.as_mut().rust_mut().holding = holding;
         let held = holding.is_some() || from_state.is_some();
         self.as_mut().rust_mut().from_state = from_state;
@@ -689,18 +701,22 @@ impl qobject::SessionModel {
 
     /// Where the opened game was left off decides its start: from the beginning, there without asking, or the question.
     fn left_off(mut self: Pin<&mut Self>, session: u32) {
-        if let Some(state) = self.as_mut().rust_mut().from_state.take() {
-            if !self.paused {
-                self.as_mut().rust_mut().resume_waiting = true;
+        let from_state = self.as_mut().rust_mut().from_state.take();
+        let holding = self.as_mut().rust_mut().holding;
+        match left_off_step(from_state, holding, || {
+            self.runtime.as_ref().and_then(|r| r.state_slots(session).ok()).is_some_and(|slots| slots.iter().any(|s| s.slot == 0 && s.exists))
+        }) {
+            LeftOff::FromState(state) => {
+                if !self.paused {
+                    self.as_mut().rust_mut().resume_waiting = true;
+                }
+                self.as_mut().begin_play();
+                self.start_from(state);
             }
-            return self.start_from(state);
-        }
-        let Some(setting) = self.as_mut().rust_mut().holding else { return };
-        let exists = self.runtime.as_ref().and_then(|r| r.state_slots(session).ok()).is_some_and(|slots| slots.iter().any(|s| s.slot == 0 && s.exists));
-        match resume::start(setting, exists) {
-            Start::Fresh => self.as_mut().let_go(false),
-            Start::Load => self.as_mut().let_go(true),
-            Start::Ask => self.as_mut().set_resume_asked(true),
+            LeftOff::Hold(Start::Fresh) => self.as_mut().let_go(false),
+            LeftOff::Hold(Start::Load) => self.as_mut().let_go(true),
+            LeftOff::Hold(Start::Ask) => self.as_mut().set_resume_asked(true),
+            LeftOff::BeginOnly => self.as_mut().begin_play(),
         }
     }
 
@@ -708,6 +724,7 @@ impl qobject::SessionModel {
     fn let_go(mut self: Pin<&mut Self>, load: bool) {
         self.as_mut().rust_mut().holding = None;
         self.as_mut().set_resume_asked(false);
+        self.as_mut().begin_play();
         if !self.paused {
             self.as_mut().rust_mut().resume_waiting = true;
         }
@@ -983,21 +1000,29 @@ impl qobject::SessionModel {
         facts.second_player = unsafe { GamePads::at(self.pads) }.is_some_and(|pads| pads.seated() & 0b10 != 0);
         facts.pictures = format!("image://{}/{serial}/", pictures::NAME);
         let platform = self.as_mut().platform().ok();
-        let picture_of = |path: &str| {
-            let picture = platform.as_ref()?.save_path(emusen_platform_client::galaxia::consts::SAVE_PICTURE, path, None, 0).ok()?;
-            picture.is_file().then(|| format!("{}file/{}", facts.pictures, picture.display()))
-        };
+        let mut slot_paths = Vec::new();
         let slots = runtime.state_slots(session).unwrap_or_default();
         facts.slots = slots
             .iter()
             .filter(|s| (1..=pause::SLOTS).contains(&s.slot))
-            .map(|s| SlotFact {
-                slot: s.slot,
-                exists: s.exists,
-                when: when_words(s.saved_at.as_deref()),
-                picture: if s.exists { picture_of(&s.path).unwrap_or_default() } else { String::new() },
+            .map(|s| {
+                let pic = if s.exists {
+                    platform
+                        .as_ref()
+                        .and_then(|p| p.save_path(emusen_platform_client::galaxia::consts::SAVE_PICTURE, &s.path, None, 0).ok())
+                        .filter(|p| p.is_file())
+                        .map(|p| {
+                            slot_paths.push((s.slot, p.to_string_lossy().into_owned()));
+                            format!("{}slot/{}", facts.pictures, s.slot)
+                        })
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
+                SlotFact { slot: s.slot, exists: s.exists, when: when_words(s.saved_at.as_deref()), picture: pic }
             })
             .collect();
+        *self.slot_pictures.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = slot_paths;
         facts.slot_when = slots
             .iter()
             .filter(|s| s.exists && (1..=pause::SLOTS).contains(&s.slot))
@@ -1300,7 +1325,7 @@ impl qobject::SessionModel {
                     *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((runtime, session));
                 }
                 if !self.served {
-                    let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone()));
+                    let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone(), self.slot_pictures.clone()));
                     self.as_mut().rust_mut().served = served;
                 }
                 self.as_mut().apply_speed();
@@ -1574,6 +1599,27 @@ impl qobject::SessionModel {
     }
 }
 
+fn holding_for(opening_game: bool, has_from_state: bool, setting: resume::Setting) -> Option<resume::Setting> {
+    (opening_game && !has_from_state && setting != resume::Setting::Never).then_some(setting)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum LeftOff {
+    FromState(String),
+    Hold(Start),
+    BeginOnly,
+}
+
+fn left_off_step(from_state: Option<String>, holding: Option<resume::Setting>, slot0_exists: impl FnOnce() -> bool) -> LeftOff {
+    if let Some(state) = from_state {
+        return LeftOff::FromState(state);
+    }
+    match holding {
+        Some(setting) => LeftOff::Hold(resume::start(setting, slot0_exists())),
+        None => LeftOff::BeginOnly,
+    }
+}
+
 /// The running console's cards for Game Options ▸ Memory Cards: the card manager's list, the session's schema rows of
 /// the media's keys, and the values the console holds for them.
 fn card_facts(runtime: &Runtime, session: u32, console: &str) -> pause::CardFacts {
@@ -1584,4 +1630,42 @@ fn card_facts(runtime: &Runtime, session: u32, console: &str) -> pause::CardFact
     let schema: Vec<_> = schema.into_iter().filter(|r| media.iter().any(|m| r.key == m.mode_key || r.shown_with.as_ref().is_some_and(|w| w.key == m.mode_key))).collect();
     let values = schema.iter().filter_map(|r| Some((r.key.clone(), runtime.settings_get(session, Scope::Console, None, &r.key).ok().flatten()?))).collect();
     pause::CardFacts { console: console.to_owned(), media, schema, values }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resume_never_holds_nothing_and_still_begins_play() {
+        let setting = resume::Setting::read("Restart");
+        assert_eq!(setting, resume::Setting::Never);
+        let holding = holding_for(true, false, setting);
+        assert_eq!(holding, None);
+        assert_eq!(left_off_step(None, holding, || false), LeftOff::BeginOnly);
+
+        let dir = std::env::temp_dir().join(format!("emusen-session-never-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let qml = dir.join("Scene.qml");
+        std::fs::write(
+            &qml,
+            "import QtQuick\nimport EmuSen.Models\nWindow {\n    id: root\n    objectName: \"scene\"\n    property string startedGame: \"\"\n    property string playedGame: \"\"\n    SessionModel {\n        id: s\n        objectName: \"session\"\n        onStartedPlaying: (path) => root.startedGame = path\n        onPlayed: (path, seconds) => root.playedGame = path\n    }\n}\n",
+        )
+        .unwrap();
+        let mut harness = emusen_qt_test::Harness::new();
+        let mut scene = harness.load(&format!("file://{}", qml.display()), 320, 240);
+        let session_ptr = scene.object("session");
+        assert!(!session_ptr.is_null(), "session object");
+        let mut session = unsafe { Pin::new_unchecked(&mut *(session_ptr as *mut qobject::SessionModel)) };
+        session.as_mut().set_game(QString::from("/rom/Aurora.sfc"));
+        session.as_mut().set_running(true);
+        session.as_mut().rust_mut().holding = None;
+        session.as_mut().left_off(1);
+        assert!(session.playing.is_some(), "Resume = Never must still record playing start");
+        assert_eq!(scene.property("scene", "startedGame"), "/rom/Aurora.sfc");
+        session.as_mut().reported(Report::Closed);
+        assert_eq!(scene.property("scene", "playedGame"), "/rom/Aurora.sfc");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

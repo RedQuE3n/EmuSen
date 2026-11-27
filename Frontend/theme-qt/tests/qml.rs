@@ -272,5 +272,34 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     bells.as_mut().strike(4);
     bells.as_mut().strike(-1);
     assert_eq!(*struck.lock().unwrap(), [("ladder", 13), ("strike", 4)], "silence with no striker, then rung i rings; no rung below 0");
+
+    // Host URL filter rewrites cover/hero URLs across recent, shelf, favourites, gamesOf, firstOf and search.
+    let mut filtered_view = read.view.clone();
+    if let Some(g) = filtered_view.catalog.games.first() {
+        let path = g.path.clone();
+        filtered_view.catalog.covers = vec![(path.clone(), "/tmp/pkg/cover.png".into())];
+        filtered_view.catalog.heroes = vec![(path.clone(), "/tmp/pkg/hero.png".into())];
+        filtered_view.catalog.recent = vec![path.clone()];
+        filtered_view.catalog.favourites = vec![path.clone()];
+        filtered_view.catalog.played = vec![(path, 1_700_000_000)];
+    }
+    let mut lib = host::library(within(window)).unwrap();
+    lib.as_mut().set_url_filter(Some(std::rc::Rc::new(|u| {
+        if u.contains("/pkg/hero.png") { "image://thumb/91".into() } else { "image://thumb/90".into() }
+    })));
+    lib.as_mut().show(&filtered_view, common::HOME_LINES);
+    lib.as_mut().show_suspended("");
+    let has_thumb = |rows: &[emusen_theme_qt::view::Row]| {
+        rows.first().is_some_and(|r| r[2] == emusen_theme_qt::view::Cell::Text("image://thumb/90".into()) && r[15] == emusen_theme_qt::view::Cell::Text("image://thumb/91".into()))
+    };
+    for list in ["recent", "shelf", "favourites"] {
+        assert!(has_thumb(lib.list(list).unwrap().rows()), "{list} must apply host url_filter");
+    }
+    let nes_games = lib.as_mut().games_of(&QString::from("nes"));
+    assert!(has_thumb(unsafe { &*nes_games }.rows()), "gamesOf must apply host url_filter");
+    let first_games = lib.as_mut().first_of(&QString::from("all"), 1);
+    assert!(has_thumb(unsafe { &*first_games }.rows()), "firstOf must apply host url_filter");
+    let found_games = lib.as_mut().search(&QString::from("Synth"));
+    assert!(has_thumb(unsafe { &*found_games }.rows()), "search must apply host url_filter");
     scene.assert_quiet();
 }

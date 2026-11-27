@@ -50,6 +50,8 @@ fn qt_3_4_12_eclipse_s_game_overview_is_its_board_at_every_size_and_handles_miss
         game::picture(&mut scene, "game-overview-1920x1200-software.png");
         assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));
         scene.assert_quiet();
+        scene.pad(UiButton::Accept);
+        assert_eq!(game::started(&mut scene), game::state_file(&w, game::RESUME).to_string_lossy(), "Overview Resume pill launches resume point");
     }
 
     // Undrawn states: no description shows muted placeholder; no screenshot hides art box and keeps description 900 wide.

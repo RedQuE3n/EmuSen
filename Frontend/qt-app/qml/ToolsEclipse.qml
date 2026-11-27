@@ -25,13 +25,13 @@ Kit.NormalizedCanvas {
     readonly property real cardWidth: (canvas.gridWidth - 2 * 28 * canvas.boardUnit) / 3
 
     visible: canvas.bigScreen && canvas.screens.shown === Screens.Tools
-    focus: !canvas.splashShown && canvas.visible
     onVisibleChanged: {
         if (canvas.visible && canvas.library) canvas.library.ensureMetadata()
         if (canvas.visible) toolsModel.refresh()
-        if (canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
+        if (canvas.visible && !canvas.splashShown) canvas.focusActive()
     }
-    onActiveFocusChanged: if (canvas.activeFocus) mainFocus.forceActiveFocus()
+    signal focusActive()
+    onFocusActive: mainFocus.forceActiveFocus()
 
     ToolsHubModel {
         id: toolsModel
@@ -71,7 +71,7 @@ Kit.NormalizedCanvas {
         id: frame
         objectName: "toolsFrame"
         anchors.fill: parent
-        focus: true
+        focus: !canvas.splashShown && canvas.visible
         form: Kit.Forms.BigScreen
         surfaceDrawn: false
         helpShown: false

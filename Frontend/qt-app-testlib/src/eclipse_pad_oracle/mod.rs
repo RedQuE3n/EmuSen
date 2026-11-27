@@ -261,6 +261,7 @@ fn with_pad_world(tag: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &VirtualPad, &
     let mut harness = emusen_qt_test::Harness::new();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
+    assert!(scene.set_property("clock", "now", &emusen_qt_models::words::now().to_string()));
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("settingsModel", "world", WORLD_JSON));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));

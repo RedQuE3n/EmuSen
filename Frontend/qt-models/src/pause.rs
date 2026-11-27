@@ -612,9 +612,9 @@ impl Card {
                 let slot = slot_value(facts.slot, facts.saved());
                 let mut rows = vec![
                     row(RESUME, "Resume", String::new()),
-                    row(REWIND, "Rewind", rewind_value(facts)),
+                    Row { dimmed: facts.rewind_why.is_some(), ..row(REWIND, "Rewind", rewind_value(facts)) },
                     Row { steps: true, ..row(SAVE, "Save State", slot.clone()) },
-                    Row { steps: true, ..row(LOAD, "Load State", slot) },
+                    Row { steps: true, dimmed: !facts.saved(), ..row(LOAD, "Load State", slot) },
                     Row { steps: true, section_end: self.eclipse, ..row(SPEED, "Speed", speed_value(facts.speed)) },
                 ];
                 if facts.discs.can_change {

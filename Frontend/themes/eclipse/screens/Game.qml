@@ -1195,8 +1195,8 @@ ThemeScreen {
                     lead: lead.activeFocus ? 14 : 26
                     trail: lead.activeFocus ? 34 : 28
                     gap: lead.activeFocus ? 16 : 12
-                    // Resume chooses the resume point's card; the others are their actions (R-20261123-35).
-                    onActivated: slot.row >= 0 ? Actions.pageChoose(slot.row) : Actions.pageAct(slot.act)
+                    // Resume uses RESUME_ACTION from placed_pills so every tab launches the resume point (R-20261123-35).
+                    onActivated: Actions.pageAct(slot.act)
                     onActiveFocusChanged: if (lead.activeFocus) Actions.pageFocus(slot.act, 0)
                     Keys.onLeftPressed: (event) => { (pills.itemAt(slot.index - 1) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
                     Keys.onRightPressed: (event) => { (pills.itemAt(slot.index + 1) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
@@ -1235,7 +1235,7 @@ ThemeScreen {
                     on: slot.on
                     outline: ink.pillLine
                     onColour: ink.rose
-                    onActivated: slot.row >= 0 ? Actions.pageChoose(slot.row) : Actions.pageAct(slot.act)
+                    onActivated: Actions.pageAct(slot.act)
                     onActiveFocusChanged: if (word.activeFocus) Actions.pageFocus(slot.act, 0)
                     Keys.onLeftPressed: (event) => { (pills.itemAt(slot.index - 1) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
                     Keys.onRightPressed: (event) => { (pills.itemAt(slot.index + 1) as PillSlot)?.walk?.forceActiveFocus(Qt.TabFocusReason); event.accepted = true }

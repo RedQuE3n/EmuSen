@@ -388,8 +388,9 @@ fn with_games_view(world_name: &str, f: impl FnOnce(&mut Scene<'_>, &Sdl, &Virtu
     }
     press(&mut scene, &sdl, &pad, PadControl::South);
     wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
+    let places: usize = scene.property("library", "places").parse().unwrap();
     let tree = scene.tree();
-    assert!(scene.focus_item(&tree, tree.find_named("tile.0").expect("All games on Choose a console")));
+    assert!(scene.focus_item(&tree, tree.find_named(&format!("tile.{places}")).expect("Super Nintendo on Choose a console")));
     press(&mut scene, &sdl, &pad, PadControl::South);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
     assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
@@ -524,6 +525,36 @@ pub fn controls_and_navigation() {
         let (x, y) = middle(scene, "gamesPath");
         scene.click(x, y);
         wait_for(scene, "screens", "shown", "Consoles", 2000);
+
+        // Top-level Library ("all"): Brand wordmark, Library nav active, Search shown, breadcrumb hidden, LB/RB step Home<->Library<->Consoles, B->Home.
+        press(scene, sdl, pad, PadControl::LeftShoulder);
+        wait_for(scene, "screens", "shown", "Grid", 2000);
+        assert_eq!(scene.property("screens", "key"), "all");
+        assert_eq!(scene.property("screens", "section"), "library");
+        wait_for(scene, "gamesGrid", "count", &GAMES.to_string(), 3000);
+        scene.wait(200);
+        {
+            let tree = scene.tree();
+            assert!(shown(&tree, "wordmark").is_some(), "top-level Library draws wordmark");
+            assert!(shown(&tree, "nav").is_some(), "top-level Library draws section nav");
+            assert!(shown(&tree, "navUnderline.library").is_some(), "Library tab underlined");
+            assert!(shown(&tree, "search").is_some(), "top-level Library draws search button");
+            assert!(shown(&tree, "gamesPath").is_none(), "top-level Library hides drill-down breadcrumb");
+        }
+        press(scene, sdl, pad, PadControl::LeftShoulder);
+        wait_for(scene, "screens", "shown", "Home", 2000);
+        assert_eq!(scene.property("screens", "section"), "home");
+        press(scene, sdl, pad, PadControl::RightShoulder);
+        wait_for(scene, "screens", "shown", "Grid", 2000);
+        assert_eq!(scene.property("screens", "key"), "all");
+        press(scene, sdl, pad, PadControl::RightShoulder);
+        wait_for(scene, "screens", "shown", "Consoles", 2000);
+        assert_eq!(scene.property("screens", "section"), "consoles");
+        press(scene, sdl, pad, PadControl::LeftShoulder);
+        wait_for(scene, "screens", "shown", "Grid", 2000);
+        assert_eq!(scene.property("screens", "key"), "all");
+        press(scene, sdl, pad, PadControl::East);
+        wait_for(scene, "screens", "shown", "Home", 2000);
     });
 }
 

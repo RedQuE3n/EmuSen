@@ -96,3 +96,29 @@ fn qt_3_5_a_theme_reaches_its_folder_and_nothing_else() {
     assert_eq!(scene.property("host", "liveEngines"), "0");
     assert_eq!(scene.property("host", "ready"), "false");
 }
+
+#[test]
+fn fe_p0_03_thumb_registry_accepts_only_images_and_reuses_ids() {
+    let dir = std::env::temp_dir().join(format!("emusen-thumb-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let img = dir.join("slot #1.png");
+    let txt = dir.join("note.txt");
+    std::fs::write(&img, b"\x89PNG\r\n\x1a\n").unwrap();
+    std::fs::write(&txt, b"plain").unwrap();
+
+    let handle = emusen_theme_host::sandbox::ThumbHandle::default();
+    let first = handle.allow(&img).expect("png approved");
+    let second = handle.allow(&img).expect("reuses prior id");
+    assert_eq!(first, second);
+    assert!(first.starts_with("image://thumb/"));
+    let id = first.trim_start_matches("image://thumb/");
+    assert!(handle.resolve(id).is_some());
+    assert!(handle.allow(&txt).is_none(), "non-image extensions are rejected");
+    std::fs::write(&img, b"\x89PNG\r\n\x1a\nupdated").unwrap();
+    let rotated = handle.allow(&img).expect("overwritten png receives fresh id");
+    assert_ne!(rotated, first);
+    assert!(handle.resolve(rotated.trim_start_matches("image://thumb/")).is_some());
+    assert!(handle.resolve(id).is_none(), "replaced thumbnail id is retired");
+    let _ = std::fs::remove_dir_all(&dir);
+}

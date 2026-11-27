@@ -21,8 +21,9 @@ use emusen_theme_qt::host;
 use emusen_theme_qt::page::{action_rows, board_row_rows, card_rows, content_rows, media_tile_rows, pill_rows, PageFacts};
 use emusen_theme_qt::session::SessionFacts;
 use emusen_theme_qt::view;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::mpsc::Sender;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -80,6 +81,13 @@ pub mod qobject {
         /// Each built-in theme's `theme.json`, in `themes::BUILT_IN`'s order, for the Themes tab's rows.
         #[qproperty(QStringList, manifests, READ, CONSTANT)]
         type BuiltInThemes = super::BuiltInThemesRust;
+    }
+
+    extern "RustQt" {
+        /// Merges updated settings cover stores into `current` without disturbing unrelated stores.
+        #[qinvokable]
+        #[cxx_name = "refreshCoverStores"]
+        fn refresh_cover_stores(self: &BuiltInThemes, library: &QString, current: &QStringList) -> QStringList;
     }
 
     unsafe extern "RustQt" {
@@ -179,7 +187,26 @@ impl Default for BuiltInThemesRust {
                 manifest
             })
             .collect();
-        BuiltInThemesRust { reference: QString::from(crate::reference_theme().as_str()), manifests: QStringList::from(&manifests) }
+        BuiltInThemesRust {
+            reference: QString::from(crate::reference_theme().as_str()),
+            manifests: QStringList::from(&manifests),
+        }
+    }
+}
+
+impl qobject::BuiltInThemes {
+    pub fn refresh_cover_stores(&self, library: &QString, current: &QStringList) -> QStringList {
+        let lib = library.to_string();
+        if lib.is_empty() {
+            return current.clone();
+        }
+        let cur: Vec<String> = current.iter().map(|s| s.to_string()).collect();
+        let Some(fresh) = crate::start::cover_stores_update(std::path::Path::new(&lib), &cur) else {
+            return current.clone();
+        };
+        let mut out = QList::<QString>::default();
+        fresh.iter().for_each(|s| out.append(QString::from(s.as_str())));
+        QStringList::from(&out)
     }
 }
 
@@ -200,6 +227,13 @@ struct Section {
     searching: bool,
     typing: bool,
     list_open: bool,
+}
+
+struct FactsRequest {
+    source: std::sync::Arc<dyn emusen_qt_models::library::LibrarySource>,
+    game: emusen_platform_client::library::GameFile,
+    seconds: i64,
+    qt: cxx_qt::CxxQtThread<qobject::ThemeFeed>,
 }
 
 /// The feed's state: the window's host and models, and what it last showed.
@@ -226,7 +260,10 @@ pub struct ThemeFeedRust {
     swap: bool,
     now: i64,
     /// The game whose facts were last asked for, so a read that comes back for another is dropped.
-    facts_for: std::cell::RefCell<String>,
+    facts_for: RefCell<String>,
+    facts_worker: RefCell<Option<(Sender<FactsRequest>, std::thread::JoinHandle<()>)>>,
+    library_gen: Cell<u64>,
+    browse_key: RefCell<Option<(i32, u64, i32, String, i64)>>,
     shown_section: QString,
     splash_shown: bool,
     splash_time: f64,
@@ -260,7 +297,10 @@ impl Default for ThemeFeedRust {
             reduced_motion: false,
             swap: false,
             now: 0,
-            facts_for: std::cell::RefCell::new(String::new()),
+            facts_for: RefCell::new(String::new()),
+            facts_worker: RefCell::new(None),
+            library_gen: Cell::new(0),
+            browse_key: RefCell::new(None),
             shown_section: QString::default(),
             splash_shown: false,
             splash_time: 0.0,
@@ -275,6 +315,10 @@ impl Default for ThemeFeedRust {
 impl Drop for ThemeFeedRust {
     fn drop(&mut self) {
         self.me.set(std::ptr::null_mut());
+        if let Some((tx, handle)) = self.facts_worker.borrow_mut().take() {
+            drop(tx);
+            let _ = handle.join();
+        }
     }
 }
 
@@ -487,7 +531,7 @@ impl ActionSink for Sink {
             (ScreenAction::PageFocus(action, row), _, Some(p)) => {
                 let actions = p.shown_actions().len();
                 let count = p.shown_items().len().max(p.board_rows().len());
-                let took = (*action == -1 || within(*action, actions)) && (*row == 0 || within(*row, count));
+                let took = (*action == -1 || *action == emusen_qt_models::game_page::RESUME_ACTION || within(*action, actions)) && (*row == 0 || within(*row, count));
                 if took {
                     p.focus(*action, *row);
                 }
@@ -572,8 +616,12 @@ impl qobject::ThemeFeed {
     }
 
     fn feed_library(&self) {
+        self.library_gen.set(self.library_gen.get().wrapping_add(1));
+        self.browse_key.borrow_mut().take();
         let (Some(library), Some(engine)) = (self.library(), self.engine()) else { return };
+        let filter = unsafe { self.host.as_ref() }.map(|h| h.media_filter());
         if let Some(mut view) = host::library(engine) {
+            view.as_mut().set_url_filter(filter);
             view.as_mut().show(library.view(), &library.home_lines().to_string());
         }
     }
@@ -623,6 +671,8 @@ impl qobject::ThemeFeed {
         let Some(section) = self.section.clone() else { return };
         // Safety: the grid's model is the window's, alive as long as the feed.
         let (Some(games), Some(library)) = (unsafe { section.games.as_ref() }, self.library()) else { return };
+        let Some(engine) = self.engine() else { return };
+        let host_gen = unsafe { self.host.as_ref() }.map_or(-1, |h| *h.generation());
         let open = (section.searching, section.typing, section.list_open);
         let searched = !games.search().is_empty();
         let mut facts = facts_of(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
@@ -631,15 +681,23 @@ impl qobject::ThemeFeed {
         facts.filter = games.filter_key();
         facts.sort = games.sort_words().to_owned();
         facts.letter = letter;
-        let rows = view::games(library.view(), games.rows(), self.at());
-        let (filters, letters) = (view::filters(games.choices()), view::letters(&letters));
+        let cache_key = (host_gen, self.library_gen.get(), *games.revision(), section.key.clone(), self.now);
+        let rebuild = *self.browse_key.borrow() != Some(cache_key.clone());
         let focused = usize::try_from(*games.focused()).ok().and_then(|i| games.rows().get(i)).map(|g| g.path.clone()).unwrap_or_default();
         self.ask_facts(library, focused);
-        let Some(engine) = self.engine() else { return };
         if let Some(mut browse) = host::browse(engine) {
-            browse.as_mut().show_games(rows);
-            browse.show_listing(filters, letters);
+            if rebuild {
+                let mut rows = view::games(library.view(), games.rows(), self.at());
+                view::map_game_urls(&mut rows, &|u| self.thumb_or_url(u));
+                let (filters, letters) = (view::filters(games.choices()), view::letters(&letters));
+                browse.as_mut().show_games(rows);
+                browse.as_mut().show_listing(filters, letters);
+                *self.browse_key.borrow_mut() = Some(cache_key);
+            }
             browse.show(&facts);
+        }
+        if let Some(host_mut) = unsafe { self.host.as_mut() } {
+            unsafe { Pin::new_unchecked(host_mut) }.sync_warnings();
         }
     }
 
@@ -719,6 +777,19 @@ impl qobject::ThemeFeed {
         }
     }
 
+    /// Proxies out-of-store regular image files through the host's `image://thumb/<id>` provider.
+    fn thumb_or_url(&self, url: String) -> String {
+        if url.is_empty() || url.starts_with("qrc:") || url.starts_with("image:") {
+            return url;
+        }
+        let Some(host) = (unsafe { self.host.as_ref() }) else { return url };
+        if host.allows_url(&url) {
+            return url;
+        }
+        let allowed = host.allow_thumb(&url);
+        if allowed.is_empty() { url } else { allowed }
+    }
+
     fn feed_page(&self) {
         // Safety: the model is the window's, alive as long as the feed.
         let Some(page) = (unsafe { self.page.as_ref() }) else { return };
@@ -729,21 +800,44 @@ impl qobject::ThemeFeed {
         let words = |l: &QStringList| QList::<QString>::from(l).iter().map(|w| w.to_string()).collect::<Vec<_>>();
         let (row_sentence, row_place) = page.board_aside();
         let (crop_picture, crop_ratios, crop_edge) = page.crop_preview();
+        let mut cards = card_rows(&page.cards());
+        // ThemeRows `cards` places `picture` at column 3 (page::PAGE_CARD_ROLES).
+        for row in &mut cards {
+            if let Some(view::Cell::Text(u)) = row.get_mut(3) {
+                *u = self.thumb_or_url(std::mem::take(u));
+            }
+        }
+        let mut media_tiles = media_tile_rows(&page.media_cards());
+        // ThemeRows `mediaTiles` places `picture` at column 2 (page::PAGE_MEDIA_TILE_ROLES).
+        for row in &mut media_tiles {
+            if let Some(view::Cell::Text(u)) = row.get_mut(2) {
+                *u = self.thumb_or_url(std::mem::take(u));
+            }
+        }
+        let mut rows = content_rows(page.shown_items());
+        // ThemeRows `rows` places `picture` at column 4 (page::PAGE_ROW_ROLES).
+        for row in &mut rows {
+            if let Some(view::Cell::Text(u)) = row.get_mut(4) {
+                *u = self.thumb_or_url(std::mem::take(u));
+            }
+        }
+        let view_kind = *page.view_kind();
+        let view_source = if view_kind == 0 { self.thumb_or_url(text(page.view_source())) } else { text(page.view_source()) };
         let facts = PageFacts {
             ready: *page.ready(),
             key: page.game_key().to_owned(),
             title: text(page.title()),
             facts: text(page.facts()),
-            cover: text(page.cover()),
-            hero: text(page.hero()),
+            cover: self.thumb_or_url(text(page.cover())),
+            hero: self.thumb_or_url(text(page.hero())),
             clip: text(page.clip()),
             actions: action_rows(&page.shown_actions()),
             sections: words(page.sections()),
             section: *page.section(),
             shows: *page.shows(),
             words: text(page.words()),
-            picture: text(page.picture()),
-            rows: content_rows(page.shown_items()),
+            picture: self.thumb_or_url(text(page.picture())),
+            rows,
             cover_art: *page.cover_art(),
             focused: page.focused(),
             help: emusen_theme_qt::help::kind_of(page.help_screen()).map_or(-1, |k| k.repr),
@@ -757,7 +851,7 @@ impl qobject::ThemeFeed {
             kicker: page.kicker(),
             line: page.line(),
             pills: pill_rows(&page.pills()),
-            cards: card_rows(&page.cards()),
+            cards,
             note: page.cards_note().to_owned(),
             trail: page.trail(),
             trail_section: emusen_qt_models::screens::CONSOLES_KEY.to_owned(),
@@ -768,21 +862,21 @@ impl qobject::ThemeFeed {
             row_sentence,
             row_place,
             defaultable: page.defaultable(),
-            media_tiles: media_tile_rows(&page.media_cards()),
+            media_tiles,
             media_note: page.media_note().to_owned(),
             coverable: page.coverable(),
             subpage: page.subpage() as i32,
             subpage_title: page.subpage_title().to_owned(),
             subpage_subtitle: page.subpage_subtitle(),
-            view_kind: *page.view_kind(),
-            view_source: text(page.view_source()),
+            view_kind,
+            view_source,
             view_manual: text(page.view_manual()),
             view_caption: page.board_view_caption(),
             view_page: *page.view_page(),
             view_zoom: *page.view_zoom(),
             view_pan_x: *page.view_pan_x(),
             view_pan_y: *page.view_pan_y(),
-            crop_picture,
+            crop_picture: self.thumb_or_url(crop_picture),
             crop_left: crop_ratios[0],
             crop_right: crop_ratios[1],
             crop_top: crop_ratios[2],
@@ -792,10 +886,12 @@ impl qobject::ThemeFeed {
         if let Some(view) = self.engine().and_then(host::page) {
             view.show(&facts);
         }
+        if let Some(host_mut) = unsafe { self.host.as_mut() } {
+            unsafe { Pin::new_unchecked(host_mut) }.sync_warnings();
+        }
     }
 
-    /// Reads the focused game's facts off the GUI thread when the focus has moved to another game, and feeds them to
-    /// `Browse` when they come back for the game still focused (EmuSen_Qt.md §3.4.10).
+    /// Reads the focused game's facts on a single coalescing worker thread when the focus moves.
     fn ask_facts(&self, library: &LibraryModel, path: String) {
         if *self.facts_for.borrow() == path {
             return;
@@ -808,14 +904,42 @@ impl qobject::ThemeFeed {
         };
         let seconds = emusen_qt_models::library::seconds_played(&library.view().catalog, &path);
         let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let facts = emusen_qt_models::library::facts_of(source.as_ref(), &game, seconds).unwrap_or_else(|_| emusen_qt_models::library::GameFacts { path: game.path.clone(), ..Default::default() });
-            let _ = qt.queue(move |feed| {
-                if *feed.facts_for.borrow() == facts.path {
-                    feed.show_facts(facts);
+        let mut req = FactsRequest { source, game, seconds, qt };
+        let mut worker = self.facts_worker.borrow_mut();
+        if let Some((tx, handle)) = worker.take() {
+            match tx.send(req) {
+                Ok(()) => {
+                    *worker = Some((tx, handle));
+                    return;
                 }
-            });
+                Err(std::sync::mpsc::SendError(returned)) => {
+                    req = returned;
+                    drop(tx);
+                    let _ = handle.join();
+                }
+            }
+        }
+        // Respawn only on first call or if a stale receiver exited after a failed queue.
+        let (send, take) = std::sync::mpsc::channel::<FactsRequest>();
+        let handle = std::thread::spawn(move || {
+            while let Ok(mut latest) = take.recv() {
+                while let Ok(newer) = take.try_recv() {
+                    latest = newer;
+                }
+                let facts = emusen_qt_models::library::facts_of(latest.source.as_ref(), &latest.game, latest.seconds)
+                    .unwrap_or_else(|_| emusen_qt_models::library::GameFacts { path: latest.game.path.clone(), ..Default::default() });
+                let sent = latest.qt.queue(move |feed| {
+                    if *feed.facts_for.borrow() == facts.path {
+                        feed.show_facts(facts);
+                    }
+                });
+                if sent.is_err() {
+                    break;
+                }
+            }
         });
+        let _ = send.send(req);
+        *worker = Some((send, handle));
     }
 
     fn show_facts(&self, facts: emusen_qt_models::library::GameFacts) {

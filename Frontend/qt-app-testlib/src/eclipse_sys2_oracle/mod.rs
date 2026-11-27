@@ -351,11 +351,12 @@ pub fn sys2(backend: &str) {
         picture(&mut scene, "tools.png");
     }
 
-    // All 6 Tools routes open their target screens and B comes back to Tools.
+    // All 6 Tools routes open their target screens and B comes back to Tools with focus settled.
     click_named(&mut scene, "toolCard.0");
     wait_for(&mut scene, "screens", "shown", "Cores", 3000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Tools", 3000);
+    assert_eq!(scene.property("toolsFrame", "activeFocus"), "true", "Tools keeps active focus after returning from Cores");
 
     for (idx, expected_tool) in [(1, "scraper"), (2, "packages"), (3, "library")] {
         click_named(&mut scene, &format!("toolCard.{idx}"));
@@ -363,24 +364,22 @@ pub fn sys2(backend: &str) {
         assert_eq!(scene.property("screens", "tool"), expected_tool);
         scene.pad(UiButton::Back);
         wait_for(&mut scene, "screens", "shown", "Tools", 3000);
+        assert_eq!(scene.property("toolsFrame", "activeFocus"), "true", "Tools keeps active focus after returning from {expected_tool}");
     }
 
     click_named(&mut scene, "toolCard.4");
-    wait_for(&mut scene, "screens", "shown", "Themes", 3000);
+    wait_for(&mut scene, "screens", "shown", "Settings", 3000);
+    wait_for(&mut scene, "settingsHeading", "text", "Themes", 3000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Tools", 3000);
+    assert_eq!(scene.property("toolsFrame", "activeFocus"), "true", "Tools keeps active focus after returning from Themes");
 
     click_named(&mut scene, "toolCard.5");
     wait_for(&mut scene, "screens", "shown", "Settings", 3000);
     scene.wait(200);
-    for _ in 0..4 {
-        if scene.property("screens", "shown") == "Tools" {
-            break;
-        }
-        scene.pad(UiButton::Back);
-        scene.wait(150);
-    }
+    scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Tools", 3000);
+    assert_eq!(scene.property("toolsFrame", "activeFocus"), "true", "Tools keeps active focus after returning from Memory cards");
 
     assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));
 }

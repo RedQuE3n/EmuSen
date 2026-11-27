@@ -513,11 +513,11 @@ pub fn oracle(backend: &str) {
     assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 1]), "RT on the last maker stays");
     press(&mut scene, &sdl, &pad, PadControl::LeftTrigger);
     assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 2]), "LT to the maker before");
-    // LB and RB step the sections, not the makers (R-20261115-17): LB opens Library, and B comes back to the plate.
+    // LB and RB step the sections (R-20261115-17, R-20261126-2): LB opens Library, RB steps back to Consoles, and B from Library returns to Home.
     press(&mut scene, &sdl, &pad, PadControl::LeftShoulder);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
     assert_eq!(scene.property("screens", "key"), emusen_qt_models::library::ALL, "LB on Consoles opens Library, every game (R-20261115-17)");
-    press(&mut scene, &sdl, &pad, PadControl::East);
+    press(&mut scene, &sdl, &pad, PadControl::RightShoulder);
     wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
     for _ in 0..40 {
         if focused(&mut scene).starts_with("plate.") {

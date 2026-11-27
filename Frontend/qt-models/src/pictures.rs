@@ -42,14 +42,18 @@ pub const NAME: &str = "session";
 /// The session the pictures are read from, none while no game is open; shared with the model that opens it.
 pub type Shown = Arc<Mutex<Option<(Runtime, SessionId)>>>;
 
+/// State slot PNG paths keyed by slot number, shared with `SessionModel` to avoid bare filesystem URLs.
+pub type Slots = Arc<Mutex<Vec<(u32, String)>>>;
+
 /// What the provider reads from.
 pub struct PictureSource {
     shown: Shown,
+    slots: Slots,
 }
 
 impl PictureSource {
-    pub fn new(shown: Shown) -> Box<PictureSource> {
-        Box::new(PictureSource { shown })
+    pub fn new(shown: Shown, slots: Slots) -> Box<PictureSource> {
+        Box::new(PictureSource { shown, slots })
     }
 }
 
@@ -107,7 +111,9 @@ pub fn save_now(runtime: &Runtime, session: SessionId, path: &str) -> bool {
 fn picture_of(source: &PictureSource, id: &QString) -> QImage {
     let id = id.to_string();
     let what = id.split_once('/').map_or("", |(_, what)| what);
-    if let Some(path) = what.strip_prefix("file/") {
+    if let Some(slot) = what.strip_prefix("slot/").and_then(|s| s.parse::<u32>().ok()) {
+        let path = source.slots.lock().unwrap_or_else(PoisonError::into_inner).iter().find(|(n, _)| *n == slot).map(|(_, p)| p.clone());
+        let Some(path) = path else { return QImage::default() };
         let bytes = std::fs::read(path).unwrap_or_default();
         return QImage::from_data(&bytes, None).unwrap_or_default();
     }

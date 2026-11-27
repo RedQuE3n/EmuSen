@@ -259,8 +259,10 @@ impl cxx_qt::Initialize for qobject::FrameController {
                     return;
                 }
                 let key = this.selected_section.to_string();
-                this.as_mut().rust_mut().walk.select_section(&key);
-                this.sync();
+                // Keep a pending section across empty sections so apply_sections() receives it regardless of binding order.
+                if this.as_mut().rust_mut().walk.select_section(&key) || this.walk.selected_section().is_some() {
+                    this.sync();
+                }
             })
             .release();
     }

@@ -109,6 +109,14 @@ pub trait LibrarySource: Send + Sync {
     fn states(&self, _game: &GameFile) -> Result<Vec<crate::game_page::State>, String> {
         Ok(Vec::new())
     }
+    /// Full records table snapshot (`{ path: record }`) to avoid repeated C-ABI queries in one refresh.
+    fn records_table(&self) -> Result<Option<serde_json::Value>, String> {
+        Ok(None)
+    }
+    /// Full edits table snapshot (`{ path: edits }`) to avoid repeated C-ABI queries in one refresh.
+    fn edits_table(&self) -> Result<Option<serde_json::Value>, String> {
+        Ok(None)
+    }
 }
 
 /// The facts a games view draws beside its focused game (EmuSen_Qt.md §3.4.10), each empty or 0 where the program holds none.
@@ -623,6 +631,46 @@ impl LibrarySource for FirstLook<'_> {
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
         self.0.folder_links()
     }
+    fn records_table(&self) -> Result<Option<serde_json::Value>, String> {
+        self.0.records_table()
+    }
+    fn edits_table(&self) -> Result<Option<serde_json::Value>, String> {
+        self.0.edits_table()
+    }
+}
+
+pub fn favourites_from_records(records: &serde_json::Value, games: &[GameFile]) -> Vec<String> {
+    let favourite = |g: &&GameFile| records.get(&g.path).and_then(|r| r.get("favourite")).and_then(serde_json::Value::as_bool).unwrap_or(false);
+    games.iter().filter(favourite).map(|g| g.path.clone()).collect()
+}
+
+pub fn hidden_from_edits(edits: &serde_json::Value, games: &[GameFile]) -> Vec<String> {
+    let hidden = |g: &&GameFile| edits.get(&g.path).is_some_and(|e| crate::edits::flag(e, crate::edits::HIDDEN));
+    games.iter().filter(hidden).map(|g| g.path.clone()).collect()
+}
+
+pub fn names_from_edits(edits: &serde_json::Value, games: &[GameFile]) -> Vec<(String, String)> {
+    let named = |g: &GameFile| {
+        edits
+            .get(&g.path)?
+            .get(crate::edits::NAME)?
+            .as_str()
+            .filter(|n| !n.trim().is_empty())
+            .map(|n| (g.path.clone(), n.to_owned()))
+    };
+    games.iter().filter_map(named).collect()
+}
+
+pub fn played_from_records(records: &serde_json::Value, games: &[GameFile]) -> Vec<(String, i64)> {
+    let at = |g: &GameFile| records.get(&g.path)?.get("last_played")?.as_str().and_then(crate::words::parse_utc);
+    games.iter().filter_map(|g| at(g).map(|t| (g.path.clone(), t))).collect()
+}
+
+pub fn plays_from_records(records: &serde_json::Value, games: &[GameFile]) -> Vec<(String, Plays)> {
+    // games.db keeps play_seconds as a real (Platform/library/src/records.rs).
+    let number = |r: &serde_json::Value, key: &str| r.get(key).and_then(serde_json::Value::as_f64).map_or(0, |n| n as i64);
+    let of = |g: &GameFile| records.get(&g.path).map(|r| (g.path.clone(), Plays { count: number(r, "play_count"), seconds: number(r, "play_seconds") }));
+    games.iter().filter_map(of).collect()
 }
 
 /// One refresh of a source, run off the GUI thread, every gamelist as it first lists.
@@ -638,23 +686,41 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
     let mut games = source.games()?;
     let settings = source.settings()?;
     let themed = crate::esde_shelves::settings_of(&settings).themed;
+    let records = source.records_table()?;
+    let edits = source.edits_table()?;
     // A hidden game leaves every view until Settings lists hidden games again (Mistress's `Listed`).
     if !settings.get(SHOW_HIDDEN).and_then(serde_json::Value::as_bool).unwrap_or(false) {
-        let hidden: HashSet<String> = source.hidden(&games)?.into_iter().collect();
+        let hidden_list = match &edits {
+            Some(e) => hidden_from_edits(e, &games),
+            None => source.hidden(&games)?,
+        };
+        let hidden: HashSet<String> = hidden_list.into_iter().collect();
         games.retain(|g| !hidden.contains(&g.path));
     }
-    let favourites = source.favourites(&games)?;
+    let favourites = match &records {
+        Some(r) => favourites_from_records(r, &games),
+        None => source.favourites(&games)?,
+    };
     let recent = source.recent(&games)?;
     let engines = source.engines(&systems)?;
     let covers = source.media(&systems, &games, &[COVER])?;
     let played_games: Vec<GameFile> = games.iter().filter(|g| recent.contains(&g.path)).cloned().collect();
     let heroes = source.media(&systems, &played_games, &HERO)?;
-    let played = source.played(&games)?;
-    let plays = source.plays(&games)?;
+    let played = match &records {
+        Some(r) => played_from_records(r, &games),
+        None => source.played(&games)?,
+    };
+    let plays = match &records {
+        Some(r) => plays_from_records(r, &games),
+        None => source.plays(&games)?,
+    };
     let metadata = if themed || by_facts { source.metadata(&games)? } else { Vec::new() };
     // Read for the consoles that start empty alone, a call each, so Start Console's pane says what the runtime finds.
     let firmware = systems.iter().filter(|s| s.starts_empty && !s.engines.is_empty()).map(|s| (s.id.clone(), firmware_line(source.firmware(&s.id)))).collect();
-    let names = source.names(&games)?;
+    let names = match &edits {
+        Some(e) => names_from_edits(e, &games),
+        None => source.names(&games)?,
+    };
     let collections = source.collections()?;
     let last = recent.first().and_then(|p| games.iter().find(|g| &g.path == p));
     let console = last.and_then(|g| systems.iter().find(|s| Some(&s.id) == g.system.as_ref()));

@@ -230,6 +230,7 @@ FocusScope {
                         icon: row.model.icon ?? ""
                         steps: row.model.steps ?? false
                         opens: row.model.opens ?? false
+                        dimmed: row.model.dimmed ?? false
                         sectionEnd: row.model.sectionEnd ?? false
                         current: ListView.isCurrentItem
                         focus: ListView.isCurrentItem

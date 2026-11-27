@@ -18,9 +18,23 @@ pub fn current(shown: Shown) -> Option<&'static Section> {
     SECTIONS.iter().find(|s| s.screen == shown && s.at.is_none())
 }
 
+/// The section shown on `shown` at `at` (mapping top-level Grid at `"all"` to `"library"`), falling back to `current`.
+pub fn current_at(shown: Shown, at: &str) -> Option<&'static Section> {
+    SECTIONS.iter().find(|s| s.screen == shown && s.at.is_some_and(|place| place == at)).or_else(|| current(shown))
+}
+
 /// The section a key opens from the shown screen: none from a screen that draws no nav, for the section already shown, or
 /// for a key that names none.
 pub fn opened(shown: Shown, key: &str) -> Option<&'static Section> {
-    let from = current(shown)?;
+    opened_at_inner(current(shown), key)
+}
+
+/// As `opened`, taking Grid's `at` key into account so top-level Library steps to sibling sections.
+pub fn opened_at(shown: Shown, at: &str, key: &str) -> Option<&'static Section> {
+    opened_at_inner(current_at(shown, at), key)
+}
+
+fn opened_at_inner(from: Option<&'static Section>, key: &str) -> Option<&'static Section> {
+    let from = from?;
     by_key(key).filter(|s| s.key != from.key)
 }

@@ -26,17 +26,20 @@ Kit.NormalizedCanvas {
     readonly property bool sheetOpen: frame.controller.sheetOpen
     onSheetOpenChanged: {
         if (!canvas.sheetOpen) collectionsModel.dialogSettled()
-        if (!canvas.sheetOpen && !collectionsModel.dialogOpen && !collectionsModel.typingOpen && canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
+        if (!canvas.sheetOpen && canvas.visible && !canvas.splashShown) canvas.focusActive()
     }
 
     visible: canvas.bigScreen && canvas.screens.shown === Screens.Collections
-    focus: !canvas.splashShown && canvas.visible
     onVisibleChanged: {
         if (canvas.visible && canvas.library) canvas.library.ensureMetadata()
         if (canvas.visible) collectionsModel.refresh()
-        if (canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
+        if (canvas.visible && !canvas.splashShown) canvas.focusActive()
     }
-    onActiveFocusChanged: if (canvas.activeFocus && !collectionsModel.dialogOpen && !collectionsModel.typingOpen) mainFocus.forceActiveFocus()
+    signal focusActive()
+    onFocusActive: {
+        if (collectionsModel.typingOpen) collectionKeyboard.forceActiveFocus()
+        else if (!collectionsModel.dialogOpen && !canvas.sheetOpen) mainFocus.forceActiveFocus()
+    }
 
     CollectionsEclipseModel {
         id: collectionsModel
@@ -51,7 +54,7 @@ Kit.NormalizedCanvas {
                 mainFocus.forceActiveFocus()
             }
         }
-        onDialogOpenChanged: if (!collectionsModel.dialogOpen && !collectionsModel.typingOpen && canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
+        onDialogOpenChanged: if (!collectionsModel.dialogOpen && !collectionsModel.typingOpen && !canvas.sheetOpen && canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
     }
 
     Connections {
@@ -85,7 +88,7 @@ Kit.NormalizedCanvas {
         id: frame
         objectName: "collectionsFrame"
         anchors.fill: parent
-        focus: true
+        focus: !canvas.splashShown && canvas.visible
         form: Kit.Forms.BigScreen
         surfaceDrawn: false
         helpShown: false

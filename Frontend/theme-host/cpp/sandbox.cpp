@@ -8,11 +8,42 @@
 #include <QtCore/QLibraryInfo>
 #include <QtCore/QMutexLocker>
 #include <QtCore/QTimer>
+#include <QtGui/QImage>
 #include <QtNetwork/QNetworkRequest>
 #include <QtQml/QQmlComponent>
 #include <QtQml/QQmlContext>
+#include <QtQuick/QQuickImageProvider>
 
 namespace {
+
+// Read-only image provider serving host-approved thumbnail paths under `image://thumb/<id>`.
+class ThumbImageProvider : public QQuickImageProvider {
+public:
+    explicit ThumbImageProvider(rust::Box<ThumbHandle> thumbs)
+        : QQuickImageProvider(QQuickImageProvider::Image), m_thumbs(std::move(thumbs)) {}
+
+    QImage requestImage(const QString& id, QSize* size, const QSize& requestedSize) override
+    {
+        const QString path = thumbPath(*m_thumbs, id);
+        if (path.isEmpty()) {
+            return {};
+        }
+        QImage image(path);
+        if (image.isNull()) {
+            return {};
+        }
+        if (size != nullptr) {
+            *size = image.size();
+        }
+        if (requestedSize.width() > 0 && requestedSize.height() > 0) {
+            image = image.scaled(requestedSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        }
+        return image;
+    }
+
+private:
+    rust::Box<ThumbHandle> m_thumbs;
+};
 
 // The folder a refused URL is rewritten into: it never exists, so the engine reports the file missing, synchronously, with no network.
 const QString REFUSED = QStringLiteral("/emusen-refused");
@@ -75,13 +106,14 @@ QNetworkAccessManager* SandboxNetwork::create(QObject* parent)
     return new RefusingManager(log, parent);
 }
 
-Sandbox::Sandbox(const Policy& policy) : interceptor(policy, log), network(log), engine(std::make_unique<QQmlEngine>())
+Sandbox::Sandbox(const Policy& policy, rust::Box<ThumbHandle> thumbs) : interceptor(policy, log), network(log), engine(std::make_unique<QQmlEngine>())
 {
     engine->setImportPathList({ sandbox_qt_qml(), QStringLiteral("qrc:/qt/qml"), QStringLiteral("qrc:/qt-project.org/imports") });
     // "." is Qt's default: a qmldir's plugin is found in its own folder, one the qmldir check has allowed.
     engine->setPluginPathList({ QStringLiteral(".") });
     engine->addUrlInterceptor(&interceptor);
     engine->setNetworkAccessManagerFactory(&network);
+    engine->addImageProvider(QStringLiteral("thumb"), new ThumbImageProvider(std::move(thumbs)));
     engine->setOfflineStoragePath(QString());
     QObject::connect(engine.get(), &QQmlEngine::warnings, engine.get(), [this](const QList<QQmlError>& warnings) {
         for (const QQmlError& w : warnings) {
@@ -141,9 +173,9 @@ bool Sandbox::place(const QString& url, QQuickItem* slot)
     return true;
 }
 
-std::unique_ptr<Sandbox> sandbox_new(const Policy& policy)
+std::unique_ptr<Sandbox> sandbox_new(const Policy& policy, rust::Box<ThumbHandle> thumbs)
 {
-    return std::make_unique<Sandbox>(policy);
+    return std::make_unique<Sandbox>(policy, std::move(thumbs));
 }
 
 bool sandbox_place(Sandbox& sandbox, const QString& url, QQuickItem* slot)

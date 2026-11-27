@@ -285,6 +285,19 @@ pub fn games(view: &LibraryView, list: &[GameRow], now: i64) -> Vec<Row> {
     list.iter().map(|g| game(g, &shapes, now)).collect()
 }
 
+/// Rewrites `cover` (col 2) and `hero` (col 15) URLs across `GAME_ROLES` rows with `map`.
+pub fn map_game_urls(rows: &mut [Row], map: &dyn Fn(String) -> String) {
+    for row in rows {
+        for col in [2, 15] {
+            if let Some(Cell::Text(url)) = row.get_mut(col) {
+                if !url.is_empty() {
+                    *url = map(std::mem::take(url));
+                }
+            }
+        }
+    }
+}
+
 /// The games a console or a place leads to (`all`, `favourites`, `recent`); none for an id that is neither.
 pub fn games_of(view: &LibraryView, id: &str, now: i64) -> Vec<Row> {
     games(view, &library::games_of_at(id, &view.systems, &view.catalog, now), now)

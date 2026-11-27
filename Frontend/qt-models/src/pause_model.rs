@@ -4,7 +4,7 @@
 
 use crate::help_model::shown_screen;
 use crate::row_roles;
-use crate::pause::{Card, Facts, Outcome, Page};
+use crate::pause::{self, Card, Facts, Outcome, Page};
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant, QVector};
@@ -279,6 +279,7 @@ pub struct PauseModelRust {
     badge: QString,
     position_line: QString,
     card: Card,
+    rows: Vec<pause::Row>,
     /// The page and the count of the rows the view holds, so a value's change is a data change and a page's a reset.
     rows_of: Option<(Page, usize)>,
 }
@@ -286,6 +287,7 @@ pub struct PauseModelRust {
 impl Default for PauseModelRust {
     fn default() -> Self {
         let card = Card::default();
+        let rows = card.rows();
         PauseModelRust {
             page: PausePage::First,
             game: QString::default(),
@@ -305,6 +307,7 @@ impl Default for PauseModelRust {
             badge: QString::default(),
             position_line: QString::from(card.position_line().as_str()),
             card,
+            rows,
             rows_of: None,
         }
     }
@@ -379,8 +382,7 @@ fn shown_page(page: Page) -> PausePage {
 
 impl qobject::PauseModel {
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let rows = self.card.rows();
-        let shown = rows.get(index.row() as usize).map(|r| row_roles::Shown {
+        let shown = self.rows.get(index.row() as usize).map(|r| row_roles::Shown {
             key: r.key,
             label: &r.label,
             value: &r.value,
@@ -398,7 +400,7 @@ impl qobject::PauseModel {
     }
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
-        self.card.rows().len() as i32
+        self.rows.len() as i32
     }
 
     pub fn open(mut self: Pin<&mut Self>) {
@@ -526,14 +528,22 @@ impl qobject::PauseModel {
     /// The page's rows and words read again from the card.
     fn shown(mut self: Pin<&mut Self>) {
         let game = self.game.to_string();
-        let now = (self.card.page, self.card.rows().len());
+        let rows = self.card.rows();
+        let now = (self.card.page, rows.len());
         if self.rows_of != Some(now) {
             self.as_mut().begin_reset_model();
-            self.as_mut().rust_mut().rows_of = Some(now);
+            {
+                let mut r = self.as_mut().rust_mut();
+                r.rows = rows;
+                r.rows_of = Some(now);
+            }
             self.as_mut().end_reset_model();
-        } else if now.1 > 0 {
-            let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(now.1 as i32 - 1, 0, &QModelIndex::default()));
-            self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
+        } else {
+            self.as_mut().rust_mut().rows = rows;
+            if now.1 > 0 {
+                let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(now.1 as i32 - 1, 0, &QModelIndex::default()));
+                self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
+            }
         }
         let console = self.console.to_string();
         let title = QString::from(self.card.title(&game).as_str());

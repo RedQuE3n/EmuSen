@@ -452,7 +452,7 @@ ThemeScreen {
                                     Glow {
                                         objectName: "tileShadow." + tile.index
                                         anchors.fill: parent
-                                        visible: !tile.activeFocus
+                                        visible: tile.visible && !tile.activeFocus
                                         radius: tile.radius
                                         color: "#73000000"
                                         blur: 30 * design.unit
@@ -462,7 +462,7 @@ ThemeScreen {
                                     RoundPicture {
                                         objectName: "tileArt." + tile.index
                                         anchors.fill: parent
-                                        source: tile.hero
+                                        source: tile.visible ? tile.hero : ""
                                         radius: tile.radius
                                         crop: true
                                         pixelScale: canvas.unit
@@ -480,8 +480,7 @@ ThemeScreen {
                                         shadeInk: ink.shade
                                         shadeClear: ink.shadeClear
                                     }
-                                    // The board's ring for a tile: 4 px of the ground's dark, 3 px of the accent, and 40 px of glow 10 px out at
-                                    // rgba(240, 180, 196, 0.5) (Main:113), measures of the design.
+                                    // Tile focus ring: 4 px gap, 3 px accent, 40 px glow 10 px out at rgba(240, 180, 196, 0.5) (Main:113).
                                     FocusRing {
                                         objectName: "tileRing"
                                         anchors.fill: parent
@@ -493,7 +492,7 @@ ThemeScreen {
                                         glowSpread: 10 * design.unit
                                         bandRadius: tile.radius + 7 * design.unit
                                         pixelScale: canvas.unit
-                                        visible: tile.activeFocus
+                                        visible: tile.visible && tile.activeFocus
                                         opacity: encore.handed
                                     }
                                 }

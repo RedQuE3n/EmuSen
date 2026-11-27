@@ -13,6 +13,7 @@ use cxx_qt_lib::QList;
 use emusen_qt_models::library::{LibraryView, FAVOURITES, RECENT};
 use emusen_qt_models::words;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -103,15 +104,25 @@ pub struct ThemeLibraryRust {
     lines: Vec<(String, bool)>,
     declined: Vec<String>,
     art_hues_read: i32,
-    /// Each picture's hues as read, by its path, when its file last changed and how many were asked; a picture being read is
-    /// listed with none, and one written again, or written after it was first asked for, is read again.
-    hues: HashMap<Asked, Vec<f64>>,
-    /// The one thread that reads pictures, one after another, started at the first asked for; it ends with the library.
-    reader: Option<std::sync::mpsc::Sender<Asked>>,
+    scan_gen: u64,
+    /// Cached hues keyed by `(path, count)` with last scan generation and file mtime checked off the GUI thread.
+    hues: HashMap<(String, usize), CachedHues>,
+    reader: Option<std::sync::mpsc::Sender<AskHues>>,
+    url_filter: Option<Rc<dyn Fn(String) -> String>>,
 }
 
-/// A picture's hues asked for: its path, when its file last changed (none while there is no file), and how many.
-type Asked = (String, Option<std::time::SystemTime>, usize);
+struct CachedHues {
+    gen: u64,
+    modified: Option<std::time::SystemTime>,
+    hues: Vec<f64>,
+}
+
+struct AskHues {
+    path: String,
+    most: usize,
+    gen: u64,
+    prev_modified: Option<std::time::SystemTime>,
+}
 
 impl Default for ThemeLibraryRust {
     fn default() -> Self {
@@ -138,8 +149,10 @@ impl Default for ThemeLibraryRust {
             lines: Vec::new(),
             declined: Vec::new(),
             art_hues_read: 0,
+            scan_gen: 1,
             hues: HashMap::new(),
             reader: None,
+            url_filter: None,
         }
     }
 }
@@ -150,6 +163,13 @@ fn fill(list: *mut ThemeRows, rows: Vec<Row>) {
     if let Some(list) = unsafe { list.as_mut() } {
         unsafe { Pin::new_unchecked(list) }.replace(rows);
     }
+}
+
+fn fill_games(list: *mut ThemeRows, mut rows: Vec<Row>, filter: Option<&dyn Fn(String) -> String>) {
+    if let Some(map) = filter {
+        view::map_game_urls(&mut rows, map);
+    }
+    fill(list, rows);
 }
 
 impl cxx_qt::Initialize for qobject::ThemeLibrary {
@@ -189,24 +209,41 @@ impl qobject::ThemeLibrary {
         if path.is_empty() || most <= 0 {
             return out;
         }
-        let changed = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-        let asked = (path, changed, most as usize);
-        if let Some(hues) = self.hues.get(&asked) {
-            hues.iter().for_each(|h| out.append(*h));
-            return out;
+        let most = most as usize;
+        let gen = self.scan_gen;
+        let cache_key = (path.clone(), most);
+        let prev_modified = if let Some(cached) = self.hues.get(&cache_key) {
+            cached.hues.iter().for_each(|h| out.append(*h));
+            if cached.gen == gen {
+                return out;
+            }
+            cached.modified
+        } else {
+            self.as_mut().rust_mut().hues.insert(cache_key.clone(), CachedHues { gen, modified: None, hues: Vec::new() });
+            None
+        };
+        if let Some(entry) = self.as_mut().rust_mut().hues.get_mut(&cache_key) {
+            entry.gen = gen;
         }
-        self.as_mut().rust_mut().hues.insert(asked.clone(), Vec::new());
         if self.reader.is_none() {
-            let (send, take) = std::sync::mpsc::channel::<Asked>();
+            let (send, take) = std::sync::mpsc::channel::<AskHues>();
             let qt = self.qt_thread();
             std::thread::spawn(move || {
                 for asked in take {
-                    let hues = emusen_qt_models::art_hues::hues_of_file(&asked.0, asked.2);
+                    let modified = std::fs::metadata(&asked.path).and_then(|m| m.modified()).ok();
+                    if asked.prev_modified.is_some() && modified == asked.prev_modified {
+                        continue;
+                    }
+                    let hues = emusen_qt_models::art_hues::hues_of_file(&asked.path, asked.most);
                     let sent = qt.queue(move |mut library| {
-                        library.as_mut().rust_mut().hues.insert(asked, hues);
-                        let read = library.art_hues_read.wrapping_add(1);
-                        library.as_mut().rust_mut().art_hues_read = read;
-                        library.as_mut().art_hues_read_changed();
+                        let key = (asked.path, asked.most);
+                        let changed = library.hues.get(&key).is_none_or(|c| c.hues != hues);
+                        library.as_mut().rust_mut().hues.insert(key, CachedHues { gen: asked.gen, modified, hues });
+                        if changed {
+                            let read = library.art_hues_read.wrapping_add(1);
+                            library.as_mut().rust_mut().art_hues_read = read;
+                            library.as_mut().art_hues_read_changed();
+                        }
                     });
                     // The library is gone: nothing is left to read for.
                     if sent.is_err() {
@@ -217,7 +254,7 @@ impl qobject::ThemeLibrary {
             self.as_mut().rust_mut().reader = Some(send);
         }
         if let Some(reader) = &self.reader {
-            let _ = reader.send(asked);
+            let _ = reader.send(AskHues { path, most, gen, prev_modified });
         }
         out
     }
@@ -232,9 +269,16 @@ impl qobject::ThemeLibrary {
         list
     }
 
+    /// Installs a host URL filter applied to game cover and hero URLs in exposed rows.
+    pub fn set_url_filter(mut self: Pin<&mut Self>, filter: Option<Rc<dyn Fn(String) -> String>>) {
+        self.as_mut().rust_mut().url_filter = filter;
+    }
+
     /// The host's feed: the library's view and Home's lines as the library model publishes them (`homeLines`).
     pub fn show(mut self: Pin<&mut Self>, view: &LibraryView, home_lines: &str) {
         let now = words::now();
+        let filter_rc = self.url_filter.clone();
+        let filter = filter_rc.as_deref();
         fill(self.consoles, view::consoles(view));
         fill(self.cores, view::cores(view));
         let games = view::game_count(view);
@@ -245,25 +289,27 @@ impl qobject::ThemeLibrary {
         let lines = view::lines_of(home_lines);
         fill(self.places, view::places(view, &lines, &self.declined));
         fill(self.shelves, view::shelves(view));
-        fill(self.recent, view::games_of(view, RECENT, now));
-        fill(self.shelf, view::shelf(view, &self.suspended, now));
-        fill(self.favourites, view::games_of(view, FAVOURITES, now));
+        fill_games(self.recent, view::games_of(view, RECENT, now), filter);
+        fill_games(self.shelf, view::shelf(view, &self.suspended, now), filter);
+        fill_games(self.favourites, view::games_of(view, FAVOURITES, now), filter);
         // The own look's view reads no collections yet (§3.2 as built), so the list stays empty.
         fill(self.collections, Vec::new());
         for (id, list) in &self.games {
-            fill(*list, view::games_of(view, id, now));
+            fill_games(*list, view::games_of(view, id, now), filter);
         }
         for ((id, count), list) in &self.firsts {
-            fill(*list, view::first_of(view, id, *count, now));
+            fill_games(*list, view::first_of(view, id, *count, now), filter);
         }
-        fill(self.found, view::search(view, &self.words, now));
+        fill_games(self.found, view::search(view, &self.words, now), filter);
         for ((show, order, short), list) in &self.listed {
             fill(*list, view::consoles_listed(view, SHOWS[*show], ORDERS[*order], short));
         }
         // The own look reads the rows, the systems and the catalog alone; the lists' texts and the ES-DE state are not copied (EmuSen_Qt.md §4.15).
         self.as_mut().rust_mut().view = LibraryView { rows: view.rows.clone(), cored: view.cored.clone(), systems: view.systems.clone(), catalog: view.catalog.clone(), ..LibraryView::default() };
         self.as_mut().rust_mut().lines = lines;
-        // The games' art may have changed with the view: a binding on `artHues` asks again.
+        // Bump generation and notify so art overwritten between refreshes is re-checked off the GUI thread.
+        let gen = self.scan_gen.wrapping_add(1).max(1);
+        self.as_mut().rust_mut().scan_gen = gen;
         let read = self.art_hues_read.wrapping_add(1);
         self.as_mut().rust_mut().art_hues_read = read;
         self.as_mut().art_hues_read_changed();
@@ -289,8 +335,9 @@ impl qobject::ThemeLibrary {
     /// The host's feed of the suspended game's file, which the shelf leaves out; empty for none.
     pub fn show_suspended(mut self: Pin<&mut Self>, key: &str) {
         if self.suspended != key {
+            let filter = self.url_filter.clone();
             self.as_mut().rust_mut().suspended = key.to_owned();
-            fill(self.shelf, view::shelf(&self.view, key, words::now()));
+            fill_games(self.shelf, view::shelf(&self.view, key, words::now()), filter.as_deref());
         }
     }
 
@@ -299,8 +346,9 @@ impl qobject::ThemeLibrary {
         if let Some(list) = self.games.get(&id) {
             return *list;
         }
+        let filter = self.url_filter.clone();
         let list = self.as_mut().made(&view::GAME_ROLES);
-        fill(list, view::games_of(&self.view, &id, words::now()));
+        fill_games(list, view::games_of(&self.view, &id, words::now()), filter.as_deref());
         self.as_mut().rust_mut().games.insert(id, list);
         list
     }
@@ -310,8 +358,9 @@ impl qobject::ThemeLibrary {
         if let Some(list) = self.firsts.get(&key) {
             return *list;
         }
+        let filter = self.url_filter.clone();
         let list = self.as_mut().made(&view::GAME_ROLES);
-        fill(list, view::first_of(&self.view, &key.0, key.1, words::now()));
+        fill_games(list, view::first_of(&self.view, &key.0, key.1, words::now()), filter.as_deref());
         self.as_mut().rust_mut().firsts.insert(key, list);
         list
     }
@@ -334,7 +383,8 @@ impl qobject::ThemeLibrary {
 
     pub fn search(mut self: Pin<&mut Self>, words: &QString) -> *mut ThemeRows {
         let words = words.to_string();
-        fill(self.found, view::search(&self.view, &words, words::now()));
+        let filter = self.url_filter.clone();
+        fill_games(self.found, view::search(&self.view, &words, words::now()), filter.as_deref());
         self.as_mut().rust_mut().words = words;
         self.found
     }

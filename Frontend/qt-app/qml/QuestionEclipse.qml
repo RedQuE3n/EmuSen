@@ -14,7 +14,12 @@ Kit.Sheet {
     property list<string> choices
     property int backIndex: -1
     property int padFamily: Kit.Families.Xbox
+    property bool showing: false
+    property bool awaiting: false
     signal chosen(int index)
+    signal pick(int index)
+    signal rearm()
+    signal dismissed()
     anchors.centerIn: undefined
     parent: Overlay.overlay
     x: 0
@@ -24,12 +29,42 @@ Kit.Sheet {
     padding: 0
     background: null
     Overlay.modal: Item {}
-    onAboutToShow: view.choiceList.currentIndex = 0
+    closePolicy: Popup.NoAutoClose
+    onRearm: {
+        view.choiceList.currentIndex = 0
+        root.awaiting = true
+    }
+    onPick: (index) => {
+        if (!root.awaiting)
+            return
+        root.awaiting = false
+        root.chosen(index)
+        if (root.showing && root.opened) {
+            view.choiceList.currentIndex = 0
+            root.awaiting = true
+        }
+    }
+    onDismissed: root.pick(root.backIndex)
+    onAboutToShow: root.rearm()
     onOpened: view.choiceList.forceActiveFocus()
-    onChosen: root.close()
+    onShowingChanged: {
+        if (root.showing)
+            root.rearm()
+        else
+            root.awaiting = false
+    }
+    onClosed: {
+        if (root.showing) {
+            root.open()
+            root.rearm()
+        } else if (root.awaiting) {
+            root.dismissed()
+        }
+    }
     Connections {
         target: root.controller
-        function onSheetDismissed() { root.chosen(root.backIndex) }
+        enabled: root.awaiting
+        function onSheetDismissed() { root.dismissed() }
     }
     Kit.NormalizedCanvas {
         id: canvas
@@ -48,7 +83,7 @@ Kit.Sheet {
             backIndex: root.backIndex
             padFamily: root.padFamily
             pixelScale: canvas.unit
-            onChosen: (index) => root.chosen(index)
+            onChosen: (index) => root.pick(index)
         }
     }
 }

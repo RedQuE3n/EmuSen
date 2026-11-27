@@ -22,6 +22,7 @@ Kit.Walkable {
     property string icon
     property bool steps: false
     property bool opens: false
+    property bool dimmed: false
     property bool sectionEnd: false
     property bool current: false
     readonly property real boxHeightPx: root.continueCard ? 118 : (root.menu ? 72 : (root.current ? 72 : 66))
@@ -29,12 +30,12 @@ Kit.Walkable {
     readonly property real pillRadius: (root.continueCard ? 22 : (root.menu ? 18 : (root.current ? 36 : 18))) * root.unit
     readonly property bool showPill: root.current || root.continueCard
     readonly property bool showGlow: root.current
-    readonly property bool showGlyph: !root.menu && !root.continueCard && root.current
+    readonly property bool showGlyph: !root.menu && !root.continueCard && root.current && !root.dimmed
     readonly property bool showSteps: !root.menu && !root.continueCard && root.steps && root.current
     readonly property bool showChevron: !root.menu && !root.continueCard && root.opens
-    readonly property color ink: root.current ? Kit.Tokens.overAccent : Kit.Tokens.textStrong
+    readonly property color ink: root.current ? (root.dimmed ? ThemeInk.overAccentMuted : Kit.Tokens.overAccent) : Kit.Tokens.textStrong
     readonly property color mutedInk: root.current ? ThemeInk.overAccentMuted : Kit.Tokens.muted
-    readonly property real labelLeft: (root.menu ? 70 : (root.current ? 76 : 22)) * root.unit
+    readonly property real labelLeft: (root.menu ? 70 : (root.showGlyph ? 76 : 22)) * root.unit
     readonly property real valueRight: root.menu ? root.width - 20 * root.unit : (root.showSteps ? root.width - 58 * root.unit : (root.showChevron ? root.width - 60 * root.unit : root.width - 22 * root.unit))
     readonly property real rightEdge: root.showSteps ? stepPrev.x - 16 * root.unit : (root.value.length > 0 ? valueText.x - (root.menu ? 20 : 16) * root.unit : (root.showChevron ? chevronMark.x - 16 * root.unit : root.width - (root.menu ? 20 : 22) * root.unit))
     implicitHeight: root.boxH + (root.continueCard ? 28 * root.unit : (root.sectionEnd ? 27 * root.unit : 0))

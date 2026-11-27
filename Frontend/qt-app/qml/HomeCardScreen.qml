@@ -19,6 +19,8 @@ Kit.NormalizedCanvas {
     readonly property bool eclipse: Kit.Tokens.coronaRim > 0
     readonly property alias slide: homeCard.slide
     visible: homeCardCanvas.bigScreen && (homeCard.open || homeCard.leaving)
+    signal focusActive()
+    onFocusActive: if (homeCard.open) homeCard.forceActiveFocus()
     CardModel {
         id: homeCardModel
         objectName: "homeCardModel"

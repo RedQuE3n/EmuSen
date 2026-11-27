@@ -609,3 +609,20 @@ fn eclipse_pause_subpages_match_boards_39_to_43_and_preserve_reference_card() {
     c.focus(2);
     assert_eq!(c.pane().tiles.into_iter().map(|t| (t.name, t.ringed)).collect::<Vec<_>>(), [("Card 1".into(), false), ("Card 2".into(), false), ("Card 3".into(), true)]);
 }
+
+#[test]
+fn rewind_and_load_mark_dimmed_only_when_unavailable() {
+    let unavailable = card(Facts { rewind_why: Some("Not running".into()), slots: Vec::new(), ..Facts::default() });
+    let rows = unavailable.rows();
+    assert!(rows.iter().find(|r| r.key == pause::REWIND).unwrap().dimmed);
+    assert!(rows.iter().find(|r| r.key == pause::LOAD).unwrap().dimmed);
+    let available = card(Facts {
+        slot: 1,
+        rewind_why: None,
+        slots: vec![SlotFact { slot: 1, exists: true, ..SlotFact::default() }],
+        ..Facts::default()
+    });
+    let rows = available.rows();
+    assert!(!rows.iter().find(|r| r.key == pause::REWIND).unwrap().dimmed);
+    assert!(!rows.iter().find(|r| r.key == pause::LOAD).unwrap().dimmed);
+}

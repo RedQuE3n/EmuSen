@@ -1317,7 +1317,7 @@ impl qobject::GamePageModel {
 
     /// The page's scrape: the scraper opened with its store, the game queued, its progress followed off the GUI thread and
     /// told to the Scrape row, and the page read again once it ends, the scraper back to finding pictures alone.
-    fn scrape(mut self: Pin<&mut Self>) {
+    fn scrape(self: Pin<&mut Self>) {
         let Some(source) = self.source.clone() else { return };
         self.start_scrape_thread(source, None, false);
     }
@@ -1403,7 +1403,7 @@ impl qobject::GamePageModel {
     }
 
     pub fn act(self: Pin<&mut Self>, index: i32) -> bool {
-        let outcome = self.page.act(index.max(0) as usize);
+        let outcome = self.page.act_pill(index);
         self.did(outcome)
     }
 
@@ -1694,7 +1694,7 @@ impl qobject::GamePageModel {
 
     /// Told while the page tells QML of a change, the focus is kept and applied once the telling has finished (EmuSen_Qt.md §7.8.1).
     pub fn focus(mut self: Pin<&mut Self>, action: i32, content: i32) {
-        let focus = (usize::try_from(action).ok(), content.max(0) as usize);
+        let focus = (self.page.action_index_of(action), content.max(0) as usize);
         let moved = self.focus != focus;
         self.as_mut().rust_mut().focus = focus;
         if self.telling == 0 {

@@ -50,6 +50,8 @@ ThemeScreen {
             readonly property string year: root.focusedCell && root.focusedCell.year > 0 ? String(root.focusedCell.year) : (root.factsHere ? Browse.year : "")
             // No console has a game (Choose a console's "With games", Words.consoleShows[1]), so the library has none: the first-run state.
             readonly property bool noLibrary: Library.consolesBy(1, 0, []).count === 0 && cells.count === 0 && !Browse.searched
+            // Top-level Library tab ("all") wears Brand + Nav + searchable Status bar; drill-downs wear the breadcrumb.
+            readonly property bool topLevel: !root.noLibrary && Library.section.length > 0 && Library.section === nav.keys[1]
             // The board's measures in its pixels, constants of the design (EclipseLibrary:64-73, 88).
             readonly property real margin: 96 * root.px
             readonly property real gridX: 660 * root.px
@@ -227,15 +229,23 @@ ThemeScreen {
                         id: brand
                         objectName: "gamesBrand"
                         unit: root.px
-                        named: root.noLibrary
+                        named: root.noLibrary || root.topLevel
                         x: root.margin
                         // The header's middle line: the games board's 64-pixel header and the empty board's mark (EclipseLibrary:23, EclipseEmpty:22).
                         y: (root.noLibrary ? 48 + 17 : 48 + 32) * root.px - height / 2
                     }
+                    Nav {
+                        id: nav
+                        visible: root.topLevel
+                        unit: root.px
+                        controller: frame.controller
+                        x: brand.x + brand.width + 64 * root.px
+                        y: 80 * root.px - height / 2
+                    }
                     Walkable {
                         id: crumb
                         objectName: "gamesPath"
-                        visible: !root.noLibrary
+                        visible: !root.noLibrary && !root.topLevel
                         controller: frame.controller
                         Accessible.name: crumbBack.text
                         x: brand.x + brand.width + 28 * root.px
@@ -277,15 +287,18 @@ ThemeScreen {
                         }
                     }
                     Status {
+                        id: status
                         objectName: "gamesStatus"
                         unit: root.px
                         controller: frame.controller
                         visible: !root.noLibrary
-                        searchable: false
+                        searchable: root.topLevel
                         battery: true
                         glassColor: ink.glass
+                        pixelScale: canvas.unit
                         x: root.width - root.margin - width
                         y: 80 * root.px - height / 2
+                        below: sortPill.visible ? sortPill : (cells.count > 0 ? cells : startPill)
                     }
 
                     // The focused game's column: its console and year, its name, its genre and players, its description, its plays and states, and A and X as buttons (EclipseLibrary:37-53); a fact the game has none of is left out.
@@ -456,8 +469,8 @@ ThemeScreen {
                                 pixelScale: canvas.unit
                                 onActivated: Actions.play(root.focusedCell?.key ?? "")
                                 KeyNavigation.right: pagePill
-                                // Up from the column reaches the path above it.
-                                KeyNavigation.up: crumb
+                                // Up from the column reaches the header above it.
+                                KeyNavigation.up: root.topLevel ? status.search : crumb
                             }
                             Pill {
                                 id: pagePill
@@ -479,7 +492,7 @@ ThemeScreen {
                                 onActivated: Actions.openPage(root.focusedCell?.key ?? "")
                                 KeyNavigation.left: startPill
                                 Keys.onRightPressed: cells.forceActiveFocus()
-                                KeyNavigation.up: crumb
+                                KeyNavigation.up: root.topLevel ? status.search : crumb
                             }
                         }
                     }
@@ -524,7 +537,7 @@ ThemeScreen {
                                     else
                                         sortPill.forceActiveFocus()
                                 }
-                                KeyNavigation.up: crumb
+                                KeyNavigation.up: root.topLevel ? status.search : crumb
                                 Keys.onDownPressed: cells.forceActiveFocus()
                                 Rectangle {
                                     objectName: "gamesFilterFill." + chip.index
@@ -571,6 +584,7 @@ ThemeScreen {
                                     return filterChips.itemAt(i).forceActiveFocus()
                             }
                         }
+                        KeyNavigation.up: root.topLevel ? status.search : crumb
                         Keys.onDownPressed: cells.forceActiveFocus()
                         Rectangle {
                             objectName: "gamesSortFill"

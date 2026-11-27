@@ -56,9 +56,197 @@ fn modified(path: &Path) -> Option<i64> {
     Some(at.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64))
 }
 
-/// Reads PNG, GIF, BMP, WebP or JPEG pixel dimensions from file headers without decoding pixels.
+/// Strips `//` and `/* */` comments and trailing commas outside string literals so JSONC package manifests parse cleanly.
+fn strip_jsonc(raw: &str) -> String {
+    let bytes = raw.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    let mut in_str = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if in_str {
+            out.push(b);
+            if b == b'\\' && i + 1 < bytes.len() {
+                out.push(bytes[i + 1]);
+                i += 2;
+                continue;
+            }
+            if b == b'"' {
+                in_str = false;
+            }
+            i += 1;
+            continue;
+        }
+        if b == b'"' {
+            in_str = true;
+            out.push(b);
+            i += 1;
+        } else if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+        } else if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+        } else if b == b',' {
+            let mut j = i + 1;
+            loop {
+                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                    j += 1;
+                }
+                if j + 1 < bytes.len() && bytes[j] == b'/' && bytes[j + 1] == b'/' {
+                    j += 2;
+                    while j < bytes.len() && bytes[j] != b'\n' {
+                        j += 1;
+                    }
+                    continue;
+                }
+                if j + 1 < bytes.len() && bytes[j] == b'/' && bytes[j + 1] == b'*' {
+                    j += 2;
+                    while j + 1 < bytes.len() && !(bytes[j] == b'*' && bytes[j + 1] == b'/') {
+                        j += 1;
+                    }
+                    j = (j + 2).min(bytes.len());
+                    continue;
+                }
+                break;
+            }
+            if j < bytes.len() && matches!(bytes[j], b']' | b'}') {
+                i += 1;
+            } else {
+                out.push(b);
+                i += 1;
+            }
+        } else {
+            out.push(b);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| raw.to_owned())
+}
+
+/// Computes lowercase SHA-1 hex digest in pure Rust for package save-key derivation.
+fn sha1_hex(data: &[u8]) -> String {
+    let mut msg = data.to_vec();
+    let bit_len = (data.len() as u64).wrapping_mul(8);
+    msg.push(0x80);
+    while msg.len() % 64 != 56 {
+        msg.push(0);
+    }
+    msg.extend_from_slice(&bit_len.to_be_bytes());
+    let [mut h0, mut h1, mut h2, mut h3, mut h4] = [0x6745_2301u32, 0xEFCD_AB89, 0x98BA_DCFE, 0x1032_5476, 0xC3D2_E1F0];
+    for chunk in msg.chunks_exact(64) {
+        let mut w = [0u32; 80];
+        for (i, word) in chunk.chunks_exact(4).enumerate() {
+            w[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+        }
+        for i in 16..80 {
+            w[i] = (w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]).rotate_left(1);
+        }
+        let (mut a, mut b, mut c, mut d, mut e) = (h0, h1, h2, h3, h4);
+        for (i, &wi) in w.iter().enumerate() {
+            let (f, k) = match i {
+                0..=19 => ((b & c) | ((!b) & d), 0x5A82_7999),
+                20..=39 => (b ^ c ^ d, 0x6ED9_EBA1),
+                40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1B_BCDC),
+                _ => (b ^ c ^ d, 0xCA62_C1D6),
+            };
+            let temp = a.rotate_left(5).wrapping_add(f).wrapping_add(e).wrapping_add(k).wrapping_add(wi);
+            e = d;
+            d = c;
+            c = b.rotate_left(30);
+            b = a;
+            a = temp;
+        }
+        h0 = h0.wrapping_add(a);
+        h1 = h1.wrapping_add(b);
+        h2 = h2.wrapping_add(c);
+        h3 = h3.wrapping_add(d);
+        h4 = h4.wrapping_add(e);
+    }
+    format!("{h0:08x}{h1:08x}{h2:08x}{h3:08x}{h4:08x}")
+}
+
+fn decode_text(bytes: &[u8]) -> String {
+    match bytes {
+        [0xFE, 0xFF, rest @ ..] => char::decode_utf16(rest.chunks_exact(2).map(|b| u16::from_be_bytes([b[0], b[1]])))
+            .map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+        [0xFF, 0xFE, 0, 0, rest @ ..] => rest
+            .chunks_exact(4)
+            .map(|b| char::from_u32(u32::from_le_bytes([b[0], b[1], b[2], b[3]])).unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+        [0xFF, 0xFE, rest @ ..] => char::decode_utf16(rest.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])))
+            .map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
+        [0, 0, 0xFE, 0xFF, rest @ ..] => rest
+            .chunks_exact(4)
+            .map(|b| char::from_u32(u32::from_be_bytes([b[0], b[1], b[2], b[3]])).unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+        _ => String::from_utf8_lossy(bytes).into_owned(),
+    }
+}
+
+fn valid_package_version(doc: &Value) -> bool {
+    let Some(v) = doc.get("version").and_then(Value::as_str) else { return false };
+    let Some((major, minor)) = v.split_once('.') else { return false };
+    major == "1" && !minor.is_empty() && minor.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn valid_hex_opt(v: Option<&Value>, digits: usize) -> bool {
+    match v {
+        None | Some(Value::Null) => true,
+        Some(Value::String(s)) => s.len() == digits && s.bytes().all(|b| b.is_ascii_hexdigit()),
+        _ => false,
+    }
+}
+
+fn valid_patch_entry(entry: &Value) -> bool {
+    let Some(obj) = entry.as_object() else { return false };
+    let has_file = obj.get("file").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    let has_fmt = obj.get("format").and_then(Value::as_str).is_some_and(|f| matches!(f, "ips" | "bps" | "ups"));
+    has_file && has_fmt && valid_hex_opt(obj.get("sha1"), 40)
+}
+
+/// Derives Galaxia's 8-hex-digit save key from `package.json`'s `patches` array (matching `emusen_galaxia::package::save_key_at`).
+pub fn package_save_key(folder: &Path) -> Option<String> {
+    let bytes = std::fs::read(folder.join("package.json")).ok()?;
+    let raw = decode_text(&bytes);
+    let doc: Value = serde_json::from_str(&strip_jsonc(&raw)).ok()?;
+    let valid_mode = doc.get("mode").and_then(Value::as_str).is_some_and(|m| matches!(m, "linked" | "self-contained"));
+    let valid_sys = doc.get("system").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    if !valid_package_version(&doc) || !valid_sys || !valid_mode || !doc.get("game").is_some_and(Value::is_object) {
+        return None;
+    }
+    let entries = doc.get("patches").and_then(Value::as_array).filter(|a| !a.is_empty())?;
+    let mut lines = String::new();
+    for entry in entries {
+        if !valid_patch_entry(entry) {
+            return None;
+        }
+        let fmt = entry.get("format").and_then(Value::as_str)?;
+        let id = entry.get("sha1").and_then(Value::as_str).or_else(|| entry.get("file").and_then(Value::as_str))?;
+        lines.push_str(fmt);
+        lines.push(' ');
+        lines.push_str(&id.to_ascii_lowercase());
+        lines.push('\n');
+    }
+    Some(sha1_hex(lines.as_bytes())[..8].to_owned())
+}
+
+/// Reads PNG, GIF, BMP, WebP or JPEG pixel dimensions from the first 4 KiB without decoding whole images.
 fn image_dimensions(path: &Path) -> (u32, u32) {
-    let Ok(bytes) = std::fs::read(path) else { return (0, 0) };
+    use std::io::Read;
+    let Ok(file) = std::fs::File::open(path) else { return (0, 0) };
+    let mut bytes = Vec::with_capacity(4096);
+    if file.take(4096).read_to_end(&mut bytes).is_err() {
+        return (0, 0);
+    }
     if bytes.len() >= 24 && &bytes[..8] == b"\x89PNG\r\n\x1a\n" {
         return (u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]), u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]));
     }
@@ -186,7 +374,10 @@ impl ClientSource {
                 Slot::Auto => (false, 0),
             };
             match &game.package {
-                Some(folder) => self.platform.save_path(if n { SAVE_PACKAGE_STATE } else { SAVE_PACKAGE_RESUME_STATE }, folder, None, slot_no),
+                Some(folder) => {
+                    let save_key = package_save_key(Path::new(folder));
+                    self.platform.save_path(if n { SAVE_PACKAGE_STATE } else { SAVE_PACKAGE_RESUME_STATE }, folder, save_key.as_deref(), slot_no)
+                }
                 None => self.platform.save_path(if n { SAVE_STATE } else { SAVE_RESUME_STATE }, &game.path, directory, slot_no),
             }
         };

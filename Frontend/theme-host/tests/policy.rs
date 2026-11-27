@@ -118,3 +118,16 @@ fn qt_3_5_theme_previews_reject_parent_traversal_and_allow_user_store_pngs() {
     assert!(!passes(&p, "file:///user/themes/aurora/screens/Home.qml", Kind::Qml));
     assert!(!passes(&p, "file:///user/themes/aurora/assets/previews/../../../../etc/other.png", Kind::Url));
 }
+
+#[test]
+fn fe_p0_03_paths_with_reserved_url_characters_encode_and_decode_cleanly() {
+    let url = folder_url("/tmp/my #theme?v=1");
+    assert_eq!(url, "file:///tmp/my %23theme%3Fv=1");
+    let p = Policy::new(&url, &["/tmp/my #covers".to_owned()], QT_QML);
+    assert!(p.reads("file:///tmp/my %23theme%3Fv=1/screens/Home.qml", "", Kind::Qml));
+    assert!(p.allows_local("file:///tmp/my%20%23covers/snes/Box%20%231.png"));
+    assert!(p.judge("file:///tmp/my%20%23covers/snes/Box%20%231.png", "/tmp/my #covers/snes/Box #1.png", Kind::Url, "").is_empty());
+    assert!(p.allows_local("file://localhost/tmp/my%20%23covers/snes/Box%20%231.png?v=2#frag"));
+    assert!(p.judge("file://localhost/tmp/my%20%23covers/snes/Box%20%231.png?v=2#frag", "", Kind::Url, "").is_empty());
+    assert!(p.reads("file://localhost/tmp/my%20%23theme%3Fv%3D1/screens/Home.qml?rev=1#top", "", Kind::Qml));
+}

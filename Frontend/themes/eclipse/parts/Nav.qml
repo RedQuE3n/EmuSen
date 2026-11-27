@@ -30,15 +30,16 @@ Row {
     Binding {
         target: root.controller
         property: "sections"
-        value: root.keys
+        value: root.visible ? root.keys : []
     }
     Binding {
         target: root.controller
         property: "selectedSection"
-        value: Library.section
+        value: root.visible ? Library.section : ""
     }
     Connections {
         target: root.controller
+        enabled: root.visible
         // The host opens another section's screen and declines the one shown (qt-models/src/sections.rs).
         function onSectionChosen(key) { Actions.openSection(key) }
     }

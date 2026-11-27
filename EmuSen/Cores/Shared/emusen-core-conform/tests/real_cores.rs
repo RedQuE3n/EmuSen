@@ -14,11 +14,13 @@ fn cores_root() -> PathBuf {
 }
 
 fn target_root() -> PathBuf {
-    if let Some(dir) = std::env::var_os("CARGO_TARGET_DIR") {
-        return PathBuf::from(dir);
-    }
-    let exe = std::env::current_exe().expect("test executable path");
-    exe.parent().unwrap().parent().unwrap().parent().unwrap().to_path_buf()
+    let base = if let Some(dir) = std::env::var_os("CARGO_TARGET_DIR") {
+        PathBuf::from(dir)
+    } else {
+        let exe = std::env::current_exe().expect("test executable path");
+        exe.parent().unwrap().parent().unwrap().parent().unwrap().to_path_buf()
+    };
+    base.join("conform-artifacts")
 }
 
 fn active_profile_name() -> String {
@@ -44,6 +46,7 @@ fn build_artifact(rel_crate: &str, cargo_args: &[&str], subdir: Option<&str>, fi
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let status = Command::new(cargo)
         .current_dir(&crate_dir)
+        .env("CARGO_TARGET_DIR", &target)
         .args(["build", "--quiet", "-j", "4"])
         .args(&profile_args)
         .args(cargo_args)

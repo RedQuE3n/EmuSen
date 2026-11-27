@@ -66,9 +66,14 @@ sandbox=(bwrap --ro-bind / / --dev-bind /dev /dev --proc /proc --tmpfs /tmp --ro
 command=("${sandbox[@]}" "$tree/AppRun" --home "$home" --resolution "$W" "$H" --fullscreen-padding off --no-update-check
   --no-splash)
 if [ -n "${DRY:-}" ]; then
+  q_here=""; q_run=""; q_pad=""; q_uinput=""
+  printf -v q_here '%q' "$here"
+  printf -v q_run '%q' "$run"
+  printf -v q_pad '%q' "$pad"
+  printf -v q_uinput '%q' "$here/pad.py"
   echo "settings: $home/ES-DE/settings/es_settings.xml"
   echo "pad: $pad"
-  echo "command: WIDTH=$W HEIGHT=$H FULL=1 INTERVAL=1000 PAD=\"$pad\" UINPUT_PAD=$here/pad.py bash $here/../qt-gates/run.sh $run $seconds $(printf '%q ' "${command[@]}")"
+  echo "command: WIDTH=$W HEIGHT=$H FULL=1 INTERVAL=1000 PAD=$q_pad UINPUT_PAD=$q_uinput bash $q_here/../qt-gates/run.sh $q_run $seconds $(printf '%q ' "${command[@]}")"
   exit 0
 fi
 

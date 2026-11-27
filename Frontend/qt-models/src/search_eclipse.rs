@@ -397,7 +397,7 @@ impl qobject::SearchEclipseModel {
                 "index": i,
                 "title": row.title,
                 "subtitle": subtitle,
-                "cover": row.cover,
+                "cover": crate::game_model::cover_url(&row.cover),
                 "dot": swatch["dot"],
                 "wave": swatch["wave"],
                 "bg": swatch["bg"],

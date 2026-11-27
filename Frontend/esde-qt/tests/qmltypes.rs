@@ -78,7 +78,11 @@ fn qt_5_3_the_registry_names_the_painter_s_types() {
 #[test]
 fn qt_5_3_the_committed_qml_files_surface_is_the_built_one() {
     let surface = emusen_qt_test::qml_surface::module(&built("qmldir"), std::path::Path::new(env!("CARGO_MANIFEST_DIR")));
-    let written = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/EmuSen.Esde.qmlfiles");
+    let target = std::env::var("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("target"));
+    std::fs::create_dir_all(&target).unwrap();
+    let written = target.join("EmuSen.Esde.qmlfiles");
     std::fs::write(&written, &surface).unwrap();
     assert_eq!(
         COMMITTED_QML_FILES,

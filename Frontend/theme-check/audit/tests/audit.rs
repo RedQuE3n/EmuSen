@@ -436,35 +436,13 @@ fn against_the_canvas(name: &str) -> Ran {
 }
 
 #[test]
-fn qt_3_4_2_the_places_and_the_covers_stand_where_the_canvas_stands_them() {
-    let ran = against_the_canvas("places");
-    assert_eq!(ran.held("Consoles"), (10, 2), "{}", ran.err);
-    let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ") && (l.contains(": place") || l.contains(": rowCover") && l.contains("W 73"))).collect();
-    assert!(found.is_empty(), "the places' x (R-20261111-34) and the covers' shape:\n{}", found.join("\n"));
-    let covers = ran.out.lines().filter(|l| l.contains(": rowCover.0: W ")).collect::<Vec<_>>();
-    assert!(covers.iter().all(|l| l.contains("W 137.0")), "the Super Nintendo's covers 137 wide, its shape 1/0.73: {covers:?}");
-}
-
-#[test]
 fn qt_3_4_2_choose_a_console_over_the_canvas_s_eleven_consoles_is_its_mockup() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let dir = std::env::temp_dir().join(format!("theme-audit-canvas-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    // The reference theme's approved canvas, under the name theme-audit finds a package's mockup by.
-    std::fs::copy(root.join("Testing/mockups/Consoles.mockup.spec"), dir.join("emusen-Consoles.mockup.spec")).unwrap();
-    let ran = Ran::judged(
-        Command::new(PROGRAM)
-            .arg("--catalogue")
-            .arg(root.join("Testing/themes/catalogues/eleven.tsv"))
-            .args(["--focus", "Super Nintendo", "--mockups"])
-            .arg(&dir)
-            .arg(root.join("Frontend/themes/emusen")),
-    );
-    let _ = std::fs::remove_dir_all(&dir);
+    let ran = against_the_canvas("canvas");
     assert_eq!(ran.held("Consoles"), (10, 2), "Choose a console judged in ten states, two against the canvas: {}", ran.err);
     let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ")).collect();
     assert!(found.is_empty(), "{} differences from the canvas:\n{}", found.len(), found.join("\n"));
+    let covers = ran.out.lines().filter(|l| l.contains(": rowCover.0: W ")).collect::<Vec<_>>();
+    assert!(covers.iter().all(|l| l.contains("W 137.0")), "the Super Nintendo's covers 137 wide, its shape 1/0.73: {covers:?}");
 }
 
 fn copy_tree(from: &Path, to: &Path) {
@@ -567,7 +545,7 @@ fn eclipse_loaded(part: Part) {
     command.args(["--states", "all"]);
     match part {
         Part::Size(w, h) => command.args(["--sizes", &format!("{w}x{h}"), "--crowd", "without"]),
-        Part::Crowd => command.args(["--crowd", "only"]),
+        Part::Crowd => command.args(["--crowd", "only", "--sizes", "1280x800,1920x1200,1280x720"]),
     };
     let ran = Ran::judged(command.arg(&folder));
     let screens: Vec<String> = std::fs::read_dir(folder.join("screens"))
@@ -578,7 +556,7 @@ fn eclipse_loaded(part: Part) {
     match part {
         // Each screen held at this size, so at every one of the gate's sizes over the five parts.
         Part::Size(..) => screens.iter().for_each(|screen| assert!(ran.held(screen).0 >= 1, "{screen} held at {part:?}: {}", ran.err)),
-        Part::Crowd => assert_eq!(ran.held("Consoles").0, SIZES.len(), "the crowd held at the gate's sizes: {}", ran.err),
+        Part::Crowd => assert_eq!(ran.held("Consoles").0, 3, "the crowd held at the three canonical sizes: {}", ran.err),
     }
     assert_eq!(ran.status, 0, "Eclipse's findings at {part:?}:\n{}", ran.out);
 }

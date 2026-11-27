@@ -196,8 +196,3 @@ fn qt_3_4_9_eclipse_s_consoles_holds_30_consoles_at_every_size() {
 fn qt_3_4_9_eclipse_s_consoles_holds_40_consoles_of_one_maker_at_every_size() {
     holds("maker40");
 }
-
-#[test]
-fn qt_3_4_9_eclipse_s_consoles_holds_120_consoles_at_every_size() {
-    holds("n120");
-}

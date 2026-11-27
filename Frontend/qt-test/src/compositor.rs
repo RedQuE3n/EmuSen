@@ -3,7 +3,62 @@
 
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::Once;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+const DEFAULT_WATCHDOG_SECONDS: u64 = 300;
+static WATCHDOG_PID: AtomicU32 = AtomicU32::new(0);
+static WATCHDOG_DEADLINE_SECS: AtomicU64 = AtomicU64::new(u64::MAX);
+static WATCHDOG_ONCE: Once = Once::new();
+
+#[cfg(target_os = "linux")]
+const PR_SET_PDEATHSIG: std::ffi::c_int = 1;
+#[cfg(target_os = "linux")]
+const LINUX_SIGTERM: std::ffi::c_ulong = 15;
+
+#[cfg(target_os = "linux")]
+extern "C" {
+    fn prctl(option: std::ffi::c_int, arg2: std::ffi::c_ulong, arg3: std::ffi::c_ulong, arg4: std::ffi::c_ulong, arg5: std::ffi::c_ulong) -> std::ffi::c_int;
+}
+
+fn now_epoch_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+}
+
+fn compute_deadline_secs(now_secs: u64, seconds: u64) -> u64 {
+    now_secs.saturating_add(seconds.max(1))
+}
+
+fn stop_pid(pid: u32) {
+    if pid != 0 {
+        let _ = Command::new("kill").args(["-TERM", &pid.to_string()]).status();
+    }
+}
+
+fn arm_watchdog(pid: u32, seconds: u64) {
+    WATCHDOG_DEADLINE_SECS.store(compute_deadline_secs(now_epoch_secs(), seconds), Ordering::Release);
+    WATCHDOG_PID.store(pid, Ordering::Release);
+    WATCHDOG_ONCE.call_once(|| {
+        let prev = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let p = WATCHDOG_PID.swap(0, Ordering::AcqRel);
+            stop_pid(p);
+            prev(info);
+            std::process::abort();
+        }));
+        std::thread::spawn(move || loop {
+            std::thread::sleep(Duration::from_millis(500));
+            let p = WATCHDOG_PID.load(Ordering::Acquire);
+            if p != 0 && now_epoch_secs() >= WATCHDOG_DEADLINE_SECS.load(Ordering::Acquire) {
+                use std::io::Write;
+                let _ = writeln!(std::io::stderr(), "the run exceeded its compositor deadline; stopping kwin_wayland (pid {p})");
+                stop_pid(p);
+                std::process::abort();
+            }
+        });
+    });
+}
 
 /// The running compositor, stopped when dropped; Qt's Wayland platform points at it from `start` on.
 pub struct Compositor {
@@ -18,16 +73,27 @@ impl Compositor {
         let runtime = PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR, where Wayland's sockets are"));
         let at = runtime.join(&socket);
         let _ = std::fs::remove_file(&at);
-        let child = Command::new("kwin_wayland")
-            .args(["--virtual", "--no-lockscreen", "--no-global-shortcuts", "--socket", &socket])
+        let mut cmd = Command::new("kwin_wayland");
+        cmd.args(["--virtual", "--no-lockscreen", "--no-global-shortcuts", "--socket", &socket])
             .args(["--width", &width.to_string(), "--height", &height.to_string()])
             .env_remove("DISPLAY")
             .env_remove("WAYLAND_DISPLAY")
             .env("KWIN_COMPOSE", "O2")
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("kwin_wayland");
+            .stderr(Stdio::null());
+        #[cfg(target_os = "linux")]
+        unsafe {
+            use std::os::unix::process::CommandExt;
+            cmd.pre_exec(|| {
+                // Bind kwin_wayland lifetime to this thread so SIGKILL/OOM cannot orphan the compositor.
+                if prctl(PR_SET_PDEATHSIG, LINUX_SIGTERM, 0, 0, 0) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let child = cmd.spawn().expect("kwin_wayland");
+        arm_watchdog(child.id(), DEFAULT_WATCHDOG_SECONDS);
         let mut compositor = Compositor { child, socket: at.clone() };
         let start = Instant::now();
         while !at.exists() {
@@ -47,37 +113,30 @@ impl Compositor {
         self.child.id()
     }
 
-    /// A failed run never leaves the compositor running: a panic, or the run past `seconds`, stops it and ends the
-    /// process at once, since unwinding drops Qt's windows unhidden and faults in their swapchains' release
-    /// (EmuSen_Qt.md §7.1, step 7). Set once, before the first window.
+    /// Updates the default watchdog deadline to `seconds` from now without spawning extra threads.
     pub fn watch(&self, seconds: u64) {
-        let pid = self.child.id();
-        let stop = move || {
-            let _ = Command::new("kill").arg(pid.to_string()).status();
-            std::process::abort();
-        };
-        // Written to the process's stderr itself, since the test harness captures what the macros print and an abort loses it.
-        let say = |words: String| {
-            use std::io::Write;
-            let _ = std::io::stderr().write_all(words.as_bytes());
-        };
-        std::panic::set_hook(Box::new(move |info| {
-            say(format!("{info}\n{}\n", std::backtrace::Backtrace::capture()));
-            stop();
-        }));
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_secs(seconds));
-            say(format!("the run took longer than {seconds} s; its compositor is stopped\n"));
-            stop();
-        });
+        arm_watchdog(self.child.id(), seconds);
     }
 }
 
 impl Drop for Compositor {
     fn drop(&mut self) {
+        let _ = WATCHDOG_PID.compare_exchange(self.child.id(), 0, Ordering::AcqRel, Ordering::Acquire);
         let _ = self.child.kill();
         let _ = self.child.wait();
         let _ = std::fs::remove_file(&self.socket);
         let _ = std::fs::remove_file(self.socket.with_extension("lock"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_deadline_secs;
+
+    #[test]
+    fn watchdog_deadline_clamps_zero_and_saturates_overflow() {
+        assert_eq!(compute_deadline_secs(100, 0), 101);
+        assert_eq!(compute_deadline_secs(100, 300), 400);
+        assert_eq!(compute_deadline_secs(u64::MAX - 5, 60), u64::MAX);
     }
 }

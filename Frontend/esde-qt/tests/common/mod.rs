@@ -7,7 +7,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use emusen_qt_test::compositor::Compositor;
 use emusen_qt_test::Scene;
 
+pub mod corpus;
 pub mod fade;
+pub mod mapping;
 
 pub const VIEW: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/tests/qml/View.qml");
 

@@ -100,10 +100,18 @@ impl Picture {
         &self.buffer[..self.stride * self.height as usize]
     }
 
+    /// Whether `width`x`height` fits in this picture's buffer and stride without overflowing.
+    pub fn fits(&self, width: u32, height: u32) -> bool {
+        let Some(row) = (width as usize).checked_mul(bytes_per_pixel(self.format)) else { return false };
+        let Some(total) = self.stride.checked_mul(height as usize) else { return false };
+        row <= self.stride && total <= self.buffer.len()
+    }
+
     /// A frame from the core, or `false` when it does not fit the largest size the core declared, which is reported.
     pub fn take(&mut self, retro: i32, data: &[u8], width: u32, height: u32, pitch: usize) -> bool {
-        let row_in = width as usize * retro_bytes_per_pixel(retro);
-        if width as usize * bytes_per_pixel(self.format) > self.stride || self.stride * height as usize > self.buffer.len() || pitch < row_in || data.len() < pitch * (height as usize).saturating_sub(1) + row_in {
+        let Some(row_in) = (width as usize).checked_mul(retro_bytes_per_pixel(retro)) else { return false };
+        let Some(needed) = pitch.checked_mul((height as usize).saturating_sub(1)).and_then(|n| n.checked_add(row_in)) else { return false };
+        if !self.fits(width, height) || pitch < row_in || data.len() < needed {
             return false;
         }
         for y in 0..height as usize {
@@ -120,16 +128,18 @@ impl Picture {
     /// A frame whose bytes are elsewhere until read back: its shape and number taken, the buffer kept; one larger
     /// than the buffer leaves the picture as it was.
     pub fn drawn_unread(&mut self, width: u32, height: u32) {
-        if width as usize * bytes_per_pixel(self.format) <= self.stride && self.stride * height as usize <= self.buffer.len() {
-            self.drawn_in_place(width, height);
-        }
+        let _ = self.drawn_in_place(width, height);
     }
 
-    /// A frame the core drew straight into this buffer, in the handed format.
-    pub fn drawn_in_place(&mut self, width: u32, height: u32) {
+    /// A frame the core drew straight into this buffer, in the handed format; refused if it exceeds the buffer.
+    pub fn drawn_in_place(&mut self, width: u32, height: u32) -> bool {
+        if !self.fits(width, height) {
+            return false;
+        }
         self.width = width;
         self.height = height;
         self.serial += 1;
+        true
     }
 }
 
@@ -232,5 +242,16 @@ mod tests {
         assert!(!p.take(sys::PIXEL_FORMAT_XRGB8888, &[0; 64], 5, 2, 20));
         assert!(p.take(sys::PIXEL_FORMAT_XRGB8888, &[0; 32], 4, 2, 16));
         assert_eq!((p.width, p.height, p.serial), (4, 2, 1));
+    }
+
+    #[test]
+    fn drawn_in_place_rejects_oversized_dimensions_without_panicking_bytes() {
+        let mut p = Picture::new(4, 2, BGRA8888);
+        assert!(!p.drawn_in_place(5, 2));
+        assert!(!p.drawn_in_place(4, 3));
+        assert!(!p.drawn_in_place(u32::MAX, 1));
+        assert_eq!((p.width, p.height, p.serial, p.bytes().len()), (0, 0, 0, 0));
+        assert!(p.drawn_in_place(4, 2));
+        assert_eq!((p.width, p.height, p.serial, p.bytes().len()), (4, 2, 1, 32));
     }
 }

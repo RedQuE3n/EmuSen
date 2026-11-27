@@ -4,6 +4,7 @@
 
 use std::ffi::{CStr, c_char, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use ash::vk;
 use emusen_libretro_sys::vulkan::*;
@@ -98,19 +99,7 @@ struct Building {
     made: Vec<(vk::Device, bool)>,
 }
 
-/// The core's device and everything the host made on it.
-pub struct Gpu {
-    entry: ash::Entry,
-    instance: ash::Instance,
-    physical: vk::PhysicalDevice,
-    device: ash::Device,
-    queue: vk::Queue,
-    family: u32,
-    memory: vk::PhysicalDeviceMemoryProperties,
-    exports: Option<(ash::khr::external_memory_fd::Device, ash::khr::external_semaphore_fd::Device, ash::khr::timeline_semaphore::Device)>,
-    uuids: ([u8; 16], [u8; 16]),
-    interface: retro_hw_render_interface_vulkan,
-    lock: AtomicBool,
+struct GpuState {
     pool: vk::CommandPool,
     commands: [vk::CommandBuffer; IN_FLIGHT],
     fences: [vk::Fence; IN_FLIGHT],
@@ -127,8 +116,33 @@ pub struct Gpu {
     held: Option<Held>,
     readback: Option<Readback>,
     swizzled: Vec<u8>,
-    pub log: Vec<String>,
+    log: Vec<String>,
 }
+
+// SAFETY: Readback.mapped points to device-mapped host memory owned by GpuState behind Mutex.
+unsafe impl Send for GpuState {}
+
+/// The core's device and everything the host made on it.
+pub struct Gpu {
+    entry: ash::Entry,
+    instance: ash::Instance,
+    physical: vk::PhysicalDevice,
+    device: ash::Device,
+    queue: vk::Queue,
+    family: u32,
+    memory: vk::PhysicalDeviceMemoryProperties,
+    exports: Option<(ash::khr::external_memory_fd::Device, ash::khr::external_semaphore_fd::Device, ash::khr::timeline_semaphore::Device)>,
+    uuids: ([u8; 16], [u8; 16]),
+    interface: retro_hw_render_interface_vulkan,
+    lock: AtomicBool,
+    released: AtomicBool,
+    device_destroyed: AtomicBool,
+    inner: Mutex<GpuState>,
+}
+
+// SAFETY: interface.handle points to the pinned Arc<Gpu>; all mutable runtime state sits behind inner Mutex.
+unsafe impl Send for Gpu {}
+unsafe impl Sync for Gpu {}
 
 fn check<T>(r: Result<T, vk::Result>, what: &str) -> Result<T, String> {
     r.map_err(|e| format!("{what} returned {e}"))
@@ -239,24 +253,25 @@ unsafe extern "system" fn hooked_create_device(gpu: vk::PhysicalDevice, info: *c
 
 // ---- The interface the core calls ------------------------------------------------------------------------------
 
-unsafe fn gpu<'a>(handle: *mut c_void) -> &'a mut Gpu {
-    unsafe { &mut *(handle as *mut Gpu) }
+unsafe fn gpu<'a>(handle: *mut c_void) -> &'a Gpu {
+    unsafe { &*(handle as *const Gpu) }
 }
 
 unsafe extern "C" fn set_image(handle: *mut c_void, image: *const retro_vulkan_image, count: u32, semaphores: *const vk::Semaphore, src_queue_family: u32) {
     let g = unsafe { gpu(handle) };
-    g.handed = unsafe { image.as_ref() }.map(|i| Handed { image: i.create_info.image, layout: i.image_layout, format: i.create_info.format });
-    g.waits.clear();
+    let mut s = g.lock_state();
+    s.handed = unsafe { image.as_ref() }.map(|i| Handed { image: i.create_info.image, layout: i.image_layout, format: i.create_info.format });
+    s.waits.clear();
     if count > 0 && !semaphores.is_null() {
-        g.waits.extend_from_slice(unsafe { std::slice::from_raw_parts(semaphores, count as usize) });
+        s.waits.extend_from_slice(unsafe { std::slice::from_raw_parts(semaphores, count as usize) });
     }
-    if src_queue_family != vk::QUEUE_FAMILY_IGNORED && src_queue_family != g.family && g.log.len() < 8 {
-        g.log.push(format!("the core's image came from queue family {src_queue_family}, not the one it was given"));
+    if src_queue_family != vk::QUEUE_FAMILY_IGNORED && src_queue_family != g.family && s.log.len() < 8 {
+        s.log.push(format!("the core's image came from queue family {src_queue_family}, not the one it was given"));
     }
 }
 
 unsafe extern "C" fn get_sync_index(handle: *mut c_void) -> u32 {
-    unsafe { gpu(handle) }.index as u32
+    unsafe { gpu(handle) }.lock_state().index as u32
 }
 
 unsafe extern "C" fn get_sync_index_mask(_handle: *mut c_void) -> u32 {
@@ -265,15 +280,18 @@ unsafe extern "C" fn get_sync_index_mask(_handle: *mut c_void) -> u32 {
 
 unsafe extern "C" fn set_command_buffers(handle: *mut c_void, count: u32, cmd: *const vk::CommandBuffer) {
     let g = unsafe { gpu(handle) };
-    g.core_commands.clear();
+    let mut s = g.lock_state();
+    s.core_commands.clear();
     if count > 0 && !cmd.is_null() {
-        g.core_commands.extend_from_slice(unsafe { std::slice::from_raw_parts(cmd, count as usize) });
+        s.core_commands.extend_from_slice(unsafe { std::slice::from_raw_parts(cmd, count as usize) });
     }
 }
 
 unsafe extern "C" fn wait_sync_index(handle: *mut c_void) {
     let g = unsafe { gpu(handle) };
-    g.wait_slot(g.index);
+    let mut s = g.lock_state();
+    let idx = s.index;
+    g.wait_slot(&mut s, idx);
 }
 
 unsafe extern "C" fn lock_queue(handle: *mut c_void) {
@@ -288,7 +306,7 @@ unsafe extern "C" fn unlock_queue(handle: *mut c_void) {
 }
 
 unsafe extern "C" fn set_signal_semaphore(handle: *mut c_void, semaphore: vk::Semaphore) {
-    unsafe { gpu(handle) }.signal = semaphore;
+    unsafe { gpu(handle) }.lock_state().signal = semaphore;
 }
 
 fn subresource() -> vk::ImageSubresourceRange {
@@ -315,7 +333,7 @@ fn readable(format: vk::Format) -> Option<bool> {
 impl Gpu {
     /// The core's device: through its `create_instance` and `create_device2` where it offers them, through v1's
     /// `create_device`, or made here with one graphics-and-compute queue; then the interface it will be handed.
-    pub fn create(ask: &Ask, negotiation: Option<&retro_hw_render_context_negotiation_interface_vulkan>) -> Result<Box<Gpu>, String> {
+    pub fn create(ask: &Ask, negotiation: Option<&retro_hw_render_context_negotiation_interface_vulkan>) -> Result<Arc<Gpu>, String> {
         // SAFETY: the loader is loaded once per device and outlives every handle made through it.
         let entry = unsafe { ash::Entry::load() }.map_err(|e| format!("Vulkan is not available: {e}"))?;
         let asked = vk::make_api_version(0, ask.version.0, ask.version.1, 0);
@@ -423,7 +441,7 @@ impl Gpu {
             unlock_queue: Some(unlock_queue),
             set_signal_semaphore: Some(set_signal_semaphore),
         };
-        let mut g = Box::new(Gpu {
+        let mut g = Arc::new(Gpu {
             entry,
             instance,
             physical,
@@ -435,26 +453,33 @@ impl Gpu {
             uuids,
             interface,
             lock: AtomicBool::new(false),
-            pool,
-            commands: [list[0], list[1]],
-            fences,
-            submitted: [false; IN_FLIGHT],
-            index: 0,
-            handed: None,
-            waits: Vec::new(),
-            core_commands: Vec::new(),
-            signal: vk::Semaphore::null(),
-            ring: None,
-            record: None,
-            unread: None,
-            held: None,
-            readback: None,
-            swizzled: Vec::new(),
-            log: Vec::new(),
+            released: AtomicBool::new(false),
+            device_destroyed: AtomicBool::new(false),
+            inner: Mutex::new(GpuState {
+                pool,
+                commands: [list[0], list[1]],
+                fences,
+                submitted: [false; IN_FLIGHT],
+                index: 0,
+                handed: None,
+                waits: Vec::new(),
+                core_commands: Vec::new(),
+                signal: vk::Semaphore::null(),
+                ring: None,
+                record: None,
+                unread: None,
+                held: None,
+                readback: None,
+                swizzled: Vec::new(),
+                log: std::mem::take(&mut b.said),
+            }),
         });
-        g.interface.handle = &mut *g as *mut Gpu as *mut c_void;
-        g.log.extend(std::mem::take(&mut b.said));
+        Arc::get_mut(&mut g).expect("unique Arc<Gpu>").interface.handle = Arc::as_ptr(&g) as *mut c_void;
         Ok(g)
+    }
+
+    fn lock_state(&self) -> MutexGuard<'_, GpuState> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// The interface `GET_HW_RENDER_INTERFACE` hands, valid while this lives.
@@ -462,18 +487,53 @@ impl Gpu {
         &self.interface
     }
 
-    /// A frame begins: last frame's record is gone.
-    pub fn begin_frame(&mut self) {
-        self.record = None;
+    /// Drains any diagnostic messages collected since the last check.
+    pub fn drain_logs(&self) -> Vec<String> {
+        std::mem::take(&mut self.lock_state().log)
     }
 
-    fn wait_slot(&mut self, i: usize) {
-        if self.submitted[i] {
+    /// Marks the Vulkan device as destroyed externally by the negotiation interface.
+    pub fn mark_device_destroyed(&self) {
+        self.device_destroyed.store(true, Ordering::Release);
+    }
+
+    /// Waits for idle and frees all host-created child resources before the VkDevice is destroyed.
+    pub fn release_resources(&self) {
+        if self.released.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        if !self.device_destroyed.load(Ordering::Acquire) {
             unsafe {
-                let _ = self.device.wait_for_fences(&[self.fences[i]], true, u64::MAX);
-                let _ = self.device.reset_fences(&[self.fences[i]]);
+                let _ = self.device.device_wait_idle();
             }
-            self.submitted[i] = false;
+        }
+        let mut s = self.lock_state();
+        self.drop_ring(&mut s);
+        self.free_held(&mut s);
+        unsafe {
+            if let Some(r) = s.readback.take() {
+                self.device.destroy_buffer(r.buffer, None);
+                self.device.free_memory(r.memory, None);
+            }
+            for f in s.fences {
+                self.device.destroy_fence(f, None);
+            }
+            self.device.destroy_command_pool(s.pool, None);
+        }
+    }
+
+    /// A frame begins: last frame's record is gone.
+    pub fn begin_frame(&self) {
+        self.lock_state().record = None;
+    }
+
+    fn wait_slot(&self, s: &mut GpuState, i: usize) {
+        if s.submitted[i] {
+            unsafe {
+                let _ = self.device.wait_for_fences(&[s.fences[i]], true, u64::MAX);
+                let _ = self.device.reset_fences(&[s.fences[i]]);
+            }
+            s.submitted[i] = false;
         }
     }
 
@@ -485,8 +545,9 @@ impl Gpu {
 
     /// The host's ring imported, replacing the last once its pictures are released; `None` withdraws it. A ring on
     /// another card, or a card that cannot import, is `NOT_SUPPORTED` (EmuSen_CoreAPI.md §6.43).
-    pub fn lend(&mut self, ring: Option<&Ring>) -> Result<(), i32> {
-        self.drop_ring();
+    pub fn lend(&self, ring: Option<&Ring>) -> Result<(), i32> {
+        let mut s = self.lock_state();
+        self.drop_ring(&mut s);
         let Some(r) = ring else { return Ok(()) };
         if self.exports.is_none() || (r.device_uuid, r.driver_uuid) != self.uuids {
             return Err(status::NOT_SUPPORTED);
@@ -497,11 +558,11 @@ impl Gpu {
         let mut imported = Imported { slots: Vec::new(), ready: vk::Semaphore::null(), done: vk::Semaphore::null(), count: 0 };
         let made = self.import(r, &mut imported);
         if let Err(why) = made {
-            self.log.push(format!("the host's ring could not be imported: {why}"));
+            s.log.push(format!("the host's ring could not be imported: {why}"));
             self.free_imported(imported);
             return Err(status::NOT_SUPPORTED);
         }
-        self.ring = Some(imported);
+        s.ring = Some(imported);
         Ok(())
     }
 
@@ -574,9 +635,9 @@ impl Gpu {
     }
 
     /// The ring let go once the host has released every picture handed on it, and this device is idle.
-    fn drop_ring(&mut self) {
-        let Some(r) = self.ring.take() else { return };
-        let last = r.slots.iter().map(|s| s.released_at).max().unwrap_or(0);
+    fn drop_ring(&self, s: &mut GpuState) {
+        let Some(r) = s.ring.take() else { return };
+        let last = r.slots.iter().map(|slot| slot.released_at).max().unwrap_or(0);
         if let Some((_, _, timeline)) = &self.exports
             && last > 0
         {
@@ -588,65 +649,66 @@ impl Gpu {
         unsafe {
             let _ = self.device.queue_wait_idle(self.queue);
         }
-        self.submitted = [false; IN_FLIGHT];
+        s.submitted = [false; IN_FLIGHT];
         unsafe {
-            let _ = self.device.reset_fences(&self.fences);
+            let _ = self.device.reset_fences(&s.fences);
         }
         self.free_imported(r);
     }
 
     /// The largest picture the lent ring holds.
-    fn ring_holds(&self, w: u32, h: u32) -> Option<bool> {
-        self.ring.as_ref().map(|r| r.slots.iter().all(|s| s.width >= w && s.height >= h))
+    fn ring_holds(s: &GpuState, w: u32, h: u32) -> Option<bool> {
+        s.ring.as_ref().map(|r| r.slots.iter().all(|slot| slot.width >= w && slot.height >= h))
     }
 
     // ---- A frame -----------------------------------------------------------------------------------------------
 
     /// The frame `video_refresh(RETRO_HW_FRAME_BUFFER_VALID)` handed, copied into the ring, held, or read back.
-    pub fn frame(&mut self, w: u32, h: u32) -> Shown {
-        self.unread = None;
-        let Some(handed) = self.handed else {
-            if self.log.len() < 8 {
-                self.log.push("the core handed a hardware frame without setting an image".into());
+    pub fn frame(&self, w: u32, h: u32) -> Shown {
+        let mut s = self.lock_state();
+        s.unread = None;
+        let Some(handed) = s.handed else {
+            if s.log.len() < 8 {
+                s.log.push("the core handed a hardware frame without setting an image".into());
             }
             return Shown::Nothing;
         };
-        let shown = match self.ring_holds(w, h) {
+        let shown = match Self::ring_holds(&s, w, h) {
             Some(true) => {
-                let slot = (self.ring.as_ref().unwrap().count % self.ring.as_ref().unwrap().slots.len() as u64) as usize;
-                match self.submit(handed, w, h, Target::Slot(slot), true) {
+                let slot = (s.ring.as_ref().unwrap().count % s.ring.as_ref().unwrap().slots.len() as u64) as usize;
+                match self.submit(&mut s, handed, w, h, Target::Slot(slot), true) {
                     Ok(()) => {
                         // A newer frame is in the ring, so a frame held for a larger ring is never shown after it.
-                        if let Some(held) = self.held.as_mut() {
+                        if let Some(held) = s.held.as_mut() {
                             held.pending = false;
                         }
-                        self.unread = Some((handed, w, h));
+                        s.unread = Some((handed, w, h));
                         return Shown::Ring;
                     }
                     Err(why) => {
-                        self.log.push(why);
+                        s.log.push(why);
                         return Shown::Nothing;
                     }
                 }
             }
             Some(false) => {
-                if let Err(why) = self.hold(handed, w, h) {
-                    self.log.push(why);
+                if let Err(why) = self.hold(&mut s, handed, w, h) {
+                    s.log.push(why);
                     return Shown::Nothing;
                 }
                 true
             }
             None => false,
         };
-        let src = if shown { Handed { image: self.held.as_ref().unwrap().image, layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL, format: SLOT_FORMAT } } else { handed };
+        let src = if shown { Handed { image: s.held.as_ref().unwrap().image, layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL, format: SLOT_FORMAT } } else { handed };
         let Some(bgra) = readable(src.format) else {
-            if self.log.len() < 8 {
-                self.log.push(format!("a picture of format {:?} cannot be read back", src.format));
+            if s.log.len() < 8 {
+                s.log.push(format!("a picture of format {:?} cannot be read back", src.format));
             }
             return Shown::Nothing;
         };
-        if let Err(why) = self.read_back(src, w, h, !shown) {
-            self.log.push(why);
+        if let Err(why) = self.read_back(&mut s, src, w, h, !shown) {
+            s.log.push(why);
             return Shown::Nothing;
         }
         if shown { Shown::Larger(w, h, bgra) } else { Shown::Bytes(w, h, bgra) }
@@ -654,42 +716,44 @@ impl Gpu {
 
     /// The size of the ring's last frame while it has not been read back.
     pub fn unread(&self) -> Option<(u32, u32)> {
-        self.unread.map(|(_, w, h)| (w, h))
+        self.lock_state().unread.map(|(_, w, h)| (w, h))
     }
 
     /// The ring's last frame read back on demand, for a screenshot or a state's picture: its size and whether it is
-    /// BGRA, `read` handing the bytes; nothing is read back on the ring's own path (EmuSen_LibretroHost.md §10h).
-    pub fn read_unread(&mut self) -> Option<(u32, u32, bool)> {
-        let (src, w, h) = self.unread.take()?;
+    /// BGRA, `read_with` handing the bytes; nothing is read back on the ring's own path (EmuSen_LibretroHost.md §10h).
+    pub fn read_unread(&self) -> Option<(u32, u32, bool)> {
+        let mut s = self.lock_state();
+        let (src, w, h) = s.unread.take()?;
         let bgra = readable(src.format)?;
-        match self.read_back(src, w, h, false) {
+        match self.read_back(&mut s, src, w, h, false) {
             Ok(()) => Some((w, h, bgra)),
             Err(why) => {
-                self.log.push(why);
+                s.log.push(why);
                 None
             }
         }
     }
 
     /// The frame's record for `frame_ring`; a held frame is copied into a ring that now holds it first.
-    pub fn frame_ring(&mut self) -> Option<RingFrame> {
-        if let Some(held) = self.held.as_ref().filter(|h| h.pending).map(|h| (h.image, h.width, h.height))
-            && self.ring_holds(held.1, held.2) == Some(true)
+    pub fn frame_ring(&self) -> Option<RingFrame> {
+        let mut s = self.lock_state();
+        if let Some(held) = s.held.as_ref().filter(|h| h.pending).map(|h| (h.image, h.width, h.height))
+            && Self::ring_holds(&s, held.1, held.2) == Some(true)
         {
-            let r = self.ring.as_ref().unwrap();
+            let r = s.ring.as_ref().unwrap();
             let slot = (r.count % r.slots.len() as u64) as usize;
             let src = Handed { image: held.0, layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL, format: SLOT_FORMAT };
-            match self.submit(src, held.1, held.2, Target::Slot(slot), false) {
-                Ok(()) => self.held.as_mut().unwrap().pending = false,
-                Err(why) => self.log.push(why),
+            match self.submit(&mut s, src, held.1, held.2, Target::Slot(slot), false) {
+                Ok(()) => s.held.as_mut().unwrap().pending = false,
+                Err(why) => s.log.push(why),
             }
         }
-        self.record
+        s.record
     }
 
-    fn hold(&mut self, handed: Handed, w: u32, h: u32) -> Result<(), String> {
-        if self.held.as_ref().is_none_or(|x| x.width != w || x.height != h) {
-            self.free_held();
+    fn hold(&self, s: &mut GpuState, handed: Handed, w: u32, h: u32) -> Result<(), String> {
+        if s.held.as_ref().is_none_or(|x| x.width != w || x.height != h) {
+            self.free_held(s);
             let info = vk::ImageCreateInfo::default()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(SLOT_FORMAT)
@@ -705,15 +769,15 @@ impl Gpu {
             let kind = self.memory_type(needs.memory_type_bits, vk::MemoryPropertyFlags::DEVICE_LOCAL).ok_or("no device memory for a held frame")?;
             let memory = check(unsafe { self.device.allocate_memory(&vk::MemoryAllocateInfo::default().allocation_size(needs.size).memory_type_index(kind), None) }, "vkAllocateMemory")?;
             check(unsafe { self.device.bind_image_memory(image, memory, 0) }, "vkBindImageMemory")?;
-            self.held = Some(Held { image, memory, width: w, height: h, pending: false });
+            s.held = Some(Held { image, memory, width: w, height: h, pending: false });
         }
-        self.submit(handed, w, h, Target::Held, true)?;
-        self.held.as_mut().unwrap().pending = true;
+        self.submit(s, handed, w, h, Target::Held, true)?;
+        s.held.as_mut().unwrap().pending = true;
         Ok(())
     }
 
-    fn free_held(&mut self) {
-        if let Some(h) = self.held.take() {
+    fn free_held(&self, s: &mut GpuState) {
+        if let Some(h) = s.held.take() {
             unsafe {
                 let _ = self.device.queue_wait_idle(self.queue);
                 self.device.destroy_image(h.image, None);
@@ -722,10 +786,10 @@ impl Gpu {
         }
     }
 
-    fn read_back(&mut self, src: Handed, w: u32, h: u32, core_frame: bool) -> Result<(), String> {
+    fn read_back(&self, s: &mut GpuState, src: Handed, w: u32, h: u32, core_frame: bool) -> Result<(), String> {
         let bytes = w as u64 * h as u64 * 4;
-        if self.readback.as_ref().is_none_or(|r| r.bytes < bytes) {
-            if let Some(r) = self.readback.take() {
+        if s.readback.as_ref().is_none_or(|r| r.bytes < bytes) {
+            if let Some(r) = s.readback.take() {
                 unsafe {
                     self.device.destroy_buffer(r.buffer, None);
                     self.device.free_memory(r.memory, None);
@@ -739,29 +803,29 @@ impl Gpu {
             let memory = check(unsafe { self.device.allocate_memory(&vk::MemoryAllocateInfo::default().allocation_size(needs.size).memory_type_index(kind), None) }, "vkAllocateMemory")?;
             check(unsafe { self.device.bind_buffer_memory(buffer, memory, 0) }, "vkBindBufferMemory")?;
             let mapped = check(unsafe { self.device.map_memory(memory, 0, vk::WHOLE_SIZE, vk::MemoryMapFlags::empty()) }, "vkMapMemory")? as *mut u8;
-            self.readback = Some(Readback { buffer, memory, bytes, mapped });
+            s.readback = Some(Readback { buffer, memory, bytes, mapped });
         }
-        let i = self.index;
-        self.submit(src, w, h, Target::Buffer, core_frame)?;
-        self.wait_slot(i);
+        let i = s.index;
+        self.submit(s, src, w, h, Target::Buffer, core_frame)?;
+        self.wait_slot(s, i);
         Ok(())
     }
 
     /// One submission: the core's command buffers, then the copy of `src` into `target`, ordered by the core's
     /// semaphores and, for a slot, by `done` and `ready` with the ownership crossing `VK_QUEUE_FAMILY_EXTERNAL`.
-    fn submit(&mut self, src: Handed, w: u32, h: u32, target: Target, core_frame: bool) -> Result<(), String> {
-        let i = self.index;
-        self.wait_slot(i);
-        let cmd = self.commands[i];
+    fn submit(&self, s: &mut GpuState, src: Handed, w: u32, h: u32, target: Target, core_frame: bool) -> Result<(), String> {
+        let i = s.index;
+        self.wait_slot(s, i);
+        let cmd = s.commands[i];
         let d = &self.device;
         let ext = vk::QUEUE_FAMILY_EXTERNAL;
         let ignored = vk::QUEUE_FAMILY_IGNORED;
         let (dst_image, dst_old, dst_from) = match target {
-            Target::Slot(s) => {
-                let slot = &self.ring.as_ref().unwrap().slots[s];
+            Target::Slot(slot_idx) => {
+                let slot = &s.ring.as_ref().unwrap().slots[slot_idx];
                 (slot.image, if slot.used { vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL } else { vk::ImageLayout::UNDEFINED }, ext)
             }
-            Target::Held => (self.held.as_ref().unwrap().image, vk::ImageLayout::UNDEFINED, ignored),
+            Target::Held => (s.held.as_ref().unwrap().image, vk::ImageLayout::UNDEFINED, ignored),
             Target::Buffer => (vk::Image::null(), vk::ImageLayout::UNDEFINED, ignored),
         };
         unsafe {
@@ -779,7 +843,7 @@ impl Gpu {
             let extent = vk::Extent3D { width: w, height: h, depth: 1 };
             if let Target::Buffer = target {
                 let region = vk::BufferImageCopy { buffer_offset: 0, buffer_row_length: 0, buffer_image_height: 0, image_subresource: layers(), image_offset: vk::Offset3D::default(), image_extent: extent };
-                d.cmd_copy_image_to_buffer(cmd, src.image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, self.readback.as_ref().unwrap().buffer, &[region]);
+                d.cmd_copy_image_to_buffer(cmd, src.image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, s.readback.as_ref().unwrap().buffer, &[region]);
             } else if src.format == SLOT_FORMAT {
                 let region = vk::ImageCopy { src_subresource: layers(), src_offset: vk::Offset3D::default(), dst_subresource: layers(), dst_offset: vk::Offset3D::default(), extent };
                 d.cmd_copy_image(cmd, src.image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, dst_image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[region]);
@@ -805,27 +869,28 @@ impl Gpu {
             }
             check(d.end_command_buffer(cmd), "vkEndCommandBuffer")?;
         }
-        let mut waits: Vec<vk::Semaphore> = if core_frame { self.waits.clone() } else { Vec::new() };
-        let mut wait_values = vec![0u64; waits.len()];
+        let mut waits: Vec<vk::Semaphore> = if core_frame { s.waits.clone() } else { Vec::new() };
+        let wait_values = vec![0u64; waits.len()];
         let mut stages = vec![vk::PipelineStageFlags::ALL_COMMANDS; waits.len()];
+        let mut wait_values = wait_values;
         let mut signals = Vec::new();
         let mut signal_values = Vec::new();
-        let mut buffers: Vec<vk::CommandBuffer> = if core_frame { std::mem::take(&mut self.core_commands) } else { Vec::new() };
+        let mut buffers: Vec<vk::CommandBuffer> = if core_frame { std::mem::take(&mut s.core_commands) } else { Vec::new() };
         buffers.push(cmd);
         let mut value = 0;
-        if let Target::Slot(s) = target {
-            let r = self.ring.as_ref().unwrap();
-            if r.slots[s].released_at > 0 {
+        if let Target::Slot(slot_idx) = target {
+            let r = s.ring.as_ref().unwrap();
+            if r.slots[slot_idx].released_at > 0 {
                 waits.push(r.done);
-                wait_values.push(r.slots[s].released_at);
+                wait_values.push(r.slots[slot_idx].released_at);
                 stages.push(vk::PipelineStageFlags::TRANSFER);
             }
             value = r.count + 1;
             signals.push(r.ready);
             signal_values.push(value);
         }
-        if core_frame && self.signal != vk::Semaphore::null() {
-            signals.push(std::mem::replace(&mut self.signal, vk::Semaphore::null()));
+        if core_frame && s.signal != vk::Semaphore::null() {
+            signals.push(std::mem::replace(&mut s.signal, vk::Semaphore::null()));
             signal_values.push(0);
         }
         let mut values = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&wait_values).signal_semaphore_values(&signal_values);
@@ -834,53 +899,51 @@ impl Gpu {
             info = info.push_next(&mut values);
         }
         unsafe { lock_queue(self.interface.handle) };
-        let sent = unsafe { self.device.queue_submit(self.queue, &[info], self.fences[i]) };
+        let sent = unsafe { self.device.queue_submit(self.queue, &[info], s.fences[i]) };
         unsafe { unlock_queue(self.interface.handle) };
         check(sent, "vkQueueSubmit")?;
-        self.submitted[i] = true;
-        self.index = (i + 1) % IN_FLIGHT;
-        if let Target::Slot(s) = target {
-            let r = self.ring.as_mut().unwrap();
+        s.submitted[i] = true;
+        s.index = (i + 1) % IN_FLIGHT;
+        if let Target::Slot(slot_idx) = target {
+            let r = s.ring.as_mut().unwrap();
             r.count = value;
-            r.slots[s].used = true;
-            r.slots[s].released_at = value;
-            self.record = Some(RingFrame { size: size_of::<RingFrame>() as u32, slot: s as u32, width: w as i32, height: h as i32, value, ..RingFrame::default() });
+            r.slots[slot_idx].used = true;
+            r.slots[slot_idx].released_at = value;
+            s.record = Some(RingFrame { size: size_of::<RingFrame>() as u32, slot: slot_idx as u32, width: w as i32, height: h as i32, value, ..RingFrame::default() });
         }
         Ok(())
     }
 
-    /// A read-back picture in the bytes `Picture::take` reads as XRGB8888: BGRA as it is, RGBA swapped once.
-    pub fn read(&mut self, w: u32, h: u32, bgra: bool) -> &[u8] {
-        let Some(rb) = self.readback.as_ref() else { return &[] };
+    /// Reads the last read-back picture in XRGB8888 byte order without exposing internal `&mut` borrows.
+    pub fn read_with(&self, w: u32, h: u32, bgra: bool, f: impl FnOnce(&[u8])) {
+        let mut s = self.lock_state();
+        let Some(rb) = s.readback.as_ref() else {
+            f(&[]);
+            return;
+        };
         let bytes = unsafe { std::slice::from_raw_parts(rb.mapped, (w as usize * h as usize * 4).min(rb.bytes as usize)) };
         if bgra {
-            return bytes;
+            f(bytes);
+            return;
         }
-        self.swizzled.resize(bytes.len(), 0);
-        for (o, p) in self.swizzled.chunks_exact_mut(4).zip(bytes.chunks_exact(4)) {
+        let len = bytes.len();
+        let mut swizzled = std::mem::take(&mut s.swizzled);
+        swizzled.resize(len, 0);
+        for (o, p) in swizzled.chunks_exact_mut(4).zip(bytes.chunks_exact(4)) {
             o.copy_from_slice(&[p[2], p[1], p[0], 0xFF]);
         }
-        &self.swizzled
+        f(&swizzled);
+        s.swizzled = swizzled;
     }
 }
 
 impl Drop for Gpu {
     fn drop(&mut self) {
+        self.release_resources();
         unsafe {
-            let _ = self.device.device_wait_idle();
-        }
-        self.drop_ring();
-        self.free_held();
-        unsafe {
-            if let Some(r) = self.readback.take() {
-                self.device.destroy_buffer(r.buffer, None);
-                self.device.free_memory(r.memory, None);
+            if !self.device_destroyed.load(Ordering::Acquire) {
+                self.device.destroy_device(None);
             }
-            for f in self.fences {
-                self.device.destroy_fence(f, None);
-            }
-            self.device.destroy_command_pool(self.pool, None);
-            self.device.destroy_device(None);
             self.instance.destroy_instance(None);
         }
         let _ = &self.entry;

@@ -17,6 +17,7 @@ Kit.Sheet {
     property bool showing: false
     property bool awaiting: false
     signal chosen(int index)
+    signal pick(int index)
     signal rearm()
     signal dismissed()
     anchors.centerIn: undefined
@@ -33,23 +34,33 @@ Kit.Sheet {
         view.choiceList.currentIndex = 0
         root.awaiting = true
     }
-    onDismissed: {
+    onPick: (index) => {
         if (!root.awaiting)
             return
         root.awaiting = false
-        root.chosen(root.backIndex)
+        root.chosen(index)
+        if (root.showing && root.opened) {
+            view.choiceList.currentIndex = 0
+            root.awaiting = true
+        }
     }
+    onDismissed: root.pick(root.backIndex)
     onAboutToShow: root.rearm()
     onOpened: view.choiceList.forceActiveFocus()
-    onTitleChanged: if (root.showing) root.rearm()
-    onMessageChanged: if (root.showing) root.rearm()
     onShowingChanged: {
         if (root.showing)
             root.rearm()
         else
             root.awaiting = false
     }
-    onClosed: if (!root.visible) root.dismissed()
+    onClosed: {
+        if (root.showing) {
+            root.open()
+            root.rearm()
+        } else if (root.awaiting) {
+            root.dismissed()
+        }
+    }
     Connections {
         target: root.controller
         enabled: root.awaiting
@@ -72,10 +83,7 @@ Kit.Sheet {
             backIndex: root.backIndex
             padFamily: root.padFamily
             pixelScale: canvas.unit
-            onChosen: (index) => {
-                root.awaiting = false
-                root.chosen(index)
-            }
+            onChosen: (index) => root.pick(index)
         }
     }
 }

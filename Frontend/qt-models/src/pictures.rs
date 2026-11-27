@@ -117,10 +117,6 @@ fn picture_of(source: &PictureSource, id: &QString) -> QImage {
         let bytes = std::fs::read(path).unwrap_or_default();
         return QImage::from_data(&bytes, None).unwrap_or_default();
     }
-    if let Some(path) = what.strip_prefix("file/") {
-        let bytes = std::fs::read(path).unwrap_or_default();
-        return QImage::from_data(&bytes, None).unwrap_or_default();
-    }
     let shown = source.shown.lock().unwrap_or_else(PoisonError::into_inner).clone();
     let Some((runtime, session)) = shown else { return QImage::default() };
     match picture(&runtime, session, what) {

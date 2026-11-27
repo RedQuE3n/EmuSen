@@ -192,16 +192,45 @@ fn decode_text(bytes: &[u8]) -> String {
     }
 }
 
+fn valid_package_version(doc: &Value) -> bool {
+    let Some(v) = doc.get("version").and_then(Value::as_str) else { return false };
+    let Some((major, minor)) = v.split_once('.') else { return false };
+    major == "1" && !minor.is_empty() && minor.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn valid_hex_opt(v: Option<&Value>, digits: usize) -> bool {
+    match v {
+        None | Some(Value::Null) => true,
+        Some(Value::String(s)) => s.len() == digits && s.bytes().all(|b| b.is_ascii_hexdigit()),
+        _ => false,
+    }
+}
+
+fn valid_patch_entry(entry: &Value) -> bool {
+    let Some(obj) = entry.as_object() else { return false };
+    let has_file = obj.get("file").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    let has_fmt = obj.get("format").and_then(Value::as_str).is_some_and(|f| matches!(f, "ips" | "bps" | "ups"));
+    has_file && has_fmt && valid_hex_opt(obj.get("sha1"), 40)
+}
+
 /// Derives Galaxia's 8-hex-digit save key from `package.json`'s `patches` array (matching `emusen_galaxia::package::save_key_at`).
 pub fn package_save_key(folder: &Path) -> Option<String> {
     let bytes = std::fs::read(folder.join("package.json")).ok()?;
     let raw = decode_text(&bytes);
     let doc: Value = serde_json::from_str(&strip_jsonc(&raw)).ok()?;
+    let valid_mode = doc.get("mode").and_then(Value::as_str).is_some_and(|m| matches!(m, "linked" | "self-contained"));
+    let valid_sys = doc.get("system").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    if !valid_package_version(&doc) || !valid_sys || !valid_mode || !doc.get("game").is_some_and(Value::is_object) {
+        return None;
+    }
     let entries = doc.get("patches").and_then(Value::as_array).filter(|a| !a.is_empty())?;
     let mut lines = String::new();
     for entry in entries {
-        let fmt = entry.get("format").and_then(Value::as_str).unwrap_or("");
-        let id = entry.get("sha1").and_then(Value::as_str).or_else(|| entry.get("file").and_then(Value::as_str)).unwrap_or("");
+        if !valid_patch_entry(entry) {
+            return None;
+        }
+        let fmt = entry.get("format").and_then(Value::as_str)?;
+        let id = entry.get("sha1").and_then(Value::as_str).or_else(|| entry.get("file").and_then(Value::as_str))?;
         lines.push_str(fmt);
         lines.push(' ');
         lines.push_str(&id.to_ascii_lowercase());

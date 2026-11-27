@@ -364,23 +364,27 @@ impl qobject::CollectionsEclipseModel {
 
     pub fn dialog_choose(mut self: Pin<&mut Self>, index: i32) {
         let mode = std::mem::take(&mut self.as_mut().rust_mut().dialog_mode);
-        self.as_mut().close_dialog();
         match (mode, index) {
             (DialogMode::Manage { id, name }, 0) => {
                 self.as_mut().rust_mut().typing_mode = TypingMode::Rename { id };
                 let prompt = format!("Choose a new name for {name}.");
-                self.open_typing("Rename collection", &prompt, &name);
+                self.as_mut().open_typing("Rename collection", &prompt, &name);
+                self.as_mut().close_dialog();
             }
             (DialogMode::Manage { id, name }, 1) => {
+                self.as_mut().close_dialog();
                 self.as_mut().rust_mut().pending_delete = Some((id, name));
             }
             (DialogMode::ConfirmDelete { id }, 0) => {
+                self.as_mut().close_dialog();
                 if !self.library.is_null() {
                     let lib = unsafe { Pin::new_unchecked(&mut *self.library) };
                     lib.delete_collection(id);
                 }
             }
-            _ => {}
+            _ => {
+                self.as_mut().close_dialog();
+            }
         }
     }
 

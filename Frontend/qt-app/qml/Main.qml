@@ -182,6 +182,8 @@ Window {
             onReady: (path) => {
                 if (program.feed === 0)
                     library.started(path)
+                if (player.session.running && player.game !== path)
+                    player.session.close()
                 // The game's screen asked for first, so an open that fails at once gives way to the library after it.
                 screens.play()
                 player.game = path
@@ -921,8 +923,12 @@ Window {
         }
         Connections {
             target: settingsModel
-            enabled: screens.shown === Screens.Settings && screens.settingsTool.length > 0 && settingsModel.ready
+            enabled: screens.shown === Screens.Settings && screens.settingsTool.length > 0
             function onReadyChanged() { screens.applySettingsTool() }
+        }
+        Connections {
+            target: settingsModel
+            enabled: screens.shown === Screens.Settings && screens.settingsTool.length > 0 && settingsModel.ready
             function onTrailChanged() { screens.checkToolsSettingsTrail() }
         }
         Loader {

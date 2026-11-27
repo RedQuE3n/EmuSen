@@ -26,7 +26,7 @@ Kit.NormalizedCanvas {
     readonly property bool sheetOpen: frame.controller.sheetOpen
     onSheetOpenChanged: {
         if (!canvas.sheetOpen) collectionsModel.dialogSettled()
-        if (!canvas.sheetOpen && !collectionsModel.dialogOpen && !collectionsModel.typingOpen && canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
+        if (!canvas.sheetOpen && canvas.visible && !canvas.splashShown) canvas.focusActive()
     }
 
     visible: canvas.bigScreen && canvas.screens.shown === Screens.Collections
@@ -38,7 +38,7 @@ Kit.NormalizedCanvas {
     signal focusActive()
     onFocusActive: {
         if (collectionsModel.typingOpen) collectionKeyboard.forceActiveFocus()
-        else if (!collectionsModel.dialogOpen) mainFocus.forceActiveFocus()
+        else if (!collectionsModel.dialogOpen && !canvas.sheetOpen) mainFocus.forceActiveFocus()
     }
 
     CollectionsEclipseModel {
@@ -54,7 +54,7 @@ Kit.NormalizedCanvas {
                 mainFocus.forceActiveFocus()
             }
         }
-        onDialogOpenChanged: if (!collectionsModel.dialogOpen && !collectionsModel.typingOpen && canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
+        onDialogOpenChanged: if (!collectionsModel.dialogOpen && !collectionsModel.typingOpen && !canvas.sheetOpen && canvas.visible && !canvas.splashShown) mainFocus.forceActiveFocus()
     }
 
     Connections {

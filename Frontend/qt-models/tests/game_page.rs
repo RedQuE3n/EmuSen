@@ -1117,19 +1117,31 @@ fn fe_p0_02_and_be_p0_01_resume_pill_and_package_save_key() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir), None);
+    let sha_upper = "AB".repeat(20);
+    let sha_lower = "ab".repeat(20);
+    let valid_head = r#""version": "1.0", "system": "snes", "mode": "linked", "game": { "role": "image", "where": "library", "path": "g.sfc" }"#;
     std::fs::write(
         dir.join("package.json"),
-        "// manifest\n{\n  \"patches\": [\n    /* one */ { \"format\": \"ips\", \"sha1\": \"AB\" },\n  ],\n}\n",
+        format!("// manifest\n{{\n  {valid_head},\n  \"patches\": [\n    /* one */ {{ \"format\": \"ips\", \"file\": \"p.ips\", \"sha1\": \"{sha_upper}\" }},\n  ],\n}}\n"),
     )
     .unwrap();
-    assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir).as_deref(), Some("9ef3842d"));
+    assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir).as_deref(), Some("e1842d59"));
     let mut bom = b"\xEF\xBB\xBF".to_vec();
-    bom.extend_from_slice(b"{\n  \"patches\": [{ \"format\": \"ips\", \"sha1\": \"ab\" }]\n}");
+    bom.extend_from_slice(format!("{{\n  {valid_head},\n  \"patches\": [{{ \"format\": \"ips\", \"file\": \"p.ips\", \"sha1\": \"{sha_lower}\" }}]\n}}").as_bytes());
     std::fs::write(dir.join("package.json"), &bom).unwrap();
-    assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir).as_deref(), Some("9ef3842d"));
-    std::fs::write(dir.join("package.json"), r#"{ "patches": [{ "format": "bps", "file": "Patch.bps" }] }"#).unwrap();
+    assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir).as_deref(), Some("e1842d59"));
+    std::fs::write(dir.join("package.json"), format!(r#"{{ {valid_head}, "patches": [{{ "format": "bps", "file": "Patch.bps" }}] }}"#)).unwrap();
     assert!(emusen_qt_models::game_page_source::package_save_key(&dir).is_some());
-    std::fs::write(dir.join("package.json"), r#"{ "patches": [] }"#).unwrap();
+    std::fs::write(dir.join("package.json"), format!(r#"{{ {valid_head}, "patches": [] }}"#)).unwrap();
     assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir), None);
+    for invalid in [
+        r#"{ "patches": [{ "format": "ips", "file": "p.ips" }] }"#.to_string(),
+        format!(r#"{{ {valid_head}, "patches": [{{ "format": "rar", "file": "p.rar" }}] }}"#),
+        format!(r#"{{ {valid_head}, "patches": ["not-an-object"] }}"#),
+        format!(r#"{{ {valid_head}, "patches": [{{ "format": "ips", "file": "p.ips", "sha1": "AB" }}] }}"#),
+    ] {
+        std::fs::write(dir.join("package.json"), invalid).unwrap();
+        assert_eq!(emusen_qt_models::game_page_source::package_save_key(&dir), None);
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }

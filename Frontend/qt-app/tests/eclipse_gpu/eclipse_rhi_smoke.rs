@@ -118,8 +118,9 @@ fn qt_3_4_eclipse_rhi_smoke_renders_all_screens_and_overlays_on_vulkan() {
     }
 
     click_named(&mut scene, "toolCard.4");
-    wait_for(&mut scene, "screens", "shown", "Themes", 3000);
-    check_rhi(&mut scene, "Themes", None, &[], &[(960.0, 500.0)]);
+    wait_for(&mut scene, "screens", "shown", "Settings", 3000);
+    wait_for(&mut scene, "settingsHeading", "text", "Themes", 3000);
+    check_rhi(&mut scene, "Themes", Some("settingsCanvas"), &["settingsBackdrop"], &[(1400.0, 500.0)]);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Tools", 3000);
 

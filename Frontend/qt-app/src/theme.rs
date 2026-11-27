@@ -261,7 +261,7 @@ pub struct ThemeFeedRust {
     now: i64,
     /// The game whose facts were last asked for, so a read that comes back for another is dropped.
     facts_for: RefCell<String>,
-    facts_worker: RefCell<Option<Sender<FactsRequest>>>,
+    facts_worker: RefCell<Option<(Sender<FactsRequest>, std::thread::JoinHandle<()>)>>,
     library_gen: Cell<u64>,
     browse_key: RefCell<Option<(i32, u64, i32, String, i64)>>,
     shown_section: QString,
@@ -315,6 +315,10 @@ impl Default for ThemeFeedRust {
 impl Drop for ThemeFeedRust {
     fn drop(&mut self) {
         self.me.set(std::ptr::null_mut());
+        if let Some((tx, handle)) = self.facts_worker.borrow_mut().take() {
+            drop(tx);
+            let _ = handle.join();
+        }
     }
 }
 
@@ -902,18 +906,22 @@ impl qobject::ThemeFeed {
         let qt = self.qt_thread();
         let mut req = FactsRequest { source, game, seconds, qt };
         let mut worker = self.facts_worker.borrow_mut();
-        if let Some(tx) = worker.as_ref() {
+        if let Some((tx, handle)) = worker.take() {
             match tx.send(req) {
-                Ok(()) => return,
+                Ok(()) => {
+                    *worker = Some((tx, handle));
+                    return;
+                }
                 Err(std::sync::mpsc::SendError(returned)) => {
                     req = returned;
-                    *worker = None;
+                    drop(tx);
+                    let _ = handle.join();
                 }
             }
         }
         // Respawn only on first call or if a stale receiver exited after a failed queue.
         let (send, take) = std::sync::mpsc::channel::<FactsRequest>();
-        std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             while let Ok(mut latest) = take.recv() {
                 while let Ok(newer) = take.try_recv() {
                     latest = newer;
@@ -931,7 +939,7 @@ impl qobject::ThemeFeed {
             }
         });
         let _ = send.send(req);
-        *worker = Some(send);
+        *worker = Some((send, handle));
     }
 
     fn show_facts(&self, facts: emusen_qt_models::library::GameFacts) {

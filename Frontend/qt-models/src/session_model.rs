@@ -103,6 +103,16 @@ pub mod qobject {
         #[qproperty(bool, resume_asked, cxx_name = "resumeAsked", READ, NOTIFY)]
         /// The game the Resume question names.
         #[qproperty(QString, resume_subject, cxx_name = "resumeSubject", READ, NOTIFY)]
+        /// Slot 0 save-state picture URL served by the session picture provider while the Resume question is shown.
+        #[qproperty(QString, resume_picture, cxx_name = "resumePicture", READ, NOTIFY)]
+        /// Formatted timestamp of slot 0 while the Resume question is shown.
+        #[qproperty(QString, resume_when, cxx_name = "resumeWhen", READ, NOTIFY)]
+        /// Friendly console display name while the Resume question is shown.
+        #[qproperty(QString, resume_console, cxx_name = "resumeConsole", READ, NOTIFY)]
+        /// Friendly core display name without a trailing Engine suffix while the Resume question is shown.
+        #[qproperty(QString, resume_core, cxx_name = "resumeCore", READ, NOTIFY)]
+        /// Core planet badge index (-1 for libretro, -2 when unknown) while the Resume question is shown.
+        #[qproperty(i32, resume_planet, cxx_name = "resumePlanet", READ, NOTIFY)]
         /// Whether the running session's master cheat switch is on.
         #[qproperty(bool, master_cheats, cxx_name = "masterCheats", READ, NOTIFY)]
         type SessionModel = super::SessionModelRust;
@@ -385,6 +395,11 @@ pub struct SessionModelRust {
     notice_attention: bool,
     resume_asked: bool,
     resume_subject: QString,
+    resume_picture: QString,
+    resume_when: QString,
+    resume_console: QString,
+    resume_core: QString,
+    resume_planet: i32,
     /// The setting Resume while the opened game is held for it, until the runtime says whether it was left off.
     holding: Option<resume::Setting>,
     /// The state the opened game is held to start from, until the runtime has opened it.
@@ -461,6 +476,11 @@ impl Default for SessionModelRust {
             notice_attention: false,
             resume_asked: false,
             resume_subject: QString::default(),
+            resume_picture: QString::default(),
+            resume_when: QString::default(),
+            resume_console: QString::default(),
+            resume_core: QString::default(),
+            resume_planet: -2,
             holding: None,
             from_state: None,
             shown: Shown::default(),
@@ -497,6 +517,79 @@ fn eclipse_when_words(saved_at: Option<&str>) -> String {
     };
     let now = crate::words::now();
     crate::game_page::short_when(crate::clock::local_day(at, 0), crate::clock::local_day(now, 0), &crate::clock::short_time(at))
+}
+
+/// Eclipse Resume Card timestamp with Today/Yesterday/date and clock, falling back to `when_words`.
+fn resume_when_words_at(saved_at: Option<&str>, now: i64) -> String {
+    if let Some(at) = saved_at.and_then(crate::words::parse_utc) {
+        return crate::game_page::state_when(
+            crate::clock::local_day(at, 0),
+            crate::clock::local_day(now, 0),
+            crate::clock::local_day(now, 1),
+            &crate::clock::short_time(at),
+        );
+    }
+    when_words(saved_at)
+}
+
+fn resume_when_words(saved_at: Option<&str>) -> String {
+    resume_when_words_at(saved_at, crate::words::now())
+}
+
+fn strip_engine_suffix(name: &str) -> String {
+    let trimmed = name.trim();
+    trimmed
+        .strip_suffix(" Engine")
+        .or_else(|| trimmed.strip_suffix(" engine"))
+        .unwrap_or(trimmed)
+        .trim_end()
+        .to_owned()
+}
+
+fn slot_picture_path(platform: Option<&Platform>, state_path: &str) -> Option<String> {
+    platform?
+        .save_path(emusen_platform_client::galaxia::consts::SAVE_PICTURE, state_path, None, 0)
+        .ok()
+        .filter(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+fn resolve_resume_console(systems: &[emusen_crystal_client::shapes::SystemRow], console_id: &str) -> String {
+    let id = console_id.trim();
+    if id.is_empty() {
+        return String::new();
+    }
+    systems
+        .iter()
+        .find(|s| s.id.eq_ignore_ascii_case(id))
+        .map(crate::library::console_name)
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| id.to_owned())
+}
+
+fn resolve_resume_core(
+    engine_id: &str,
+    cores: &[emusen_crystal_client::shapes::CoreRow],
+    engines: &[emusen_crystal_client::shapes::Engine],
+) -> (String, i32) {
+    let id = engine_id.trim();
+    if id.is_empty() {
+        return (String::new(), -2);
+    }
+    let shown = crate::clients::engine_shown(id, cores);
+    let has_core_row = cores.iter().any(|c| c.engine.as_deref() == Some(id));
+    let raw = if !has_core_row {
+        engines
+            .iter()
+            .find(|e| e.id == id && !e.name.trim().is_empty())
+            .map(|e| crate::library::without_port_mark(&e.name).to_owned())
+            .unwrap_or(shown.name)
+    } else {
+        shown.name
+    };
+    let clean = strip_engine_suffix(&raw);
+    let planet = crate::settings_shown::planet_of(&clean, shown.libretro, !clean.is_empty());
+    (clean, planet)
 }
 
 impl qobject::SessionModel {
@@ -715,7 +808,10 @@ impl qobject::SessionModel {
             }
             LeftOff::Hold(Start::Fresh) => self.as_mut().let_go(false),
             LeftOff::Hold(Start::Load) => self.as_mut().let_go(true),
-            LeftOff::Hold(Start::Ask) => self.as_mut().set_resume_asked(true),
+            LeftOff::Hold(Start::Ask) => {
+                self.as_mut().read_resume_facts(session);
+                self.as_mut().set_resume_asked(true);
+            }
             LeftOff::BeginOnly => self.as_mut().begin_play(),
         }
     }
@@ -723,6 +819,7 @@ impl qobject::SessionModel {
     /// The held game let go, from where it was left off or the beginning, and run unless the player paused it meanwhile.
     fn let_go(mut self: Pin<&mut Self>, load: bool) {
         self.as_mut().rust_mut().holding = None;
+        self.as_mut().clear_resume_facts();
         self.as_mut().set_resume_asked(false);
         self.as_mut().begin_play();
         if !self.paused {
@@ -764,8 +861,12 @@ impl qobject::SessionModel {
             Answer::Fresh => self.let_go(false),
             // The game let go unplayed: no longer named, so choosing it again opens it again.
             Answer::Back => {
-                self.as_mut().set_resume_asked(false);
-                self.set_game(QString::default());
+                if self.game.is_empty() {
+                    self.as_mut().clear_resume_facts();
+                    self.as_mut().set_resume_asked(false);
+                } else {
+                    self.set_game(QString::default());
+                }
             }
         }
     }
@@ -782,6 +883,118 @@ impl qobject::SessionModel {
             self.as_mut().rust_mut().resume_subject = value;
             self.resume_subject_changed();
         }
+    }
+
+    fn set_resume_picture(mut self: Pin<&mut Self>, value: QString) {
+        if self.resume_picture != value {
+            self.as_mut().rust_mut().resume_picture = value;
+            self.resume_picture_changed();
+        }
+    }
+
+    fn set_resume_when(mut self: Pin<&mut Self>, value: QString) {
+        if self.resume_when != value {
+            self.as_mut().rust_mut().resume_when = value;
+            self.resume_when_changed();
+        }
+    }
+
+    fn set_resume_console(mut self: Pin<&mut Self>, value: QString) {
+        if self.resume_console != value {
+            self.as_mut().rust_mut().resume_console = value;
+            self.resume_console_changed();
+        }
+    }
+
+    fn set_resume_core(mut self: Pin<&mut Self>, value: QString) {
+        if self.resume_core != value {
+            self.as_mut().rust_mut().resume_core = value;
+            self.resume_core_changed();
+        }
+    }
+
+    fn set_resume_planet(mut self: Pin<&mut Self>, value: i32) {
+        if self.resume_planet != value {
+            self.as_mut().rust_mut().resume_planet = value;
+            self.resume_planet_changed();
+        }
+    }
+
+    fn ensure_pictures_served(mut self: Pin<&mut Self>) {
+        if !self.served {
+            let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone(), self.slot_pictures.clone()));
+            self.as_mut().rust_mut().served = served;
+        }
+    }
+
+    fn set_slot0_picture(&self, path: Option<String>) {
+        let mut guard = self.slot_pictures.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.retain(|(n, _)| *n != 0);
+        if let Some(p) = path {
+            guard.push((0, p));
+        }
+    }
+
+    fn read_resume_facts(mut self: Pin<&mut Self>, session: u32) {
+        self.as_mut().ensure_pictures_served();
+        let runtime = self.runtime.clone();
+        let platform = self.as_mut().platform().ok();
+        let info = runtime.as_ref().and_then(|r| r.session_info(session).ok());
+        let systems = runtime.as_ref().and_then(|r| r.systems().ok()).unwrap_or_default();
+        let cores = runtime.as_ref().and_then(|r| r.cores().ok()).unwrap_or_default();
+        let engines = runtime.as_ref().and_then(|r| r.engines().ok()).unwrap_or_default();
+        let slots = runtime.as_ref().and_then(|r| r.state_slots(session).ok()).unwrap_or_default();
+        let fallback_console = self.console.to_string();
+        let console_id = info.as_ref().map(|i| i.console.as_str()).filter(|c| !c.is_empty()).unwrap_or(&fallback_console);
+        let console = resolve_resume_console(&systems, console_id);
+        let fallback_engine = self.engine.to_string();
+        let engine_id = info.as_ref().map(|i| i.engine.as_str()).filter(|e| !e.is_empty()).unwrap_or(&fallback_engine);
+        let (core, planet) = resolve_resume_core(engine_id, &cores, &engines);
+        let slot0 = slots.iter().find(|s| s.slot == 0 && s.exists);
+        let when = slot0.map(|s| resume_when_words(s.saved_at.as_deref())).unwrap_or_default();
+        let picture_path = slot0.and_then(|s| slot_picture_path(platform.as_deref(), &s.path));
+        let picture = match picture_path {
+            Some(path) => {
+                let serial = self.serial + 1;
+                self.as_mut().rust_mut().serial = serial;
+                self.set_slot0_picture(Some(path));
+                format!("image://{}/{serial}/slot/0", pictures::NAME)
+            }
+            None => {
+                self.set_slot0_picture(None);
+                String::new()
+            }
+        };
+        self.as_mut().set_resume_picture(QString::from(&picture));
+        self.as_mut().set_resume_when(QString::from(&when));
+        self.as_mut().set_resume_console(QString::from(&console));
+        self.as_mut().set_resume_core(QString::from(&core));
+        self.as_mut().set_resume_planet(planet);
+    }
+
+    fn clear_resume_facts(mut self: Pin<&mut Self>) {
+        self.set_slot0_picture(None);
+        self.as_mut().set_resume_picture(QString::default());
+        self.as_mut().set_resume_when(QString::default());
+        self.as_mut().set_resume_console(QString::default());
+        self.as_mut().set_resume_core(QString::default());
+        self.as_mut().set_resume_planet(-2);
+    }
+
+    /// Attaches a test runtime session and executes `left_off` for software QML tests without a GPU feed.
+    #[doc(hidden)]
+    pub fn attach_resume_test_session(mut self: Pin<&mut Self>, runtime: Runtime, session: u32, game: &str) {
+        let game_q = QString::from(game);
+        if self.game != game_q {
+            self.as_mut().rust_mut().game = game_q;
+            self.as_mut().game_changed();
+        }
+        self.as_mut().set_resume_subject(QString::from(resume::subject(game).as_str()));
+        self.as_mut().rust_mut().runtime = Some(runtime);
+        self.as_mut().rust_mut().opened = Some(session);
+        self.as_mut().rust_mut().holding = Some(resume::Setting::Ask);
+        self.as_mut().set_running(true);
+        self.as_mut().left_off(session);
     }
 
     /// The cores folder a host names, else the runtime's own default (emusen_crystal.h, the config's `cores`); the
@@ -1000,19 +1213,20 @@ impl qobject::SessionModel {
         facts.second_player = unsafe { GamePads::at(self.pads) }.is_some_and(|pads| pads.seated() & 0b10 != 0);
         facts.pictures = format!("image://{}/{serial}/", pictures::NAME);
         let platform = self.as_mut().platform().ok();
-        let mut slot_paths = Vec::new();
         let slots = runtime.state_slots(session).unwrap_or_default();
+        let mut slot_paths: Vec<(u32, String)> = slots
+            .iter()
+            .filter(|s| s.slot == 0 && s.exists)
+            .filter_map(|s| slot_picture_path(platform.as_deref(), &s.path).map(|p| (0, p)))
+            .collect();
         facts.slots = slots
             .iter()
             .filter(|s| (1..=pause::SLOTS).contains(&s.slot))
             .map(|s| {
                 let pic = if s.exists {
-                    platform
-                        .as_ref()
-                        .and_then(|p| p.save_path(emusen_platform_client::galaxia::consts::SAVE_PICTURE, &s.path, None, 0).ok())
-                        .filter(|p| p.is_file())
+                    slot_picture_path(platform.as_deref(), &s.path)
                         .map(|p| {
-                            slot_paths.push((s.slot, p.to_string_lossy().into_owned()));
+                            slot_paths.push((s.slot, p));
                             format!("{}slot/{}", facts.pictures, s.slot)
                         })
                         .unwrap_or_default()
@@ -1297,6 +1511,8 @@ impl qobject::SessionModel {
         }
         self.as_mut().rust_mut().holding = None;
         self.as_mut().rust_mut().from_state = None;
+        self.as_mut().clear_resume_facts();
+        self.slot_pictures.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
         self.as_mut().set_resume_asked(false);
         self.as_mut().set_running(false);
         self.as_mut().set_paused(false);
@@ -1321,10 +1537,7 @@ impl qobject::SessionModel {
                 if let Some(runtime) = self.runtime.clone() {
                     *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((runtime, session));
                 }
-                if !self.served {
-                    let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone(), self.slot_pictures.clone()));
-                    self.as_mut().rust_mut().served = served;
-                }
+                self.as_mut().ensure_pictures_served();
                 self.as_mut().apply_speed();
                 let console = self.runtime.as_ref().and_then(|r| r.session_info(session).ok()).map(|info| info.console);
                 self.as_mut().rust_mut().display_console = console;
@@ -1690,5 +1903,142 @@ mod tests {
         }
         assert!(preset_document_for_rel(&platform, "custom/user.slangp").is_ok());
         drop(world);
+    }
+
+    fn write_test_png(path: &std::path::Path, width: i32, height: i32) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        let rgba = vec![0xD0u8; (width * height * 4) as usize];
+        let image = unsafe { cxx_qt_lib::QImage::from_raw_bytes(rgba, width, height, cxx_qt_lib::QImageFormat::Format_RGBA8888) };
+        assert!(pictures::ffi::save_png(&image, &QString::from(path.to_string_lossy().as_ref())), "wrote png at {}", path.display());
+    }
+
+    #[test]
+    fn resume_helpers_format_when_core_console_and_stage_meta() {
+        let now = crate::words::parse_utc("2026-11-27T20:00:00Z").unwrap();
+        let today = resume_when_words_at(Some("2026-11-27T18:30:00Z"), now);
+        assert!(today.starts_with("Today, "), "expected Today prefix, got {today}");
+        let yesterday = resume_when_words_at(Some("2026-11-26T18:30:00Z"), now);
+        assert!(yesterday.starts_with("Yesterday, "), "expected Yesterday prefix, got {yesterday}");
+        let older = resume_when_words_at(Some("2026-11-08T18:30:00Z"), now);
+        assert!(older.contains(", ") && !older.starts_with("Today") && !older.starts_with("Yesterday"), "expected date prefix, got {older}");
+        assert!(eclipse_when_words(Some("2026-11-08T18:30:00Z")).is_empty() == false);
+
+        assert_eq!(strip_engine_suffix("Snes9x Engine"), "Snes9x");
+        assert_eq!(strip_engine_suffix("Moon engine "), "Moon");
+        assert_eq!(strip_engine_suffix("bsnes"), "bsnes");
+
+        let systems = vec![emusen_crystal_client::shapes::SystemRow {
+            id: "snes".into(),
+            name: "Super Nintendo".into(),
+            console: "Super Nintendo Entertainment System".into(),
+            esde_system: "snes".into(),
+            ..Default::default()
+        }];
+        let disp = resolve_resume_console(&systems, "SNES");
+        assert!(!disp.is_empty(), "console {disp}");
+        assert_eq!(resolve_resume_console(&systems, "unknown"), "unknown");
+
+        let engines = vec![emusen_crystal_client::shapes::Engine {
+            id: "moon".into(),
+            name: "Moon Engine".into(),
+            ..Default::default()
+        }];
+        assert_eq!(resolve_resume_core("moon", &[], &engines), ("Moon".into(), 0));
+        let libretro_core = emusen_crystal_client::shapes::CoreRow {
+            engine: Some("snes9x".into()),
+            libretro: Some(Default::default()),
+            name: Some("Snes9x".into()),
+            ..Default::default()
+        };
+        assert_eq!(resolve_resume_core("snes9x", &[libretro_core], &[]), ("Snes9x".into(), -1));
+        assert_eq!(resolve_resume_core("", &[], &[]), (String::new(), -2));
+
+        assert_eq!(crate::words::resume_stage_meta(256, 224), "8:7 · 256×224");
+        assert_eq!(crate::words::resume_stage_meta(640, 480), "4:3 · 640×480");
+        assert_eq!(crate::words::resume_stage_meta(240, 160), "3:2 · 240×160");
+        assert_eq!(crate::words::resume_stage_meta(160, 144), "10:9 · 160×144");
+        assert_eq!(crate::words::resume_stage_meta(1280, 720), "16:9 · 1280×720");
+        assert_eq!(crate::words::resume_stage_meta(0, 0), "STATE READY");
+    }
+
+    #[test]
+    fn left_off_populates_resume_facts_serves_slot0_image_and_clears_on_let_go_and_close() {
+        use emusen_client_fixture::{library, World};
+        use emusen_crystal_client::Open;
+        use emusen_platform_client::galaxia::consts::SAVE_PICTURE;
+        let world = World::new("session-resume-facts");
+        let player = world.dir("Cores");
+        world.player_core(&player);
+        let api = Api::load(library()).unwrap();
+        let config = Config { development: false, cores: Some(Vec::new()), player_cores: Some(vec![player.to_str().unwrap().into()]) };
+        let runtime = Runtime::new(&api, &config).unwrap();
+        let sha = runtime.cores().unwrap().into_iter().find(|c| c.directory.as_deref() == Some("player")).and_then(|c| c.sha256).unwrap();
+        runtime.core_approve(&sha).unwrap();
+
+        let roms = world.dir("Roms/test");
+        std::fs::create_dir_all(&roms).unwrap();
+        let game_path = roms.join("Aurora Drift (USA).tst");
+        std::fs::write(&game_path, emusen_client_fixture::image(&[1, 2, 3, 4])).unwrap();
+        let sid = runtime.open(&Open { path: Some(game_path.to_str().unwrap().into()), ..Open::default() }).unwrap();
+
+        let platform = Platform::load(library()).unwrap();
+        runtime.resume_save(sid).unwrap();
+        let slots = runtime.state_slots(sid).unwrap();
+        let slot0 = slots.iter().find(|s| s.slot == 0 && s.exists).expect("slot 0 exists");
+        let slot0_png = platform.save_path(SAVE_PICTURE, &slot0.path, None, 0).unwrap();
+        write_test_png(&slot0_png, 16, 14);
+
+        let qml = world.root.join("ResumeScene.qml");
+        std::fs::write(
+            &qml,
+            "import QtQuick\nimport EmuSen.Models\nWindow {\n    id: root\n    objectName: \"scene\"\n    SessionModel { id: s; objectName: \"session\" }\n    Image { id: slotPic; objectName: \"slotPic\"; source: s.resumePicture; asynchronous: false }\n}\n",
+        )
+        .unwrap();
+        let mut harness = emusen_qt_test::Harness::new();
+        let mut scene = harness.load(&format!("file://{}", qml.display()), 320, 240);
+        let session_ptr = scene.object("session");
+        assert!(!session_ptr.is_null(), "session object");
+        let mut session = unsafe { Pin::new_unchecked(&mut *(session_ptr as *mut qobject::SessionModel)) };
+        session.as_mut().rust_mut().platform_library = QString::from(library().to_str().unwrap());
+        session.as_mut().rust_mut().game = QString::from(game_path.to_str().unwrap());
+        session.as_mut().rust_mut().runtime = Some(runtime.clone());
+        session.as_mut().rust_mut().opened = Some(sid);
+        session.as_mut().rust_mut().holding = Some(resume::Setting::Ask);
+        session.as_mut().left_off(sid);
+
+        assert!(session.resume_asked, "left_off Ask sets resumeAsked");
+        let pic_url = session.resume_picture.to_string();
+        assert!(pic_url.starts_with("image://session/") && pic_url.ends_with("/slot/0"), "resumePicture={pic_url}");
+        assert!(!session.resume_when.is_empty(), "resumeWhen populated");
+        assert!(!session.resume_console.is_empty(), "resumeConsole populated");
+        assert!(!session.resume_core.is_empty() && !session.resume_core.to_string().contains("Engine"), "resumeCore={}", session.resume_core);
+        assert!(session.resume_planet >= -1, "resumePlanet={}", session.resume_planet);
+        assert_eq!(scene.property("slotPic", "status"), "Ready", "slot 0 PNG decoded via image://session/<serial>/slot/0");
+        assert_eq!((scene.property("slotPic", "implicitWidth"), scene.property("slotPic", "implicitHeight")), ("16".into(), "14".into()));
+
+        // Pause Card refresh must keep slot 0 registered in slot_pictures.
+        session.as_mut().read_card_facts();
+        assert!(session.slot_pictures.lock().unwrap().iter().any(|(n, _)| *n == 0), "slot 0 preserved in slot_pictures");
+
+        // let_go resets all resume facts.
+        session.as_mut().let_go(false);
+        assert!(!session.resume_asked);
+        assert!(session.resume_picture.is_empty());
+        assert!(session.resume_when.is_empty());
+        assert!(session.resume_console.is_empty());
+        assert!(session.resume_core.is_empty());
+        assert_eq!(session.resume_planet, -2);
+
+        // Missing slot 0 PNG still populates when/console/core while clearing resumePicture, and close clears all.
+        std::fs::remove_file(&slot0_png).unwrap();
+        session.as_mut().rust_mut().holding = Some(resume::Setting::Ask);
+        session.as_mut().left_off(sid);
+        assert!(session.resume_asked);
+        assert!(session.resume_picture.is_empty(), "missing slot 0 PNG leaves resumePicture empty");
+        assert!(!session.resume_when.is_empty() && !session.resume_console.is_empty());
+        session.as_mut().close();
+        assert!(!session.resume_asked && session.resume_when.is_empty() && session.resume_console.is_empty() && session.resume_core.is_empty() && session.resume_planet == -2);
     }
 }

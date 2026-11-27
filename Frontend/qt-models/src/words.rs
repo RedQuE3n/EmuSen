@@ -419,3 +419,70 @@ pub fn status_line(controllers: usize, time: &str) -> String {
         format!("{} · {time}", counted(controllers, "controller", "controllers"))
     }
 }
+
+/// Eclipse Resume Card header label, eyebrow suffix, badge, action hints, and stage meta words.
+pub const RESUME_LAUNCH: &str = "Launch";
+pub const RESUME_CORE_SUFFIX: &str = "CORE";
+pub const RESUME_HERE: &str = "RESUMES HERE";
+pub const RESUME_START_AGAIN_SUB: &str = "From the beginning";
+pub const RESUME_CONTINUE_FALLBACK_SUB: &str = "Where you left off";
+pub const RESUME_NO_PREVIEW: &str = "Resume state ready · No preview picture";
+pub const RESUME_STATE_READY: &str = "STATE READY";
+
+/// Eclipse Resume Card saved badge copy, keeping a valid timestamp verbatim after "Saved ".
+pub fn resume_saved_line(when: &str) -> String {
+    if when.is_empty() {
+        "Saved state ready".to_owned()
+    } else {
+        format!("Saved {when}")
+    }
+}
+
+/// Left console prefix of the Eclipse Resume Card eyebrow before CardPlanet and the core name.
+pub fn resume_eyebrow_left(console: &str, has_core: bool) -> String {
+    if console.is_empty() {
+        String::new()
+    } else if has_core {
+        format!("{console} {BETWEEN} ")
+    } else {
+        console.to_owned()
+    }
+}
+
+/// Right core label of the Eclipse Resume Card eyebrow ("<CORE> CORE"), always naming CORE rather than ENGINE.
+pub fn resume_eyebrow_core(core: &str) -> String {
+    if core.is_empty() {
+        String::new()
+    } else {
+        format!("{core} {RESUME_CORE_SUFFIX}")
+    }
+}
+
+/// Eclipse Resume Card viewport footer caption naming the slot timestamp when available.
+pub fn resume_foot_line(when: &str) -> String {
+    if when.is_empty() {
+        "Saved state ready · Auto-resume slot".to_owned()
+    } else {
+        format!("Saved {when} {BETWEEN} Auto-resume slot")
+    }
+}
+
+fn gcd_u32(mut a: u32, mut b: u32) -> u32 {
+    while b != 0 {
+        let r = a % b;
+        a = b;
+        b = r;
+    }
+    a.max(1)
+}
+
+/// Aspect-reduced dimensions pill ("8:7 · 256×224") when decoded, or "STATE READY" otherwise.
+pub fn resume_stage_meta(width: i32, height: i32) -> String {
+    if width > 0 && height > 0 {
+        let (w, h) = (width as u32, height as u32);
+        let g = gcd_u32(w, h);
+        format!("{}:{} {BETWEEN} {w}×{h}", w / g, h / g)
+    } else {
+        RESUME_STATE_READY.to_owned()
+    }
+}

@@ -1212,7 +1212,7 @@ impl<A> Genesis<A> {
         {
             return false;
         }
-        if s.line >= saved_lines || s.clock.saturating_sub(s.ram_refresh_at) > 10_000_000 {
+        if s.line >= saved_lines {
             return false;
         }
         if let Some(p) = s.eeprom {
@@ -1476,10 +1476,10 @@ mod tests {
         assert!(!g.check_state(&s));
         s.open_line.size = orig_size;
 
-        let orig_clock = s.clock;
-        s.clock = s.ram_refresh_at.saturating_add(10_000_001);
+        let orig_line = s.line;
+        s.line = 400;
         assert!(!g.check_state(&s));
-        s.clock = orig_clock;
+        s.line = orig_line;
 
         s.eeprom = Some([0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0]);
         assert!(!g.check_state(&s));

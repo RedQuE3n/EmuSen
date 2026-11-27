@@ -15,6 +15,7 @@ pub mod eclipse_packages_oracle;
 pub mod eclipse_pad;
 pub mod eclipse_pad_oracle;
 pub mod eclipse_pause_oracle;
+pub mod eclipse_resume_oracle;
 pub mod eclipse_settings_cards_pages;
 pub mod eclipse_settings_consoles_pages;
 pub mod eclipse_settings_oracle;

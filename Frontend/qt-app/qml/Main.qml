@@ -114,7 +114,7 @@ Window {
     onSaid: (words, attention, overGame) => { if (words.length > 0) notices.raise(words, attention, overGame) }
     signal settleFocus()
     onSettleFocus: {
-        if (program.splashShown || player.session.resumeAsked || launch.asking)
+        if (program.splashShown || player.session.resumeAsked || resumeDialog.sheetOpen || launch.asking)
             return
         if (!program.bigScreen) {
             if (chosenTheme.active && chosenTheme.focus)
@@ -351,13 +351,13 @@ Window {
             objectName: "game"
             anchors.fill: parent
             visible: program.gameShown || program.pauseShown || (program.bigScreen && screens.shown === Screens.Home && player.session.running)
-            inFront: program.gameShown && !player.session.resumeAsked
+            inFront: program.gameShown && !player.session.resumeAsked && !resumeDialog.sheetOpen
             // As the start read them until the settings are read, then as they say, changed on the screen or not.
             guideChords: settingsModel.ready ? settingsModel.guideChords : program.guideChords
             showStatusText: settingsModel.showStatusText
             showFps: settingsModel.showFps
             showStatusBar: settingsModel.showStatusBar
-            focus: (program.gameShown || (!program.bigScreen && program.pauseShown)) && !player.session.resumeAsked && (program.bigScreen || !desktopModel.drawerOpen)
+            focus: (program.gameShown || (!program.bigScreen && program.pauseShown)) && !player.session.resumeAsked && !resumeDialog.sheetOpen && (program.bigScreen || !desktopModel.drawerOpen)
             feed: program.feed
             platformLibrary: program.platformLibrary
             cores: library.cores
@@ -1102,8 +1102,14 @@ Window {
             bigScreen: program.bigScreen
         }
         ResumeQuestion {
+            id: resumeDialog
             session: player.session
             padFamily: program.padFamily
+            library: library
+            clock: clock
+            battery: machineBattery.level
+            bigScreen: program.bigScreen
+            onSheetOpenChanged: if (!resumeDialog.sheetOpen) program.settleFocus()
         }
         LaunchQuestion {
             launch: launch
@@ -1140,6 +1146,7 @@ Window {
         Connections {
             target: player.session
             function onStartedPlaying() { screens.markPlaying() }
+            function onResumeAskedChanged() { program.settleFocus() }
         }
         // What failed, from every model that can fail, said where the player is: a game that does not open (over the game),
         // the library unread, a setting, a game's page's change, or Cores; a cleared problem raises nothing (EmuSen_Qt.md §7.9).

@@ -51,6 +51,9 @@ pub struct Lent {
     pub queue: u32,
     /// The family the lender's own queue is of, which a buffer the lender reads must be shared with.
     pub host_family: u32,
+    /// Features enabled by the lender (`shader_int64` and `VK_KHR_shader_float_controls`).
+    pub int64: bool,
+    pub float_controls: bool,
 }
 
 impl Lent {
@@ -62,7 +65,14 @@ impl Lent {
     pub unsafe fn from_raw(get_instance_proc_addr: unsafe extern "C" fn(), instance: u64, physical: u64, device: u64, api: u32, family: u32, queue: u32, host_family: u32) -> Lent {
         // SAFETY: the caller's; one function pointer for another of the same ABI.
         let get_instance_proc_addr = unsafe { std::mem::transmute::<unsafe extern "C" fn(), vk::PFN_vkGetInstanceProcAddr>(get_instance_proc_addr) };
-        Lent { get_instance_proc_addr, instance, physical, device, api, family, queue, host_family }
+        Lent { get_instance_proc_addr, instance, physical, device, api, family, queue, host_family, int64: false, float_controls: false }
+    }
+
+    /// Sets the lender-enabled device feature flags carried alongside this lend.
+    pub fn with_features(mut self, int64: bool, float_controls: bool) -> Self {
+        self.int64 = int64;
+        self.float_controls = float_controls;
+        self
     }
 }
 
@@ -463,8 +473,8 @@ impl GpuDevice {
             name,
             software: properties.device_type == vk::PhysicalDeviceType::CPU,
             max_buffer_bytes: properties.limits.max_storage_buffer_range as u64,
-            int64: false,
-            float_controls: false,
+            int64: lent.int64,
+            float_controls: lent.float_controls,
             live: Tally::default(),
         })
     }
@@ -715,15 +725,31 @@ impl GpuDevice {
         unsafe {
             self.device.end_command_buffer(buffer).expect("vkEndCommandBuffer");
             let buffers = [buffer];
-            let waits: Vec<vk::Semaphore> = wait.iter().map(|w| w.0).collect();
-            let wait_values: Vec<u64> = wait.iter().map(|w| w.1).collect();
+            let mut waits = [vk::Semaphore::null(); 1];
+            let mut wait_values = [0u64; 1];
+            let wait_len = match wait {
+                Some((s, v)) => {
+                    waits[0] = s;
+                    wait_values[0] = v;
+                    1
+                }
+                None => 0,
+            };
             let stages = [vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::TRANSFER];
-            let signals: Vec<vk::Semaphore> = signal.iter().map(|s| s.0).collect();
-            let signal_values: Vec<u64> = signal.iter().map(|s| s.1).collect();
-            let mut values = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&wait_values).signal_semaphore_values(&signal_values);
+            let mut signals = [vk::Semaphore::null(); 1];
+            let mut signal_values = [0u64; 1];
+            let signal_len = match signal {
+                Some((s, v)) => {
+                    signals[0] = s;
+                    signal_values[0] = v;
+                    1
+                }
+                None => 0,
+            };
+            let mut values = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&wait_values[..wait_len]).signal_semaphore_values(&signal_values[..signal_len]);
             let mut submit = vk::SubmitInfo::default().command_buffers(&buffers);
-            if !waits.is_empty() || !signals.is_empty() {
-                submit = submit.wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals).push_next(&mut values);
+            if wait_len > 0 || signal_len > 0 {
+                submit = submit.wait_semaphores(&waits[..wait_len]).wait_dst_stage_mask(&stages[..wait_len]).signal_semaphores(&signals[..signal_len]).push_next(&mut values);
             }
             self.device.queue_submit(self.queue, &[submit], fence).expect("vkQueueSubmit");
         }
@@ -890,16 +916,33 @@ impl Commands<'_> {
     pub fn dispatch_in<T: Copy>(&mut self, program: &GpuProgram, set: usize, buffers: &[&GpuBuffer], push: &T, x: u32, y: u32, z: u32) {
         assert!(buffers.len() == program.buffers, "the program binds {} buffers, not {}", program.buffers, buffers.len());
         assert!(size_of::<T>() == program.push_bytes, "the program takes {} bytes of push constants, not {}", program.push_bytes, size_of::<T>());
-        let infos: Vec<[vk::DescriptorBufferInfo; 1]> = buffers.iter().map(|b| [vk::DescriptorBufferInfo::default().buffer(b.handle).offset(0).range(vk::WHOLE_SIZE)]).collect();
-        let writes: Vec<vk::WriteDescriptorSet> = infos
-            .iter()
-            .enumerate()
-            .map(|(i, info)| vk::WriteDescriptorSet::default().dst_set(program.sets[set]).dst_binding(i as u32).descriptor_type(vk::DescriptorType::STORAGE_BUFFER).buffer_info(info))
-            .collect();
+        const STACK_BUFFERS: usize = 32;
         // SAFETY: the push value is plain data of the program's size, read as bytes.
         let bytes = unsafe { std::slice::from_raw_parts((push as *const T).cast::<u8>(), size_of::<T>()) };
         unsafe {
-            self.device.update_descriptor_sets(&writes, &[]);
+            if buffers.len() <= STACK_BUFFERS {
+                let mut infos = [vk::DescriptorBufferInfo::default(); STACK_BUFFERS];
+                for (dst, b) in infos.iter_mut().zip(buffers.iter()) {
+                    *dst = vk::DescriptorBufferInfo::default().buffer(b.handle).offset(0).range(vk::WHOLE_SIZE);
+                }
+                let mut writes = [vk::WriteDescriptorSet::default(); STACK_BUFFERS];
+                for (i, dst) in writes[..buffers.len()].iter_mut().enumerate() {
+                    *dst = vk::WriteDescriptorSet::default()
+                        .dst_set(program.sets[set])
+                        .dst_binding(i as u32)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(std::slice::from_ref(&infos[i]));
+                }
+                self.device.update_descriptor_sets(&writes[..buffers.len()], &[]);
+            } else {
+                let infos: Vec<[vk::DescriptorBufferInfo; 1]> = buffers.iter().map(|b| [vk::DescriptorBufferInfo::default().buffer(b.handle).offset(0).range(vk::WHOLE_SIZE)]).collect();
+                let writes: Vec<vk::WriteDescriptorSet> = infos
+                    .iter()
+                    .enumerate()
+                    .map(|(i, info)| vk::WriteDescriptorSet::default().dst_set(program.sets[set]).dst_binding(i as u32).descriptor_type(vk::DescriptorType::STORAGE_BUFFER).buffer_info(info))
+                    .collect();
+                self.device.update_descriptor_sets(&writes, &[]);
+            }
             self.device.cmd_bind_pipeline(self.commands, vk::PipelineBindPoint::COMPUTE, program.pipeline);
             self.device.cmd_bind_descriptor_sets(self.commands, vk::PipelineBindPoint::COMPUTE, program.layout, 0, &[program.sets[set]], &[]);
             if !bytes.is_empty() {
@@ -983,5 +1026,14 @@ mod tests {
     fn a_name_no_device_has_chooses_none() {
         assert_eq!(choose(RANKED, "GeForce"), None);
         assert_eq!(choose([], ""), None);
+    }
+
+    #[test]
+    fn lent_from_raw_defaults_feature_flags_false_and_with_features_enables_them() {
+        unsafe extern "C" fn stub() {}
+        let base = unsafe { super::Lent::from_raw(stub, 1, 2, 3, super::vk::API_VERSION_1_2, 0, 0, 0) };
+        assert!(!base.int64 && !base.float_controls);
+        let featured = base.with_features(true, true);
+        assert!(featured.int64 && featured.float_controls);
     }
 }

@@ -24,6 +24,8 @@ emusen_native::state_error! {
         OtherSystem(u8) => STATUS_OTHER_SYSTEM,
         /// A Sega CD's state made over another disc than the drive's: the two fingerprints.
         WrongMedia { saved: u64, here: u64 } => emusen_native::core::status::WRONG_MEDIA,
+        /// Corrupted or out-of-range state payload.
+        Corrupt => emusen_native::core::status::FOREIGN,
     }
 }
 
@@ -63,11 +65,26 @@ impl Fitted {
 
     fn check(&self, saved: &FittedSaved) -> Result<(), StateError> {
         let refused = match (self, saved) {
-            (Fitted::Md(g), FittedSaved::Md(_, s)) => g.hw.att.check(s),
+            (Fitted::Md(g), FittedSaved::Md(registers, s)) => {
+                if !g.check_state(registers) {
+                    return Err(StateError::Corrupt);
+                }
+                g.hw.att.check(s)
+            }
             #[cfg(feature = "mcd")]
-            (Fitted::Mcd(g), FittedSaved::Mcd(_, s)) => g.hw.att.check(s),
+            (Fitted::Mcd(g), FittedSaved::Mcd(registers, s)) => {
+                if !g.check_state(registers) {
+                    return Err(StateError::Corrupt);
+                }
+                g.hw.att.check(s)
+            }
             #[cfg(feature = "s32x")]
-            (Fitted::S32x(g), FittedSaved::S32x(_, s)) => g.hw.att.check(s),
+            (Fitted::S32x(g), FittedSaved::S32x(registers, s)) => {
+                if !g.check_state(registers) {
+                    return Err(StateError::Corrupt);
+                }
+                g.hw.att.check(s)
+            }
             #[allow(unreachable_patterns)]
             _ => unreachable!("a state read by the configuration fitted"),
         };

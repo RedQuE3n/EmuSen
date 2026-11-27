@@ -1,4 +1,4 @@
-//! Conformance C1-C25 over 120 frames against all eight native cores, the libretro host and the brokered proxy.
+//! Conformance C1-C25 over 120 frames against the seven active native cores, the libretro host and the brokered proxy.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -173,27 +173,6 @@ fn psx() -> Vec<u8> {
     exe
 }
 
-fn ps2_elf() -> Vec<u8> {
-    let (ehdr, phdr, offset, origin, bytes) = (52usize, 32usize, 0x60u32, 0x0010_0000u32, 8u32);
-    let mut elf = vec![0u8; offset as usize];
-    elf[..4].copy_from_slice(b"\x7FELF");
-    elf[4..7].copy_from_slice(&[1, 1, 1]);
-    elf[16..18].copy_from_slice(&2u16.to_le_bytes());
-    elf[18..20].copy_from_slice(&8u16.to_le_bytes());
-    elf[20..24].copy_from_slice(&1u32.to_le_bytes());
-    elf[24..28].copy_from_slice(&origin.to_le_bytes());
-    elf[28..32].copy_from_slice(&(ehdr as u32).to_le_bytes());
-    elf[40..42].copy_from_slice(&(ehdr as u16).to_le_bytes());
-    elf[42..44].copy_from_slice(&(phdr as u16).to_le_bytes());
-    elf[44..46].copy_from_slice(&1u16.to_le_bytes());
-    for (at, v) in [(0, 1u32), (4, offset), (8, origin), (12, origin), (16, bytes), (20, bytes), (24, 5), (28, 16)] {
-        elf[ehdr + at..ehdr + at + 4].copy_from_slice(&v.to_le_bytes());
-    }
-    elf.extend_from_slice(&0x1000_FFFFu32.to_le_bytes());
-    elf.extend_from_slice(&0u32.to_le_bytes());
-    elf
-}
-
 fn libretro_layout(name: &str, entry_lib: &str, built_lib: &Path, extra_proxy: bool) -> (PathBuf, PathBuf) {
     let root = target_root().join("real-cores-libretro").join(format!("{name}-{}", std::process::id()));
     let entry = root.join("libretro").join("testcore");
@@ -245,11 +224,6 @@ fn endou_conforms() {
 #[test]
 fn nephrite_conforms() {
     verify_native("Sega/Nephrite - Genesis", "nephrite", genesis());
-}
-
-#[test]
-fn sapphire_conforms() {
-    verify_native("Sony/Sapphire - PlayStation 2", "sapphire", ps2_elf());
 }
 
 #[test]

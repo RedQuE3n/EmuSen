@@ -29,6 +29,8 @@ emusen_native::state_error! {
     pub enum StateError {
         /// The state was made over another disc than the drive holds (EmuSen_CoreAPI.md §6.23).
         WrongMedia { state: u64, drive: u64 } => emusen_native::core::status::WRONG_MEDIA,
+        /// Corrupted or out-of-range state payload.
+        Corrupt => emusen_native::core::status::FOREIGN,
     }
 }
 
@@ -92,7 +94,7 @@ impl Board {
         w.u32("TtyLength", self.tty.len as u32);
     }
 
-    fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+    fn read_state(&mut self, r: &mut StateReader) -> Result<(), StateError> {
         self.now = r.u64()?;
         r.u64s(&mut self.queue)?;
         self.bus_free = r.u64()?;
@@ -131,6 +133,9 @@ impl Board {
         self.dma.dpcr = r.u32()?;
         self.dma.dicr = r.u32()?;
         let active = r.i32()?;
+        if !(-1..7).contains(&active) {
+            return Err(StateError::Corrupt);
+        }
         self.dma.active = (active >= 0).then_some(active as usize);
         self.dma.due = r.u64()?;
         self.dma.left = r.u32()?;
@@ -162,6 +167,9 @@ impl Board {
         r.bytes(&mut du)?;
         [self.duart.mr[0], self.duart.mr[1], self.duart.pointer] = du;
         self.tty.len = r.u32()? as usize;
+        if self.duart.pointer >= 2 || self.tty.len > self.tty.text.len() {
+            return Err(StateError::Corrupt);
+        }
         self.field_done = false;
         Ok(())
     }
@@ -212,7 +220,7 @@ impl Sio0 {
         }
     }
 
-    fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+    fn read_state(&mut self, r: &mut StateReader) -> Result<(), StateError> {
         let mut regs = [0u16; 3];
         r.u16s(&mut regs)?;
         [self.mode, self.control, self.baud] = regs;
@@ -420,7 +428,7 @@ impl Gpu {
         w.u32s("Scan", &[self.display.next, self.display.width, self.display.height]);
     }
 
-    fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+    fn read_state(&mut self, r: &mut StateReader) -> Result<(), StateError> {
         r.u32s(&mut self.env)?;
         let mut f = [false; 7];
         r.bools(&mut f)?;
@@ -521,11 +529,13 @@ fn write_block(w: &mut StateWriter, layer: &dyn crate::layer::Layer, tag: [u8; 4
 fn read_blocks(data: &[u8], mut at: usize) -> Result<Vec<([u8; 4], &[u8])>, StateError> {
     let mut blocks = Vec::new();
     while at < data.len() {
-        let head = data.get(at..at + 8).ok_or(StateError::Truncated { at, wanted: 8 })?;
+        let head_end = at.checked_add(8).ok_or(StateError::Truncated { at, wanted: 8 })?;
+        let head = data.get(at..head_end).ok_or(StateError::Truncated { at, wanted: 8 })?;
         let length = u32::from_le_bytes(head[4..8].try_into().unwrap()) as usize;
-        let body = data.get(at + 8..at + 8 + length).ok_or(StateError::Truncated { at: at + 8, wanted: length })?;
+        let end = head_end.checked_add(length).ok_or(StateError::Truncated { at: head_end, wanted: length })?;
+        let body = data.get(head_end..end).ok_or(StateError::Truncated { at: head_end, wanted: length })?;
         blocks.push((head[..4].try_into().unwrap(), body));
-        at += 8 + length;
+        at = end;
     }
     Ok(blocks)
 }
@@ -769,5 +779,37 @@ mod tests {
         let mut c = machine();
         c.load_state(&v9).unwrap();
         assert!(c.board.gpu.display.frame() == read, "whatever the machine loading it showed");
+    }
+
+    #[test]
+    fn corrupt_dma_duart_tty_or_block_length_is_rejected_without_mutating_machine() {
+        let m = machine();
+        let mut s = vec![0; m.state_size()];
+        m.save_state(&mut s).unwrap();
+        let mut layout = StateWriter::layout();
+        m.write(&mut layout);
+        let text = layout.into_layout();
+        let offset_of = |name: &str| -> usize {
+            let line = text.lines().find(|l| l.ends_with(name)).unwrap_or_else(|| panic!("missing {name}"));
+            line.split(' ').next().unwrap().parse().unwrap()
+        };
+        let mut target = machine();
+        target.frames = 123;
+        for (field, bad_bytes) in [
+            ("Dma.Active", 7i32.to_le_bytes().to_vec()),
+            ("Duart", vec![0u8, 0u8, 2u8]),
+            ("TtyLength", u32::MAX.to_le_bytes().to_vec()),
+        ] {
+            let off = offset_of(field);
+            let mut bad = s.clone();
+            bad[off..off + bad_bytes.len()].copy_from_slice(&bad_bytes);
+            assert!(matches!(target.load_state(&bad), Err(StateError::Corrupt)), "{field}");
+            assert_eq!(target.frames, 123, "{field}");
+        }
+        let mut overflow = s;
+        overflow.extend_from_slice(b"TEST");
+        overflow.extend_from_slice(&u32::MAX.to_le_bytes());
+        assert!(matches!(target.load_state(&overflow), Err(StateError::Truncated { .. })));
+        assert_eq!(target.frames, 123);
     }
 }

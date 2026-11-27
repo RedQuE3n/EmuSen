@@ -101,7 +101,8 @@ impl Settings {
     }
 }
 
-static CRASH_LOG: OnceLock<String> = OnceLock::new();
+static CRASH_LOG: Mutex<Option<(String, std::path::PathBuf)>> = Mutex::new(None);
+static CRASH_HOOK: OnceLock<()> = OnceLock::new();
 
 /// Held while a report is written, so a second thread's panic waits for the first's report rather than cutting it off.
 static CRASH_WRITE: Mutex<()> = Mutex::new(());
@@ -111,21 +112,27 @@ static CRASH_WRITE: Mutex<()> = Mutex::new(());
 ///
 /// # Safety
 /// `path` must be a valid NUL-terminated UTF-8 string, or null.
-pub unsafe fn install_crash_log(engine: &'static str, path: *const c_char) -> i32 {
+pub unsafe fn install_crash_log(engine: &str, path: *const c_char) -> i32 {
     if path.is_null() {
         return crate::ffi::status::NULL;
     }
-    let path = unsafe { CStr::from_ptr(path) }.to_string_lossy().into_owned();
-    if CRASH_LOG.set(path).is_ok() {
-        std::panic::set_hook(Box::new(move |info| {
+    let path = std::path::PathBuf::from(unsafe { CStr::from_ptr(path) }.to_string_lossy().into_owned());
+    {
+        let mut guard = CRASH_LOG.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.is_none() {
+            *guard = Some((engine.to_owned(), path));
+        }
+    }
+    CRASH_HOOK.get_or_init(|| {
+        std::panic::set_hook(Box::new(|info| {
+            let entry = CRASH_LOG.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            let Some((engine, path)) = entry else { return };
             let text = format!("{engine} panic: {info}\n{}\n", std::backtrace::Backtrace::force_capture());
             let _one = CRASH_WRITE.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(path) = CRASH_LOG.get() {
-                let _ = std::fs::OpenOptions::new().create(true).append(true).open(path).and_then(|mut f| f.write_all(text.as_bytes()));
-            }
+            let _ = std::fs::OpenOptions::new().create(true).append(true).open(&path).and_then(|mut f| f.write_all(text.as_bytes()));
             eprintln!("{text}");
         }));
-    }
+    });
     0
 }
 

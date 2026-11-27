@@ -446,7 +446,22 @@ fn split_settings(text: &[u8]) -> (Vec<u8>, Option<u64>) {
     (kept.join("\n").into_bytes(), deadline)
 }
 
+/// Catches any panic before it unwinds across a broker `extern "C"` export.
+pub fn guard<R: emusen_native::ffi::PanicFallback>(f: impl FnOnce() -> R) -> R {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(v) => v,
+        Err(payload) => {
+            record(&mut LIBRARY_LOG.lock().unwrap_or_else(|e| e.into_inner()), "error", &emusen_native::ffi::panic_message(payload));
+            R::panic_fallback()
+        }
+    }
+}
+
 fn files_of(w: &mut Writer, files: *const FileEntry, count: usize, size: usize) {
+    if count == 0 || files.is_null() || size < FileEntry::SIZE_1_0 || u32::try_from(count).is_err() || count.checked_mul(size).is_none() {
+        w.u32(0);
+        return;
+    }
     w.u32(count as u32);
     for i in 0..count {
         let mut f: FileEntry = unsafe { std::mem::zeroed() };
@@ -483,6 +498,20 @@ pub unsafe fn expect<T: Target>(sha256: *const c_char) -> i32 {
     if *first != given || outcome.is_err() { status::NOT_EXPECTED } else { 0 }
 }
 
+unsafe fn write_error(out: *mut u8, len: usize, why: &str) {
+    if out.is_null() || len == 0 {
+        return;
+    }
+    let mut n = why.len().min(len - 1);
+    while !why.is_char_boundary(n) {
+        n -= 1;
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(why.as_ptr(), out, n);
+        *out.add(n) = 0;
+    }
+}
+
 pub unsafe fn create<T: Target>(params: *const CreateParams, status_out: *mut i32) -> *mut RawMachine {
     let set = |code: i32| {
         if !status_out.is_null() {
@@ -501,57 +530,59 @@ pub unsafe fn create<T: Target>(params: *const CreateParams, status_out: *mut i3
     let mut p: CreateParams = unsafe { std::mem::zeroed() };
     unsafe { std::ptr::copy_nonoverlapping(params as *const u8, &mut p as *mut CreateParams as *mut u8, size.min(size_of::<CreateParams>())) };
     let refuse = |code: i32, why: &str| {
-        if !p.error.is_null() && p.error_len > 0 {
-            let n = why.len().min(p.error_len - 1);
-            unsafe {
-                std::ptr::copy_nonoverlapping(why.as_ptr(), p.error, n);
-                *p.error.add(n) = 0;
-            }
-        }
+        unsafe { write_error(p.error, p.error_len, why) };
         set(code);
         std::ptr::null_mut()
     };
-    if let Some(why) = broken() {
-        return refuse(status::NOT_EXPECTED, why);
-    }
-    if let Err(why) = descriptors::<T>() {
-        return refuse(STATUS_ENDED, why);
-    }
-    if p.file_count > 0 && p.file_size < FileEntry::SIZE_1_0 {
-        return refuse(status::BAD_STRUCT, "file entries shorter than 1.0's");
-    }
-    let image_path = path_of(p.image_path);
-    let spawn = match T::spawn(image_path.as_deref()) {
-        Ok(s) => s,
-        Err(why) => return refuse(STATUS_ENDED, &why),
-    };
-    let settings = if p.settings.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(p.settings, p.settings_len) } };
-    let (settings, deadline) = split_settings(settings);
-    let frame = Duration::from_secs(deadline.unwrap_or(DEADLINE_DEFAULT));
-    let mut link = match Link::spawn(&spawn, frame * 6) {
-        Ok(l) => l,
-        Err(why) => return refuse(STATUS_ENDED, &why),
-    };
-    let mut log = Vec::new();
-    record(&mut log, "info", &format!("the core runs in process {}: {}", link.pid, link.hello));
-    if let Some(path) = CRASH_LOG.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(why) = broken() {
+            return refuse(status::NOT_EXPECTED, why);
+        }
+        if let Err(why) = descriptors::<T>() {
+            return refuse(STATUS_ENDED, why);
+        }
+        if p.file_count > 0 && p.files.is_null() {
+            return refuse(status::NULL, "file_count is non-zero with a null files pointer");
+        }
+        if p.file_count > 0 && (p.file_size < FileEntry::SIZE_1_0 || p.file_count.checked_mul(p.file_size).is_none()) {
+            return refuse(status::BAD_STRUCT, "file entries shorter than 1.0's");
+        }
+        let image_path = path_of(p.image_path);
+        let spawn = match T::spawn(image_path.as_deref()) {
+            Ok(s) => s,
+            Err(why) => return refuse(STATUS_ENDED, &why),
+        };
+        let settings = if p.settings.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(p.settings, p.settings_len) } };
+        let (settings, deadline) = split_settings(settings);
+        let frame = Duration::from_secs(deadline.unwrap_or(DEADLINE_DEFAULT));
+        let mut link = match Link::spawn(&spawn, frame * 6) {
+            Ok(l) => l,
+            Err(why) => return refuse(STATUS_ENDED, &why),
+        };
+        let mut log = Vec::new();
+        record(&mut log, "info", &format!("the core runs in process {}: {}", link.pid, link.hello));
+        if let Some(path) = CRASH_LOG.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+            let mut w = Writer::default();
+            w.bytes(path.as_bytes());
+            let _ = link.call(Op::SetCrashLog, false, 0, &w.0, frame);
+        }
         let mut w = Writer::default();
-        w.bytes(path.as_bytes());
-        let _ = link.call(Op::SetCrashLog, false, 0, &w.0, frame);
-    }
-    let mut w = Writer::default();
-    w.bytes(&settings);
-    files_of(&mut w, p.files, p.file_count, p.file_size);
-    w.u64(p.pixel_formats).u32(p.flags & !flags::CREATE_LENT);
-    w.text(path_of(p.system).as_deref().map(str::as_bytes));
-    let image = if p.image.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(p.image, p.image_len) } };
-    let by_path = image_path.is_some() && reads_by_path::<T>();
-    w.text((!by_path).then_some(image));
-    w.text(image_path.as_deref().map(str::as_bytes));
-    match link.call(Op::Create, false, 0, &w.0, frame * 6) {
-        Ok(r) if r.ret == 0 => Box::into_raw(Box::new(Proxied { link, log, frame, window: Window { enabled: T::window(), ..Window::default() } })) as *mut RawMachine,
-        Ok(r) => refuse(r.ret as i32, &String::from_utf8_lossy(&r.bytes)),
-        Err((code, why)) => refuse(code, &why),
+        w.bytes(&settings);
+        files_of(&mut w, p.files, p.file_count, p.file_size);
+        w.u64(p.pixel_formats).u32(p.flags & !flags::CREATE_LENT);
+        w.text(path_of(p.system).as_deref().map(str::as_bytes));
+        let image = if p.image.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(p.image, p.image_len) } };
+        let by_path = image_path.is_some() && reads_by_path::<T>();
+        w.text((!by_path).then_some(image));
+        w.text(image_path.as_deref().map(str::as_bytes));
+        match link.call(Op::Create, false, 0, &w.0, frame * 6) {
+            Ok(r) if r.ret == 0 => Box::into_raw(Box::new(Proxied { link, log, frame, window: Window { enabled: T::window(), ..Window::default() } })) as *mut RawMachine,
+            Ok(r) => refuse(r.ret as i32, &String::from_utf8_lossy(&r.bytes)),
+            Err((code, why)) => refuse(code, &why),
+        }
+    })) {
+        Ok(m) => m,
+        Err(payload) => refuse(status::FAULT_BASE, &emusen_native::ffi::panic_message(payload)),
     }
 }
 
@@ -671,7 +702,13 @@ pub unsafe fn events(m: *mut RawMachine, out: *mut Event, count: usize, event_si
     if event_size < size_of::<Event>() && !out.is_null() {
         return status::BAD_STRUCT as i64;
     }
-    match on(m, Op::Events, out.is_null(), (count * size_of::<Event>()) as u64, &[]) {
+    let Some(ask_bytes) = count.checked_mul(size_of::<Event>()) else {
+        return status::BAD_STRUCT as i64;
+    };
+    if !out.is_null() && count.checked_mul(event_size).is_none() {
+        return status::BAD_STRUCT as i64;
+    }
+    match on(m, Op::Events, out.is_null(), ask_bytes as u64, &[]) {
         Ok(r) => {
             if !out.is_null() {
                 for (i, e) in r.bytes.chunks_exact(size_of::<Event>()).enumerate().take(count) {
@@ -684,6 +721,17 @@ pub unsafe fn events(m: *mut RawMachine, out: *mut Event, count: usize, event_si
     }
 }
 
+unsafe fn copy_frame_info_reply(out: *mut FrameInfo, size: usize, ret: i64, bytes: &[u8]) -> i32 {
+    if ret >= 0 {
+        if bytes.len() < FrameInfo::SIZE_1_0 {
+            return STATUS_ENDED;
+        }
+        let n = size.min(bytes.len()).min(size_of::<FrameInfo>());
+        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr().add(4), (out as *mut u8).add(4), n.saturating_sub(4)) };
+    }
+    ret as i32
+}
+
 pub unsafe fn frame_info(m: *const RawMachine, out: *mut FrameInfo) -> i32 {
     let Some(o) = (unsafe { out.as_mut() }) else { return status::NULL };
     let size = o.size as usize;
@@ -691,13 +739,7 @@ pub unsafe fn frame_info(m: *const RawMachine, out: *mut FrameInfo) -> i32 {
         return status::BAD_STRUCT;
     }
     match on(m as *mut _, Op::FrameInfo, false, 0, &[]) {
-        Ok(r) => {
-            if r.ret >= 0 {
-                let n = size.min(r.bytes.len()).min(size_of::<FrameInfo>());
-                unsafe { std::ptr::copy_nonoverlapping(r.bytes.as_ptr().add(4), (out as *mut u8).add(4), n - 4) };
-            }
-            r.ret as i32
-        }
+        Ok(r) => unsafe { copy_frame_info_reply(out, size, r.ret, &r.bytes) },
         Err(c) => c,
     }
 }
@@ -715,12 +757,13 @@ pub unsafe fn audio_buffered(m: *const RawMachine) -> i64 {
 }
 
 pub unsafe fn audio_drain(m: *mut RawMachine, out: *mut i16, len: usize, max_frames: i64, rate: *mut i32) -> i64 {
-    match on(m, Op::AudioDrain, out.is_null(), (len * 2) as u64, &args(|w| {
+    let Some(bytes) = len.checked_mul(2) else { return status::BAD_STRUCT as i64 };
+    match on(m, Op::AudioDrain, out.is_null(), bytes as u64, &args(|w| {
         w.i64(max_frames);
     })) {
         Ok(r) => {
             if !out.is_null() {
-                unsafe { std::ptr::copy_nonoverlapping(r.bytes.as_ptr(), out as *mut u8, r.bytes.len().min(len * 2)) };
+                unsafe { std::ptr::copy_nonoverlapping(r.bytes.as_ptr(), out as *mut u8, r.bytes.len().min(bytes)) };
             }
             if !rate.is_null() {
                 unsafe { *rate = r.aux as i32 };
@@ -831,7 +874,8 @@ pub unsafe fn reset(m: *mut RawMachine) -> i32 {
 }
 
 pub unsafe fn phases(m: *const RawMachine, out: *mut i64, len: usize) -> i64 {
-    text_on(m as *mut _, Op::Phases, &[], out as *mut u8, len * 8)
+    let Some(bytes) = len.checked_mul(8) else { return status::BAD_STRUCT as i64 };
+    text_on(m as *mut _, Op::Phases, &[], out as *mut u8, bytes)
 }
 
 pub unsafe fn set_axis(m: *mut RawMachine, port: u32, axis: u32, value: f64) -> i32 {
@@ -875,6 +919,12 @@ pub unsafe fn media_insert<T: Target>(m: *mut RawMachine, drive: u32, media: *co
     }
     let mut d: Media = unsafe { std::mem::zeroed() };
     unsafe { std::ptr::copy_nonoverlapping(media as *const u8, &mut d as *mut Media as *mut u8, (given.size as usize).min(size_of::<Media>())) };
+    if d.file_count > 0 && d.files.is_null() {
+        return status::NULL;
+    }
+    if d.file_count > 0 && (d.file_size < FileEntry::SIZE_1_0 || d.file_count.checked_mul(d.file_size).is_none()) {
+        return status::BAD_STRUCT;
+    }
     let path = path_of(d.image_path);
     let by_path = path.is_some() && reads_by_path::<T>();
     let image = (!d.image.is_null()).then(|| unsafe { std::slice::from_raw_parts(d.image, d.image_len) });
@@ -898,7 +948,10 @@ pub unsafe fn ring_lend(m: *mut RawMachine, ring: *const RingLend) -> i32 {
     let Some(r) = (unsafe { ring.as_ref() }) else { return code(on(m, Op::RingLend, false, 0, &args(|w| {
         w.u32(0);
     }))) as i32 };
-    if (r.size as usize) < size_of::<RingLend>() || (r.count > 0 && (r.images.is_null() || r.image_size < size_of::<RingImage>())) || r.count as usize + 2 > crate::wire::MAX_RING_FDS {
+    if (r.size as usize) < size_of::<RingLend>()
+        || (r.count > 0 && (r.images.is_null() || r.image_size < size_of::<RingImage>() || (r.count as usize).checked_mul(r.image_size).is_none()))
+        || r.count as usize + 2 > crate::wire::MAX_RING_FDS
+    {
         return status::BAD_STRUCT;
     }
     let images: Vec<RingImage> = (0..r.count as usize).map(|i| unsafe { std::ptr::read_unaligned((r.images as *const u8).add(i * r.image_size) as *const RingImage) }).collect();
@@ -943,38 +996,38 @@ macro_rules! broker_exports {
     ($t:ty; $($group:ident),* $(,)?) => {
         use $crate::proxy as __p;
         use emusen_native::core::sys::{CreateParams as __Cp, Event as __Ev, FrameInfo as __Fi, Machine as __M, Media as __Md};
-        #[unsafe(no_mangle)] pub extern "C" fn emusen_core_abi_version() -> u32 { __p::abi_version::<$t>() }
+        #[unsafe(no_mangle)] pub extern "C" fn emusen_core_abi_version() -> u32 { __p::guard(|| __p::abi_version::<$t>()) }
         #[unsafe(no_mangle)] pub extern "C" fn emusen_core_capabilities() -> u64 { __p::capabilities::<$t>() }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_info(o: *mut u8, l: usize) -> i64 { unsafe { __p::info::<$t>(o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_settings_schema(o: *mut u8, l: usize) -> i64 { unsafe { __p::settings_schema::<$t>(o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_firmware_for(i: *const u8, il: usize, o: *mut u8, l: usize) -> i64 { unsafe { __p::firmware_for::<$t>(i, il, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_status_text(c: i32, o: *mut u8, l: usize) -> i64 { unsafe { __p::status_text::<$t>(c, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_crash_log(p: *const std::ffi::c_char) -> i32 { unsafe { __p::set_crash_log::<$t>(p) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_log_drain(m: *mut __M, o: *mut u8, l: usize) -> i64 { unsafe { __p::log_drain::<$t>(m, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_create(p: *const __Cp, s: *mut i32) -> *mut __M { unsafe { __p::create::<$t>(p, s) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_free(m: *mut __M) -> i32 { unsafe { __p::free::<$t>(m) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_machine_info(m: *const __M, o: *mut u8, l: usize) -> i64 { unsafe { __p::machine_info(m, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_last_error(m: *const __M, o: *mut u8, l: usize) -> i64 { unsafe { __p::last_error(m, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_advance(m: *mut __M, d: *mut u64) -> i32 { unsafe { __p::advance(m, d) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_options(m: *mut __M, f: u32) -> i32 { unsafe { __p::set_options(m, f) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_count(m: *const __M) -> i64 { unsafe { __p::frame_count(m) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_events(m: *mut __M, o: *mut __Ev, c: usize, s: usize) -> i64 { unsafe { __p::events(m, o, c, s) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_info(m: *const __M, o: *mut __Fi) -> i32 { unsafe { __p::frame_info(m, o) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_copy(m: *const __M, o: *mut u8, l: usize) -> i64 { unsafe { __p::frame_copy(m, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_audio_rate(m: *const __M) -> i32 { unsafe { __p::audio_rate(m) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_audio_buffered(m: *const __M) -> i64 { unsafe { __p::audio_buffered(m) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_audio_drain(m: *mut __M, o: *mut i16, l: usize, f: i64, r: *mut i32) -> i64 { unsafe { __p::audio_drain(m, o, l, f, r) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_audio_limit(m: *mut __M, s: u64) -> i32 { unsafe { __p::set_audio_limit(m, s) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_buttons(m: *mut __M, p: u32, k: u32, c: u32) -> i32 { unsafe { __p::set_buttons(m, p, k, c) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_state_size(m: *const __M, k: u32) -> i64 { unsafe { __p::state_size(m, k) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_state_save(m: *mut __M, k: u32, o: *mut u8, l: usize) -> i64 { unsafe { __p::state_save(m, k, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_state_load(m: *mut __M, d: *const u8, l: usize) -> i32 { unsafe { __p::state_load(m, d, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_state_layout(m: *const __M, k: u32, o: *mut u8, l: usize) -> i64 { unsafe { __p::state_layout(m, k, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_space_size(m: *const __M, s: u32) -> i64 { unsafe { __p::space_size(m, s) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_space_read(m: *mut __M, s: u32, a: u32, o: *mut u8, l: usize) -> i64 { unsafe { __p::space_read(m, s, a, o, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_space_write(m: *mut __M, s: u32, a: u32, d: *const u8, l: usize) -> i64 { unsafe { __p::space_write(m, s, a, d, l) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_battery(m: *const __M, w: u32, o: *mut u8, l: usize, f: *mut u32) -> i64 { unsafe { __p::battery(m, w, o, l, f) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_battery_saved(m: *mut __M, w: u32) -> i32 { unsafe { __p::battery_saved(m, w) } }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_info(o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::info::<$t>(o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_settings_schema(o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::settings_schema::<$t>(o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_firmware_for(i: *const u8, il: usize, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::firmware_for::<$t>(i, il, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_status_text(c: i32, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::status_text::<$t>(c, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_crash_log(p: *const std::ffi::c_char) -> i32 { __p::guard(|| unsafe { __p::set_crash_log::<$t>(p) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_log_drain(m: *mut __M, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::log_drain::<$t>(m, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_create(p: *const __Cp, s: *mut i32) -> *mut __M { __p::guard(|| unsafe { __p::create::<$t>(p, s) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_free(m: *mut __M) -> i32 { __p::guard(|| unsafe { __p::free::<$t>(m) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_machine_info(m: *const __M, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::machine_info(m, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_last_error(m: *const __M, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::last_error(m, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_advance(m: *mut __M, d: *mut u64) -> i32 { __p::guard(|| unsafe { __p::advance(m, d) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_options(m: *mut __M, f: u32) -> i32 { __p::guard(|| unsafe { __p::set_options(m, f) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_count(m: *const __M) -> i64 { __p::guard(|| unsafe { __p::frame_count(m) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_events(m: *mut __M, o: *mut __Ev, c: usize, s: usize) -> i64 { __p::guard(|| unsafe { __p::events(m, o, c, s) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_info(m: *const __M, o: *mut __Fi) -> i32 { __p::guard(|| unsafe { __p::frame_info(m, o) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_copy(m: *const __M, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::frame_copy(m, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_audio_rate(m: *const __M) -> i32 { __p::guard(|| unsafe { __p::audio_rate(m) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_audio_buffered(m: *const __M) -> i64 { __p::guard(|| unsafe { __p::audio_buffered(m) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_audio_drain(m: *mut __M, o: *mut i16, l: usize, f: i64, r: *mut i32) -> i64 { __p::guard(|| unsafe { __p::audio_drain(m, o, l, f, r) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_audio_limit(m: *mut __M, s: u64) -> i32 { __p::guard(|| unsafe { __p::set_audio_limit(m, s) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_buttons(m: *mut __M, p: u32, k: u32, c: u32) -> i32 { __p::guard(|| unsafe { __p::set_buttons(m, p, k, c) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_state_size(m: *const __M, k: u32) -> i64 { __p::guard(|| unsafe { __p::state_size(m, k) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_state_save(m: *mut __M, k: u32, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::state_save(m, k, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_state_load(m: *mut __M, d: *const u8, l: usize) -> i32 { __p::guard(|| unsafe { __p::state_load(m, d, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_state_layout(m: *const __M, k: u32, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::state_layout(m, k, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_space_size(m: *const __M, s: u32) -> i64 { __p::guard(|| unsafe { __p::space_size(m, s) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_space_read(m: *mut __M, s: u32, a: u32, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::space_read(m, s, a, o, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_space_write(m: *mut __M, s: u32, a: u32, d: *const u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::space_write(m, s, a, d, l) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_battery(m: *const __M, w: u32, o: *mut u8, l: usize, f: *mut u32) -> i64 { __p::guard(|| unsafe { __p::battery(m, w, o, l, f) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_battery_saved(m: *mut __M, w: u32) -> i32 { __p::guard(|| unsafe { __p::battery_saved(m, w) }) }
         $( $crate::broker_group!($t, $group); )*
         const _: () = assert!(<$t as $crate::proxy::Target>::CAPABILITIES & emusen_native::core::EXPORTING == 0 $(| $crate::__group_bit!($group))*, "the groups named and CAPABILITIES disagree");
     };
@@ -998,22 +1051,22 @@ macro_rules! __group_bit {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! broker_group {
-    ($t:ty, reset) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_reset(m: *mut __M) -> i32 { unsafe { __p::reset(m) } } };
-    ($t:ty, phases) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_phases(m: *const __M, o: *mut i64, l: usize) -> i64 { unsafe { __p::phases(m, o, l) } } };
-    ($t:ty, axes) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_axis(m: *mut __M, p: u32, a: u32, v: f64) -> i32 { unsafe { __p::set_axis(m, p, a, v) } } };
-    ($t:ty, settings) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_settings(m: *mut __M, t: *const u8, l: usize) -> i32 { unsafe { __p::set_settings(m, t, l) } } };
-    ($t:ty, setting_notes) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_setting_notes(m: *const __M, o: *mut u8, l: usize) -> i64 { unsafe { __p::setting_notes(m, o, l) } } };
+    ($t:ty, reset) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_reset(m: *mut __M) -> i32 { __p::guard(|| unsafe { __p::reset(m) }) } };
+    ($t:ty, phases) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_phases(m: *const __M, o: *mut i64, l: usize) -> i64 { __p::guard(|| unsafe { __p::phases(m, o, l) }) } };
+    ($t:ty, axes) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_axis(m: *mut __M, p: u32, a: u32, v: f64) -> i32 { __p::guard(|| unsafe { __p::set_axis(m, p, a, v) }) } };
+    ($t:ty, settings) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_settings(m: *mut __M, t: *const u8, l: usize) -> i32 { __p::guard(|| unsafe { __p::set_settings(m, t, l) }) } };
+    ($t:ty, setting_notes) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_setting_notes(m: *const __M, o: *mut u8, l: usize) -> i64 { __p::guard(|| unsafe { __p::setting_notes(m, o, l) }) } };
     ($t:ty, media) => {
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_media_lid(m: *mut __M, d: u32, o: u32) -> i32 { unsafe { __p::media_lid(m, d, o) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_media_insert(m: *mut __M, d: u32, x: *const __Md) -> i32 { unsafe { __p::media_insert::<$t>(m, d, x) } }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_media_lid(m: *mut __M, d: u32, o: u32) -> i32 { __p::guard(|| unsafe { __p::media_lid(m, d, o) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_media_insert(m: *mut __M, d: u32, x: *const __Md) -> i32 { __p::guard(|| unsafe { __p::media_insert::<$t>(m, d, x) }) }
     };
-    ($t:ty, presence) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_present(m: *mut __M, p: u32, x: u32) -> i32 { unsafe { __p::set_present(m, p, x) } } };
+    ($t:ty, presence) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_present(m: *mut __M, p: u32, x: u32) -> i32 { __p::guard(|| unsafe { __p::set_present(m, p, x) }) } };
     ($t:ty, device_ring) => {
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_ring_lend(m: *mut __M, r: *const emusen_native::core::sys::RingLend) -> i32 { unsafe { __p::ring_lend(m, r) } }
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_ring(m: *mut __M, o: *mut emusen_native::core::sys::RingFrame) -> i32 { unsafe { __p::frame_ring(m, o) } }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_ring_lend(m: *mut __M, r: *const emusen_native::core::sys::RingLend) -> i32 { __p::guard(|| unsafe { __p::ring_lend(m, r) }) }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_ring(m: *mut __M, o: *mut emusen_native::core::sys::RingFrame) -> i32 { __p::guard(|| unsafe { __p::frame_ring(m, o) }) }
     };
     ($t:ty, expect) => {
-        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_expect(s: *const std::ffi::c_char) -> i32 { unsafe { __p::expect::<$t>(s) } }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_expect(s: *const std::ffi::c_char) -> i32 { __p::guard(|| unsafe { __p::expect::<$t>(s) }) }
         const _: emusen_native::core::sys::ExpectFn = emusen_core_expect;
     };
 }
@@ -1109,5 +1162,41 @@ mod tests {
         assert_eq!(arr[1]["min"], 1);
         assert_eq!(arr[1]["max"], 600);
         assert!(augment_schema("{}").is_err());
+    }
+
+    #[test]
+    fn frame_info_rejects_short_replies_without_underflow() {
+        let mut out = FrameInfo { size: size_of::<FrameInfo>() as u32, width: 7, ..FrameInfo::default() };
+        for len in [0, 1, 3, FrameInfo::SIZE_1_0 - 1] {
+            let reply = vec![0xAAu8; len];
+            let r = unsafe { copy_frame_info_reply(&mut out, out.size as usize, 0, &reply) };
+            assert_eq!(r, STATUS_ENDED, "short reply len {len}");
+            assert_eq!(out.width, 7);
+        }
+        let valid = FrameInfo::rgba(320, 240);
+        let bytes = unsafe { std::slice::from_raw_parts(&valid as *const FrameInfo as *const u8, size_of::<FrameInfo>()) };
+        let r = unsafe { copy_frame_info_reply(&mut out, out.size as usize, 0, bytes) };
+        assert_eq!(r, 0);
+        assert_eq!((out.width, out.height), (320, 240));
+    }
+
+    #[test]
+    fn guard_catches_panics_and_write_error_respects_utf8_boundaries() {
+        assert_eq!(guard::<i32>(|| panic!("broker boom")), status::FAULT_BASE);
+        let mut buf = [0xFFu8; 5];
+        unsafe { write_error(buf.as_mut_ptr(), buf.len(), "ab\u{1F600}cd") };
+        let nul = buf.iter().position(|&b| b == 0).unwrap();
+        assert_eq!(nul, 2);
+        assert_eq!(std::str::from_utf8(&buf[..nul]).unwrap(), "ab");
+    }
+
+    #[test]
+    fn media_insert_rejects_null_files_and_short_file_size() {
+        let mut dummy = 0u8;
+        let m_null = Media { size: size_of::<Media>() as u32, flags: 0, image: std::ptr::null(), image_len: 0, files: std::ptr::null(), file_count: 1, file_size: FileEntry::SIZE_1_0, image_path: std::ptr::null() };
+        assert_eq!(unsafe { media_insert::<Reads>(&mut dummy as *mut u8 as *mut RawMachine, 0, &m_null) }, status::NULL);
+        let entry = FileEntry { size: 24, which: 0, data: std::ptr::null(), len: 0, name: std::ptr::null() };
+        let m_short = Media { file_count: 1, files: &entry, file_size: FileEntry::SIZE_1_0 - 1, ..m_null };
+        assert_eq!(unsafe { media_insert::<Reads>(&mut dummy as *mut u8 as *mut RawMachine, 0, &m_short) }, status::BAD_STRUCT);
     }
 }

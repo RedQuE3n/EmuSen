@@ -579,4 +579,28 @@ mod tests {
             m.state_size(false).unwrap() + 4 + 8 * SNAPSHOT_WORDS
         });
     }
+
+    #[test]
+    fn corrupt_rdp_vi_or_ai_state_fields_are_rejected_without_mutating_machine() {
+        let m = busy();
+        let bytes = m.save_state_vec(false).unwrap();
+        let layout = m.layout(false).unwrap();
+        let offset_of = |suffix: &str| -> usize {
+            let line = layout.lines().find(|l| l.ends_with(suffix)).unwrap_or_else(|| panic!("missing layout {suffix}"));
+            line.split(' ').next().unwrap().parse().unwrap()
+        };
+        let mut target = Machine::new(RDRAM_SIZE).unwrap();
+        let before = target.clone();
+        for (suffix, corrupt) in [
+            ("._taken", 22i32.to_le_bytes().to_vec()),
+            ("Vi._debt", (-1i64).to_le_bytes().to_vec()),
+            ("Ai._queued", 3i32.to_le_bytes().to_vec()),
+        ] {
+            let off = offset_of(suffix);
+            let mut bad = bytes.clone();
+            bad[off..off + corrupt.len()].copy_from_slice(&corrupt);
+            assert_eq!(target.load_state(&bad), Err(StateError::Corrupt), "{suffix}");
+            assert_eq!(target, before, "{suffix}");
+        }
+    }
 }

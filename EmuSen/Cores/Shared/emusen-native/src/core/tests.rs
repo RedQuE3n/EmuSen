@@ -847,3 +847,91 @@ fn a_ring_is_read_at_the_hosts_sizes_and_frame_ring_keeps_the_hosts_size() {
     assert_eq!(unsafe { emusen_core_frame_ring(m, &mut f) }, status::BAD_STRUCT);
     unsafe { emusen_core_free(m) };
 }
+
+#[test]
+fn create_rejects_null_files_with_nonzero_count_and_checked_mul_overflows() {
+    let mut code = 0;
+    let p = CreateParams { file_count: 1, files: null(), file_size: FileEntry::SIZE_1_0, ..params(&[], "", &[]) };
+    let bad = unsafe { emusen_core_create(&p, &mut code) };
+    assert!(bad.is_null());
+    assert_eq!(code, status::NULL);
+    let m = make("");
+    assert_eq!(unsafe { emusen_core_set_rom_patches(m, null(), 1) }, status::NULL as i64);
+    assert_eq!(unsafe { emusen_core_set_rom_patches(m, [0u32; 3].as_ptr(), usize::MAX) }, status::BAD_STRUCT as i64);
+    assert_eq!(unsafe { emusen_core_set_cheat_pokes(m, null(), 1) }, status::NULL as i64);
+    assert_eq!(unsafe { emusen_core_set_cheat_pokes(m, [0u32; 4].as_ptr(), usize::MAX) }, status::BAD_STRUCT as i64);
+    assert_eq!(unsafe { emusen_core_set_crash_log(c"/tmp/emusen-test-crash.log".as_ptr()) }, 0);
+    assert_eq!(unsafe { emusen_core_set_crash_log(c"/tmp/emusen-test-crash-2.log".as_ptr()) }, 0);
+    unsafe { emusen_core_free(m) };
+}
+
+#[test]
+fn panic_across_core_export_is_caught_and_recorded_in_last_error() {
+    struct PanicCore;
+    impl crate::ffi::StateMachine for PanicCore {
+        type Error = test_core::StateError;
+        fn load_state(&mut self, _: &[u8]) -> Result<(), Self::Error> { Ok(()) }
+        fn state_size(&self) -> usize { 0 }
+        fn save_state(&self, _: &mut [u8]) -> Result<usize, Self::Error> { Ok(0) }
+        fn layout(&self) -> String { String::new() }
+    }
+    impl Core for PanicCore {
+        const CAPABILITIES: u64 = 0;
+        fn info() -> super::Info {
+            super::Info { id: "panic".into(), name: "Panic".into(), version: "0".into(), license: "MIT".into(), ..Default::default() }
+        }
+        fn create(_: &super::Create<'_>) -> Result<Self, i32> {
+            Ok(PanicCore)
+        }
+        fn machine_info(&self) -> super::MachineInfo {
+            super::MachineInfo::default()
+        }
+        fn advance(&mut self, _: &mut u64) -> Result<(), i32> {
+            panic!("boom in advance");
+        }
+        fn set_options(&mut self, _: u32) {}
+        fn frame_count(&self) -> i64 { 0 }
+        fn frame_info(&self) -> FrameInfo { FrameInfo::rgba(1, 1) }
+        fn frame(&mut self) -> &[u8] { &[] }
+        fn audio_rate(&self) -> i32 { 44100 }
+        fn audio_buffered(&self) -> usize { 0 }
+        fn drain_audio(&mut self, _: &mut [i16], _: usize) -> usize { 0 }
+        fn set_audio_limit(&mut self, _: usize) {}
+        fn set_buttons(&mut self, _: u32, _: u32, _: u32) -> Result<(), i32> { Ok(()) }
+        fn space_size(&self, _: u32) -> Result<i64, i32> { Err(status::NO_SUCH_SPACE) }
+        fn space_read(&mut self, _: u32, _: u32, _: &mut [u8]) -> Result<(), i32> { Err(status::NO_SUCH_SPACE) }
+        fn space_write(&mut self, _: u32, _: u32, _: &[u8]) -> Result<(), i32> { Err(status::NO_SUCH_SPACE) }
+        fn battery(&self, _: u32) -> Result<(&[u8], u32), i32> { Err(status::NOT_SUPPORTED) }
+    }
+
+    let mut status_out = 0;
+    let img = [1u8; 4];
+    let p = CreateParams { size: size_of::<CreateParams>() as u32, host_abi_version: super::sys::ABI_VERSION, image: img.as_ptr(), image_len: img.len(), settings: null(), settings_len: 0, files: null(), file_count: 0, file_size: 0, pixel_formats: 1, error: null_mut(), error_len: 0, flags: 0, device: null(), system: null(), image_path: null() };
+    let m = unsafe { super::exports::create::<PanicCore>(&p, &mut status_out) };
+    assert!(!m.is_null() && status_out == 0);
+    assert_eq!(crate::ffi::guard(|| unsafe { super::exports::advance::<PanicCore>(m, null_mut()) }), status::FAULT_BASE);
+    let err = text(|o, l| unsafe { super::exports::last_error::<PanicCore>(m, o, l) });
+    assert!(err.contains("boom in advance"), "{err}");
+    unsafe { super::exports::free::<PanicCore>(m) };
+}
+
+#[test]
+fn accuracy_setting_allows_accepted_byte_default_in_domain() {
+    use super::{Choice, Effect, Scope, Setting, SettingKind};
+    let valid = Setting {
+        key: "mode".into(),
+        label: "Mode".into(),
+        help: String::new(),
+        kind: SettingKind::Choice(vec![Choice { value: "byte".into(), label: "Byte".into(), help: None }, Choice { value: "cycle".into(), label: "Cycle".into(), help: None }]),
+        default: "byte".into(),
+        scope: Scope::Create,
+        category: None,
+        effect: Effect::Accuracy { cost: "timing".into(), accurate: "cycle".into() },
+        advanced: false,
+        hidden: false,
+        restart: false,
+    };
+    assert!(valid.check().is_ok());
+    let invalid = Setting { effect: Effect::Accuracy { cost: "timing".into(), accurate: "unknown".into() }, ..valid };
+    assert!(invalid.check().is_err());
+}

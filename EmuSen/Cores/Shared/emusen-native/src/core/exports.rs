@@ -81,6 +81,7 @@ pub fn shared_words(code: i32) -> Option<String> {
         status::WRONG_MEDIA => "the drive holds another disc than the state was made with",
         status::NO_SUCH_DRIVE => "no such drive",
         status::NOT_EXPECTED => "the library serves other bytes than the approved build",
+        status::FAULT_BASE => "an unexpected core fault",
         c if (status::FAULT_BASE - 63..=status::FAULT_BASE - 1).contains(&c) => return Some(format!("a reproduced .NET exception, kind {}", status::FAULT_BASE - c)),
         _ => return None,
     };
@@ -105,7 +106,13 @@ fn call<T: Core, R>(inst: &mut Instance<T>, f: impl FnOnce(&mut T) -> Result<R, 
     let Instance { core, outbox, .. } = inst;
     let r = {
         let _route = Route::to(outbox);
-        let r = f(core);
+        let r = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(core))) {
+            Ok(r) => r,
+            Err(payload) => {
+                outbox.borrow_mut().detail = Some(crate::ffi::panic_message(payload));
+                Err(status::FAULT_BASE)
+            }
+        };
         T::end_call();
         r
     };
@@ -117,7 +124,13 @@ fn call<T: Core, R>(inst: &mut Instance<T>, f: impl FnOnce(&mut T) -> Result<R, 
 fn look<'a, T: Core, R>(inst: &'a Instance<T>, f: impl FnOnce(&'a T) -> Result<R, i32>) -> Result<R, i32> {
     let r = {
         let _route = Route::to(&inst.outbox);
-        f(&inst.core)
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&inst.core))) {
+            Ok(r) => r,
+            Err(payload) => {
+                inst.outbox.borrow_mut().detail = Some(crate::ffi::panic_message(payload));
+                Err(status::FAULT_BASE)
+            }
+        }
     };
     settle_call::<T>(&mut inst.outbox.borrow_mut(), r.as_ref().err().copied());
     r
@@ -268,8 +281,7 @@ pub unsafe fn status_text<T: Core>(code: i32, out: *mut u8, len: usize) -> i64 {
 }
 
 pub unsafe fn set_crash_log<T: Core>(path: *const c_char) -> i32 {
-    let engine: &'static str = Box::leak(T::info().name.into_boxed_str());
-    unsafe { crate::abi::install_crash_log(engine, path) }
+    unsafe { crate::abi::install_crash_log(&T::info().name, path) }
 }
 
 pub unsafe fn log_drain<T: Core>(machine: *mut Machine, out: *mut u8, len: usize) -> i64 {
@@ -315,6 +327,16 @@ fn lent<'a, T: Core>(flag: bool, image: &'a [u8], files: &[File<'a>]) -> Option<
 /// The host's array of `count` files of `size` bytes each, at least 1.0's, as slices, and since 1.16 the names of the
 /// named files among them; a named file with no name or a name a host may not store is `BAD_FILE`.
 unsafe fn file_list<'a>(files: *const FileEntry, count: usize, size: usize) -> Result<(Vec<File<'a>>, Vec<(u32, String)>), i32> {
+    if count == 0 {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    if files.is_null() {
+        super::detail("file_count is non-zero with a null files pointer");
+        return Err(status::NULL);
+    }
+    if size < FileEntry::SIZE_1_0 || count.checked_mul(size).is_none() {
+        return Err(status::BAD_STRUCT);
+    }
     let mut list = Vec::with_capacity(count);
     let mut names = Vec::new();
     for i in 0..count {
@@ -399,9 +421,13 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
     let mut error: (*mut u8, usize) = (std::ptr::null_mut(), 0);
     let made = {
         let _route = Route::to(&outbox);
-        let r = (|| {
+        let r = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let p = unsafe { prefix(params, CreateParams::SIZE_1_0) }?;
             error = (p.error, p.error_len);
+            if p.file_count > 0 && p.files.is_null() {
+                super::detail("file_count is non-zero with a null files pointer");
+                return Err(status::NULL);
+            }
             if p.file_count > 0 && p.file_size < FileEntry::SIZE_1_0 {
                 return Err(status::BAD_STRUCT);
             }
@@ -440,7 +466,13 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
                     Err(code)
                 }
             }
-        })();
+        })) {
+            Ok(r) => r,
+            Err(payload) => {
+                super::detail(&crate::ffi::panic_message(payload));
+                Err(status::FAULT_BASE)
+            }
+        };
         T::end_call();
         r
     };
@@ -619,7 +651,7 @@ pub unsafe fn frame_device<T: Core>(machine: *mut Machine, out: *mut DeviceFrame
 pub unsafe fn ring_lend<T: Core>(machine: *mut Machine, ring: *const RingLend) -> i32 {
     let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
     let Some(r) = (unsafe { ring.as_ref() }) else { return status_of(call(inst, |c| c.ring_lend(None))) };
-    if (r.size as usize) < size_of::<RingLend>() || (r.count > 0 && (r.images.is_null() || r.image_size < size_of::<RingImage>())) {
+    if (r.size as usize) < size_of::<RingLend>() || (r.count > 0 && (r.images.is_null() || r.image_size < size_of::<RingImage>() || (r.count as usize).checked_mul(r.image_size).is_none())) {
         return status::BAD_STRUCT;
     }
     let images = (0..r.count as usize).map(|i| unsafe { std::ptr::read_unaligned((r.images as *const u8).add(i * r.image_size) as *const RingImage) }).collect();
@@ -846,15 +878,29 @@ pub unsafe fn battery_saved<T: Core>(machine: *mut Machine, which: u32) -> i32 {
 
 // ---- Cheats and settings -------------------------------------------------------------------------------------
 
+unsafe fn checked_words<'a, U>(ptr: *const U, count: usize, stride: usize) -> Result<&'a [U], i32> {
+    if count > 0 && ptr.is_null() {
+        return Err(NULL);
+    }
+    let Some(len) = count.checked_mul(stride) else { return Err(status::BAD_STRUCT) };
+    Ok(unsafe { slice(ptr, len) })
+}
+
 pub unsafe fn set_rom_patches<T: Core>(machine: *mut Machine, triples: *const u32, count: usize) -> i64 {
     let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL as i64 };
-    let words = unsafe { slice(triples, count * 3) };
+    let words = match unsafe { checked_words(triples, count, 3) } {
+        Ok(w) => w,
+        Err(e) => return e as i64,
+    };
     call(inst, |c| c.set_rom_patches(words)).map_or_else(|e| e as i64, |()| count as i64)
 }
 
 pub unsafe fn set_cheat_pokes<T: Core>(machine: *mut Machine, quads: *const u32, count: usize) -> i64 {
     let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL as i64 };
-    let words = unsafe { slice(quads, count * 4) };
+    let words = match unsafe { checked_words(quads, count, 4) } {
+        Ok(w) => w,
+        Err(e) => return e as i64,
+    };
     call(inst, |c| c.set_cheat_pokes(words)).map_or_else(|e| e as i64, |()| count as i64)
 }
 
@@ -958,24 +1004,38 @@ pub unsafe fn debug_set<T: Core>(machine: *mut Machine, bits: u32, depth_target:
 }
 
 pub unsafe fn debug_set_stack<T: Core>(machine: *mut Machine, pairs: *const u32, count: usize) -> i32 {
-    hooks::<T>(machine).map_or_else(|e| e, |h| {
-        let values = unsafe { slice(pairs, 2 * count) };
-        h.set_stack(&values.chunks_exact(2).map(|p| (p[0], p[1])).collect::<Vec<_>>());
-        0
-    })
+    let h = match hooks::<T>(machine) {
+        Ok(h) => h,
+        Err(e) => return e,
+    };
+    let values = match unsafe { checked_words(pairs, count, 2) } {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    h.set_stack(&values.chunks_exact(2).map(|p| (p[0], p[1])).collect::<Vec<_>>());
+    0
 }
 
 pub unsafe fn debug_set_breakpoints<T: Core>(machine: *mut Machine, processor: u32, pairs: *const i32, count: usize) -> i32 {
     let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
-    let values = unsafe { slice(pairs, 2 * count) };
+    let values = match unsafe { checked_words(pairs, count, 2) } {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     status_of(call(inst, |c| c.debug_breakpoints(processor, values)))
 }
 
 pub unsafe fn debug_set_ranges<T: Core>(machine: *mut Machine, which: u32, triples: *const u32, count: usize) -> i32 {
-    hooks::<T>(machine).map_or_else(|e| e, |h| {
-        let known = which <= debug::range::BREAK || (T::CAPABILITIES & caps::DEBUG_READS != 0 && which <= debug::range::READ_BREAK);
-        if known && h.set_ranges(which, unsafe { slice(triples, 3 * count) }) { 0 } else { status::NOT_SUPPORTED }
-    })
+    let h = match hooks::<T>(machine) {
+        Ok(h) => h,
+        Err(e) => return e,
+    };
+    let values = match unsafe { checked_words(triples, count, 3) } {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let known = which <= debug::range::BREAK || (T::CAPABILITIES & caps::DEBUG_READS != 0 && which <= debug::range::READ_BREAK);
+    if known && h.set_ranges(which, values) { 0 } else { status::NOT_SUPPORTED }
 }
 
 pub unsafe fn debug_run_frame<T: Core>(machine: *mut Machine, bits: u32, processor: *mut u32, pc: *mut u64, detail: *mut u64) -> i32 {

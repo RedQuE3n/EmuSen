@@ -46,11 +46,17 @@ pub fn checksum(frame: &[u8]) -> u8 {
 
 /// The allocation state of directory entry `entry`, 0 to 14.
 pub fn state(image: &[u8], entry: usize) -> u32 {
+    if entry >= BLOCKS || image.len() < (entry + 2) * FRAME_LENGTH {
+        return FREE;
+    }
     le32(frame(image, entry + 1))
 }
 
 /// The block after `entry`'s, or `NO_NEXT`.
 pub fn next(image: &[u8], entry: usize) -> u16 {
+    if entry >= BLOCKS || image.len() < (entry + 2) * FRAME_LENGTH {
+        return NO_NEXT;
+    }
     let f = frame(image, entry + 1);
     u16::from_le_bytes([f[8], f[9]])
 }
@@ -89,6 +95,9 @@ impl Chain {
 /// The blocks of the save whose first directory entry is `first`; none where the chain leaves the card, loops, meets
 /// a block not in the middle or at the end of a save, or does not end at a last block.
 pub fn chain(image: &[u8], first: usize) -> Option<Chain> {
+    if first >= BLOCKS || image.len() < (BLOCKS + 1) * FRAME_LENGTH {
+        return None;
+    }
     let mut chain = Chain { blocks: [0; BLOCKS], len: 1 };
     chain.blocks[0] = first as u8;
     let mut at = first;
@@ -142,6 +151,9 @@ pub fn free_blocks(image: &[u8]) -> usize {
 
 /// Entry `entry`'s name: its field's bytes before the first NUL.
 pub fn name(image: &[u8], entry: usize) -> &[u8] {
+    if entry >= BLOCKS || image.len() < (entry + 2) * FRAME_LENGTH {
+        return &[];
+    }
     let field = &frame(image, entry + 1)[NAME_AT..NAME_AT + NAME_LENGTH];
     let end = field.iter().position(|&b| b == 0).unwrap_or(NAME_LENGTH);
     &field[..end]
@@ -150,8 +162,11 @@ pub fn name(image: &[u8], entry: usize) -> &[u8] {
 /// The title of the save whose first block is `entry`'s: the title frame's text before its first NUL; none where the
 /// frame does not begin "SC" or its text is empty.
 pub fn title(image: &[u8], entry: usize) -> Option<&[u8]> {
+    if entry >= BLOCKS {
+        return None;
+    }
     let at = (entry + 1) * BLOCK_LENGTH;
-    let frame = &image[at..at + FRAME_LENGTH];
+    let frame = image.get(at..at + FRAME_LENGTH)?;
     if frame[0] != b'S' || frame[1] != b'C' {
         return None;
     }
@@ -219,6 +234,9 @@ pub fn copy(from: &[u8], first: usize, to: &mut [u8]) -> Result<(), CopyError> {
 /// As the console's manager deletes: each of the save's directory frames marked deleted, its blocks kept, so the save
 /// can be brought back; a broken chain's first frame alone.
 pub fn delete(image: &mut [u8], first: usize) {
+    if first >= BLOCKS || image.len() < (BLOCKS + 1) * FRAME_LENGTH {
+        return;
+    }
     let mut one = Chain { blocks: [0; BLOCKS], len: 1 };
     one.blocks[0] = first as u8;
     let chain = chain(image, first).unwrap_or(one);
@@ -366,5 +384,19 @@ mod tests {
         assert_eq!(free_blocks(&card), 15);
         assert_eq!(&card[3 * BLOCK_LENGTH..6 * BLOCK_LENGTH], &data[..]);
         assert!((3..6).all(|f| checksum(frame(&card, f)) == card[f * FRAME_LENGTH + 0x7F]));
+    }
+
+    #[test]
+    fn out_of_bounds_directory_blocks_are_rejected_without_panicking() {
+        let mut card = blank();
+        let mut to = blank();
+        for bad in [BLOCKS, 1023, usize::MAX / 2] {
+            assert_eq!(chain(&card, bad), None);
+            assert_eq!(name(&card, bad), &[]);
+            assert_eq!(title(&card, bad), None);
+            assert_eq!(copy(&card, bad, &mut to), Err(CopyError::BrokenChain));
+            delete(&mut card, bad);
+        }
+        assert_eq!(title(&card[..BLOCK_LENGTH], 0), None);
     }
 }

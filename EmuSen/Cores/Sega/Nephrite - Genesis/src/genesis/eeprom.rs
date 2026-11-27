@@ -155,6 +155,10 @@ impl Eeprom {
     /// A board at rest, its lines released: where a power-on leaves it.
     pub(crate) const IDLE: [u16; 11] = [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
 
+    pub(in crate::genesis) fn size_mask(&self) -> u16 {
+        self.board.size_mask
+    }
+
     pub(in crate::genesis) fn set_protocol(&mut self, p: [u16; 11]) {
         self.state = match p[0] {
             1 => State::Receive,
@@ -162,8 +166,8 @@ impl Eeprom {
             _ => State::Idle,
         };
         (self.scl, self.sda_in, self.sda_out) = (p[1] != 0, p[2] != 0, p[3] != 0);
-        (self.shift, self.bits, self.taken) = (p[4] as u8, p[5] as u8, p[6] as u8);
-        (self.address, self.upper, self.read, self.ack) = (p[7], p[8], p[9] != 0, p[10] != 0);
+        (self.shift, self.bits, self.taken) = (p[4] as u8, (p[5] as u8).min(8), p[6] as u8);
+        (self.address, self.upper, self.read, self.ack) = (p[7] & self.board.size_mask, p[8] & 7, p[9] != 0, p[10] != 0);
     }
 
     /// SDA as the console reads it: the wire, low if either side pulls it low.

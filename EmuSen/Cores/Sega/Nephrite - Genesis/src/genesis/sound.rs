@@ -63,11 +63,18 @@ impl Side {
     fn step(&mut self, c: &Circuit, x: i32) -> i16 {
         let mut v = (x as i64) << 8;
         for (k, s) in c.sections.iter().enumerate() {
-            let y = (s[0] * v + s[1] * self.x[k][0] + s[2] * self.x[k][1] + s[3] * self.y[k][0] + s[4] * self.y[k][1]) >> 24;
+            let sum = (s[0] as i128)
+                .saturating_mul(v as i128)
+                .saturating_add((s[1] as i128).saturating_mul(self.x[k][0] as i128))
+                .saturating_add((s[2] as i128).saturating_mul(self.x[k][1] as i128))
+                .saturating_add((s[3] as i128).saturating_mul(self.y[k][0] as i128))
+                .saturating_add((s[4] as i128).saturating_mul(self.y[k][1] as i128));
+            let y = (sum >> 24).clamp(i64::MIN as i128, i64::MAX as i128) as i64;
             (self.x[k], self.y[k]) = ([v, self.x[k][0]], [y, self.y[k][0]]);
             v = y;
         }
-        let h = (c.high_pass * (self.high[1] + v - self.high[0])) >> 24;
+        let diff = (self.high[1] as i128).saturating_add(v as i128).saturating_sub(self.high[0] as i128);
+        let h = ((c.high_pass as i128).saturating_mul(diff) >> 24).clamp(i64::MIN as i128, i64::MAX as i128) as i64;
         self.high = [v, h];
         (h >> 8).clamp(-32768, 32767) as i16
     }
@@ -190,7 +197,7 @@ impl Sound {
         self.psg_steps.take(t, |l, r| {
             // The FM stream's held samples have their droop undone, three samples late; the PSG waits with it.
             fm_line.rotate_left(1);
-            fm_line[6] = fm[i];
+            fm_line[6] = fm.get(i).copied().unwrap_or([0, 0]);
             i += 1;
             let unheld = |side: usize| {
                 let f = |k: usize| fm_line[k][side] as i64;
@@ -199,9 +206,9 @@ impl Sound {
             let psg = psg_line[0];
             psg_line.rotate_left(1);
             psg_line[2] = [l, r];
-            let (l, r) = (sides[0].step(&circuit, unheld(0) + psg[0]), sides[1].step(&circuit, unheld(1) + psg[1]));
+            let (l, r) = (sides[0].step(&circuit, unheld(0).saturating_add(psg[0])), sides[1].step(&circuit, unheld(1).saturating_add(psg[1])));
             match ex.get(i - 1) {
-                Some(&[a, b]) => out((l as i32 + a).clamp(-32768, 32767) as i16, (r as i32 + b).clamp(-32768, 32767) as i16),
+                Some(&[a, b]) => out((l as i32).saturating_add(a).clamp(-32768, 32767) as i16, (r as i32).saturating_add(b).clamp(-32768, 32767) as i16),
                 None => out(l, r),
             }
         });

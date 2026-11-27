@@ -51,3 +51,29 @@ fn blocks_are_laid_side_by_side_and_run_as_they_are_added() {
     assert_eq!(f(1), 1, "the first block still runs");
     assert!(m.held() < 2000 * 256, "a block costs its bytes, not its pages: {}", m.held());
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn dual_mapped_wx_keeps_execution_mapping_rx_and_writable_mapping_rw() {
+    let mut m = Memory::new(vec![stub()]);
+    let entry = m.place(block(41)).expect("placed");
+    let maps = std::fs::read_to_string("/proc/self/maps").expect("proc maps");
+    let mut rx_line = None;
+    let mut rw_count = 0usize;
+    for line in maps.lines() {
+        let Some((range, perms)) = line.split_once(' ').and_then(|(r, rest)| rest.split(' ').next().map(|p| (r, p))) else { continue };
+        let Some((lo, hi)) = range.split_once('-') else { continue };
+        let (Ok(lo), Ok(hi)) = (u64::from_str_radix(lo, 16), u64::from_str_radix(hi, 16)) else { continue };
+        if (lo..hi).contains(&entry) {
+            rx_line = Some(perms.to_owned());
+        }
+        if line.contains("memfd:emusen-jit") && perms.starts_with("rw-") && !perms.contains('x') {
+            rw_count += 1;
+        }
+    }
+    let rx_perms = rx_line.expect("entry address in /proc/self/maps");
+    assert!(rx_perms.starts_with("r-x"), "execution mapping must be strict R-X: {rx_perms}");
+    assert!(rw_count >= 1, "expected separate RW memfd alias for emitter");
+    let f = unsafe { std::mem::transmute::<u64, extern "C" fn(u64) -> u64>(entry) };
+    assert_eq!(f(1), 42);
+}

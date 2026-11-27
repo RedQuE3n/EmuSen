@@ -679,6 +679,29 @@ fn c2(lib: &Lib, info: &str) -> Case {
     c.done("C2", "info")
 }
 
+fn check_setting(c: &mut Check, s: &Value, keys: &mut BTreeSet<String>) {
+    let get = |k: &str| s.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
+    let (key, kind, default, effect) = (get("key"), get("kind"), get("default"), get("effect"));
+    c.that(keys.insert(key.clone()), || format!("{key} appears twice"));
+    let valid = |val: &str| match kind.as_str() {
+        "switch" => val == "true" || val == "false",
+        "count" => val.parse::<i64>().is_ok_and(|d| d >= s.get("min").and_then(Value::as_i64).unwrap_or(i64::MIN) && d <= s.get("max").and_then(Value::as_i64).unwrap_or(i64::MAX)),
+        "choice" => s.get("choices").and_then(Value::as_array).into_iter().flatten().any(|ch| ch.get("value").and_then(Value::as_str) == Some(val)),
+        _ => !val.contains(['\r', '\n']),
+    };
+    c.that(valid(&default), || format!("{key}: the default {default:?} is outside its own domain"));
+    if effect == "accuracy" {
+        let accurate = get("accurate");
+        c.that(valid(&accurate), || format!("{key}: accurate value {accurate:?} is outside its own domain"));
+    }
+    if effect == "enhancement" {
+        c.that(get("hardware") == default, || format!("{key}: an enhancement's default must be the hardware's value"));
+    }
+    if matches!(effect.as_str(), "accuracy" | "latency" | "enhancement") {
+        c.that(!get("cost").trim().is_empty(), || format!("{key}: a trade-off needs its cost"));
+    }
+}
+
 fn c3(lib: &Lib) -> Case {
     let mut c = Check::new();
     let text = match lib.settings() {
@@ -694,25 +717,7 @@ fn c3(lib: &Lib) -> Case {
     let list = parse(&text).and_then(|v| v.as_array().map(|a| a.to_vec())).unwrap_or_default();
     let mut keys = BTreeSet::new();
     for s in &list {
-        let get = |k: &str| s.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
-        let (key, kind, default, effect) = (get("key"), get("kind"), get("default"), get("effect"));
-        c.that(keys.insert(key.clone()), || format!("{key} appears twice"));
-        let in_domain = match kind.as_str() {
-            "switch" => default == "true" || default == "false",
-            "count" => default.parse::<i64>().is_ok_and(|d| d >= s.get("min").and_then(Value::as_i64).unwrap_or(i64::MIN) && d <= s.get("max").and_then(Value::as_i64).unwrap_or(i64::MAX)),
-            "choice" => s.get("choices").and_then(Value::as_array).into_iter().flatten().any(|ch| ch.get("value").and_then(Value::as_str) == Some(default.as_str())),
-            _ => !default.contains(['\r', '\n']),
-        };
-        c.that(in_domain, || format!("{key}: the default {default:?} is outside its own domain"));
-        if effect == "accuracy" {
-            c.that(get("accurate") == default, || format!("{key}: an accuracy setting's default must be its accurate value"));
-        }
-        if effect == "enhancement" {
-            c.that(get("hardware") == default, || format!("{key}: an enhancement's default must be the hardware's value"));
-        }
-        if matches!(effect.as_str(), "accuracy" | "latency" | "enhancement") {
-            c.that(!get("cost").trim().is_empty(), || format!("{key}: a trade-off needs its cost"));
-        }
+        check_setting(&mut c, s, &mut keys);
     }
     c.note(format!("{} settings", list.len()));
     c.done("C3", "the schema")
@@ -1052,18 +1057,43 @@ fn c7(s: &mut Session<'_>) -> Case {
                     c.that(b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: {what} was refused but changed the machine"));
                 }
                 if own.len() > 32 {
-                    let mut flipped = own.clone();
-                    let mid = 32 + (flipped.len() - 32) / 2;
-                    for i in [32, mid, flipped.len() - 1] {
-                        flipped[i] ^= 0x5A;
+                    let mid = 32 + (own.len() - 32) / 2;
+                    let tail = own.len().saturating_sub(16).max(32);
+                    let mut patterns: Vec<Vec<u8>> = Vec::with_capacity(4);
+                    let mut flip = own.clone();
+                    for i in [32, mid, own.len() - 1] {
+                        flip[i] ^= 0x5A;
                     }
-                    let r = b.load(&flipped);
-                    if r != 0 {
-                        s.statuses.insert(r);
-                        c.that(b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: payload-bitflip state was refused but changed the machine"));
-                    } else {
-                        c.that(b.save(0).is_ok(), || format!("frame {p}: payload-bitflip state accepted then state_save failed"));
-                        c.that(b.load(&own) == 0 && b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: clean state failed to reload after payload bitflip"));
+                    patterns.push(flip);
+                    for (range, fill) in [(32..own.len().min(48), 0xFFu8), (mid..own.len().min(mid + 16), 0x00u8), (tail..own.len(), 0x80u8)] {
+                        let mut buf = own.clone();
+                        buf[range].fill(fill);
+                        if buf != own {
+                            patterns.push(buf);
+                        }
+                    }
+                    for (idx, bad) in patterns.iter().enumerate() {
+                        let r = b.load(bad);
+                        if r != 0 {
+                            s.statuses.insert(r);
+                            c.that(b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: fuzzed state {idx} was refused but changed the machine"));
+                        } else {
+                            let started = std::time::Instant::now();
+                            for step in 0..4 {
+                                if started.elapsed() >= std::time::Duration::from_secs(5) {
+                                    c.that(false, || format!("frame {p}: accepted fuzzed state {idx} hung during advance step {step}"));
+                                    break;
+                                }
+                                if let Err(code) = b.advance() {
+                                    s.statuses.insert(code);
+                                    break;
+                                }
+                            }
+                            c.that(b.save(0).is_ok(), || format!("frame {p}: fuzzed state {idx} accepted then state_save failed"));
+                            c.that(b.load(&own) == 0 && b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: clean state failed to reload after fuzzed state {idx}"));
+                            let _ = b.drain_audio();
+                            let _ = b.events();
+                        }
                     }
                 }
             }
@@ -1274,8 +1304,8 @@ fn c11(s: &mut Session<'_>) -> Case {
         let mut one = [0u8; 1];
         c.that((f.info)(one.as_mut_ptr(), 1) == whole && whole > 1, || "info with a one-byte buffer does not answer the whole length".to_owned());
     }
-    let small_params = |size: u32, file_size: usize| -> i32 {
-        let file = FileEntry { size: 24, which: 0, data: std::ptr::null(), len: 0, name: std::ptr::null() };
+    let file = FileEntry { size: FileEntry::SIZE_1_0 as u32, which: 0, data: std::ptr::null(), len: 0, name: std::ptr::null() };
+    let small_params = |size: u32, file_size: usize, files: *const FileEntry| -> i32 {
         let p = CreateParams {
             size,
             host_abi_version: emusen_native::core::sys::ABI_VERSION,
@@ -1283,7 +1313,7 @@ fn c11(s: &mut Session<'_>) -> Case {
             image_len: s.opts.image.len(),
             settings: std::ptr::null(),
             settings_len: 0,
-            files: &file,
+            files,
             file_count: 1,
             file_size,
             pixel_formats: 1,
@@ -1301,10 +1331,12 @@ fn c11(s: &mut Session<'_>) -> Case {
         }
         code
     };
-    let short = small_params(80, 24);
+    let short = small_params(80, FileEntry::SIZE_1_0, &file);
     c.that(short == status::BAD_STRUCT, || format!("create_params of 80 bytes answered {short}, not BAD_STRUCT"));
-    let short_file = small_params(88, 16);
+    let short_file = small_params(88, 16, &file);
     c.that(short_file == status::BAD_STRUCT, || format!("a file element of 16 bytes answered {short_file}, not BAD_STRUCT"));
+    let null_files = small_params(size_of::<CreateParams>() as u32, FileEntry::SIZE_1_0, std::ptr::null());
+    c.that(null_files == status::NULL, || format!("create_params with null files and count=1 answered {null_files}, not EMUSEN_NULL"));
     match s.machine(&s.opts.settings.clone()) {
         Ok(m) => {
             let mut fi = FrameInfo { size: 48, ..FrameInfo::default() };
@@ -1313,6 +1345,23 @@ fn c11(s: &mut Session<'_>) -> Case {
             let mut ev = [Event::default(); 2];
             let r = unsafe { (s.lib.f.events)(m.h, ev.as_mut_ptr(), 2, 16) };
             c.that(r == status::BAD_STRUCT as i64, || format!("events of 16 bytes answered {r}, not BAD_STRUCT"));
+            if let Some(insert) = s.lib.f.media_insert {
+                let null_media = emusen_native::core::sys::Media {
+                    size: size_of::<emusen_native::core::sys::Media>() as u32,
+                    flags: 0,
+                    image: std::ptr::null(),
+                    image_len: 0,
+                    files: std::ptr::null(),
+                    file_count: 1,
+                    file_size: FileEntry::SIZE_1_0,
+                    image_path: std::ptr::null(),
+                };
+                let r = unsafe { insert(m.h, 0, &null_media) };
+                c.that(r == status::NULL, || format!("media_insert with null files and count=1 answered {r}, not EMUSEN_NULL"));
+                let short_media = emusen_native::core::sys::Media { files: &file, file_size: 16, ..null_media };
+                let r = unsafe { insert(m.h, 0, &short_media) };
+                c.that(r == status::BAD_STRUCT, || format!("media_insert with file_size=16 answered {r}, not BAD_STRUCT"));
+            }
         }
         Err(e) => c.that(false, || e),
     }
@@ -2969,5 +3018,40 @@ mod tests {
         assert!(c6(&mut s).passed);
         assert!(s.first.is_none());
         assert!(c8(&mut s).passed);
+    }
+
+    #[test]
+    fn c3_allows_accuracy_setting_with_byte_default_and_accurate_in_domain() {
+        let valid_setting = serde_json::json!({
+            "key": "cpu_face",
+            "kind": "choice",
+            "default": "byte",
+            "effect": "accuracy",
+            "accurate": "cycle",
+            "cost": "fast",
+            "choices": [{"value": "byte"}, {"value": "cycle"}]
+        });
+        let mut c = Check::new();
+        let mut keys = BTreeSet::new();
+        check_setting(&mut c, &valid_setting, &mut keys);
+        assert!(c.fails.is_empty(), "{:?}", c.fails);
+
+        let mut bad_setting = valid_setting;
+        bad_setting["accurate"] = Value::from("bogus");
+        let mut c2 = Check::new();
+        keys.clear();
+        check_setting(&mut c2, &bad_setting, &mut keys);
+        assert_eq!(c2.fails.len(), 1);
+    }
+
+    #[test]
+    fn c7_and_c11_exercise_expanded_fuzzing_and_null_files_checks() {
+        let lib = Lib::open(&library("kit_test_core")).unwrap();
+        let opts = options(16);
+        let mut s = session(&lib, &opts);
+        let res7 = c7(&mut s);
+        assert!(res7.passed, "{:?}", res7.evidence);
+        let res11 = c11(&mut s);
+        assert!(res11.passed, "{:?}", res11.evidence);
     }
 }

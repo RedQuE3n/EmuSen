@@ -126,18 +126,7 @@ impl<B: AsRef<[u8]>> ChdImage<B> {
             return Err("the CHD holds no CD-ROM track metadata: not a compact disc".into());
         }
         entries.sort_by_key(|e| e.track);
-        let mut tracks = Vec::new();
-        let (mut unit, mut cursor) = (0u64, 0u32);
-        for (k, e) in entries.iter().enumerate() {
-            let unstored = if e.pregap_stored { 0 } else { e.pregap };
-            let from = if k == 0 { PROGRAM_START - if e.pregap_stored { e.pregap } else { 0 } } else { cursor + unstored };
-            let to = from + e.frames;
-            let start = if e.pregap_stored { from + e.pregap } else { from };
-            let end = to + e.postgap;
-            tracks.push(Track::stored(e.track, e.mode, if e.mode.audio() { CONTROL_AUDIO } else { CONTROL_DATA }, if k == 0 { 0 } else { cursor }, start, end, 0, from, to, unit));
-            unit += e.frames.div_ceil(4) as u64 * 4;
-            cursor = end;
-        }
+        let (tracks, cursor) = layout_tracks(&entries)?;
         Ok((self, tracks, cursor))
     }
 
@@ -254,5 +243,43 @@ impl<B: AsRef<[u8]>> ChdImage<B> {
             return Ok(crc);
         }
         Err(format!("its self-references run past {REFERENCES} hunks"))
+    }
+}
+
+fn layout_tracks(entries: &[Entry]) -> Result<(Vec<Track>, u32), String> {
+    let mut tracks = Vec::new();
+    let (mut unit, mut cursor) = (0u64, 0u32);
+    for (k, e) in entries.iter().enumerate() {
+        let unstored = if e.pregap_stored { 0 } else { e.pregap };
+        let from = if k == 0 {
+            PROGRAM_START.saturating_sub(if e.pregap_stored { e.pregap } else { 0 })
+        } else {
+            cursor.checked_add(unstored).ok_or_else(|| "CHD track start overflows u32".to_owned())?
+        };
+        let to = from.checked_add(e.frames).ok_or_else(|| "CHD track end overflows u32".to_owned())?;
+        let start = if e.pregap_stored {
+            from.checked_add(e.pregap).ok_or_else(|| "CHD track index 1 overflows u32".to_owned())?
+        } else {
+            from
+        };
+        let end = to.checked_add(e.postgap).ok_or_else(|| "CHD track postgap overflows u32".to_owned())?;
+        tracks.push(Track::stored(e.track, e.mode, if e.mode.audio() { CONTROL_AUDIO } else { CONTROL_DATA }, if k == 0 { 0 } else { cursor }, start, end, 0, from, to, unit));
+        unit += e.frames.div_ceil(4) as u64 * 4;
+        cursor = end;
+    }
+    Ok((tracks, cursor))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn track1_stored_pregap_above_150_does_not_underflow() {
+        let entries = [Entry { track: 1, mode: Mode::Mode2Raw, frames: 600, pregap: 300, pregap_stored: true, postgap: 0 }];
+        let (tracks, end) = layout_tracks(&entries).unwrap();
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].start, 300);
+        assert_eq!(end, 600);
     }
 }

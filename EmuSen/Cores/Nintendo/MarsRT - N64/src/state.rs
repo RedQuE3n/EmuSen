@@ -8,6 +8,8 @@ emusen_native::state_error! {
         RdramSize(i32) => -12,
         PendingOverflow(i32) => -13,
         PendingInState(usize) => -14,
+        /// Corrupted or out-of-range state payload.
+        Corrupt => emusen_native::core::status::FOREIGN,
     }
 }
 

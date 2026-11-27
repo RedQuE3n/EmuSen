@@ -321,13 +321,15 @@ impl Hw {
     /// A 68000 access to the main RAM about to begin: the RAM's refresh, if one has been requested by now.
     fn ram_refresh(&mut self) {
         let at = self.clock;
-        while self.ram_refresh_at <= at {
-            let requested = self.ram_refresh_at;
-            if at - requested < RAM_REFRESH_WINDOW {
+        if at >= self.ram_refresh_at {
+            if at - self.ram_refresh_at >= RAM_REFRESH_WINDOW {
+                let period = RAM_REFRESH_WINDOW + RAM_REFRESH_AFTER;
+                let missed = (at - self.ram_refresh_at - RAM_REFRESH_WINDOW) / period + 1;
+                self.ram_refresh_at = self.ram_refresh_at.saturating_add(missed.saturating_mul(period));
+            }
+            if self.ram_refresh_at <= at {
                 self.clock += RAM_REFRESH_WAIT;
                 self.ram_refresh_at = at + RAM_REFRESH_AFTER;
-            } else {
-                self.ram_refresh_at = requested + RAM_REFRESH_WINDOW + RAM_REFRESH_AFTER;
             }
         }
     }
@@ -1196,6 +1198,36 @@ impl<A> Genesis<A> {
         })
     }
 
+    pub(crate) fn check_state(&self, s: &Saved) -> bool {
+        let saved_lines = crate::genesis::vdp::Vdp::lines_for(self.hw.vdp.pal, s.vdp.regs[1], s.vdp.interlace, s.vdp.odd);
+        let o = &s.open_line;
+        if o.open[0] != 0 && (o.open[0] as usize - 1) >= saved_lines as usize {
+            return false;
+        }
+        if o.open[1] as usize > crate::genesis::render::MAX_W {
+            return false;
+        }
+        if let Some(size) = o.size
+            && (size[0] as usize > crate::genesis::render::MAX_W || size[1] as usize > crate::genesis::render::MAX_H)
+        {
+            return false;
+        }
+        if s.line >= saved_lines {
+            return false;
+        }
+        if let Some(p) = s.eeprom {
+            if p[0] > 2 || p[5] > 8 || p[8] > 7 {
+                return false;
+            }
+            if let Some(e) = &self.hw.cart.eeprom
+                && p[7] > e.size_mask()
+            {
+                return false;
+            }
+        }
+        true
+    }
+
     pub(crate) fn apply_state(&mut self, s: Saved) {
         self.cpu = s.cpu;
         self.z80 = s.z80;
@@ -1411,6 +1443,86 @@ mod tests {
         for (k, board) in [(26, 13.0), (27, 16.2), (29, 3.8)] {
             assert!((share(&ram, k) - board).abs() < 1.0, "{k} clocks: {ram:?}");
         }
+    }
+
+    #[test]
+    fn corrupt_state_fields_are_rejected_and_ram_refresh_jumps_in_constant_time() {
+        use emusen_native::ffi::StateMachine;
+        let rom = crate::media::cartridge("SEGA GENESIS", "U", None);
+        let mut m = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+        let mut raw = vec![0u8; m.state_size()];
+        m.save_state(&mut raw).unwrap();
+        let (mut r, version) = emusen_native::shell::open_state(&raw, crate::state::STATE_MAGIC, |_| true).unwrap();
+        let _ = r.u8().unwrap();
+        let _ = r.i64().unwrap();
+        for space in m.spaces().into_iter().filter(|s| !s.read_only) {
+            let mut skip = vec![0u8; m.bytes(space.id).unwrap().len()];
+            r.bytes(&mut skip).unwrap();
+        }
+        #[allow(irrefutable_let_patterns)]
+        let crate::machine::Fitted::Md(g) = &mut m.fitted else { unreachable!("a cartridge") };
+        let mut s = g.read_state(&mut r, version).unwrap();
+        assert!(g.check_state(&s));
+
+        let orig_open = s.open_line.open;
+        s.open_line.open = [400, 0];
+        assert!(!g.check_state(&s));
+        s.open_line.open = [1, 321];
+        assert!(!g.check_state(&s));
+        s.open_line.open = orig_open;
+
+        let orig_size = s.open_line.size;
+        s.open_line.size = Some([321, 240]);
+        assert!(!g.check_state(&s));
+        s.open_line.size = orig_size;
+
+        let orig_line = s.line;
+        s.line = 400;
+        assert!(!g.check_state(&s));
+        s.line = orig_line;
+
+        s.eeprom = Some([0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0]);
+        assert!(!g.check_state(&s));
+
+        g.hw.ram_refresh_at = 0;
+        g.hw.clock = 10_000_000_000_000;
+        g.hw.ram_refresh();
+        assert!(g.hw.ram_refresh_at > g.hw.clock);
+    }
+
+    #[test]
+    fn saved_vdp_mode_governs_line_validation_across_mode_transitions() {
+        use emusen_native::ffi::StateMachine;
+        let rom = crate::media::cartridge("SEGA GENESIS", "U", None);
+        let save_with = |reg1: u8, interlace: u8, odd: bool, line: u32| -> Vec<u8> {
+            let mut m = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+            m.hw_mut().vdp.regs[1] = reg1;
+            m.hw_mut().vdp.interlace = interlace;
+            m.hw_mut().vdp.odd = odd;
+            m.hw_mut().line = line;
+            let mut raw = vec![0u8; m.state_size()];
+            m.save_state(&mut raw).unwrap();
+            raw
+        };
+
+        // (a) Valid NTSC odd-field interlace (line 262) and V30 (line 400) load into a 262-line machine.
+        let mut target = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+        assert_eq!(target.hw().vdp.lines(), 262);
+        let odd_interlace = save_with(0, 1, true, 262);
+        target.load_state(&odd_interlace).unwrap();
+        assert_eq!(target.hw().line, 262);
+
+        let mut target262 = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+        let v30 = save_with(0x0C, 0, false, 400);
+        target262.load_state(&v30).unwrap();
+        assert_eq!(target262.hw().line, 400);
+
+        // (b) Corrupt 262-line state (line 300) is rejected when loaded into a 512-line machine.
+        let corrupt_262 = save_with(0, 0, false, 300);
+        let mut target512 = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+        target512.hw_mut().vdp.regs[1] |= 0x0C;
+        assert_eq!(target512.hw().vdp.lines(), 512);
+        assert!(matches!(target512.load_state(&corrupt_262), Err(crate::state::StateError::Corrupt)));
     }
 }
 

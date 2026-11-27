@@ -30,8 +30,9 @@ impl<'a> StateReader<'a> {
     }
 
     fn take(&mut self, n: usize) -> Result<&'a [u8], Truncated> {
-        let slice = self.data.get(self.pos..self.pos + n).ok_or(Truncated { at: self.pos, wanted: n })?;
-        self.pos += n;
+        let end = self.pos.checked_add(n).ok_or(Truncated { at: self.pos, wanted: n })?;
+        let slice = self.data.get(self.pos..end).ok_or(Truncated { at: self.pos, wanted: n })?;
+        self.pos = end;
         Ok(slice)
     }
 
@@ -145,7 +146,8 @@ impl<'a> StateReader<'a> {
     }
 
     fn array<T, const N: usize>(&mut self, into: &mut [T], le: fn([u8; N]) -> T) -> Result<(), Truncated> {
-        let src = self.take(into.len() * N)?;
+        let bytes = into.len().checked_mul(N).ok_or(Truncated { at: self.pos, wanted: usize::MAX })?;
+        let src = self.take(bytes)?;
         for (dst, &chunk) in into.iter_mut().zip(src.as_chunks::<N>().0) {
             *dst = le(chunk);
         }
@@ -171,5 +173,17 @@ impl<'a> StateReader<'a> {
             item.read_state(self)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn take_overflow_returns_truncated_instead_of_panicking() {
+        let mut r = StateReader::new(&[1, 2, 3, 4]);
+        assert_eq!(r.u16().unwrap(), 0x0201);
+        assert_eq!(r.skip(usize::MAX), Err(Truncated { at: 2, wanted: usize::MAX }));
     }
 }

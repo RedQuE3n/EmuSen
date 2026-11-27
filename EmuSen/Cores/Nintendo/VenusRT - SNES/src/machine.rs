@@ -609,6 +609,13 @@ impl Machine {
         r.bytes(&mut self.sys.apu.ram)?;
         r.bytes(&mut self.sys.cart.sram)?;
         self.sys.timing.interlace = interlace;
+        let expected_apu = self.sys.timing.clock as u128 * self.sys.apu.ratio.0 as u128 / self.sys.apu.ratio.1 as u128;
+        if self.sys.timing.line >= self.sys.timing.lines()
+            || self.sys.timing.line_clock >= self.sys.timing.line_length()
+            || expected_apu.abs_diff(self.sys.apu.cycles as u128) > 1_000_000
+        {
+            return Err(StateError::Corrupt);
+        }
         self.sys.timing.schedule();
         self.debug_open = None;
         Ok(())
@@ -801,5 +808,29 @@ pub(crate) mod tests {
         m.run_frame();
         back.run_frame();
         assert_eq!(drain(&mut back), drain(&mut m));
+    }
+
+    #[test]
+    fn corrupt_timing_line_or_apu_lag_is_rejected_without_mutating_machine() {
+        let m = Machine::load_rom(&rom(&[0x80, 0xFE])).unwrap();
+        let mut s = save(&m);
+        let mut w = StateWriter::layout();
+        m.write_state(&mut w);
+        let text = w.into_layout();
+        let offset_of = |name: &str| -> usize {
+            let line = text.lines().find(|l| l.ends_with(name)).unwrap_or_else(|| panic!("missing {name}"));
+            line.split(' ').next().unwrap().parse().unwrap()
+        };
+        let off_line = offset_of("Timing.Line");
+        let off_clock = offset_of("Timing.LineClock");
+        let mut target = Machine::load_rom(&rom(&[0x80, 0xFE])).unwrap();
+        target.sys.timing.frame = 77;
+        s[off_line..off_line + 2].copy_from_slice(&500u16.to_le_bytes());
+        assert_eq!(target.load_state(&s), Err(StateError::Corrupt));
+        assert_eq!(target.sys.timing.frame, 77);
+        s = save(&m);
+        s[off_clock..off_clock + 2].copy_from_slice(&2000u16.to_le_bytes());
+        assert_eq!(target.load_state(&s), Err(StateError::Corrupt));
+        assert_eq!(target.sys.timing.frame, 77);
     }
 }

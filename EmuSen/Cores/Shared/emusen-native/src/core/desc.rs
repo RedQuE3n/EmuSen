@@ -509,7 +509,7 @@ impl Setting {
             return Err(format!("{}: the default {:?} is outside its own domain", self.key, self.default));
         }
         match &self.effect {
-            Effect::Accuracy { accurate, .. } if *accurate != self.default => Err(format!("{}: an accuracy setting's default must be its accurate value", self.key)),
+            Effect::Accuracy { accurate, .. } if !self.accepts(accurate) => Err(format!("{}: the accurate value {:?} is outside its own domain", self.key, accurate)),
             Effect::Enhancement { hardware, .. } if *hardware != self.default => Err(format!("{}: an enhancement's default must be the hardware's value", self.key)),
             Effect::Accuracy { cost, .. } | Effect::Latency { cost } | Effect::Enhancement { cost, .. } if cost.trim().is_empty() => Err(format!("{}: a trade-off needs its cost", self.key)),
             _ => Ok(()),

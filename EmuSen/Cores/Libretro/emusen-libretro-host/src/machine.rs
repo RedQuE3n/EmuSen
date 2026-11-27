@@ -2,6 +2,7 @@
 //! EmuSen_LibretroHost.md §4 mapped onto libretro's calls.
 
 use std::ffi::{CString, c_void};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use emusen_libretro_sys as sys;
@@ -76,7 +77,8 @@ const RTC: u32 = 1;
 
 pub struct Machine {
     lib: &'static Library,
-    shared: Box<Shared>,
+    shared: Arc<Shared>,
+    frame_scratch: Vec<u8>,
     frames: i64,
     system: String,
     identity: u64,
@@ -208,13 +210,9 @@ fn firmware(lib: &Library) -> Vec<Firmware> {
 }
 
 impl Machine {
-    fn shared(&mut self) -> &mut Shared {
-        &mut self.shared
-    }
-
     /// The events the callbacks queued, raised for the host.
     fn raise(&mut self) {
-        for (kind, a, b) in std::mem::take(&mut self.shared.events) {
+        for (kind, a, b) in self.shared.drain_events() {
             v1::emit(kind, a, b);
         }
     }
@@ -245,7 +243,8 @@ impl Machine {
     /// when they change.
     fn update_spaces(&mut self, first: bool) {
         let before = self.spaces.len();
-        match self.shared.maps.take() {
+        let taken = self.shared.maps.lock().unwrap_or_else(|e| e.into_inner()).take();
+        match taken {
             Some(maps) if !maps.is_empty() => {
                 let mut s = maps;
                 if let Some(name) = crate::cheat_space(&self.system)
@@ -269,7 +268,7 @@ impl Machine {
     }
 
     fn platform(&self) -> Option<u32> {
-        (self.shared.quirks & (sys::QUIRK_ENDIAN_DEPENDENT | sys::QUIRK_PLATFORM_DEPENDENT) != 0).then(state::platform)
+        (self.shared.quirks.load(Ordering::Acquire) & (sys::QUIRK_ENDIAN_DEPENDENT | sys::QUIRK_PLATFORM_DEPENDENT) != 0).then(state::platform)
     }
 
     /// The core's state after a header: sealed with its digest for a state that may be written out, marked as this run's for a snapshot.
@@ -293,22 +292,30 @@ impl Machine {
 
 impl Drop for Machine {
     fn drop(&mut self) {
-        // The context is destroyed before the game is unloaded and the device after retro_deinit (EmuSen_LibretroHost.md §10f).
-        if self.shared.gpu.is_some()
-            && let Some(destroy) = self.shared.hw.and_then(|h| h.destroy)
+        // Keep shared.gpu populated across destroy/unload/deinit, then release resources before device teardown.
+        let hw = *self.shared.hw.lock().unwrap_or_else(|e| e.into_inner());
+        let negotiation = *self.shared.negotiation.lock().unwrap_or_else(|e| e.into_inner());
+        let gpu = self.shared.gpu();
+        if gpu.is_some()
+            && let Some(destroy) = hw.and_then(|h| h.destroy)
         {
             unsafe { destroy() };
         }
         unsafe { (self.lib.api.unload_game)() };
-        if self.shared.gpu.is_some()
-            && let Some(destroy) = self.shared.negotiation.and_then(|n| n.destroy_device)
+        unsafe { (self.lib.api.deinit)() };
+        *self.shared.gpu.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        if let Some(ref g) = gpu {
+            g.release_resources();
+        }
+        if let Some(ref g) = gpu
+            && let Some(destroy) = negotiation.and_then(|n| n.destroy_device)
         {
+            g.mark_device_destroyed();
             unsafe { destroy() };
         }
-        unsafe { (self.lib.api.deinit)() };
-        self.shared.gpu = None;
+        drop(gpu);
         front::with_declared(|d| d.initialised = false);
-        front::bind(std::ptr::null_mut());
+        front::bind(None);
         front::flush_logs();
         LIVE.store(false, Ordering::Release);
     }
@@ -485,7 +492,7 @@ impl v1::Core for Machine {
         front::RUMBLE.iter().flatten().for_each(|m| m.store(0, Ordering::Relaxed));
         let made = Self::make(lib, system, r);
         if made.is_err() {
-            front::bind(std::ptr::null_mut());
+            front::bind(None);
             LIVE.store(false, Ordering::Release);
         }
         front::flush_logs();
@@ -493,7 +500,11 @@ impl v1::Core for Machine {
     }
 
     fn machine_info(&self) -> MachineInfo {
-        let g = self.shared.av.geometry;
+        let (g, format, fps) = {
+            let v = self.shared.lock_video();
+            (v.av.geometry, v.picture.format, v.av.timing.fps)
+        };
+        let audio_rate = crate::audio::rounded(self.shared.lock_sound().rate());
         let aspect = if g.aspect_ratio > 0.0 { video::ratio(g.aspect_ratio as f64, 100_000) } else { (g.base_width as u64, g.base_height.max(1) as u64) };
         let mut battery = Vec::new();
         if !self.memory(sys::MEMORY_SAVE_RAM).is_empty() {
@@ -506,9 +517,9 @@ impl v1::Core for Machine {
         MachineInfo {
             system: self.system.clone(),
             region: None,
-            frame_rate: video::ratio(self.shared.av.timing.fps, 1_000_000),
-            video: Video { base_width: g.base_width, base_height: g.base_height, max_width: g.max_width, max_height: g.max_height, aspect: (aspect.0 as u32, aspect.1 as u32), formats: vec![self.shared.picture.format] },
-            audio: Audio { rate: crate::audio::rounded(self.shared.sound.rate()), channels: Vec::new() },
+            frame_rate: video::ratio(fps, 1_000_000),
+            video: Video { base_width: g.base_width, base_height: g.base_height, max_width: g.max_width, max_height: g.max_height, aspect: (aspect.0 as u32, aspect.1 as u32), formats: vec![format] },
+            audio: Audio { rate: audio_rate, channels: Vec::new() },
             ports: (0..front::ports() as u32).map(|port| Port { port, controller: Some("retropad".into()) }).collect(),
             spaces: self
                 .spaces
@@ -535,7 +546,7 @@ impl v1::Core for Machine {
     }
 
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
-        if self.shared.shutdown {
+        if self.shared.shutdown.load(Ordering::Acquire) {
             v1::detail("the core asked to stop");
             return Err(STATUS_SHUTDOWN);
         }
@@ -544,10 +555,11 @@ impl v1::Core for Machine {
             return Err(STATUS_NOT_STARTED);
         }
         let start = std::time::Instant::now();
-        if let Some((cb, reference)) = self.shared.frame_time {
+        let frame_time = *self.shared.frame_time.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((cb, reference)) = frame_time {
             unsafe { cb(reference) };
         }
-        if let Some(g) = self.shared.gpu.as_mut() {
+        if let Some(g) = self.shared.gpu() {
             g.begin_frame();
         }
         unsafe { (self.lib.api.run)() };
@@ -557,7 +569,8 @@ impl v1::Core for Machine {
         if self.frames % 15 == 0 {
             self.scan_saves();
         }
-        if self.shared.maps.is_some() || (self.blocks && self.spaces.is_empty()) {
+        let has_maps = self.shared.maps.lock().unwrap_or_else(|e| e.into_inner()).is_some();
+        if has_maps || (self.blocks && self.spaces.is_empty()) {
             self.update_spaces(false);
         }
         self.phases = [ran, 0, saves_start.elapsed().as_nanos() as i64];
@@ -575,7 +588,7 @@ impl v1::Core for Machine {
     }
 
     fn set_options(&mut self, flags: u32) {
-        self.shared().skip_video = flags & 1 != 0;
+        self.shared.skip_video.store(flags & 1 != 0, Ordering::Release);
     }
 
     fn frame_count(&self) -> i64 {
@@ -587,42 +600,51 @@ impl v1::Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        let p = &self.shared.picture;
-        let g = self.shared.av.geometry;
+        let v = self.shared.lock_video();
+        let p = &v.picture;
+        let g = v.av.geometry;
         let (num, den) = if g.aspect_ratio > 0.0 { video::ratio(g.aspect_ratio as f64, 100_000) } else { (0, 0) };
         FrameInfo { format: p.format, stride: p.stride as i32, aspect_num: num as u32, aspect_den: den as u32, serial: p.serial, bytes: p.bytes().len() as i64, ..FrameInfo::rgba(p.width as i32, p.height as i32) }
     }
 
     fn frame(&mut self) -> &[u8] {
-        let s = &mut *self.shared;
-        if let Some(g) = s.gpu.as_mut()
-            && g.unread().is_some_and(|(w, h)| (w, h) == (s.picture.width, s.picture.height))
-            && let Some((w, h, bgra)) = g.read_unread()
-        {
-            let serial = s.picture.serial;
-            s.picture.take(sys::PIXEL_FORMAT_XRGB8888, g.read(w, h, bgra), w, h, w as usize * 4);
-            s.picture.serial = serial;
+        if let Some(g) = self.shared.gpu() {
+            let unread_matches = g.unread().is_some_and(|(w, h)| {
+                let v = self.shared.lock_video();
+                (w, h) == (v.picture.width, v.picture.height)
+            });
+            if unread_matches && let Some((w, h, bgra)) = g.read_unread() {
+                g.read_with(w, h, bgra, |bytes| {
+                    let mut v = self.shared.lock_video();
+                    let serial = v.picture.serial;
+                    v.picture.take(sys::PIXEL_FORMAT_XRGB8888, bytes, w, h, w as usize * 4);
+                    v.picture.serial = serial;
+                });
+            }
         }
-        s.picture.bytes()
+        let v = self.shared.lock_video();
+        let bytes = v.picture.bytes();
+        self.frame_scratch.resize(bytes.len(), 0);
+        self.frame_scratch.copy_from_slice(bytes);
+        &self.frame_scratch
     }
 
     fn ring_lend(&mut self, ring: Option<&v1::Ring>) -> Result<(), i32> {
-        let r = match self.shared.gpu.as_mut() {
-            Some(g) => g.lend(ring),
-            None if ring.is_none() => Ok(()),
-            None => Err(status::NOT_SUPPORTED),
+        let Some(g) = self.shared.gpu() else {
+            return if ring.is_none() { Ok(()) } else { Err(status::NOT_SUPPORTED) };
         };
-        for line in self.shared.gpu.as_mut().map(|g| std::mem::take(&mut g.log)).unwrap_or_default() {
+        let r = g.lend(ring);
+        for line in g.drain_logs() {
             v1::log(v1::Level::Warn, "libretro", &line);
         }
         r
     }
 
     fn frame_ring(&mut self) -> Result<Option<v1::RingFrame>, i32> {
-        let Some(g) = self.shared.gpu.as_mut() else { return Ok(None) };
+        let Some(g) = self.shared.gpu() else { return Ok(None) };
         let Some(mut f) = g.frame_ring() else { return Ok(None) };
         (f.fields, f.field) = crate::vulkan::fields_of(&self.system, f.height as u32);
-        let a = self.shared.av.geometry.aspect_ratio;
+        let a = self.shared.lock_video().av.geometry.aspect_ratio;
         if a > 0.0 {
             let (n, d) = video::ratio(a as f64, 100_000);
             (f.aspect_num, f.aspect_den) = (n as u32, d as u32);
@@ -631,30 +653,30 @@ impl v1::Core for Machine {
     }
 
     fn audio_rate(&self) -> i32 {
-        crate::audio::rounded(self.shared.sound.next_rate())
+        crate::audio::rounded(self.shared.lock_sound().next_rate())
     }
 
     fn audio_rate_exact(&self) -> Option<(u64, u64)> {
-        Some(self.shared.sound.next_rate())
+        Some(self.shared.lock_sound().next_rate())
     }
 
     fn audio_buffered(&self) -> usize {
-        self.shared.sound.buffered()
+        self.shared.lock_sound().buffered()
     }
 
     fn drain_audio(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        self.shared().sound.drain(out, max_frames).0
+        self.shared.lock_sound().drain(out, max_frames).0
     }
 
     fn set_audio_limit(&mut self, samples: usize) {
-        self.shared().sound.set_limit(samples);
+        self.shared.lock_sound().set_limit(samples);
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
         if port as usize >= front::ports() {
             return Err(status::NO_SUCH_PORT);
         }
-        self.shared().input.set_buttons(port as usize, mask, changed);
+        self.shared.lock_input().set_buttons(port as usize, mask, changed);
         Ok(())
     }
 
@@ -662,7 +684,7 @@ impl v1::Core for Machine {
         if port as usize >= front::ports() {
             return Err(status::NO_SUCH_PORT);
         }
-        if self.shared().input.set_axis(port as usize, axis, value) { Ok(()) } else { Err(status::NOT_SUPPORTED) }
+        if self.shared.lock_input().set_axis(port as usize, axis, value) { Ok(()) } else { Err(status::NOT_SUPPORTED) }
     }
 
     fn outputs(&self) -> Vec<v1::Output> {
@@ -681,7 +703,7 @@ impl v1::Core for Machine {
         if port as usize >= front::ports() {
             return Err(status::NO_SUCH_PORT);
         }
-        self.shared().input.pads[port as usize].present = present;
+        self.shared.lock_input().pads[port as usize].present = present;
         let device = if present { device_for(port as usize) } else { sys::DEVICE_NONE };
         unsafe { (self.lib.api.set_controller_port_device)(port, device) };
         front::flush_logs();
@@ -689,7 +711,7 @@ impl v1::Core for Machine {
     }
 
     fn snapshot_offered(&self) -> bool {
-        self.shared.quirks & (sys::QUIRK_INCOMPLETE | sys::QUIRK_SINGLE_SESSION) == 0
+        self.shared.quirks.load(Ordering::Acquire) & (sys::QUIRK_INCOMPLETE | sys::QUIRK_SINGLE_SESSION) == 0
     }
 
     fn snapshot_size(&self) -> usize {
@@ -697,9 +719,9 @@ impl v1::Core for Machine {
     }
 
     fn save_snapshot(&mut self, out: &mut [u8]) -> Result<usize, i32> {
-        self.shared().savestate_context = sys::SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE;
+        self.shared.savestate_context.store(sys::SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE, Ordering::Release);
         let r = self.serialize_into(out, false);
-        self.shared().savestate_context = sys::SAVESTATE_CONTEXT_NORMAL;
+        self.shared.savestate_context.store(sys::SAVESTATE_CONTEXT_NORMAL, Ordering::Release);
         r
     }
 
@@ -743,7 +765,8 @@ impl v1::Core for Machine {
     }
 
     fn drives(&self) -> Vec<Drive> {
-        let Some(d) = self.shared.disk.as_ref() else { return Vec::new() };
+        let disk = *self.shared.disk.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(d) = disk else { return Vec::new() };
         let lid_open = d.base.get_eject_state.is_some_and(|f| unsafe { f() });
         let images = d.base.get_num_images.map_or(0, |f| unsafe { f() });
         let index = d.base.get_image_index.map_or(0, |f| unsafe { f() });
@@ -751,7 +774,8 @@ impl v1::Core for Machine {
     }
 
     fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
-        let d = self.shared.disk.as_ref().filter(|_| drive == 0).ok_or(status::NO_SUCH_DRIVE)?;
+        let disk = *self.shared.disk.lock().unwrap_or_else(|e| e.into_inner());
+        let d = disk.filter(|_| drive == 0).ok_or(status::NO_SUCH_DRIVE)?;
         let set = d.base.set_eject_state.ok_or(status::NOT_SUPPORTED)?;
         let done = unsafe { set(open) };
         front::flush_logs();
@@ -759,7 +783,8 @@ impl v1::Core for Machine {
     }
 
     fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
-        let d = *self.shared.disk.as_ref().filter(|_| drive == 0).ok_or(status::NO_SUCH_DRIVE)?;
+        let disk = *self.shared.disk.lock().unwrap_or_else(|e| e.into_inner());
+        let d = disk.filter(|_| drive == 0).ok_or(status::NO_SUCH_DRIVE)?;
         if !insert.restore && !d.base.get_eject_state.is_some_and(|f| unsafe { f() }) {
             return Err(status::LID_CLOSED);
         }
@@ -880,12 +905,12 @@ impl Machine {
             v1::detail(&format!("the core's folders: {e}"));
             STATUS_FOLDERS
         })?;
-        let mut shared = Box::new(Shared::new(r.pixel_formats));
+        let shared = Arc::new(Shared::new(r.pixel_formats));
         let c = |p: &std::path::Path| CString::new(p.to_string_lossy().as_bytes()).unwrap_or_default();
         let image_path = v1::image_path();
         let content = image_path.as_deref().and_then(|p| std::path::Path::new(p).parent()).map(c);
-        shared.folders = Some(front::Folders { system: c(&system_folder(lib)), save: c(&folders.save), content });
-        front::bind(&mut *shared);
+        *shared.folders.lock().unwrap_or_else(|e| e.into_inner()) = Some(front::Folders { system: c(&system_folder(lib)), save: c(&folders.save), content });
+        front::bind(Some(Arc::clone(&shared)));
         front::with_declared(|d| {
             for (k, v) in r.settings.pairs() {
                 d.options.set(k, v);
@@ -957,7 +982,7 @@ impl Machine {
                 file_in_archive: false,
                 persistent_data: image.is_some(),
             };
-            shared.game_info_ext = Some(front::GameInfoExt { strings: ext_strings.into_iter().flatten().collect(), ext });
+            *shared.game_info_ext.lock().unwrap_or_else(|e| e.into_inner()) = Some(front::GameInfoExt { strings: ext_strings.into_iter().flatten().collect(), ext });
         }
         if let Some(p) = path_c {
             strings.push(p);
@@ -983,14 +1008,19 @@ impl Machine {
         }
         let mut av = sys::retro_system_av_info::default();
         unsafe { (lib.api.get_system_av_info)(&mut av) };
-        let handed = video::handed_format(shared.retro_format, r.pixel_formats);
-        shared.picture = Picture::new(av.geometry.max_width, av.geometry.max_height, handed);
-        shared.av = av;
-        shared.sound.set_rate(video::ratio(av.timing.sample_rate, 1_000_000));
-        shared.events.clear();
-        if let Some(ask) = shared.hw {
-            match crate::vulkan::Gpu::create(&ask, shared.negotiation.as_ref()) {
-                Ok(g) => shared.gpu = Some(g),
+        {
+            let mut v = shared.lock_video();
+            let handed = video::handed_format(v.retro_format, r.pixel_formats);
+            v.picture = Picture::new(av.geometry.max_width, av.geometry.max_height, handed);
+            v.av = av;
+        }
+        shared.lock_sound().set_rate(video::ratio(av.timing.sample_rate, 1_000_000));
+        shared.drain_events();
+        let hw = *shared.hw.lock().unwrap_or_else(|e| e.into_inner());
+        let negotiation = *shared.negotiation.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ask) = hw {
+            match crate::vulkan::Gpu::create(&ask, negotiation.as_ref()) {
+                Ok(g) => *shared.gpu.lock().unwrap_or_else(|e| e.into_inner()) = Some(g),
                 Err(why) => {
                     v1::detail(&format!("the core's Vulkan device: {why}"));
                     unsafe { (lib.api.unload_game)() };
@@ -1006,6 +1036,7 @@ impl Machine {
         let mut machine = Machine {
             lib,
             shared,
+            frame_scratch: Vec::new(),
             frames: 0,
             system: system.to_owned(),
             identity: state::identity(&lib.name, &lib.version),
@@ -1024,7 +1055,7 @@ impl Machine {
             held,
             failed: None,
         };
-        front::bind(&mut *machine.shared);
+        front::bind(Some(Arc::clone(&machine.shared)));
         for (which, id) in [(SRAM, sys::MEMORY_SAVE_RAM), (RTC, sys::MEMORY_RTC)] {
             let (p, n) = unsafe { ((lib.api.get_memory_data)(id), (lib.api.get_memory_size)(id)) };
             if let Some(file) = r.files.iter().find(|f| f.which == which)

@@ -6,6 +6,8 @@ emusen_native::state_error! {
     /// Why a state could not be read or written; each has a status code for the C ABI.
     pub enum StateError {
         BadStringLength { at: usize } => emusen_native::ffi::status::BAD_STRING,
+        /// Corrupted or out-of-range state payload.
+        Corrupt => emusen_native::ffi::status::FOREIGN,
     }
 }
 

@@ -65,6 +65,63 @@ pub trait StateMachine {
     fn layout(&self) -> String;
 }
 
+/// The value returned across an `extern "C"` boundary when a body panics.
+pub trait PanicFallback {
+    fn panic_fallback() -> Self;
+}
+
+impl PanicFallback for i32 {
+    fn panic_fallback() -> Self {
+        crate::abi::status::FAULT_BASE
+    }
+}
+
+impl PanicFallback for i64 {
+    fn panic_fallback() -> Self {
+        crate::abi::status::FAULT_BASE as i64
+    }
+}
+
+impl PanicFallback for u32 {
+    fn panic_fallback() -> Self {
+        crate::core::sys::ABI_VERSION
+    }
+}
+
+impl PanicFallback for u64 {
+    fn panic_fallback() -> Self {
+        0
+    }
+}
+
+impl PanicFallback for *mut crate::core::sys::Machine {
+    fn panic_fallback() -> Self {
+        std::ptr::null_mut()
+    }
+}
+
+/// Extracts a readable panic description from a caught unwind payload.
+pub fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_owned()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "core panicked".to_owned()
+    }
+}
+
+/// Catches any panic before it unwinds across an `extern "C"` boundary.
+pub fn guard<R: PanicFallback>(f: impl FnOnce() -> R) -> R {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(v) => v,
+        Err(payload) => {
+            crate::core::outbox::library_log().push(crate::core::Level::Error, "panic", &panic_message(payload));
+            R::panic_fallback()
+        }
+    }
+}
+
 /// The four state exports over a `StateMachine`, under the names given: load, size, save, layout.
 #[macro_export]
 macro_rules! state_exports {
@@ -75,18 +132,20 @@ macro_rules! state_exports {
         /// `machine` must be live or null; `data` valid for `len` bytes.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $load(machine: *mut $machine, data: *const u8, len: usize) -> i32 {
-            let Some(m) = (unsafe { machine.as_mut() }) else { return $crate::ffi::status::NULL };
-            match $crate::ffi::StateMachine::load_state(m, unsafe { $crate::ffi::input(data, len) }) {
-                Ok(()) => 0,
-                Err(e) => $crate::ffi::Status::status(&e),
-            }
+            $crate::ffi::guard(|| {
+                let Some(m) = (unsafe { machine.as_mut() }) else { return $crate::ffi::status::NULL };
+                match $crate::ffi::StateMachine::load_state(m, unsafe { $crate::ffi::input(data, len) }) {
+                    Ok(()) => 0,
+                    Err(e) => $crate::ffi::Status::status(&e),
+                }
+            })
         }
 
         /// # Safety
         /// `machine` must be live or null.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $size(machine: *const $machine) -> i64 {
-            unsafe { machine.as_ref() }.map_or($crate::ffi::status::NULL as i64, |m| $crate::ffi::StateMachine::state_size(m) as i64)
+            $crate::ffi::guard(|| unsafe { machine.as_ref() }.map_or($crate::ffi::status::NULL as i64, |m| $crate::ffi::StateMachine::state_size(m) as i64))
         }
 
         /// The bytes written, or a negative status.
@@ -95,11 +154,13 @@ macro_rules! state_exports {
         /// `machine` must be live or null; `out` valid for `len` bytes.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $save(machine: *const $machine, out: *mut u8, len: usize) -> i64 {
-            let Some(m) = (unsafe { machine.as_ref() }) else { return $crate::ffi::status::NULL as i64 };
-            if out.is_null() {
-                return $crate::ffi::status::NULL as i64;
-            }
-            $crate::ffi::result($crate::ffi::StateMachine::save_state(m, unsafe { std::slice::from_raw_parts_mut(out, len) }))
+            $crate::ffi::guard(|| {
+                let Some(m) = (unsafe { machine.as_ref() }) else { return $crate::ffi::status::NULL as i64 };
+                if out.is_null() {
+                    return $crate::ffi::status::NULL as i64;
+                }
+                $crate::ffi::result($crate::ffi::StateMachine::save_state(m, unsafe { std::slice::from_raw_parts_mut(out, len) }))
+            })
         }
 
         /// The state's layout as UTF-8 text, copied up to `len` bytes; returns its whole length, or a negative status.
@@ -108,8 +169,10 @@ macro_rules! state_exports {
         /// `machine` must be live or null; `out` valid for `len` bytes, or null.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $layout(machine: *const $machine, out: *mut u8, len: usize) -> i64 {
-            let Some(m) = (unsafe { machine.as_ref() }) else { return $crate::ffi::status::NULL as i64 };
-            unsafe { $crate::ffi::copy_text(&$crate::ffi::StateMachine::layout(m), out, len) }
+            $crate::ffi::guard(|| {
+                let Some(m) = (unsafe { machine.as_ref() }) else { return $crate::ffi::status::NULL as i64 };
+                unsafe { $crate::ffi::copy_text(&$crate::ffi::StateMachine::layout(m), out, len) }
+            })
         }
     };
 }

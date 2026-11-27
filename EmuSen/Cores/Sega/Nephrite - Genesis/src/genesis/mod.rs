@@ -1198,34 +1198,34 @@ impl<A> Genesis<A> {
         })
     }
 
-    pub(crate) fn check_state(&self, s: &Saved) -> Result<(), crate::state::StateError> {
+    pub(crate) fn check_state(&self, s: &Saved) -> bool {
         let saved_lines = crate::genesis::vdp::Vdp::lines_for(self.hw.vdp.pal, s.vdp.regs[1], s.vdp.interlace, s.vdp.odd);
         let o = &s.open_line;
         if o.open[0] != 0 && (o.open[0] as usize - 1) >= saved_lines as usize {
-            return Err(crate::state::StateError::Corrupt);
+            return false;
         }
         if o.open[1] as usize > crate::genesis::render::MAX_W {
-            return Err(crate::state::StateError::Corrupt);
+            return false;
         }
         if let Some(size) = o.size
             && (size[0] as usize > crate::genesis::render::MAX_W || size[1] as usize > crate::genesis::render::MAX_H)
         {
-            return Err(crate::state::StateError::Corrupt);
+            return false;
         }
         if s.line >= saved_lines || s.clock.saturating_sub(s.ram_refresh_at) > 10_000_000 {
-            return Err(crate::state::StateError::Corrupt);
+            return false;
         }
         if let Some(p) = s.eeprom {
             if p[0] > 2 || p[5] > 8 || p[8] > 7 {
-                return Err(crate::state::StateError::Corrupt);
+                return false;
             }
             if let Some(e) = &self.hw.cart.eeprom
                 && p[7] > e.size_mask()
             {
-                return Err(crate::state::StateError::Corrupt);
+                return false;
             }
         }
-        Ok(())
+        true
     }
 
     pub(crate) fn apply_state(&mut self, s: Saved) {
@@ -1462,27 +1462,27 @@ mod tests {
         #[allow(irrefutable_let_patterns)]
         let crate::machine::Fitted::Md(g) = &mut m.fitted else { unreachable!("a cartridge") };
         let mut s = g.read_state(&mut r, version).unwrap();
-        assert!(g.check_state(&s).is_ok());
+        assert!(g.check_state(&s));
 
         let orig_open = s.open_line.open;
         s.open_line.open = [400, 0];
-        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        assert!(!g.check_state(&s));
         s.open_line.open = [1, 321];
-        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        assert!(!g.check_state(&s));
         s.open_line.open = orig_open;
 
         let orig_size = s.open_line.size;
         s.open_line.size = Some([321, 240]);
-        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        assert!(!g.check_state(&s));
         s.open_line.size = orig_size;
 
         let orig_clock = s.clock;
         s.clock = s.ram_refresh_at.saturating_add(10_000_001);
-        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        assert!(!g.check_state(&s));
         s.clock = orig_clock;
 
         s.eeprom = Some([0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0]);
-        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        assert!(!g.check_state(&s));
 
         g.hw.ram_refresh_at = 0;
         g.hw.clock = 10_000_000_000_000;

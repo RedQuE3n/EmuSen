@@ -66,17 +66,23 @@ impl Fitted {
     fn check(&self, saved: &FittedSaved) -> Result<(), StateError> {
         let refused = match (self, saved) {
             (Fitted::Md(g), FittedSaved::Md(registers, s)) => {
-                g.check_state(registers)?;
+                if !g.check_state(registers) {
+                    return Err(StateError::Corrupt);
+                }
                 g.hw.att.check(s)
             }
             #[cfg(feature = "mcd")]
             (Fitted::Mcd(g), FittedSaved::Mcd(registers, s)) => {
-                g.check_state(registers)?;
+                if !g.check_state(registers) {
+                    return Err(StateError::Corrupt);
+                }
                 g.hw.att.check(s)
             }
             #[cfg(feature = "s32x")]
             (Fitted::S32x(g), FittedSaved::S32x(registers, s)) => {
-                g.check_state(registers)?;
+                if !g.check_state(registers) {
+                    return Err(StateError::Corrupt);
+                }
                 g.hw.att.check(s)
             }
             #[allow(unreachable_patterns)]

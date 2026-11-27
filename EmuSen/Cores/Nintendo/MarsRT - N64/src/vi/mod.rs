@@ -54,6 +54,9 @@ impl State for Vi {
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
         self.fields = r.i64()?; // <Fields>k__BackingField
         self.debt = r.i64()?; // _debt
+        if self.debt < 0 || self.debt > 0x1000 * PROCESSOR_CLOCK {
+            return Err(crate::state::StateError::Corrupt);
+        }
         self.field = r.bool()?; // _field
         self.half_line = r.i32()?; // _halfLine
         r.i32s(&mut self.held[..])?; // _held
@@ -128,7 +131,7 @@ impl MemoryBus {
     pub fn vi_settle(&mut self) {
         let now = self.cycles;
         if self.vi.programmed().is_some() {
-            self.vi.debt = self.vi.debt.wrapping_add((now - *self.vi.debt_at).wrapping_mul(self.vi.video_clock() * 2));
+            self.vi.debt = now.saturating_sub(*self.vi.debt_at).saturating_mul(self.vi.video_clock() * 2).saturating_add(self.vi.debt);
         }
         *self.vi.debt_at = now;
     }
@@ -154,8 +157,8 @@ impl MemoryBus {
             return;
         };
         let step = self.vi.video_clock() * 2;
-        let remaining = line - self.vi.debt;
-        *self.vi.due = if remaining <= 0 { *self.vi.debt_at } else { *self.vi.debt_at + (remaining + step - 1) / step };
+        let remaining = line.saturating_sub(self.vi.debt);
+        *self.vi.due = if remaining <= 0 { *self.vi.debt_at } else { (*self.vi.debt_at).saturating_add((remaining + step - 1) / step) };
     }
 
     /// `Rebase`: a loaded state was settled when it was saved.

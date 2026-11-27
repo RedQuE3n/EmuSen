@@ -588,13 +588,7 @@ impl v1::Core for Core {
     }
 
     fn drain_audio(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        let samples = &mut self.machine.bus.ai.samples;
-        let mut n = max_frames.saturating_mul(2).min(samples.len()).min(out.len());
-        n -= n & 1;
-        for (to, from) in out[..n].iter_mut().zip(samples.drain(..n)) {
-            *to = from;
-        }
-        n
+        self.machine.bus.ai.drain_into(out, max_frames)
     }
 
     fn set_audio_limit(&mut self, samples: usize) {

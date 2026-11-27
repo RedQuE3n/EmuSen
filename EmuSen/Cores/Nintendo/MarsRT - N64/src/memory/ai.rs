@@ -57,6 +57,18 @@ impl State for AiInterface {
         self.next_address = r.u32()?; // _nextAddress
         self.next_length = r.u32()?; // _nextLength
         self.queued = r.i32()?; // _queued
+        if !(0..=2).contains(&self.queued)
+            || self.dac_rate > 0x3FFF
+            || !(0..=0x4000 * PROCESSOR_CLOCK).contains(&self.debt)
+            || self.length > LENGTH_MASK
+            || self.length & 3 != 0
+            || self.next_length > LENGTH_MASK
+            || self.next_length & 3 != 0
+            || self.address & !0x00FF_FFFC != 0
+            || self.next_address & !0x00FF_FFFC != 0
+        {
+            return Err(crate::state::StateError::Corrupt);
+        }
         Ok(())
     }
 }
@@ -102,6 +114,16 @@ impl AiInterface {
         let mut wanted = (max_frames.saturating_mul(2)).min(self.samples.len());
         wanted -= wanted & 1;
         self.samples.drain(..wanted).collect()
+    }
+
+    /// Destructively drains whole stereo sample pairs directly into `out` without allocating.
+    pub fn drain_into(&mut self, out: &mut [i16], max_frames: usize) -> usize {
+        let mut n = max_frames.saturating_mul(2).min(self.samples.len()).min(out.len());
+        n -= n & 1;
+        for (to, from) in out[..n].iter_mut().zip(self.samples.drain(..n)) {
+            *to = from;
+        }
+        n
     }
 
     /// `DropUndrained`: a loaded state starts the frontend's queue afresh.
@@ -262,5 +284,18 @@ mod tests {
             ai.enqueue(n as i16, n as i16);
         }
         assert_eq!(ai.samples.len(), MAX_BUFFERED_SAMPLES);
+    }
+
+    #[test]
+    fn drain_into_copies_whole_stereo_pairs_into_caller_slice() {
+        let mut ai = AiInterface::default();
+        ai.enqueue(10, -10);
+        ai.enqueue(20, -20);
+        ai.enqueue(30, -30);
+        let mut out = [0i16; 3];
+        let written = ai.drain_into(&mut out, 4);
+        assert_eq!(written, 2);
+        assert_eq!(&out[..2], &[10, -10]);
+        assert_eq!(ai.samples.len(), 4);
     }
 }

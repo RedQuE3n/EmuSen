@@ -264,6 +264,9 @@ impl Machine {
         }
         self.total_frames = r.i64()?; // TotalFrames
         self.cycles_into_frame = r.i64()?; // _cyclesIntoFrame
+        if !(0..=CYCLES_PER_FRAME * 2).contains(&self.cycles_into_frame) {
+            return Err(StateError::Corrupt);
+        }
         self.bus.cart.read_state(r)?;
         self.bus.mapper.read_state(r, &mut self.bus.cart)?;
         crate::state::State::read_state(&mut self.cpu, r)?;
@@ -425,5 +428,27 @@ mod tests {
         wrong[4] = (STATE_VERSION + 1) as u8;
         assert_eq!(m.load_state(&wrong).map_err(|e| e.status()), Err(-4));
         assert_eq!(m, before);
+    }
+
+    #[test]
+    fn corrupt_cycles_or_mapper_fields_are_rejected_without_mutating_machine() {
+        let m = Machine::load_rom(rom(0x03, 2, 0), Model::Auto).unwrap();
+        let state = save(&m);
+        let layout = m.layout();
+        let offset_of = |suffix: &str| -> usize {
+            let line = layout.lines().find(|l| l.ends_with(suffix)).unwrap_or_else(|| panic!("missing {suffix}"));
+            line.split(' ').next().unwrap().parse().unwrap()
+        };
+        let mut target = Machine::load_rom(rom(0x03, 2, 0), Model::Auto).unwrap();
+        target.total_frames = 55;
+        let off_cycles = offset_of("_cyclesIntoFrame");
+        let mut bad = state.clone();
+        bad[off_cycles..off_cycles + 8].copy_from_slice(&(-1i64).to_le_bytes());
+        assert_eq!(target.load_state(&bad), Err(StateError::Corrupt));
+        let off_bank1 = offset_of("Mapper._bank1");
+        let mut bad_bank = state;
+        bad_bank[off_bank1..off_bank1 + 4].copy_from_slice(&0x20i32.to_le_bytes());
+        assert_eq!(target.load_state(&bad_bank), Err(StateError::Corrupt));
+        assert_eq!(target.total_frames, 55);
     }
 }

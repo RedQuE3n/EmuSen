@@ -246,6 +246,7 @@ pub struct GpuRasteriser {
     primitives: Vec<u32>,
     rows: Vec<u32>,
     tile_offsets: Vec<u32>,
+    tile_cursor: Vec<u32>,
     tile_rows: Vec<u32>,
     texture_memory: Vec<u32>,
     tiles: Vec<u32>,
@@ -355,6 +356,7 @@ impl GpuRasteriser {
                 primitives: vec![0; PRIMITIVE_WORDS * 256],
                 rows: vec![0; ROW_WORDS * 4096],
                 tile_offsets: vec![0; 1],
+                tile_cursor: Vec::new(),
                 tile_rows: vec![0; 4096],
                 texture_memory: vec![0; TEXTURE_MEMORY_WORDS * 8],
                 tiles: vec![0; TILE_WORDS * 64],
@@ -553,13 +555,14 @@ impl GpuRasteriser {
         }
 
         // Placed from each tile's start with a cursor, which the offsets are restored from afterwards.
-        let mut cursor: Vec<u32> = self.tile_offsets[..tiles].to_vec();
+        self.tile_cursor.clear();
+        self.tile_cursor.extend_from_slice(&self.tile_offsets[..tiles]);
         for r in 0..self.row_count {
             let at = r * ROW_WORDS;
             let slot = (self.rows[at + 1] as i32 / th - tile_y0) * tiles_wide - tile_x0;
             let (from, to) = ((self.rows[at + 2] as i32).max(0) / tw, (self.rows[at + 3] as i32).min(width - 1) / tw);
             for t in from..=to {
-                let c = &mut cursor[(slot + t) as usize];
+                let c = &mut self.tile_cursor[(slot + t) as usize];
                 self.tile_rows[*c as usize] = r as u32;
                 *c += 1;
             }

@@ -15,6 +15,8 @@ pub const STATUS_OTHER_DSP_ENGINE: i32 = -11;
 emusen_native::state_error! {
     pub enum StateError {
         DspEngine { saved: u8, running: u8 } => STATUS_OTHER_DSP_ENGINE,
+        /// Corrupted or out-of-range state payload.
+        Corrupt => emusen_native::core::status::FOREIGN,
     }
 }
 

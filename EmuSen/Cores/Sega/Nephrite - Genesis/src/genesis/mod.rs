@@ -321,13 +321,15 @@ impl Hw {
     /// A 68000 access to the main RAM about to begin: the RAM's refresh, if one has been requested by now.
     fn ram_refresh(&mut self) {
         let at = self.clock;
-        while self.ram_refresh_at <= at {
-            let requested = self.ram_refresh_at;
-            if at - requested < RAM_REFRESH_WINDOW {
+        if at >= self.ram_refresh_at {
+            if at - self.ram_refresh_at >= RAM_REFRESH_WINDOW {
+                let period = RAM_REFRESH_WINDOW + RAM_REFRESH_AFTER;
+                let missed = (at - self.ram_refresh_at - RAM_REFRESH_WINDOW) / period + 1;
+                self.ram_refresh_at = self.ram_refresh_at.saturating_add(missed.saturating_mul(period));
+            }
+            if self.ram_refresh_at <= at {
                 self.clock += RAM_REFRESH_WAIT;
                 self.ram_refresh_at = at + RAM_REFRESH_AFTER;
-            } else {
-                self.ram_refresh_at = requested + RAM_REFRESH_WINDOW + RAM_REFRESH_AFTER;
             }
         }
     }
@@ -1196,6 +1198,35 @@ impl<A> Genesis<A> {
         })
     }
 
+    pub(crate) fn check_state(&self, s: &Saved) -> Result<(), crate::state::StateError> {
+        let o = &s.open_line;
+        if o.open[0] != 0 && (o.open[0] as usize - 1) >= self.hw.vdp.lines() as usize {
+            return Err(crate::state::StateError::Corrupt);
+        }
+        if o.open[1] as usize > crate::genesis::render::MAX_W {
+            return Err(crate::state::StateError::Corrupt);
+        }
+        if let Some(size) = o.size
+            && (size[0] as usize > crate::genesis::render::MAX_W || size[1] as usize > crate::genesis::render::MAX_H)
+        {
+            return Err(crate::state::StateError::Corrupt);
+        }
+        if s.line >= self.hw.vdp.lines() || s.clock.saturating_sub(s.ram_refresh_at) > 10_000_000 {
+            return Err(crate::state::StateError::Corrupt);
+        }
+        if let Some(p) = s.eeprom {
+            if p[0] > 2 || p[5] > 8 || p[8] > 7 {
+                return Err(crate::state::StateError::Corrupt);
+            }
+            if let Some(e) = &self.hw.cart.eeprom
+                && p[7] > e.size_mask()
+            {
+                return Err(crate::state::StateError::Corrupt);
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn apply_state(&mut self, s: Saved) {
         self.cpu = s.cpu;
         self.z80 = s.z80;
@@ -1411,6 +1442,51 @@ mod tests {
         for (k, board) in [(26, 13.0), (27, 16.2), (29, 3.8)] {
             assert!((share(&ram, k) - board).abs() < 1.0, "{k} clocks: {ram:?}");
         }
+    }
+
+    #[test]
+    fn corrupt_state_fields_are_rejected_and_ram_refresh_jumps_in_constant_time() {
+        use emusen_native::ffi::StateMachine;
+        let rom = crate::media::cartridge("SEGA GENESIS", "U", None);
+        let mut m = crate::machine::Machine::new(&rom, crate::media::Media::read(&rom));
+        let mut raw = vec![0u8; m.state_size()];
+        m.save_state(&mut raw).unwrap();
+        let (mut r, version) = emusen_native::shell::open_state(&raw, crate::state::STATE_MAGIC, |_| true).unwrap();
+        let _ = r.u8().unwrap();
+        let _ = r.i64().unwrap();
+        for space in m.spaces().into_iter().filter(|s| !s.read_only) {
+            let mut skip = vec![0u8; m.bytes(space.id).unwrap().len()];
+            r.bytes(&mut skip).unwrap();
+        }
+        #[allow(irrefutable_let_patterns)]
+        let crate::machine::Fitted::Md(g) = &mut m.fitted else { unreachable!("a cartridge") };
+        let mut s = g.read_state(&mut r, version).unwrap();
+        assert!(g.check_state(&s).is_ok());
+
+        let orig_open = s.open_line.open;
+        s.open_line.open = [400, 0];
+        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        s.open_line.open = [1, 321];
+        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        s.open_line.open = orig_open;
+
+        let orig_size = s.open_line.size;
+        s.open_line.size = Some([321, 240]);
+        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        s.open_line.size = orig_size;
+
+        let orig_clock = s.clock;
+        s.clock = s.ram_refresh_at.saturating_add(10_000_001);
+        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+        s.clock = orig_clock;
+
+        s.eeprom = Some([0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0]);
+        assert!(matches!(g.check_state(&s), Err(crate::state::StateError::Corrupt)));
+
+        g.hw.ram_refresh_at = 0;
+        g.hw.clock = 10_000_000_000_000;
+        g.hw.ram_refresh();
+        assert!(g.hw.ram_refresh_at > g.hw.clock);
     }
 }
 

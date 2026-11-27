@@ -290,6 +290,9 @@ impl Mbc1 {
         self.bank2 = r.i32()?; // _bank2
         cart.read_retired_copy(r)?; // _cart, version 5 only
         self.ram_enabled = r.bool()?; // _ramEnabled
+        if !(0..=0x1F).contains(&self.bank1) || !(0..=3).contains(&self.bank2) {
+            return Err(crate::state::StateError::Corrupt);
+        }
         Ok(())
     }
 }
@@ -304,6 +307,9 @@ impl Mbc2 {
         cart.read_retired_copy(r)?; // _cart, version 5 only
         self.ram_enabled = r.bool()?; // _ramEnabled
         self.rom_bank = r.i32()?; // _romBank
+        if !(0..=0x0F).contains(&self.rom_bank) {
+            return Err(crate::state::StateError::Corrupt);
+        }
         Ok(())
     }
 }
@@ -328,6 +334,12 @@ impl Mbc3 {
         self.ram_bank = r.i32()?; // _ramBank
         self.ram_enabled = r.bool()?; // _ramEnabled
         self.rom_bank = r.i32()?; // _romBank
+        if !(0..crate::machine::CPU_CLOCK_HZ).contains(&self.cycles_into_second)
+            || !(0..=0x0F).contains(&self.ram_bank)
+            || !(0..=0x7F).contains(&self.rom_bank)
+        {
+            return Err(crate::state::StateError::Corrupt);
+        }
         Ok(())
     }
 }
@@ -346,6 +358,9 @@ impl Mbc5 {
         self.ram_enabled = r.bool()?; // _ramEnabled
         self.rom_bank = r.i32()?; // _romBank
         self.rumbling = r.bool()?; // _rumbling
+        if !(0..=0x0F).contains(&self.ram_bank) || !(0..=0x1FF).contains(&self.rom_bank) {
+            return Err(crate::state::StateError::Corrupt);
+        }
         Ok(())
     }
 }

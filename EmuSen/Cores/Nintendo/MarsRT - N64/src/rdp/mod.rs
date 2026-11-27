@@ -515,6 +515,9 @@ impl State for Rdp {
         r.i32s(&mut self.span_major_x[..])?; // _spanMajorX
         r.i32s(&mut self.span_right[..])?; // _spanRight
         self.taken = r.i32()?; // _taken
+        if self.taken < 0 || (self.taken as usize) >= self.command.len() {
+            return Err(crate::state::StateError::Corrupt);
+        }
         self.texel0.read_state(r)?; // _texel0
         self.texel1.read_state(r)?; // _texel1
         self.texture_image = r.u32()?; // _textureImage

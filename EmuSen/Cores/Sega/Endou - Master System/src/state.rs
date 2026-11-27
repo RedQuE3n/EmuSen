@@ -24,6 +24,8 @@ emusen_native::state_error! {
         Console(u8, u8) => status::FOREIGN,
         /// A state of a machine started by another boot or BIOS: the boot's byte and the BIOS's CRC-32.
         Boot(u8, u32) => status::FOREIGN,
+        /// Corrupted or out-of-range state payload.
+        Corrupt => status::FOREIGN,
     }
 }
 
@@ -86,6 +88,13 @@ impl StateMachine for Machine {
         }
         let frames = r.i64()?;
         let (clock, frame_end) = (r.u64()?, r.u64()?);
+        let frame = self.frame_clocks();
+        if frame_end > u64::MAX - frame * 2
+            || clock.saturating_sub(frame_end) > frame
+            || frame_end.saturating_sub(clock) > frame
+        {
+            return Err(StateError::Corrupt);
+        }
         let mut cpu = self.cpu.clone();
         emusen_native::State::read_state(&mut cpu, &mut r)?;
         let mut sound = self.bus.sound.clone();
@@ -263,5 +272,27 @@ mod tests {
         let mut other = small;
         assert!(other.load_state(&s).is_err(), "a state of another board's size is refused");
         assert_eq!((b.frames, b.space(RAM_ID).unwrap(), b.space(VRAM_ID).unwrap()[0x3FFF]), (1, &before[..], 0xA5));
+    }
+
+    #[test]
+    fn corrupt_clock_or_frame_end_is_rejected_without_mutating_machine() {
+        let image = cartridge(0x20000, 4);
+        let mut a = machine(&image);
+        a.advance();
+        let s = {
+            let mut buf = vec![0; a.state_size()];
+            a.save_state(&mut buf).unwrap();
+            buf
+        };
+        let mut w = StateWriter::layout();
+        a.write(&mut w);
+        let text = w.into_layout();
+        let frame_end_off: usize = text.lines().find(|l| l.ends_with(" FrameEnd")).unwrap().split(' ').next().unwrap().parse().unwrap();
+        let mut bad = s.clone();
+        bad[frame_end_off..frame_end_off + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut b = machine(&image);
+        b.frames = 42;
+        assert_eq!(b.load_state(&bad), Err(StateError::Corrupt));
+        assert_eq!(b.frames, 42);
     }
 }

@@ -17,7 +17,7 @@ pub const EMUSEN_SCRAPE_BUSY: i32 = -1164;
 pub const EMUSEN_SCRAPE_IO: i32 = -1165;
 pub const EMUSEN_SCRAPE_NO_LIBRARY: i32 = -1166;
 pub const EMUSEN_SCRAPE_STORE_IN_USE: i32 = -1167;
-pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 50;
+pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 51;
 pub const EMUSEN_PLATFORM_NULL: i32 = -1;
 pub const EMUSEN_PLATFORM_BAD_STRING: i32 = -5;
 pub const EMUSEN_PLATFORM_NOT_SUPPORTED: i32 = -256;
@@ -889,6 +889,7 @@ pub struct PlatformLibrary {
     ) -> i64,
     pub emusen_galaxia_settings_rows: unsafe extern "C" fn(out: *mut u8, len: usize) -> i64,
     pub emusen_galaxia_battery: unsafe extern "C" fn(root: *const u8, root_len: usize, charging: *mut u8) -> i32,
+    pub emusen_sys_telemetry_snapshot: unsafe extern "C" fn(paths_json: *const u8, paths_json_len: usize, out: *mut u8, len: usize) -> i64,
     pub emusen_galaxia_log_root: unsafe extern "C" fn(directory: *const u8, directory_len: usize, out: *mut u8, len: usize) -> i64,
     pub emusen_galaxia_log_usable: unsafe extern "C" fn(directory: *const u8, directory_len: usize) -> i32,
     pub emusen_galaxia_log_path:
@@ -1514,6 +1515,7 @@ impl PlatformLibrary {
         let emusen_galaxia_cheat_game_list = unsafe { __library.get(b"emusen_galaxia_cheat_game_list\0") }.map(|sym| *sym)?;
         let emusen_galaxia_settings_rows = unsafe { __library.get(b"emusen_galaxia_settings_rows\0") }.map(|sym| *sym)?;
         let emusen_galaxia_battery = unsafe { __library.get(b"emusen_galaxia_battery\0") }.map(|sym| *sym)?;
+        let emusen_sys_telemetry_snapshot = unsafe { __library.get(b"emusen_sys_telemetry_snapshot\0") }.map(|sym| *sym)?;
         let emusen_galaxia_log_root = unsafe { __library.get(b"emusen_galaxia_log_root\0") }.map(|sym| *sym)?;
         let emusen_galaxia_log_usable = unsafe { __library.get(b"emusen_galaxia_log_usable\0") }.map(|sym| *sym)?;
         let emusen_galaxia_log_path = unsafe { __library.get(b"emusen_galaxia_log_path\0") }.map(|sym| *sym)?;
@@ -1795,6 +1797,7 @@ impl PlatformLibrary {
             emusen_galaxia_cheat_game_list,
             emusen_galaxia_settings_rows,
             emusen_galaxia_battery,
+            emusen_sys_telemetry_snapshot,
             emusen_galaxia_log_root,
             emusen_galaxia_log_usable,
             emusen_galaxia_log_path,
@@ -2361,6 +2364,9 @@ impl PlatformLibrary {
     }
     pub unsafe fn emusen_galaxia_battery(&self, root: *const u8, root_len: usize, charging: *mut u8) -> i32 {
         unsafe { (self.emusen_galaxia_battery)(root, root_len, charging) }
+    }
+    pub unsafe fn emusen_sys_telemetry_snapshot(&self, paths_json: *const u8, paths_json_len: usize, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.emusen_sys_telemetry_snapshot)(paths_json, paths_json_len, out, len) }
     }
     pub unsafe fn emusen_galaxia_log_root(&self, directory: *const u8, directory_len: usize, out: *mut u8, len: usize) -> i64 {
         unsafe { (self.emusen_galaxia_log_root)(directory, directory_len, out, len) }

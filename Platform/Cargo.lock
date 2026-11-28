@@ -771,7 +771,9 @@ name = "emusen-session"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
+ "emusen-galaxia",
  "emusen-session-service",
+ "serde_json",
 ]
 
 [[package]]

@@ -360,126 +360,128 @@ Module {
             Parameter { name: "games"; type: "QStringList" }
             Parameter { name: "collection_id"; type: "QString" }
         }
-        Method { name: "sessionPause"; type: "bool"; lineNumber: 90 }
-        Method { name: "sessionResume"; type: "bool"; lineNumber: 91 }
-        Method { name: "sessionRestart"; type: "bool"; lineNumber: 92 }
-        Method { name: "sessionClose"; type: "bool"; lineNumber: 93 }
-        Method { name: "sessionScreenshot"; type: "bool"; lineNumber: 94 }
+        Method { name: "workspaceLibrary"; type: "bool"; lineNumber: 90 }
+        Method { name: "workspaceShaders"; type: "bool"; lineNumber: 91 }
+        Method { name: "sessionPause"; type: "bool"; lineNumber: 92 }
+        Method { name: "sessionResume"; type: "bool"; lineNumber: 93 }
+        Method { name: "sessionRestart"; type: "bool"; lineNumber: 94 }
+        Method { name: "sessionClose"; type: "bool"; lineNumber: 95 }
+        Method { name: "sessionScreenshot"; type: "bool"; lineNumber: 96 }
         Method {
             name: "sessionChooseSlot"
-            type: "bool"
-            lineNumber: 95
-            Parameter { name: "slot"; type: "int" }
-        }
-        Method {
-            name: "sessionSaveState"
-            type: "bool"
-            lineNumber: 96
-            Parameter { name: "slot"; type: "int" }
-        }
-        Method {
-            name: "sessionLoadState"
             type: "bool"
             lineNumber: 97
             Parameter { name: "slot"; type: "int" }
         }
         Method {
-            name: "sessionChooseSpeed"
+            name: "sessionSaveState"
             type: "bool"
             lineNumber: 98
+            Parameter { name: "slot"; type: "int" }
+        }
+        Method {
+            name: "sessionLoadState"
+            type: "bool"
+            lineNumber: 99
+            Parameter { name: "slot"; type: "int" }
+        }
+        Method {
+            name: "sessionChooseSpeed"
+            type: "bool"
+            lineNumber: 100
             Parameter { name: "percent"; type: "int" }
         }
         Method {
             name: "sessionRewindTo"
             type: "bool"
-            lineNumber: 99
+            lineNumber: 101
             Parameter { name: "frame"; type: "double" }
         }
         Method {
             name: "sessionSetMasterCheats"
             type: "bool"
-            lineNumber: 100
+            lineNumber: 102
             Parameter { name: "on"; type: "bool" }
         }
         Method {
             name: "sessionSwitchCheat"
             type: "bool"
-            lineNumber: 101
+            lineNumber: 103
             Parameter { name: "index"; type: "int" }
         }
         Method {
             name: "sessionStepConsoleOption"
             type: "bool"
-            lineNumber: 102
+            lineNumber: 104
             Parameter { name: "key"; type: "QString" }
             Parameter { name: "by"; type: "int" }
         }
-        Method { name: "sessionSwapPlayers"; type: "bool"; lineNumber: 103 }
+        Method { name: "sessionSwapPlayers"; type: "bool"; lineNumber: 105 }
         Method {
             name: "sessionAnswerResume"
             type: "bool"
-            lineNumber: 104
+            lineNumber: 106
             Parameter { name: "resume"; type: "bool" }
         }
         Method {
             name: "settingsSetFilter"
             type: "bool"
-            lineNumber: 105
+            lineNumber: 107
             Parameter { name: "filter"; type: "QString" }
         }
         Method {
             name: "settingsSetModifiedOnly"
             type: "bool"
-            lineNumber: 106
+            lineNumber: 108
             Parameter { name: "on"; type: "bool" }
         }
         Method {
             name: "settingsOpenTool"
             type: "bool"
-            lineNumber: 107
+            lineNumber: 109
             Parameter { name: "index"; type: "int" }
         }
         Method {
             name: "themesSetKind"
             type: "bool"
-            lineNumber: 108
+            lineNumber: 110
             Parameter { name: "kind"; type: "QString" }
         }
         Method {
             name: "themesFocus"
             type: "bool"
-            lineNumber: 109
+            lineNumber: 111
             Parameter { name: "row"; type: "int" }
         }
         Method {
             name: "themesUse"
             type: "bool"
-            lineNumber: 110
+            lineNumber: 112
             Parameter { name: "id"; type: "QString" }
         }
         Method {
             name: "themesStep"
             type: "bool"
-            lineNumber: 111
+            lineNumber: 113
             Parameter { name: "row"; type: "int" }
             Parameter { name: "by"; type: "int" }
         }
         Method {
             name: "themesCheck"
             type: "bool"
-            lineNumber: 112
+            lineNumber: 114
             Parameter { name: "id"; type: "QString" }
         }
         Method {
             name: "toolsFocus"
             type: "bool"
-            lineNumber: 113
+            lineNumber: 115
             Parameter { name: "index"; type: "int" }
         }
         Method {
             name: "toolsOpen"
             type: "bool"
-            lineNumber: 114
+            lineNumber: 116
             Parameter { name: "key"; type: "QString" }
         }
     }
@@ -4251,28 +4253,28 @@ Module {
             name: "ViewMode"
             isScoped: true
             type: "int"
-            lineNumber: 99
+            lineNumber: 100
             values: ["Library", "Table", "Settings"]
         }
         Enum {
             name: "ConsoleScope"
             isScoped: true
             type: "int"
-            lineNumber: 105
+            lineNumber: 106
             values: ["Active", "All", "Favourites"]
         }
         Enum {
             name: "DrawerTab"
             isScoped: true
             type: "int"
-            lineNumber: 111
+            lineNumber: 112
             values: ["Shaders", "States", "Cheats", "Controls"]
         }
         Enum {
             name: "SortColumn"
             isScoped: true
             type: "int"
-            lineNumber: 118
+            lineNumber: 119
             values: [
                 "Title",
                 "Console",
@@ -4280,7 +4282,7 @@ Module {
                 "Year",
                 "Genre",
                 "Played",
-                "States"
+                "SaveStates"
             ]
         }
         Property {
@@ -4875,6 +4877,15 @@ Module {
             isReadonly: true
             isPropertyConstant: true
         }
-        Signal { name: "changed"; lineNumber: 197 }
+        Property {
+            name: "themesDoorKey"
+            type: "QString"
+            read: "getThemesDoorKey"
+            index: 65
+            lineNumber: 99
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Signal { name: "changed"; lineNumber: 199 }
     }
 }

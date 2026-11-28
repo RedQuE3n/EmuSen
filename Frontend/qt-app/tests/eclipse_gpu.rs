@@ -16,6 +16,8 @@ pub use emusen_qt_app_testlib::{
 
 #[path = "eclipse_gpu/eclipse_consoles_gpu.rs"]
 mod eclipse_consoles_gpu;
+#[path = "eclipse_gpu/eclipse_desktop_gpu.rs"]
+mod eclipse_desktop_gpu;
 #[path = "eclipse_gpu/eclipse_game_gpu.rs"]
 mod eclipse_game_gpu;
 #[path = "eclipse_gpu/eclipse_home_gpu.rs"]

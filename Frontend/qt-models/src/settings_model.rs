@@ -1125,11 +1125,13 @@ impl qobject::SettingsModel {
                         r.view.scrape = scrape;
                         r.view.scrape.status_note = note;
                         r.view.scrape.pending_user = pending;
-                        if let (Some(mut board), Some(data)) = (r.shaders_state.take(), shader_data) {
-                            persist_favs = board.apply_open_data(data, &r.view);
-                            r.shaders_state = Some(board);
-                            cleared_loading = r.shaders_loading;
-                            r.shaders_loading = false;
+                        if let Some(data) = shader_data {
+                            if let Some(mut board) = r.shaders_state.take() {
+                                persist_favs = board.apply_open_data(data, &r.view);
+                                r.shaders_state = Some(board);
+                                cleared_loading = r.shaders_loading;
+                                r.shaders_loading = false;
+                            }
                         }
                         if clear_said {
                             model.as_mut().said(String::new());

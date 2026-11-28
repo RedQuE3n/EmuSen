@@ -48,7 +48,7 @@ pub mod qobject {
         Year,
         Genre,
         Played,
-        States,
+        SaveStates,
     }
 
     extern "RustQt" {
@@ -120,6 +120,7 @@ pub mod qobject {
         #[qproperty(*mut ThemeRows, letters, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, games, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, inspector_states, cxx_name = "inspectorStates", READ, CONSTANT)]
+        #[qproperty(QString, themes_door_key, cxx_name = "themesDoorKey", READ, CONSTANT)]
         type ThemeWorkspace = super::ThemeWorkspaceRust;
     }
 
@@ -310,6 +311,7 @@ pub struct ThemeWorkspaceRust {
     letters: *mut ThemeRows,
     games: *mut ThemeRows,
     inspector_states: *mut ThemeRows,
+    themes_door_key: QString,
 }
 
 impl Default for ThemeWorkspaceRust {
@@ -380,6 +382,7 @@ impl Default for ThemeWorkspaceRust {
             letters: std::ptr::null_mut(),
             games: std::ptr::null_mut(),
             inspector_states: std::ptr::null_mut(),
+            themes_door_key: QString::from("themes"),
         }
     }
 }

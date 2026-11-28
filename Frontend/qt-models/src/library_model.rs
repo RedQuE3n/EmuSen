@@ -722,6 +722,27 @@ impl qobject::LibraryModel {
         });
     }
 
+    /// Adds a batch of game paths to a user collection on a single worker thread and refreshes once.
+    pub fn batch_add_to_collection(self: Pin<&mut Self>, collection_id: i64, paths: Vec<String>) {
+        if paths.is_empty() {
+            return;
+        }
+        let (Some(client), Some(source)) = (self.client.clone(), self.source.clone()) else { return };
+        let (qt, gamelists, by_facts) = (self.qt_thread(), self.view.gamelists.clone(), self.by_facts);
+        std::thread::spawn(move || {
+            for path in paths {
+                if let Err(why) = client.library.change(&serde_json::json!({ "op": "add_to_collection", "id": collection_id, "path": path })) {
+                    let msg = QString::from(why.to_string().as_str());
+                    let _ = qt.queue(move |model| model.collection_problem(msg));
+                    return;
+                }
+            }
+            let refreshed = refresh_with(source.as_ref(), &gamelists, by_facts);
+            let texts = texts_of(&refreshed);
+            let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
+        });
+    }
+
     pub fn games_of(&self, key: &QString) -> QString {
         let key = key.to_string();
         if let Some(id) = key.strip_prefix("collection:").and_then(|s| s.parse::<i64>().ok()) {

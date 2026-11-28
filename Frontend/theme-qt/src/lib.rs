@@ -5,6 +5,7 @@
 pub mod actions;
 pub mod bells;
 pub mod browse;
+pub mod collections;
 pub mod cues;
 pub mod device;
 pub mod glue;
@@ -16,8 +17,11 @@ pub mod rows;
 pub mod session;
 pub mod settings;
 pub mod splash;
+pub mod themes;
+pub mod tools;
 pub mod view;
 pub mod words;
+pub mod workspace;
 
 /// The host's way to the singletons of the engine a theme runs in: given that engine or any object it made, each
 /// singleton to feed, made by the engine on the first ask.
@@ -25,6 +29,7 @@ pub mod host {
     use crate::actions::qobject::ThemeActions;
     use crate::bells::qobject::ThemeBells;
     use crate::browse::qobject::ThemeBrowse;
+    use crate::collections::qobject::ThemeCollections;
     use crate::cues::qobject::ThemeCues;
     use crate::device::qobject::ThemeDevice;
     use crate::glue::ffi;
@@ -34,7 +39,10 @@ pub mod host {
     use crate::session::qobject::ThemeSession;
     use crate::settings::qobject::ThemeSettings;
     use crate::splash::qobject::ThemeSplash;
+    use crate::themes::qobject::ThemeThemes;
+    use crate::tools::qobject::ThemeTools;
     use crate::words::qobject::ThemeWords;
+    use crate::workspace::qobject::ThemeWorkspace;
     use core::pin::Pin;
     use cxx_qt::casting::Upcast;
     use cxx_qt::QObject;
@@ -99,6 +107,22 @@ pub mod host {
 
     pub fn splash(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeSplash>> {
         find(within, "Splash")
+    }
+
+    pub fn workspace(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeWorkspace>> {
+        find(within, "Workspace")
+    }
+
+    pub fn themes(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeThemes>> {
+        find(within, "Themes")
+    }
+
+    pub fn tools(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeTools>> {
+        find(within, "Tools")
+    }
+
+    pub fn collections(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeCollections>> {
+        find(within, "Collections")
     }
 
     /// The kit's tokens in the theme's engine, which the host keeps in step with the program's (reduced motion).

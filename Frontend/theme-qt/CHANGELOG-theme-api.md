@@ -3,6 +3,16 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.23, an addition: Desktop Mode Workspace, Themes, Tools, Collections, and live Session surfaces (2026-11-27)
+
+Decided 2026-11-27 by the tester (`R-20261127-7`..`R-20261127-11`): Desktop Mode themes read dedicated read-only singletons and act exclusively through `Actions`.
+
+- **`Workspace`**: read-only singleton (`ViewMode`, `ConsoleScope`, `DrawerTab`, `SortColumn` enums; workspace, catalog, filter/sort, batch-selection, and inspector scalar/list properties; constant `Rows` lists `places`, `consoles`, `filters`, `sorts`, `letters`, `games`, `inspectorStates`).
+- **`Themes`**, **`Tools`**, **`Collections`**: read-only directory singletons for installed themes, tool cards, and game collections.
+- **`Session`**: additive live session scalar properties (`running`, `paused`, `core`, `planet`, `fpsWords`, `status`, `slot`, `speed`, `masterCheats`, `hasRewind`, `latestRewindFrame`, `soundVolume`, `resumeAsked`, `resumeSubject`, `resumePicture`, `resumeWhen`, `resumeConsole`, `resumeCore`, `resumePlanet`), `liveChanged` signal, and constant `Rows` lists `slots`, `cheats`, `consoleOptions`, `rewindMarks`.
+- **`Settings`**, **`Browse`**, **`Words`**, **`Actions`**: additive Desktop filter/badge/sort properties and `SETTINGS_ROW_ROLES` (`isChoice`, `isSlider`, `isDoor`, `isModified`), `Words` Desktop labels, and `Actions` invokables for Workspace, live Session, Settings filter/tool, Themes, and Tools.
+- The module is 1.23 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.23.*`.
+
 ## 1.22, an addition: Dual-face themes (Big Picture and Desktop faces) (2026-11-26)
 
 - **`theme.json` schema 2**: adds `"faces": { "bigPicture": [...], "desktop": [...] }` (`screens/desktop/{Library,Table,Playing,Settings}.qml`) and optional nested `tokens.<variant>.desktop` token overrides layered over the variant's base overrides; schema 1 packages remain 100% valid unchanged.

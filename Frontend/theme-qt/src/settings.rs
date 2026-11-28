@@ -98,6 +98,12 @@ pub mod qobject {
         #[qproperty(bool, theme_preview, cxx_name = "themePreview", READ, NOTIFY = shown)]
         #[qproperty(QString, preview_image, cxx_name = "previewImage", READ, NOTIFY = shown)]
         #[qproperty(QString, board_meta, cxx_name = "boardMeta", READ, NOTIFY = shown)]
+        /// From 1.23: Desktop Settings filter, modified-only toggle, trail/tool back state, active tool index, and section badges.
+        #[qproperty(QString, filter, READ, NOTIFY = shown)]
+        #[qproperty(bool, modified_only, cxx_name = "modifiedOnly", READ, NOTIFY = shown)]
+        #[qproperty(bool, can_back, cxx_name = "canBack", READ, NOTIFY = shown)]
+        #[qproperty(i32, tool_index, cxx_name = "toolIndex", READ, NOTIFY = shown)]
+        #[qproperty(QStringList, section_badges, cxx_name = "sectionBadges", READ, NOTIFY = shown)]
         type ThemeSettings = super::ThemeSettingsRust;
     }
 
@@ -110,10 +116,11 @@ pub mod qobject {
     impl cxx_qt::Initialize for ThemeSettings {}
 }
 
-/// `Settings.rows`' roles (EmuSen_Qt.md §3.2, `Settings`; 19..28 added in 1.15 for boards #27, #28, #57, #29).
-pub const SETTINGS_ROW_ROLES: [&str; 28] = [
+/// `Settings.rows`' roles (EmuSen_Qt.md §3.2, `Settings`; 19..28 added in 1.15; 28..32 added in 1.23).
+pub const SETTINGS_ROW_ROLES: [&str; 32] = [
     "key", "label", "about", "value", "kind", "isSwitch", "switchOn", "held", "marked", "code", "minimum", "maximum", "step", "amount", "consoleName",
     "system", "games", "engine", "form", "boardLabel", "boardAbout", "boardValue", "boardForm", "planet", "subtitle", "chip", "chipAttention", "runs",
+    "isChoice", "isSlider", "isDoor", "isModified",
 ];
 
 /// `Settings.chips`' roles (from 1.14, R-20261116-22): Scraping's aside toggle chips and their model row index.
@@ -163,6 +170,11 @@ pub struct SettingsFacts {
     pub theme_preview: bool,
     pub preview_image: String,
     pub board_meta: String,
+    pub filter: String,
+    pub modified_only: bool,
+    pub can_back: bool,
+    pub tool_index: i32,
+    pub section_badges: Vec<String>,
 }
 
 /// The facts of a view whose rows were last told as `rows`; an error where those are not the view's rows.
@@ -213,6 +225,10 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
                 Cell::Text(br.chip.clone()),
                 Cell::Flag(br.chip_attention),
                 Cell::Flag(br.runs),
+                Cell::Flag(matches!(r.kind, RowKind::Steps)),
+                Cell::Flag(matches!(r.kind, RowKind::Slider)),
+                Cell::Flag(matches!(r.kind, RowKind::Opens | RowKind::Asks) || (matches!(r.kind, RowKind::Action) && r.value.is_empty())),
+                Cell::Flag(view.row_modified(offset + i)),
             ]
         })
         .collect();
@@ -281,6 +297,11 @@ pub fn facts_of(view: &SettingsView, rows: &[settings::Row], focused: i32) -> Re
         theme_preview: aside.theme_preview,
         preview_image: aside.preview_image,
         board_meta: aside.meta,
+        filter: String::new(),
+        modified_only: false,
+        can_back: !view.trail().is_empty(),
+        tool_index: -1,
+        section_badges: view.section_badges(),
     })
 }
 
@@ -351,6 +372,11 @@ pub struct ThemeSettingsRust {
     theme_preview: bool,
     preview_image: QString,
     board_meta: QString,
+    filter: QString,
+    modified_only: bool,
+    can_back: bool,
+    tool_index: i32,
+    section_badges: QStringList,
     last: SettingsFacts,
 }
 
@@ -407,7 +433,12 @@ impl Default for ThemeSettingsRust {
             theme_preview: false,
             preview_image: QString::default(),
             board_meta: QString::default(),
-            last: SettingsFacts { help: -1, card_planet: -3, inline_pill: -1, ..SettingsFacts::default() },
+            filter: QString::default(),
+            modified_only: false,
+            can_back: false,
+            tool_index: -1,
+            section_badges: QStringList::default(),
+            last: SettingsFacts { help: -1, card_planet: -3, inline_pill: -1, tool_index: -1, ..SettingsFacts::default() },
         }
     }
 }
@@ -505,6 +536,11 @@ impl qobject::ThemeSettings {
         me.theme_preview = facts.theme_preview;
         me.preview_image = QString::from(facts.preview_image.as_str());
         me.board_meta = QString::from(facts.board_meta.as_str());
+        me.filter = QString::from(facts.filter.as_str());
+        me.modified_only = facts.modified_only;
+        me.can_back = facts.can_back;
+        me.tool_index = facts.tool_index;
+        me.section_badges = list(&facts.section_badges);
         me.last = facts.clone();
         drop(me);
         self.shown();

@@ -8,6 +8,7 @@ Kit.NormalizedCanvas {
     id: screen
     required property GamePageModel page
     property int padFamily
+    property bool bigScreen: true
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
     // True when a theme's GamePage stays visible as backdrop behind a program Question dialog.
@@ -47,7 +48,7 @@ Kit.NormalizedCanvas {
         anchors.fill: parent
         // Cover art or a themed GamePage backdrop stands in its place while open.
         visible: !screen.page.coverArt && !screen.themedBackdrop
-        form: Kit.Forms.BigScreen
+        form: screen.bigScreen ? Kit.Forms.BigScreen : Kit.Forms.Desktop
         // The viewer and the keyboard take the keys while they are open; a question over the viewer still takes focus on frame.
         focus: screen.inputs && !screen.themedBackdrop && (!screen.page.viewing || screen.page.asking) && !screen.page.typing && !screen.page.coverArt
         padFamily: screen.padFamily
@@ -130,7 +131,7 @@ Kit.NormalizedCanvas {
         id: modalFrame
         anchors.fill: parent
         visible: screen.themedBackdrop
-        form: Kit.Forms.BigScreen
+        form: screen.bigScreen ? Kit.Forms.BigScreen : Kit.Forms.Desktop
         surfaceDrawn: false
         helpShown: false
         focus: screen.inputs && screen.themedBackdrop

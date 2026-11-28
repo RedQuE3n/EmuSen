@@ -148,6 +148,8 @@ pub mod qobject {
         #[qproperty(QStringList, built_ins, cxx_name = "builtIns")]
         /// Whether an EmuSen theme draws Settings, enabling Eclipse's board-projected pages.
         #[qproperty(bool, themed_settings, cxx_name = "themedSettings")]
+        /// Whether Eclipse's #20 Shaders board opens on the Display Shaders door.
+        #[qproperty(bool, eclipse_shaders, cxx_name = "eclipseShaders")]
         /// Eclipse `#20` Shaders overlay state and live Serenity preview feed.
         #[qproperty(bool, shaders_shown, cxx_name = "shadersShown", READ, NOTIFY = shaders_changed)]
         #[qproperty(bool, shaders_loading, cxx_name = "shadersLoading", READ, NOTIFY = shaders_changed)]
@@ -644,6 +646,7 @@ pub struct SettingsModelRust {
     typing_secret: bool,
     built_ins: QStringList,
     themed_settings: bool,
+    eclipse_shaders: bool,
     shaders_shown: bool,
     shaders_loading: bool,
     shaders_board: QString,
@@ -782,6 +785,7 @@ impl Default for SettingsModelRust {
             typing_secret: false,
             built_ins: QStringList::default(),
             themed_settings: false,
+            eclipse_shaders: true,
             shaders_shown: false,
             shaders_loading: false,
             shaders_board: QString::from("{}"),
@@ -1180,7 +1184,7 @@ impl qobject::SettingsModel {
 
     pub fn choose(mut self: Pin<&mut Self>, row: i32) -> bool {
         let index = row.max(0) as usize;
-        if self.themed_settings && self.view.is_shaders_door(index) {
+        if self.themed_settings && self.eclipse_shaders && self.view.is_shaders_door(index) {
             self.open_shaders_board(index);
             return true;
         }

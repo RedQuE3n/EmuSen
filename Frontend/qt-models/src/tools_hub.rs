@@ -9,6 +9,30 @@ use emusen_kit_core::input::UiButton;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 
+pub struct ToolEntryData {
+    pub index: i32,
+    pub key: String,
+    pub name: String,
+    pub line: String,
+    pub badge: String,
+    pub icon: String,
+    pub attention: bool,
+    pub running: bool,
+}
+
+pub fn tool_key(index: i32) -> Option<&'static str> {
+    usize::try_from(index).ok().and_then(|i| TOOL_SPECS.get(i)).map(|(k, _, _)| *k)
+}
+
+pub struct ToolsSnapshot {
+    pub count: i32,
+    pub focused: i32,
+    pub active_key: String,
+    pub busy: bool,
+    pub summary: String,
+    pub entries: Vec<ToolEntryData>,
+}
+
 const TOOL_SPECS: [(&str, &str, &str); 6] = [
     ("cores", "Cores", "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"),
     ("scraper", "Scraper", "M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9.500h.01"),
@@ -200,27 +224,59 @@ impl qobject::ToolsHubModel {
         }
     }
 
-    pub fn refresh(mut self: Pin<&mut Self>) {
+    pub fn snapshot(&self) -> ToolsSnapshot {
         let lib = unsafe { self.library.as_ref() };
         let settings = unsafe { self.settings.as_ref() };
         let tools_json = lib
             .and_then(|l| serde_json::from_str::<Value>(&l.tool_summaries().to_string()).ok())
             .unwrap_or(Value::Null);
-
-        let cards: Vec<Value> = TOOL_SPECS
+        let entries: Vec<ToolEntryData> = TOOL_SPECS
             .iter()
             .enumerate()
             .map(|(i, (key, name, icon))| {
                 let (line, badge) = self.describe_tool(key, &tools_json, lib, settings);
+                let attention = tools_json.get(*key).and_then(|v| v.get("attention")).and_then(Value::as_bool).unwrap_or(false);
+                let running = tools_json.get(*key).and_then(|v| v.get("running")).and_then(Value::as_bool).unwrap_or(false);
+                ToolEntryData {
+                    index: i as i32,
+                    key: (*key).to_owned(),
+                    name: (*name).to_owned(),
+                    line,
+                    badge,
+                    icon: (*icon).to_owned(),
+                    attention,
+                    running,
+                }
+            })
+            .collect();
+        let focused = self.focused.clamp(0, TOOL_SPECS.len() as i32 - 1);
+        let active_key = tool_key(focused).unwrap_or_default().to_owned();
+        let busy = entries.iter().any(|e| e.running);
+        ToolsSnapshot {
+            count: entries.len() as i32,
+            focused,
+            active_key,
+            busy,
+            summary: "Each one says what it would do before it does it.".to_owned(),
+            entries,
+        }
+    }
+
+    pub fn refresh(mut self: Pin<&mut Self>) {
+        let snap = self.snapshot();
+        let cards: Vec<Value> = snap
+            .entries
+            .iter()
+            .map(|e| {
                 json!({
-                    "index": i,
-                    "key": key,
-                    "name": name,
-                    "line": line,
-                    "badge": badge,
-                    "icon": icon,
-                    "objectName": format!("toolCard.{i}"),
-                    "badgeName": format!("toolBadge.{i}"),
+                    "index": e.index,
+                    "key": e.key,
+                    "name": e.name,
+                    "line": e.line,
+                    "badge": e.badge,
+                    "icon": e.icon,
+                    "objectName": format!("toolCard.{}", e.index),
+                    "badgeName": format!("toolBadge.{}", e.index),
                 })
             })
             .collect();
@@ -233,8 +289,8 @@ impl qobject::ToolsHubModel {
         let payload = json!({
             "navSections": nav_sections("tools"),
             "title": "Tools",
-            "subtitle": "Each one says what it would do before it does it.",
-            "focused": self.focused.clamp(0, TOOL_SPECS.len() as i32 - 1),
+            "subtitle": snap.summary,
+            "focused": snap.focused,
             "cards": cards,
             "actionLines": "previous PageUp\nnext PageDown\n",
         });

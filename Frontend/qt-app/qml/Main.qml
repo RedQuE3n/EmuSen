@@ -80,6 +80,7 @@ Window {
     }
     readonly property bool gameShown: screens.shown === Screens.Game
     readonly property bool pauseShown: screens.shown === Screens.Pause
+    readonly property bool desktopOverlayShown: !program.bigScreen && (screens.shown === Screens.Page || screens.shown === Screens.Tool || screens.shown === Screens.Cores || screens.shown === Screens.Themes)
     // The chosen theme's host while one is made.
     readonly property ThemeHost themeHost: chosenTheme.item as ThemeHost
     // Why the reference is shown in place of the theme the settings choose, said once the splash has gone.
@@ -117,7 +118,15 @@ Window {
         if (program.splashShown || player.session.resumeAsked || resumeDialog.sheetOpen || launch.asking)
             return
         if (!program.bigScreen) {
-            if (chosenTheme.active && chosenTheme.focus)
+            if (themesLoader.active && themesLoader.focus)
+                themesLoader.forceActiveFocus()
+            else if (coresLoader.active && coresLoader.focus)
+                coresLoader.forceActiveFocus()
+            else if (jobsLoader.active && jobsLoader.focus)
+                jobsLoader.forceActiveFocus()
+            else if (pageScreen.visible && screens.shown === Screens.Page)
+                pageScreen.focusActive()
+            else if (chosenTheme.active && chosenTheme.focus)
                 chosenTheme.forceActiveFocus()
             else if (desktopShell.focus)
                 desktopShell.forceActiveFocus()
@@ -462,12 +471,56 @@ Window {
             onPageRequested: (path) => {
                 program.inHand = path
                 screens.openGame(path)
-                program.bigScreen = true
             }
-            onDoorRequested: (name) => {
-                screens.openDesktopDoor(name)
-                program.bigScreen = true
+            onDoorRequested: (name) => screens.openDesktopDoor(name)
+            onToggleFullScreenRequested: {
+                program.fullScreenAsked = program.visibility !== Window.FullScreen
+                program.visibility = program.fullScreenAsked ? Window.FullScreen : Window.Windowed
             }
+        }
+        ThemesModel {
+            id: desktopThemesModel
+            objectName: "desktopFeedThemesModel"
+            platformLibrary: program.platformLibrary
+            builtIns: BuiltInThemes.manifests
+            open: !program.bigScreen && (program.themeHost?.hasDesktopFace ?? false)
+            onUsed: (folder) => program.theme = folder
+            onRestyled: (esde) => {
+                program.esdeChosen = program.esdeChosen && esde
+                library.restyle()
+            }
+        }
+        ToolsHubModel {
+            id: desktopToolsModel
+            objectName: "desktopFeedToolsModel"
+            library: library
+            settings: settingsModel
+            screens: screens
+        }
+        CollectionsEclipseModel {
+            id: desktopCollectionsModel
+            objectName: "desktopFeedCollectionsModel"
+            library: library
+            screens: screens
+        }
+        Connections {
+            target: library
+            enabled: !program.bigScreen && (program.themeHost?.hasDesktopFace ?? false)
+            function onLoadingChanged() { desktopToolsModel.refresh() }
+            function onToolSummariesChanged() { desktopToolsModel.refresh() }
+            function onMetadataChanged() { desktopToolsModel.refresh() }
+        }
+        Connections {
+            target: library
+            enabled: !program.bigScreen && (program.themeHost?.hasDesktopFace ?? false)
+            function onLoadingChanged() { desktopCollectionsModel.refresh() }
+            function onCollectionsChanged() { desktopCollectionsModel.refresh() }
+        }
+        Connections {
+            target: settingsModel
+            enabled: !program.bigScreen && (program.themeHost?.hasDesktopFace ?? false)
+            function onReadyChanged() { desktopToolsModel.refresh() }
+            function onSaved() { desktopToolsModel.refresh() }
         }
         Connections {
             target: program
@@ -506,7 +559,7 @@ Window {
             anchors.fill: parent
             active: !program.bigScreen && !program.splashShown
             visible: active
-            focus: active && !(program.themeHost?.takesFocus ?? false) && !(desktopModel.gameShown && !desktopModel.drawerOpen) && !settingsModel.bindingsShown && !settingsModel.shadersShown
+            focus: active && !(program.themeHost?.takesFocus ?? false) && !(desktopModel.gameShown && !desktopModel.drawerOpen) && !settingsModel.bindingsShown && !settingsModel.shadersShown && !program.desktopOverlayShown
             onFocusChanged: program.settleFocus()
             onLoaded: {
                 desktopModel.refresh()
@@ -550,12 +603,18 @@ Window {
             onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: ThemeHost {
                 objectName: "theme"
-                visible: (!program.gameShown && !( !program.bigScreen && program.pauseShown )) || (!program.bigScreen && (program.themeHost?.desktopPlaying ?? false))
+                visible: ((!program.gameShown && !( !program.bigScreen && program.pauseShown )) || (!program.bigScreen && (program.themeHost?.desktopPlaying ?? false))) && !program.desktopOverlayShown
                 bigScreen: program.bigScreen
                 desktopView: desktopModel.view
                 desktopGameShown: program.gameShown || program.pauseShown
-                desktopPlayingInputs: !program.bigScreen && desktopModel.drawerOpen
+                desktopPlayingInputs: !program.bigScreen && desktopModel.drawerOpen && !program.desktopOverlayShown
                 onBigScreenRequested: (big) => program.bigScreen = big
+                onDesktopDoorRequested: (name) => screens.openDesktopDoor(name)
+                onToolRequested: (key) => screens.openTool(key)
+                onFullScreenToggleRequested: {
+                    program.fullScreenAsked = program.visibility !== Window.FullScreen
+                    program.visibility = program.fullScreenAsked ? Window.FullScreen : Window.Windowed
+                }
                 // Loaded once the host is whole, so its connections hear the new engine and feed it the models as they stand.
                 folder: chosenTheme.status === Loader.Ready ? program.theme : ""
                 coverStores: program.coverStores
@@ -571,7 +630,7 @@ Window {
                 family: program.padFamily
                 reducedMotion: program.reducedMotion
                 swap: Kit.PadRouter.swapAcceptBack
-                inputs: !program.splashShown
+                inputs: !program.splashShown && !program.desktopOverlayShown
                 splashShown: program.splashShown
                 splashLayer: splashLayer
                 splashLeading: program.led && program.splashShown
@@ -579,6 +638,10 @@ Window {
                 splashEase: themeSplash.ease
                 settingsModel: settingsModel
                 pageModel: pageScreen.page
+                desktopModel: desktopModel
+                themesModel: desktopThemesModel
+                toolsModel: desktopToolsModel
+                collectionsModel: desktopCollectionsModel
                 onPlayed: (path) => program.play(path)
                 onFavourite: (path) => library.toggleFavourite(path)
                 onResumed: screens.resume()
@@ -708,7 +771,8 @@ Window {
             platformLibrary: program.platformLibrary
             cores: library.cores
             builtIns: BuiltInThemes.manifests
-            themedSettings: Kit.Tokens.coronaRim > 0 && (program.bigScreen ? (program.themeHost?.settings ?? false) : (program.themeHost?.desktopSettings ?? false))
+            themedSettings: program.bigScreen ? (program.themeHost?.settings ?? false) : (program.themeHost?.desktopSettings ?? false)
+            eclipseShaders: screens.eclipse
             open: (program.bigScreen && (screens.shown === Screens.Settings || (program.pauseShown && !settingsModel.ready))) || (!program.bigScreen && (desktopModel.view === 2 || program.gameShown || (program.pauseShown && !settingsModel.ready)))
             facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
             gamePads: pads.gamePads
@@ -800,7 +864,7 @@ Window {
             id: settingsEclipseShaders
             objectName: "settingsEclipseShaders"
             anchors.fill: parent
-            active: !program.splashShown && settingsModel.shadersShown && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : desktopModel.view === 2)
+            active: !program.splashShown && settingsModel.shadersShown && screens.eclipse && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : desktopModel.view === 2)
             focus: active && !settingsModel.typing
             onFocusChanged: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
             onLoaded: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
@@ -934,7 +998,7 @@ Window {
         Loader {
             id: themesLoader
             anchors.fill: parent
-            active: program.bigScreen && screens.shown === Screens.Themes
+            active: screens.shown === Screens.Themes
             focus: active
             onActiveChanged: if (!active) program.settleFocus()
             onLoaded: if (focus) program.settleFocus()
@@ -957,7 +1021,7 @@ Window {
         Loader {
             id: coresLoader
             anchors.fill: parent
-            active: program.bigScreen && screens.shown === Screens.Cores
+            active: screens.shown === Screens.Cores
             focus: active
             onActiveChanged: if (!active) program.settleFocus()
             onLoaded: {
@@ -992,7 +1056,7 @@ Window {
         Loader {
             id: jobsLoader
             anchors.fill: parent
-            active: program.bigScreen && screens.shown === Screens.Tool
+            active: screens.shown === Screens.Tool
             focus: active
             onActiveChanged: if (!active) program.settleFocus()
             onLoaded: {
@@ -1061,8 +1125,8 @@ Window {
         PageScreen {
             id: pageScreen
             objectName: "gamePage"
-            themed: program.themeHost?.pageDrawn ?? false
-            themedBackdrop: (program.themeHost?.game ?? false) && pageScreen.page.asking
+            themed: program.bigScreen && (program.themeHost?.pageDrawn ?? false)
+            themedBackdrop: program.bigScreen && (program.themeHost?.game ?? false) && pageScreen.page.asking
             screens: screens
             library: library
             platformLibrary: program.platformLibrary

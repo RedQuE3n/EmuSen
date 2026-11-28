@@ -77,6 +77,7 @@ pub struct Row {
     /// The first preview's URL; empty for none.
     pub preview: String,
     pub current: bool,
+    pub dual_face: bool,
     pub checked: Checked,
 }
 
@@ -84,6 +85,18 @@ impl Row {
     /// Offered Use: a theme whose last check was clean, not already the one in use.
     pub fn usable(&self) -> bool {
         self.checked == Checked::Ok && !self.current
+    }
+
+    pub fn badge(&self) -> &'static str {
+        if self.current {
+            "Active"
+        } else if self.dual_face {
+            "Dual"
+        } else if self.kind == Kind::Esde {
+            "ES-DE"
+        } else {
+            ""
+        }
     }
 
     /// The row's value on the list: in use, checking, its check's outcome, or nothing yet.
@@ -201,15 +214,15 @@ fn url_in(folder: &str, path: &str) -> String {
 pub fn package_row(id: &str, manifest: &str, folder: &str) -> Row {
     let parsed = emusen_theme_manifest::parse(manifest).ok().map(|(m, _)| m);
     let named = |name: &str| if name.is_empty() { id.to_owned() } else { name.to_owned() };
-    let (name, author, api, variants, preview) = match &parsed {
+    let (name, author, api, variants, preview, dual_face) = match &parsed {
         Some(m) => {
             let names: Vec<&str> = m.variants.iter().map(|v| v.name()).collect();
             let preview = m.previews.first().map(|p| url_in(folder, &p.path)).unwrap_or_default();
-            (named(&m.name), m.author.clone(), format!("{}.{}", m.api.0, m.api.1), names.join(" and "), preview)
+            (named(&m.name), m.author.clone(), format!("{}.{}", m.api.0, m.api.1), names.join(" and "), preview, !m.desktop_screens.is_empty())
         }
-        None => (id.to_owned(), String::new(), String::new(), String::new(), String::new()),
+        None => (id.to_owned(), String::new(), String::new(), String::new(), String::new(), false),
     };
-    Row { id: id.to_owned(), name, kind: Kind::EmuSen, author, api, variants, preview, current: false, checked: Checked::Not }
+    Row { id: id.to_owned(), name, kind: Kind::EmuSen, author, api, variants, preview, current: false, dual_face, checked: Checked::Not }
 }
 
 /// A built-in's row: its manifest from the resources, held clean by the build's own tests, so checked.
@@ -228,7 +241,7 @@ fn esde_row(id: &str, folder: &Path) -> Row {
         n => format!("{n} variants"),
     };
     let name = if caps.theme_name.is_empty() { id.to_owned() } else { caps.theme_name };
-    Row { id: id.to_owned(), name, kind: Kind::Esde, author: String::new(), api: "ES-DE".to_owned(), variants, preview: String::new(), current: false, checked: Checked::Not }
+    Row { id: id.to_owned(), name, kind: Kind::Esde, author: String::new(), api: "ES-DE".to_owned(), variants, preview: String::new(), current: false, dual_face: false, checked: Checked::Not }
 }
 
 /// Every theme folder directly under the store, in name order; hidden, partial and replaced folders, and one named as a built-in, left out.

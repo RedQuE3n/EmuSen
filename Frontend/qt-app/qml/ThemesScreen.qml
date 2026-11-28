@@ -11,11 +11,10 @@ Themes {
     required property LibraryModel library
     required property string platformLibrary
     required property bool splashShown
-    property bool bigScreen: true
     // A theme used, by its folder, and a look stored, ES-DE's or not, which the window answers.
     signal used(string folder)
     signal restyled(bool esde)
-    visible: screen.bigScreen && screen.screens.shown === Screens.Themes
+    visible: screen.screens.shown === Screens.Themes
     themes: themesModel
     inputs: visible && !screen.splashShown
     onBacked: screen.screens.back()
@@ -25,7 +24,7 @@ Themes {
         objectName: "themesModel"
         platformLibrary: screen.platformLibrary
         builtIns: BuiltInThemes.manifests
-        open: screen.bigScreen && screen.screens.shown === Screens.Themes
+        open: screen.screens.shown === Screens.Themes
         onUsed: (folder) => screen.used(folder)
         // The window lets go of the start's choice of an ES-DE theme first; the library's read decides the rest.
         onRestyled: (esde) => {

@@ -30,7 +30,9 @@ bool savePicture(const QImage &image, const QString &path)
 
 bool sessionPicturesServe(const QObject &object, const QString &name, rust::Box<PictureSource> source)
 {
-    QQmlEngine *engine = qmlEngine(&object);
+    QQmlEngine *engine = qobject_cast<QQmlEngine *>(const_cast<QObject *>(&object));
+    if (!engine)
+        engine = qmlEngine(&object);
     if (!engine)
         return false;
     // The engine owns its providers; one model serves a name, so a second one in the same engine takes it over.

@@ -486,3 +486,118 @@ pub fn resume_stage_meta(width: i32, height: i32) -> String {
         RESUME_STATE_READY.to_owned()
     }
 }
+
+/// Desktop Mode workspace labels, one owner shared between DesktopModel and Words.
+pub const DESKTOP_NAV_TABS: [&str; 3] = ["Library", "Table", "Settings"];
+pub const DESKTOP_VIEW_MODES: [&str; 3] = ["Grid", "Table", "Settings"];
+pub const DESKTOP_SORT_LABELS: [&str; 7] = ["Title", "Console", "Core", "Year", "Genre", "Played", "States"];
+pub const DESKTOP_TABLE_COLUMNS: [&str; 9] = ["Title", "Console", "Core", "Year", "Genre", "Time Played", "States", "Format", "Status"];
+pub const DESKTOP_DRAWER_TABS: [&str; 4] = ["Shaders", "States", "Cheats", "Options"];
+pub const DESKTOP_SEARCH_PLACEHOLDER: &str = "Search games, consoles, or filters...";
+pub const DESKTOP_BIG_PICTURE_LABEL: &str = "Big Picture";
+pub const DESKTOP_BIG_PICTURE_HINT: &str = "F10";
+pub const DESKTOP_RESUME_LABEL: &str = "Resume";
+pub const DESKTOP_SIDEBAR_TIP: &str = "Toggle sidebar";
+pub const DESKTOP_INSPECTOR_TIP: &str = "Toggle inspector";
+pub const DESKTOP_CONSTELLATION_HEADING: &str = "CONSTELLATION";
+pub const DESKTOP_ALL_GAMES_LABEL: &str = "All Games";
+pub const DESKTOP_RECENT_LABEL: &str = "Recently Played";
+pub const DESKTOP_CONSOLES_HEADING: &str = "CONSOLES";
+pub const DESKTOP_SCOPE_ACTIVE: &str = "Active";
+pub const DESKTOP_CONSOLE_FILTER_PLACEHOLDER: &str = "Filter consoles...";
+pub const DESKTOP_IDLE_STATUS: &str = "Idle";
+pub const DESKTOP_RUNNING_STATUS: &str = "Running";
+pub const DESKTOP_PAUSED_STATUS: &str = "Paused";
+pub const DESKTOP_NO_CONTROLLERS: &str = "No controller";
+pub const DESKTOP_BATCH_GUARANTEE_TITLE: &str = "Read-only library";
+pub const DESKTOP_CONTRACT_NOTE: &str = "Library folders are read in place; source ROMs are never modified.";
+pub const DESKTOP_FILTER_RESUME_READY: &str = "Resume Ready";
+pub const DESKTOP_FILTER_UNPLAYED: &str = "Unplayed";
+pub const DESKTOP_SORT_LABEL: &str = "Sort:";
+pub const DESKTOP_CONSOLE_OPTIONS_LABEL: &str = "Console Options";
+pub const DESKTOP_RESUME_BADGE: &str = "RESUME";
+pub const DESKTOP_INSPECTOR_HEADING: &str = "INSPECTOR";
+pub const DESKTOP_PLAY_LABEL: &str = "Play";
+pub const DESKTOP_SAVE_STATES_LABEL: &str = "SAVE STATES";
+pub const DESKTOP_NO_STATES_LABEL: &str = "No saved states yet";
+pub const DESKTOP_PROGRAM_FACTS_LABEL: &str = "PROGRAM FACTS";
+pub const DESKTOP_FACT_CORE: &str = "Core";
+pub const DESKTOP_FACT_PLAYED: &str = "Time played";
+pub const DESKTOP_FACT_PLAYERS: &str = "Players";
+pub const DESKTOP_FACT_GENRE: &str = "Genre";
+pub const DESKTOP_FACT_FILE: &str = "File";
+pub const DESKTOP_FACT_SIZE: &str = "Size";
+pub const DESKTOP_FACT_LAST_PLAYED: &str = "Last played";
+pub const DESKTOP_FAVOURITE_LABEL: &str = "Favourite";
+pub const DESKTOP_UNFAVOURITE_LABEL: &str = "Favourited";
+pub const DESKTOP_DETAILS_LABEL: &str = "Page";
+pub const DESKTOP_FOLDER_LABEL: &str = "Folder";
+pub const DESKTOP_LIBRETRO_SUFFIX: &str = "libretro";
+pub const DESKTOP_NATIVE_SUFFIX: &str = "EmuSen native";
+pub const DESKTOP_TABLE_HEADING: &str = "Library Table";
+pub const DESKTOP_CLEAR_FILTERS_LABEL: &str = "Clear filters";
+pub const DESKTOP_SORT_ASC: &str = "↑";
+pub const DESKTOP_SORT_DESC: &str = "↓";
+pub const DESKTOP_STATUS_READY: &str = "Ready";
+pub const DESKTOP_SELECTED_SUFFIX: &str = "selected";
+pub const DESKTOP_CLEAR_LABEL: &str = "Clear";
+pub const DESKTOP_UNMARK_FAV_LABEL: &str = "Unfavourite";
+pub const DESKTOP_DASH: &str = "—";
+pub const DESKTOP_STRIP_PAUSE: &str = "Pause";
+pub const DESKTOP_STRIP_REWIND: &str = "Rewind";
+pub const DESKTOP_STRIP_STATES: &str = "States";
+pub const DESKTOP_STRIP_SHADERS: &str = "Shaders";
+pub const DESKTOP_STRIP_CHEATS: &str = "Cheats";
+pub const DESKTOP_STRIP_SHOT: &str = "Shot";
+pub const DESKTOP_STRIP_FULLSCREEN: &str = "Fullscreen";
+pub const DESKTOP_QUICK_SAVE_LABEL: &str = "Save Slot";
+pub const DESKTOP_QUICK_LOAD_LABEL: &str = "Load Slot";
+pub const DESKTOP_SLOT_PREFIX: &str = "Slot";
+pub const DESKTOP_EMPTY_SLOT_LABEL: &str = "Empty";
+pub const DESKTOP_REWIND_AVAILABLE: &str = "Rewind";
+pub const DESKTOP_NO_REWIND_LABEL: &str = "Rewind unavailable";
+pub const DESKTOP_MASTER_CHEATS_LABEL: &str = "Master Cheats";
+pub const DESKTOP_NO_CHEATS_LABEL: &str = "No cheats for this game";
+pub const DESKTOP_SHADERS_HEADING: &str = "Display & Shaders";
+pub const DESKTOP_NO_DISPLAY_ROWS_LABEL: &str = "Open Settings for per-console shader configuration";
+pub const DESKTOP_SPEED_LABEL: &str = "Speed";
+pub const DESKTOP_SWAP_PLAYERS_LABEL: &str = "Swap P1 / P2";
+pub const DESKTOP_RESTART_LABEL: &str = "Restart";
+pub const DESKTOP_QUIT_GAME_LABEL: &str = "Close Game";
+pub const DESKTOP_SETTINGS_FILTER_PLACEHOLDER: &str = "Filter settings...";
+pub const DESKTOP_SETTINGS_HEADING: &str = "SETTINGS";
+pub const DESKTOP_TOOLS_HEADING: &str = "TOOLS";
+pub const DESKTOP_MODIFIED_ONLY_LABEL: &str = "Modified only";
+pub const DESKTOP_BACK_LABEL: &str = "Back";
+pub const DESKTOP_THEMES_HEADING: &str = "Themes";
+pub const DESKTOP_THEMES_SUBTITLE: &str = "Choose an EmuSen or ES-DE look. Changes apply immediately.";
+pub const DESKTOP_USE_THEME_LABEL: &str = "Use";
+pub const DESKTOP_IN_USE_LABEL: &str = "In use";
+pub const DESKTOP_DUAL_FACE_BADGE: &str = "Dual Face";
+pub const DESKTOP_BIG_PICTURE_BADGE: &str = "Big Picture";
+pub const DESKTOP_ESDE_BADGE: &str = "ES-DE";
+pub const DESKTOP_CHECK_THEME_LABEL: &str = "Check";
+pub const DESKTOP_ABOUT_DETAIL_HEADING: &str = "DETAILS";
+pub const DESKTOP_STATUS_HINTS: &str = "Double-click: Play · F10: Big Picture · F11: Fullscreen";
+pub const DESKTOP_NEVER_PLAYED: &str = "Never played";
+pub const DESKTOP_READ_IN_PLACE: &str = "Read in place";
+pub const DESKTOP_NONE_LABEL: &str = "None";
+pub const DESKTOP_LIBRARY_MANAGER_LABEL: &str = "Library Manager";
+pub const DESKTOP_RESUME_AUTO_LABEL: &str = "Resume (Auto)";
+pub const DESKTOP_SPEED_MAX_LABEL: &str = "Max";
+
+pub fn desktop_summary_line(filtered: usize, total: usize, narrowed: bool) -> String {
+    if narrowed {
+        format!("Showing {} of {} games", grouped(filtered), grouped(total))
+    } else {
+        games(filtered)
+    }
+}
+
+pub fn desktop_status_summary(theme_label: &str) -> String {
+    format!("{} {BETWEEN} {theme_label} Desktop", version_line())
+}
+
+pub fn desktop_controllers_line(controllers: i32) -> String {
+    if controllers > 0 { counted(controllers as usize, "controller", "controllers") } else { DESKTOP_NO_CONTROLLERS.to_owned() }
+}

@@ -9,6 +9,7 @@ Kit.NormalizedCanvas {
     id: tab
     required property ThemesModel themes
     property int padFamily
+    property bool bigScreen: true
     // Whether it takes the keys: while it is shown and the splash has gone.
     property bool inputs: true
     // B on the tab, and its declared actions the screens answer (Start, Home).
@@ -18,7 +19,7 @@ Kit.NormalizedCanvas {
         id: frame
         objectName: "themesFrame"
         anchors.fill: parent
-        form: Kit.Forms.BigScreen
+        form: tab.bigScreen ? Kit.Forms.BigScreen : Kit.Forms.Desktop
         focus: tab.inputs
         padFamily: tab.padFamily
         helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })

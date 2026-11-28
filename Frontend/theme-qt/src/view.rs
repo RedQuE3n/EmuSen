@@ -253,8 +253,12 @@ pub fn shelves(view: &LibraryView) -> Vec<Row> {
 }
 
 /// A game's row at `now`, in seconds since 1970; `shapes` holds each console's cover shape, width over height.
-fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
+fn game(g: &GameRow, shapes: &HashMap<&str, f64>, meta: Option<&std::collections::BTreeMap<String, String>>, now: i64) -> Row {
     let played = g.played_at > 0;
+    let str_field = |k: &str| meta.and_then(|m| m.get(k)).cloned().unwrap_or_default();
+    let players = meta.and_then(|m| m.get("players")).and_then(|s| s.parse::<i32>().ok()).unwrap_or(0);
+    let genre = str_field("genre");
+    let description = meta.and_then(|m| m.get("description").or_else(|| m.get("desc"))).cloned().unwrap_or_default();
     vec![
         text(&g.path),
         text(&g.title),
@@ -265,12 +269,11 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
         Cell::Flag(played),
         text(&g.system),
         Cell::Number(g.hue),
-        // Players, genre, rating, description and video wait on the scraper's facts in the own look's view (§3.2 as built).
-        Cell::Whole(0),
+        Cell::Whole(players),
         Cell::Whole(g.year.parse().unwrap_or(0)),
-        text(""),
+        Cell::Text(genre),
         Cell::Number(0.0),
-        text(""),
+        Cell::Text(description),
         text(""),
         Cell::Text(cover_url(if g.hero.is_empty() { &g.cover } else { &g.hero })),
         Cell::Text(if played { words::ago(g.played_at, now) } else { String::new() }),
@@ -282,7 +285,8 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
 /// Rows of games as a list shows them, each console's cover shape from qt-models' `library::cover_shape` (`Browse.games`, Home's shelf).
 pub fn games(view: &LibraryView, list: &[GameRow], now: i64) -> Vec<Row> {
     let shapes: HashMap<&str, f64> = view.systems.iter().map(|s| (s.id.as_str(), library::cover_shape(Some(s)))).collect();
-    list.iter().map(|g| game(g, &shapes, now)).collect()
+    let meta: HashMap<&str, &std::collections::BTreeMap<String, String>> = view.catalog.metadata.iter().map(|(p, m)| (p.as_str(), m)).collect();
+    list.iter().map(|g| game(g, &shapes, meta.get(g.path.as_str()).copied(), now)).collect()
 }
 
 /// Rewrites `cover` (col 2) and `hero` (col 15) URLs across `GAME_ROLES` rows with `map`.

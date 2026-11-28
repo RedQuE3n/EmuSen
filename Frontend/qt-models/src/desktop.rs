@@ -247,6 +247,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "doorRequested"]
         fn door_requested(self: Pin<&mut DesktopModel>, name: QString);
+
+        #[qsignal]
+        #[cxx_name = "toggleFullScreenRequested"]
+        fn toggle_full_screen_requested(self: Pin<&mut DesktopModel>);
     }
 
     impl cxx_qt::Initialize for DesktopModel {}
@@ -367,6 +371,199 @@ pub struct CachedInspector {
     pub states: Vec<crate::game_page::State>,
 }
 
+/// Structured Workspace projection shared by `DesktopModel` JSON serialization and `ThemeFeed`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopPlace {
+    pub key: String,
+    pub label: String,
+    pub count: i32,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopConsole {
+    pub key: String,
+    pub name: String,
+    pub full_name: String,
+    pub maker: String,
+    pub year: i32,
+    pub games: i32,
+    pub played: i32,
+    pub engine: String,
+    pub engine_kind: String,
+    pub planet: i32,
+    pub libretro: bool,
+    pub has_games: bool,
+    pub screen: String,
+    pub hue: f64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopFilter {
+    pub key: String,
+    pub label: String,
+    pub count: i32,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopSort {
+    pub index: i32,
+    pub label: String,
+    pub key: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopGame {
+    pub key: String,
+    pub title: String,
+    pub system: String,
+    pub console: String,
+    pub core: String,
+    pub planet: i32,
+    pub libretro: bool,
+    pub year: String,
+    pub genre: String,
+    pub subtitle: String,
+    pub played_words: String,
+    pub played_seconds: i64,
+    pub last_played_words: String,
+    pub favourite: bool,
+    pub marked: bool,
+    pub resume_ready: bool,
+    pub badge: String,
+    pub cover: String,
+    pub hero: String,
+    pub swatch: Value,
+    pub format: String,
+    pub states_count: i32,
+    pub states_label: String,
+    pub status_label: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopStateEntry {
+    pub path: String,
+    pub label: String,
+    pub when_words: String,
+    pub picture: String,
+    pub is_auto: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopWorkspaceData {
+    pub theme_name: String,
+    pub status_text: String,
+    pub status_summary: String,
+    pub mode_badge: String,
+    pub big_picture_hint: String,
+    pub status_hints: String,
+    pub counts_line: String,
+    pub controllers_line: String,
+    pub marked_count: i32,
+    pub all_marked: bool,
+    pub count: i32,
+    pub total_count: i32,
+    pub summary_line: String,
+    pub empty_words: String,
+    pub active_heading: String,
+    pub active_core: String,
+    pub active_planet: i32,
+    pub active_screen: String,
+    pub has_selection: bool,
+    pub effective_selected: String,
+    pub inspector_title: String,
+    pub inspector_subtitle: String,
+    pub inspector_console: String,
+    pub inspector_system: String,
+    pub inspector_core: String,
+    pub inspector_core_line: String,
+    pub inspector_planet: i32,
+    pub inspector_libretro: bool,
+    pub inspector_played_words: String,
+    pub inspector_players: String,
+    pub inspector_genre: String,
+    pub inspector_description: String,
+    pub inspector_file_name: String,
+    pub inspector_folder_path: String,
+    pub inspector_size_words: String,
+    pub inspector_favourite: bool,
+    pub inspector_running: bool,
+    pub inspector_cover: String,
+    pub inspector_hero: String,
+    pub inspector_swatch: Value,
+    pub inspector_states_count: i32,
+    pub inspector_states_heading: String,
+    pub inspector_package_words: String,
+    pub inspector_cheats_words: String,
+    pub places: Vec<DesktopPlace>,
+    pub consoles: Vec<DesktopConsole>,
+    pub filters: Vec<DesktopFilter>,
+    pub sorts: Vec<DesktopSort>,
+    pub letters: Vec<String>,
+    pub games: Vec<DesktopGame>,
+    pub inspector_states: Vec<DesktopStateEntry>,
+    pub visible_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopPlayingSlot {
+    pub slot: i32,
+    pub exists: bool,
+    pub when: String,
+    pub picture: String,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopPlayingCheat {
+    pub index: i32,
+    pub description: String,
+    pub on: bool,
+    pub code: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopPlayingConsoleOption {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+    pub display_value: String,
+    pub choice_count: i32,
+    pub choices: Vec<String>,
+    pub choice_labels: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopPlayingRewindMark {
+    pub frame: f64,
+    pub label: String,
+    pub short: String,
+    pub picture: String,
+    pub now: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopPlayingData {
+    pub running: bool,
+    pub paused: bool,
+    pub game: String,
+    pub system: String,
+    pub title: String,
+    pub console: String,
+    pub core: String,
+    pub planet: i32,
+    pub fps_words: String,
+    pub status: String,
+    pub slot: i32,
+    pub speed: i32,
+    pub master_cheats: bool,
+    pub has_rewind: bool,
+    pub latest_rewind_frame: f64,
+    pub slots: Vec<DesktopPlayingSlot>,
+    pub cheats: Vec<DesktopPlayingCheat>,
+    pub console_options: Vec<DesktopPlayingConsoleOption>,
+    pub rewind_marks: Vec<DesktopPlayingRewindMark>,
+}
+
 /// Output bundle of `project_desktop`.
 #[derive(Clone, Debug)]
 pub struct DesktopProjection {
@@ -382,7 +579,8 @@ pub struct DesktopProjection {
     pub all_marked: bool,
 }
 
-const SORT_LABELS: [&str; 7] = ["Title", "Console", "Core", "Year", "Genre", "Played", "States"];
+const SORT_LABELS: [&str; 7] = words::DESKTOP_SORT_LABELS;
+const SORT_KEYS: [&str; 7] = ["title", "console", "core", "year", "genre", "played", "states"];
 const TOOL_KEYS: [&str; 6] = ["cores", "shaders", "packages", "scraper", "library", "themes"];
 
 /// Static dictionary of every user-facing string and icon path in Reference Desktop Mode.
@@ -397,156 +595,156 @@ pub fn chrome_json() -> String {
         &mut map,
         json!({
             "wordmark": words::NAME,
-            "navTabs": ["Library", "Table", "Settings"],
-            "viewModes": ["Grid", "Table", "Settings"],
-            "searchPlaceholder": "Search games, consoles, or filters...",
-            "bigPictureLabel": "Big Picture",
-            "bigPictureHint": "F10",
-            "resumeLabel": "Resume",
-            "sidebarTip": "Toggle sidebar",
-            "inspectorTip": "Toggle inspector",
-            "constellationHeading": "CONSTELLATION",
+            "navTabs": words::DESKTOP_NAV_TABS,
+            "viewModes": words::DESKTOP_VIEW_MODES,
+            "searchPlaceholder": words::DESKTOP_SEARCH_PLACEHOLDER,
+            "bigPictureLabel": words::DESKTOP_BIG_PICTURE_LABEL,
+            "bigPictureHint": words::DESKTOP_BIG_PICTURE_HINT,
+            "resumeLabel": words::DESKTOP_RESUME_LABEL,
+            "sidebarTip": words::DESKTOP_SIDEBAR_TIP,
+            "inspectorTip": words::DESKTOP_INSPECTOR_TIP,
+            "constellationHeading": words::DESKTOP_CONSTELLATION_HEADING,
             "continueLabel": words::CONTINUE_ENTRY,
-            "allGamesLabel": "All Games",
+            "allGamesLabel": words::DESKTOP_ALL_GAMES_LABEL,
             "favouritesLabel": words::FAVOURITES_FILTER,
-            "recentLabel": "Recently Played",
-            "consolesHeading": "CONSOLES",
+            "recentLabel": words::DESKTOP_RECENT_LABEL,
+            "consolesHeading": words::DESKTOP_CONSOLES_HEADING,
             "scopeAll": words::ALL,
-            "scopeActive": "Active",
-            "consoleFilterPlaceholder": "Filter consoles...",
-            "idleStatus": "Idle",
-            "runningStatus": "Running",
-            "pausedStatus": "Paused",
-            "noControllers": "No controller",
-            "batchGuaranteeTitle": "Read-only library",
-            "contractNote": "Library folders are read in place; source ROMs are never modified."
+            "scopeActive": words::DESKTOP_SCOPE_ACTIVE,
+            "consoleFilterPlaceholder": words::DESKTOP_CONSOLE_FILTER_PLACEHOLDER,
+            "idleStatus": words::DESKTOP_IDLE_STATUS,
+            "runningStatus": words::DESKTOP_RUNNING_STATUS,
+            "pausedStatus": words::DESKTOP_PAUSED_STATUS,
+            "noControllers": words::DESKTOP_NO_CONTROLLERS,
+            "batchGuaranteeTitle": words::DESKTOP_BATCH_GUARANTEE_TITLE,
+            "contractNote": words::DESKTOP_CONTRACT_NOTE
         }),
     );
     merge(
         &mut map,
         json!({
             "filters": [
-                { "key": "all", "label": "All" },
-                { "key": "favourites", "label": "Favourites" },
-                { "key": "resume", "label": "Resume Ready" },
-                { "key": "unplayed", "label": "Unplayed" }
+                { "key": "all", "label": words::ALL },
+                { "key": "favourites", "label": words::FAVOURITES_FILTER },
+                { "key": "resume", "label": words::DESKTOP_FILTER_RESUME_READY },
+                { "key": "unplayed", "label": words::DESKTOP_FILTER_UNPLAYED }
             ],
-            "sortLabel": "Sort:",
+            "sortLabel": words::DESKTOP_SORT_LABEL,
             "sortOptions": SORT_LABELS,
-            "consoleOptionsLabel": "Console Options",
-            "resumeBadge": "RESUME",
+            "consoleOptionsLabel": words::DESKTOP_CONSOLE_OPTIONS_LABEL,
+            "resumeBadge": words::DESKTOP_RESUME_BADGE,
             "emptyLibrary": words::NO_GAMES,
             "emptyFiltered": words::NO_GAMES_FOUND,
-            "inspectorHeading": "INSPECTOR",
-            "playLabel": "Play",
-            "resumeSlotLabel": "Resume",
-            "saveStatesLabel": "SAVE STATES",
-            "noStatesLabel": "No saved states yet",
-            "programFactsLabel": "PROGRAM FACTS",
-            "factCore": "Core",
-            "factPlayed": "Time played",
-            "factPlayers": "Players",
-            "factGenre": "Genre",
-            "factFile": "File",
-            "factSize": "Size",
-            "factLastPlayed": "Last played",
-            "favouriteLabel": "Favourite",
-            "unfavouriteLabel": "Favourited",
-            "detailsLabel": "Page",
-            "folderLabel": "Folder",
-            "libretroSuffix": "libretro",
-            "nativeSuffix": "EmuSen native"
+            "inspectorHeading": words::DESKTOP_INSPECTOR_HEADING,
+            "playLabel": words::DESKTOP_PLAY_LABEL,
+            "resumeSlotLabel": words::DESKTOP_RESUME_LABEL,
+            "saveStatesLabel": words::DESKTOP_SAVE_STATES_LABEL,
+            "noStatesLabel": words::DESKTOP_NO_STATES_LABEL,
+            "programFactsLabel": words::DESKTOP_PROGRAM_FACTS_LABEL,
+            "factCore": words::DESKTOP_FACT_CORE,
+            "factPlayed": words::DESKTOP_FACT_PLAYED,
+            "factPlayers": words::DESKTOP_FACT_PLAYERS,
+            "factGenre": words::DESKTOP_FACT_GENRE,
+            "factFile": words::DESKTOP_FACT_FILE,
+            "factSize": words::DESKTOP_FACT_SIZE,
+            "factLastPlayed": words::DESKTOP_FACT_LAST_PLAYED,
+            "favouriteLabel": words::DESKTOP_FAVOURITE_LABEL,
+            "unfavouriteLabel": words::DESKTOP_UNFAVOURITE_LABEL,
+            "detailsLabel": words::DESKTOP_DETAILS_LABEL,
+            "folderLabel": words::DESKTOP_FOLDER_LABEL,
+            "libretroSuffix": words::DESKTOP_LIBRETRO_SUFFIX,
+            "nativeSuffix": words::DESKTOP_NATIVE_SUFFIX
         }),
     );
     merge(
         &mut map,
         json!({
-            "tableHeading": "Library Table",
-            "clearFiltersLabel": "Clear filters",
-            "columns": ["Title", "Console", "Core", "Year", "Genre", "Time Played", "States", "Format", "Status"],
-            "sortAsc": "↑",
-            "sortDesc": "↓",
-            "statusResume": "Resume",
-            "statusFav": "Favourite",
-            "statusReady": "Ready",
-            "selectedSuffix": "selected",
-            "clearSelectionLabel": "Clear",
-            "batchMarkFav": "Favourite",
-            "batchUnmarkFav": "Unfavourite",
-            "batchPage": "Page",
-            "batchPlay": "Play",
-            "batchClear": "Clear",
-            "dash": "—"
+            "tableHeading": words::DESKTOP_TABLE_HEADING,
+            "clearFiltersLabel": words::DESKTOP_CLEAR_FILTERS_LABEL,
+            "columns": words::DESKTOP_TABLE_COLUMNS,
+            "sortAsc": words::DESKTOP_SORT_ASC,
+            "sortDesc": words::DESKTOP_SORT_DESC,
+            "statusResume": words::DESKTOP_RESUME_LABEL,
+            "statusFav": words::DESKTOP_FAVOURITE_LABEL,
+            "statusReady": words::DESKTOP_STATUS_READY,
+            "selectedSuffix": words::DESKTOP_SELECTED_SUFFIX,
+            "clearSelectionLabel": words::DESKTOP_CLEAR_LABEL,
+            "batchMarkFav": words::DESKTOP_FAVOURITE_LABEL,
+            "batchUnmarkFav": words::DESKTOP_UNMARK_FAV_LABEL,
+            "batchPage": words::DESKTOP_DETAILS_LABEL,
+            "batchPlay": words::DESKTOP_PLAY_LABEL,
+            "batchClear": words::DESKTOP_CLEAR_LABEL,
+            "dash": words::DESKTOP_DASH
         }),
     );
     merge(
         &mut map,
         json!({
-            "stripLibrary": "Library",
-            "stripPause": "Pause",
-            "stripResume": "Resume",
-            "stripRewind": "Rewind",
-            "stripStates": "States",
-            "stripShaders": "Shaders",
-            "stripCheats": "Cheats",
-            "stripControls": "Options",
-            "stripScreenshot": "Shot",
-            "stripFullscreen": "Fullscreen",
-            "stripBigPicture": "Big Picture",
-            "drawerTabs": ["Shaders", "States", "Cheats", "Options"],
-            "quickSaveLabel": "Save Slot",
-            "quickLoadLabel": "Load Slot",
-            "slotPrefix": "Slot",
-            "emptySlotLabel": "Empty",
-            "rewindNowLabel": "Rewind",
-            "noRewindLabel": "Rewind unavailable",
-            "masterCheatsLabel": "Master Cheats",
-            "noCheatsLabel": "No cheats for this game",
-            "shadersHeading": "Display & Shaders",
-            "noDisplayRowsLabel": "Open Settings for per-console shader configuration",
-            "speedLabel": "Speed",
+            "stripLibrary": words::LIBRARY_SECTION,
+            "stripPause": words::DESKTOP_STRIP_PAUSE,
+            "stripResume": words::DESKTOP_RESUME_LABEL,
+            "stripRewind": words::DESKTOP_STRIP_REWIND,
+            "stripStates": words::DESKTOP_STRIP_STATES,
+            "stripShaders": words::DESKTOP_STRIP_SHADERS,
+            "stripCheats": words::DESKTOP_STRIP_CHEATS,
+            "stripControls": words::OPTIONS,
+            "stripScreenshot": words::DESKTOP_STRIP_SHOT,
+            "stripFullscreen": words::DESKTOP_STRIP_FULLSCREEN,
+            "stripBigPicture": words::DESKTOP_BIG_PICTURE_LABEL,
+            "drawerTabs": words::DESKTOP_DRAWER_TABS,
+            "quickSaveLabel": words::DESKTOP_QUICK_SAVE_LABEL,
+            "quickLoadLabel": words::DESKTOP_QUICK_LOAD_LABEL,
+            "slotPrefix": words::DESKTOP_SLOT_PREFIX,
+            "emptySlotLabel": words::DESKTOP_EMPTY_SLOT_LABEL,
+            "rewindNowLabel": words::DESKTOP_REWIND_AVAILABLE,
+            "noRewindLabel": words::DESKTOP_NO_REWIND_LABEL,
+            "masterCheatsLabel": words::DESKTOP_MASTER_CHEATS_LABEL,
+            "noCheatsLabel": words::DESKTOP_NO_CHEATS_LABEL,
+            "shadersHeading": words::DESKTOP_SHADERS_HEADING,
+            "noDisplayRowsLabel": words::DESKTOP_NO_DISPLAY_ROWS_LABEL,
+            "speedLabel": words::DESKTOP_SPEED_LABEL,
             "speeds": [
                 { "percent": 25, "label": "25%" },
                 { "percent": 100, "label": "100%" },
                 { "percent": 300, "label": "300%" },
-                { "percent": 0, "label": "Max" }
+                { "percent": 0, "label": words::DESKTOP_SPEED_MAX_LABEL }
             ],
-            "swapPlayersLabel": "Swap P1 / P2",
-            "restartLabel": "Restart",
-            "quitGameLabel": "Close Game"
+            "swapPlayersLabel": words::DESKTOP_SWAP_PLAYERS_LABEL,
+            "restartLabel": words::DESKTOP_RESTART_LABEL,
+            "quitGameLabel": words::DESKTOP_QUIT_GAME_LABEL
         }),
     );
     merge(
         &mut map,
         json!({
-            "settingsFilterPlaceholder": "Filter settings...",
-            "settingsHeading": "SETTINGS",
-            "toolsHeading": "TOOLS",
-            "modifiedOnlyLabel": "Modified only",
-            "backLabel": "Back",
-            "themesHeading": "Themes",
-            "themesSubtitle": "Choose an EmuSen or ES-DE look. Changes apply immediately.",
-            "useThemeLabel": "Use",
-            "inUseLabel": "In use",
-            "dualFaceBadge": "Dual Face",
-            "bigPictureBadge": "Big Picture",
-            "esdeBadge": "ES-DE",
+            "settingsFilterPlaceholder": words::DESKTOP_SETTINGS_FILTER_PLACEHOLDER,
+            "settingsHeading": words::DESKTOP_SETTINGS_HEADING,
+            "toolsHeading": words::DESKTOP_TOOLS_HEADING,
+            "modifiedOnlyLabel": words::DESKTOP_MODIFIED_ONLY_LABEL,
+            "backLabel": words::DESKTOP_BACK_LABEL,
+            "themesHeading": words::DESKTOP_THEMES_HEADING,
+            "themesSubtitle": words::DESKTOP_THEMES_SUBTITLE,
+            "useThemeLabel": words::DESKTOP_USE_THEME_LABEL,
+            "inUseLabel": words::DESKTOP_IN_USE_LABEL,
+            "dualFaceBadge": words::DESKTOP_DUAL_FACE_BADGE,
+            "bigPictureBadge": words::DESKTOP_BIG_PICTURE_BADGE,
+            "esdeBadge": words::DESKTOP_ESDE_BADGE,
             "navObjectNames": ["desktopNavLibrary", "desktopNavTable", "desktopNavSettings"],
             "allKey": "all",
             "sep": " · ",
             "percent": "%",
             "batteryPrefix": "BAT ",
-            "checkThemeLabel": "Check",
+            "checkThemeLabel": words::DESKTOP_CHECK_THEME_LABEL,
             "toolsList": [
-                { "key": "cores", "label": "Cores" },
-                { "key": "shaders", "label": "Shaders" },
-                { "key": "packages", "label": "Packages" },
-                { "key": "scraper", "label": "Scraper" },
-                { "key": "library", "label": "Library Manager" },
-                { "key": "themes", "label": "Themes" }
+                { "key": "cores", "label": words::HOME_PLACES[4] },
+                { "key": "shaders", "label": words::DESKTOP_STRIP_SHADERS },
+                { "key": "packages", "label": words::HOME_PLACES[2] },
+                { "key": "scraper", "label": words::HOME_PLACES[1] },
+                { "key": "library", "label": words::DESKTOP_LIBRARY_MANAGER_LABEL },
+                { "key": "themes", "label": words::DESKTOP_THEMES_HEADING }
             ],
-            "aboutDetailHeading": "DETAILS",
-            "statusHints": "Double-click: Play · F10: Big Picture · F11: Fullscreen",
+            "aboutDetailHeading": words::DESKTOP_ABOUT_DETAIL_HEADING,
+            "statusHints": words::DESKTOP_STATUS_HINTS,
             "icons": {
                 "search": "M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0 -14M16.5 16.5L21 21",
                 "heart": "M12 20s-7-4.5-9-9a5 5 0 0 1 9-3a5 5 0 0 1 9 3c-2 4.5-9 9-9 9z",
@@ -632,8 +830,9 @@ fn row_matches_search(g: &GameRow, core: &str, genre: &str, query: &str) -> bool
         || g.year.to_lowercase().contains(&q)
 }
 
-/// Computes all Desktop Mode JSON projections from the real library, session, saved states, and cached inspector state.
-pub fn project_desktop(
+/// Computes structured Desktop Workspace projections from the real library, session, saved states, and cached inspector state.
+#[allow(clippy::too_many_arguments)]
+pub fn project_workspace(
     view: &LibraryView,
     extra_meta: &[(String, BTreeMap<String, String>)],
     state: &DesktopState,
@@ -642,20 +841,21 @@ pub fn project_desktop(
     cached: Option<&CachedInspector>,
     theme_name: &str,
     controllers: i32,
-) -> DesktopProjection {
+) -> DesktopWorkspaceData {
     let now = words::now();
     let meta = if !view.catalog.metadata.is_empty() { view.catalog.metadata.as_slice() } else { extra_meta };
     let has_running = session.running && !session.game.is_empty();
-    let theme_label = if theme_name.trim().is_empty() { "EmuSen".to_owned() } else { theme_name.trim().to_owned() };
+    let theme_label = if theme_name.trim().is_empty() { words::NAME.to_owned() } else { theme_name.trim().to_owned() };
     let mode_badge = theme_label.to_ascii_uppercase();
-    let status_summary = format!("{} · {} Desktop", words::version_line(), theme_label);
+    let status_summary = words::desktop_status_summary(&theme_label);
 
     let all_games = games_of_at(ALL, &view.systems, &view.catalog, now);
     let recent_count = view.catalog.recent.len();
     let fav_count = all_games.iter().filter(|g| g.favourite).count();
+    let fav_systems: HashSet<&str> = all_games.iter().filter(|g| g.favourite).map(|g| g.system.as_str()).collect();
 
     let console_q = state.console_filter.trim().to_lowercase();
-    let source_consoles = if state.console_scope == 0 {
+    let source_consoles: Vec<_> = if state.console_scope == 0 {
         let mut all = view.cored.clone();
         for r in view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)) {
             if !all.iter().any(|c| c.key == r.key) {
@@ -663,44 +863,57 @@ pub fn project_desktop(
             }
         }
         all
+    } else if state.console_scope == 2 {
+        view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console) && fav_systems.contains(r.key.as_str())).cloned().collect()
     } else {
         view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).cloned().collect()
     };
-    let consoles: Vec<Value> = source_consoles
+    let consoles: Vec<DesktopConsole> = source_consoles
         .iter()
         .filter(|r| console_q.is_empty() || r.name.to_lowercase().contains(&console_q) || r.full_name.to_lowercase().contains(&console_q))
         .map(|r| {
             let planet = planet_of(&r.engine_name, r.libretro, !r.engine.is_empty());
-            json!({
-                "key": r.key,
-                "name": r.name,
-                "fullName": r.full_name,
-                "count": r.count,
-                "played": r.played,
-                "planet": planet,
-                "engine": r.engine_name,
-                "libretro": r.libretro,
-                "screen": r.screen,
-                "hue": r.hue,
-            })
+            let engine_kind = if r.engine_name.is_empty() {
+                String::new()
+            } else if r.libretro {
+                words::DESKTOP_LIBRETRO_SUFFIX.to_owned()
+            } else {
+                words::DESKTOP_NATIVE_SUFFIX.to_owned()
+            };
+            DesktopConsole {
+                key: r.key.clone(),
+                name: r.name.clone(),
+                full_name: r.full_name.clone(),
+                maker: r.maker.clone(),
+                year: r.year,
+                games: r.count as i32,
+                played: r.played as i32,
+                engine: r.engine_name.clone(),
+                engine_kind,
+                planet,
+                libretro: r.libretro,
+                has_games: r.count > 0,
+                screen: r.screen.clone(),
+                hue: r.hue,
+            }
         })
         .collect();
 
     let mut places = Vec::new();
     if has_running {
-        places.push(json!({ "key": "continue", "label": words::CONTINUE_ENTRY, "count": 1 }));
+        places.push(DesktopPlace { key: "continue".to_owned(), label: words::CONTINUE_ENTRY.to_owned(), count: 1 });
     }
-    places.push(json!({ "key": ALL, "label": "All Games", "count": all_games.len() }));
-    places.push(json!({ "key": crate::library::FAVOURITES, "label": words::FAVOURITES_FILTER, "count": fav_count }));
-    places.push(json!({ "key": crate::library::RECENT, "label": "Recently Played", "count": recent_count }));
+    places.push(DesktopPlace { key: ALL.to_owned(), label: words::DESKTOP_ALL_GAMES_LABEL.to_owned(), count: all_games.len() as i32 });
+    places.push(DesktopPlace { key: crate::library::FAVOURITES.to_owned(), label: words::FAVOURITES_FILTER.to_owned(), count: fav_count as i32 });
+    places.push(DesktopPlace { key: crate::library::RECENT.to_owned(), label: words::DESKTOP_RECENT_LABEL.to_owned(), count: recent_count as i32 });
 
     let active_row = view.rows.rows().iter().find(|r| r.key == state.console_key);
     let active_heading = match state.console_key.as_str() {
         "continue" => words::CONTINUE_ENTRY.to_owned(),
-        ALL => "All Games".to_owned(),
+        ALL => words::DESKTOP_ALL_GAMES_LABEL.to_owned(),
         crate::library::FAVOURITES => words::FAVOURITES_FILTER.to_owned(),
-        crate::library::RECENT => "Recently Played".to_owned(),
-        _ => active_row.map(|r| r.name.clone()).unwrap_or_else(|| "All Games".to_owned()),
+        crate::library::RECENT => words::DESKTOP_RECENT_LABEL.to_owned(),
+        _ => active_row.map(|r| r.name.clone()).unwrap_or_else(|| words::DESKTOP_ALL_GAMES_LABEL.to_owned()),
     };
     let (active_core, active_planet, _) = if active_row.is_some_and(|r| r.kind == Some(Kind::Console)) {
         system_core_info(view, &state.console_key)
@@ -710,18 +923,8 @@ pub fn project_desktop(
     let active_screen = active_row.map(|r| r.screen.clone()).unwrap_or_default();
     let total_consoles = view.systems.len();
     let active_consoles = view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).count();
-
-    let consoles_json = json!({
-        "places": places,
-        "consoles": consoles,
-        "activeHeading": active_heading,
-        "activeCore": active_core,
-        "activePlanet": active_planet,
-        "activeScreen": active_screen,
-        "countsLine": format!("{active_consoles} / {total_consoles}"),
-        "controllersLine": if controllers > 0 { words::counted(controllers as usize, "controller", "controllers") } else { "No controller".to_owned() },
-    })
-    .to_string();
+    let counts_line = format!("{active_consoles} / {total_consoles}");
+    let controllers_line = words::desktop_controllers_line(controllers);
 
     let base_list: Vec<GameRow> = match state.console_key.as_str() {
         "continue" => {
@@ -840,55 +1043,55 @@ pub fn project_desktop(
     let marked_set: HashSet<&str> = state.marked_keys.iter().map(String::as_str).collect();
     let all_marked = !visible_paths.is_empty() && visible_paths.iter().all(|p| marked_set.contains(p.as_str()));
 
-    let rows_json: Vec<Value> = filtered
+    let games: Vec<DesktopGame> = filtered
         .iter()
         .map(|e| {
             let cover = cover_url(&e.row.cover);
             let hero = cover_url(if e.row.hero.is_empty() { &e.row.cover } else { &e.row.hero });
             let swatch = cover_swatch(&cover, game_seed(&e.row.path));
             let badge = if has_running && session.game == e.row.path {
-                "RESUME".to_owned()
+                words::DESKTOP_RESUME_BADGE.to_owned()
             } else if e.states_count > 0 {
                 words::counted(e.states_count, "STATE", "STATES")
             } else {
                 String::new()
             };
             let status_label = if e.resume_ready {
-                "Resume"
+                words::DESKTOP_RESUME_LABEL.to_owned()
             } else if e.row.favourite {
-                "Favourite"
+                words::DESKTOP_FAVOURITE_LABEL.to_owned()
             } else {
-                "Ready"
+                words::DESKTOP_STATUS_READY.to_owned()
             };
-            let states_label = if e.states_count > 0 { words::counted(e.states_count, "state", "states") } else { "—".to_owned() };
+            let states_label = if e.states_count > 0 { words::counted(e.states_count, "state", "states") } else { words::DESKTOP_DASH.to_owned() };
             let subtitle = words::line(&[&e.year, &e.genre]);
             let subtitle = if subtitle.is_empty() { e.row.console.clone() } else { subtitle };
-            json!({
-                "path": e.row.path,
-                "title": e.row.title,
-                "system": e.row.system,
-                "console": e.row.console,
-                "core": e.core,
-                "planet": e.planet,
-                "libretro": e.libretro,
-                "year": e.year,
-                "genre": e.genre,
-                "subtitle": subtitle,
-                "playedWords": if e.played_words.is_empty() { "—".to_owned() } else { e.played_words.clone() },
-                "playedSeconds": e.played_seconds,
-                "lastPlayedWords": e.last_played_words,
-                "favourite": e.row.favourite,
-                "marked": marked_set.contains(e.row.path.as_str()),
-                "resumeReady": e.resume_ready,
-                "badge": badge,
-                "coverUrl": cover,
-                "heroUrl": hero,
-                "swatch": swatch,
-                "format": e.format,
-                "statesCount": e.states_count,
-                "statesLabel": states_label,
-                "statusLabel": status_label,
-            })
+            DesktopGame {
+                key: e.row.path.clone(),
+                title: e.row.title.clone(),
+                system: e.row.system.clone(),
+                console: e.row.console.clone(),
+                core: e.core.clone(),
+                planet: e.planet,
+                libretro: e.libretro,
+                year: e.year.clone(),
+                genre: e.genre.clone(),
+                subtitle,
+                played_words: if e.played_words.is_empty() { words::DESKTOP_DASH.to_owned() } else { e.played_words.clone() },
+                played_seconds: e.played_seconds,
+                last_played_words: e.last_played_words.clone(),
+                favourite: e.row.favourite,
+                marked: marked_set.contains(e.row.path.as_str()),
+                resume_ready: e.resume_ready,
+                badge,
+                cover,
+                hero,
+                swatch,
+                format: e.format.clone(),
+                states_count: e.states_count as i32,
+                states_label,
+                status_label,
+            }
         })
         .collect();
 
@@ -899,103 +1102,131 @@ pub fn project_desktop(
     };
 
     let selected_item = filtered.iter().find(|e| e.row.path == effective_selected);
-    let inspector_json = if let Some(item) = selected_item {
+    let mut data = DesktopWorkspaceData {
+        theme_name: theme_label,
+        status_text: String::new(),
+        status_summary,
+        mode_badge,
+        big_picture_hint: words::DESKTOP_BIG_PICTURE_HINT.to_owned(),
+        status_hints: words::DESKTOP_STATUS_HINTS.to_owned(),
+        counts_line,
+        controllers_line,
+        marked_count: state.marked_keys.len() as i32,
+        all_marked,
+        count: filtered.len() as i32,
+        total_count: f_all as i32,
+        summary_line: words::desktop_summary_line(filtered.len(), f_all, state.filter_key != ALL || !state.search_query.trim().is_empty()),
+        empty_words: if state.filter_key != ALL || !state.search_query.trim().is_empty() {
+            words::NO_GAMES_FOUND.to_owned()
+        } else if state.console_key == crate::library::FAVOURITES {
+            words::NO_FAVOURITES.to_owned()
+        } else if state.console_key == crate::library::RECENT {
+            words::NO_RECENT.to_owned()
+        } else {
+            words::NO_GAMES.to_owned()
+        },
+        active_heading: active_heading.clone(),
+        active_core,
+        active_planet,
+        active_screen,
+        has_selection: selected_item.is_some(),
+        effective_selected,
+        places,
+        consoles,
+        filters: vec![
+            DesktopFilter { key: "all".to_owned(), label: words::ALL.to_owned(), count: f_all as i32 },
+            DesktopFilter { key: "favourites".to_owned(), label: words::FAVOURITES_FILTER.to_owned(), count: f_fav as i32 },
+            DesktopFilter { key: "resume".to_owned(), label: words::DESKTOP_FILTER_RESUME_READY.to_owned(), count: f_res as i32 },
+            DesktopFilter { key: "unplayed".to_owned(), label: words::DESKTOP_FILTER_UNPLAYED.to_owned(), count: f_unp as i32 },
+        ],
+        sorts: SORT_LABELS
+            .iter()
+            .zip(SORT_KEYS)
+            .enumerate()
+            .map(|(index, (label, key))| DesktopSort { index: index as i32, label: (*label).to_owned(), key: key.to_owned() })
+            .collect(),
+        letters,
+        games,
+        inspector_states: Vec::new(),
+        visible_paths,
+        ..DesktopWorkspaceData::default()
+    };
+
+    if let Some(item) = selected_item {
         let c_facts = cached.filter(|c| c.path == item.row.path);
         let cover = cover_url(&item.row.cover);
         let hero = cover_url(if item.row.hero.is_empty() { &item.row.cover } else { &item.row.hero });
         let swatch = cover_swatch(&hero, game_seed(&item.row.path));
         let players = c_facts.map(|c| c.facts.players.clone()).filter(|p| !p.is_empty()).unwrap_or_else(|| words::players(&meta_str(meta, &item.row.path, "players")));
         let description = c_facts.map(|c| c.facts.description.clone()).filter(|d| !d.is_empty()).unwrap_or_else(|| meta_str(meta, &item.row.path, "description"));
-        let size_words = c_facts.and_then(|c| c.size_bytes).map(format_bytes).unwrap_or_else(|| "—".to_owned());
+        let size_words = c_facts.and_then(|c| c.size_bytes).map(format_bytes).unwrap_or_else(|| words::DESKTOP_DASH.to_owned());
         let played_line = match (item.played_words.as_str(), item.last_played_words.as_str()) {
-            ("", "") => "Never played".to_owned(),
+            ("", "") => words::DESKTOP_NEVER_PLAYED.to_owned(),
             ("", last) => last.to_owned(),
             (p, "") => p.to_owned(),
             (p, last) => format!("{p} · {last}"),
         };
         let subtitle = words::line(&[&item.row.console, &item.year, &item.genre]);
         let core_kind = if item.core.is_empty() {
-            "—".to_owned()
+            words::DESKTOP_DASH.to_owned()
         } else if item.libretro {
-            format!("{} (libretro)", item.core)
+            format!("{} ({})", item.core, words::DESKTOP_LIBRETRO_SUFFIX)
         } else {
-            format!("{} (EmuSen native)", item.core)
+            format!("{} ({})", item.core, words::DESKTOP_NATIVE_SUFFIX)
         };
         let package_name = view.catalog.games.iter().find(|g| g.path == item.row.path).and_then(|g| g.package.as_deref()).unwrap_or_default();
         let cheats_count = c_facts.map_or(0, |c| c.cheats_count);
-        let states_json: Vec<Value> = c_facts
+        let inspector_states: Vec<DesktopStateEntry> = c_facts
             .map(|c| c.states.as_slice())
             .unwrap_or(&[])
             .iter()
             .map(|s| {
                 let label = match s.slot {
-                    crate::game_page::Slot::Auto => "Resume (Auto)".to_owned(),
-                    crate::game_page::Slot::Number(n) => format!("Slot {n}"),
+                    crate::game_page::Slot::Auto => words::DESKTOP_RESUME_AUTO_LABEL.to_owned(),
+                    crate::game_page::Slot::Number(n) => format!("{} {n}", words::DESKTOP_SLOT_PREFIX),
                 };
-                json!({
-                    "path": s.path,
-                    "label": label,
-                    "whenWords": words::ago(s.when, now),
-                    "pictureUrl": cover_url(&s.picture),
-                    "isAuto": matches!(s.slot, crate::game_page::Slot::Auto),
-                })
+                DesktopStateEntry {
+                    path: s.path.clone(),
+                    label,
+                    when_words: words::ago(s.when, now),
+                    picture: cover_url(&s.picture),
+                    is_auto: matches!(s.slot, crate::game_page::Slot::Auto),
+                }
             })
             .collect();
-        json!({
-            "hasGame": true,
-            "path": item.row.path,
-            "title": item.row.title,
-            "subtitle": subtitle,
-            "console": item.row.console,
-            "system": item.row.system,
-            "core": item.core,
-            "coreLine": core_kind,
-            "planet": item.planet,
-            "libretro": item.libretro,
-            "playedWords": played_line,
-            "players": if players.is_empty() { "—".to_owned() } else { players },
-            "genre": if item.genre.is_empty() { "—".to_owned() } else { item.genre.clone() },
-            "description": description,
-            "fileName": path_file_name(&item.row.path),
-            "folderPath": path_folder(&item.row.path),
-            "sizeWords": size_words,
-            "favourite": item.row.favourite,
-            "running": has_running && session.game == item.row.path,
-            "coverUrl": cover,
-            "heroUrl": hero,
-            "swatch": swatch,
-            "statesCount": item.states_count,
-            "statesHeading": if item.states_count > 0 { format!("SAVE STATES · {}", item.states_count) } else { "SAVE STATES".to_owned() },
-            "states": states_json,
-            "packageWords": if package_name.is_empty() { "Read in place".to_owned() } else { package_name.to_owned() },
-            "cheatsWords": if cheats_count > 0 { words::counted(cheats_count, "code", "codes") } else { "None".to_owned() },
-        })
-    } else {
-        json!({ "hasGame": false })
+
+        data.inspector_title = item.row.title.clone();
+        data.inspector_subtitle = subtitle;
+        data.inspector_console = item.row.console.clone();
+        data.inspector_system = item.row.system.clone();
+        data.inspector_core = item.core.clone();
+        data.inspector_core_line = core_kind;
+        data.inspector_planet = item.planet;
+        data.inspector_libretro = item.libretro;
+        data.inspector_played_words = played_line;
+        data.inspector_players = if players.is_empty() { words::DESKTOP_DASH.to_owned() } else { players };
+        data.inspector_genre = if item.genre.is_empty() { words::DESKTOP_DASH.to_owned() } else { item.genre.clone() };
+        data.inspector_description = description;
+        data.inspector_file_name = path_file_name(&item.row.path);
+        data.inspector_folder_path = path_folder(&item.row.path);
+        data.inspector_size_words = size_words;
+        data.inspector_favourite = item.row.favourite;
+        data.inspector_running = has_running && session.game == item.row.path;
+        data.inspector_cover = cover;
+        data.inspector_hero = hero;
+        data.inspector_swatch = swatch;
+        data.inspector_states_count = item.states_count as i32;
+        data.inspector_states_heading = if item.states_count > 0 {
+            format!("{} · {}", words::DESKTOP_SAVE_STATES_LABEL, item.states_count)
+        } else {
+            words::DESKTOP_SAVE_STATES_LABEL.to_owned()
+        };
+        data.inspector_states = inspector_states;
+        data.inspector_package_words = if package_name.is_empty() { words::DESKTOP_READ_IN_PLACE.to_owned() } else { package_name.to_owned() };
+        data.inspector_cheats_words = if cheats_count > 0 { words::counted(cheats_count, "code", "codes") } else { words::DESKTOP_NONE_LABEL.to_owned() };
     }
-    .to_string();
 
-    let narrowed = state.filter_key != ALL || !state.search_query.trim().is_empty();
-    let games_summary = if narrowed {
-        format!("Showing {} of {} games", words::grouped(filtered.len()), words::grouped(f_all))
-    } else {
-        words::games(filtered.len())
-    };
-    let games_json = json!({
-        "count": filtered.len(),
-        "totalCount": f_all,
-        "summaryLine": games_summary,
-        "filterCounts": { "all": f_all, "favourites": f_fav, "resume": f_res, "unplayed": f_unp },
-        "rows": rows_json,
-        "letters": letters,
-        "allMarked": all_marked,
-    })
-    .to_string();
-
-    let pause_facts = if session.card_facts.is_empty() { None } else { Some(PauseFacts::from_json(&session.card_facts)) };
-    let playing_json = build_playing_json(view, session, pause_facts.as_ref());
-
-    let status_text = if !state.marked_keys.is_empty() && state.view == 1 {
+    data.status_text = if !state.marked_keys.is_empty() && state.view == 1 {
         format!("{} of {} selected ({} total in library)", words::grouped(state.marked_keys.len()), words::grouped(filtered.len()), words::grouped(all_games.len()))
     } else if let Some(item) = selected_item {
         format!("{active_heading} · {} · Selected: {}", words::games(filtered.len()), item.row.title)
@@ -1003,21 +1234,168 @@ pub fn project_desktop(
         format!("{active_heading} · {}", words::games(filtered.len()))
     };
 
+    data
+}
+
+/// Computes all Desktop Mode JSON projections from the real library, session, saved states, and cached inspector state.
+#[allow(clippy::too_many_arguments)]
+pub fn project_desktop(
+    view: &LibraryView,
+    extra_meta: &[(String, BTreeMap<String, String>)],
+    state: &DesktopState,
+    session: &SessionSnapshot,
+    state_counts: &BTreeMap<String, usize>,
+    cached: Option<&CachedInspector>,
+    theme_name: &str,
+    controllers: i32,
+) -> DesktopProjection {
+    let ws = project_workspace(view, extra_meta, state, session, state_counts, cached, theme_name, controllers);
+    let places_json: Vec<Value> = ws.places.iter().map(|p| json!({ "key": p.key, "label": p.label, "count": p.count })).collect();
+    let consoles_list: Vec<Value> = ws
+        .consoles
+        .iter()
+        .map(|c| {
+            json!({
+                "key": c.key,
+                "name": c.name,
+                "fullName": c.full_name,
+                "count": c.games,
+                "played": c.played,
+                "planet": c.planet,
+                "engine": c.engine,
+                "libretro": c.libretro,
+                "screen": c.screen,
+                "hue": c.hue,
+            })
+        })
+        .collect();
+    let consoles_json = json!({
+        "places": places_json,
+        "consoles": consoles_list,
+        "activeHeading": ws.active_heading,
+        "activeCore": ws.active_core,
+        "activePlanet": ws.active_planet,
+        "activeScreen": ws.active_screen,
+        "countsLine": ws.counts_line,
+        "controllersLine": ws.controllers_line,
+    })
+    .to_string();
+
+    let rows_json: Vec<Value> = ws
+        .games
+        .iter()
+        .map(|g| {
+            json!({
+                "path": g.key,
+                "title": g.title,
+                "system": g.system,
+                "console": g.console,
+                "core": g.core,
+                "planet": g.planet,
+                "libretro": g.libretro,
+                "year": g.year,
+                "genre": g.genre,
+                "subtitle": g.subtitle,
+                "playedWords": g.played_words,
+                "playedSeconds": g.played_seconds,
+                "lastPlayedWords": g.last_played_words,
+                "favourite": g.favourite,
+                "marked": g.marked,
+                "resumeReady": g.resume_ready,
+                "badge": g.badge,
+                "coverUrl": g.cover,
+                "heroUrl": g.hero,
+                "swatch": g.swatch,
+                "format": g.format,
+                "statesCount": g.states_count,
+                "statesLabel": g.states_label,
+                "statusLabel": g.status_label,
+            })
+        })
+        .collect();
+
+    let inspector_json = if ws.has_selection {
+        let states_json: Vec<Value> = ws
+            .inspector_states
+            .iter()
+            .map(|s| {
+                json!({
+                    "path": s.path,
+                    "label": s.label,
+                    "whenWords": s.when_words,
+                    "pictureUrl": s.picture,
+                    "isAuto": s.is_auto,
+                })
+            })
+            .collect();
+        json!({
+            "hasGame": true,
+            "path": ws.effective_selected,
+            "title": ws.inspector_title,
+            "subtitle": ws.inspector_subtitle,
+            "console": ws.inspector_console,
+            "system": ws.inspector_system,
+            "core": ws.inspector_core,
+            "coreLine": ws.inspector_core_line,
+            "planet": ws.inspector_planet,
+            "libretro": ws.inspector_libretro,
+            "playedWords": ws.inspector_played_words,
+            "players": ws.inspector_players,
+            "genre": ws.inspector_genre,
+            "description": ws.inspector_description,
+            "fileName": ws.inspector_file_name,
+            "folderPath": ws.inspector_folder_path,
+            "sizeWords": ws.inspector_size_words,
+            "favourite": ws.inspector_favourite,
+            "running": ws.inspector_running,
+            "coverUrl": ws.inspector_cover,
+            "heroUrl": ws.inspector_hero,
+            "swatch": ws.inspector_swatch,
+            "statesCount": ws.inspector_states_count,
+            "statesHeading": ws.inspector_states_heading,
+            "states": states_json,
+            "packageWords": ws.inspector_package_words,
+            "cheatsWords": ws.inspector_cheats_words,
+        })
+    } else {
+        json!({ "hasGame": false })
+    }
+    .to_string();
+
+    let f_all = ws.filters.first().map_or(0, |f| f.count);
+    let f_fav = ws.filters.get(1).map_or(0, |f| f.count);
+    let f_res = ws.filters.get(2).map_or(0, |f| f.count);
+    let f_unp = ws.filters.get(3).map_or(0, |f| f.count);
+    let games_json = json!({
+        "count": ws.count,
+        "totalCount": ws.total_count,
+        "summaryLine": ws.summary_line,
+        "filterCounts": { "all": f_all, "favourites": f_fav, "resume": f_res, "unplayed": f_unp },
+        "rows": rows_json,
+        "letters": ws.letters,
+        "allMarked": ws.all_marked,
+    })
+    .to_string();
+
+    let pause_facts = if session.card_facts.is_empty() { None } else { Some(PauseFacts::from_json(&session.card_facts)) };
+    let playing_json = build_playing_json(view, session, pause_facts.as_ref());
+
     DesktopProjection {
         consoles_json,
         games_json,
         inspector_json,
         playing_json,
-        status_text,
-        mode_badge,
-        status_summary,
-        effective_selected,
-        visible_paths,
-        all_marked,
+        status_text: ws.status_text,
+        mode_badge: ws.mode_badge,
+        status_summary: ws.status_summary,
+        effective_selected: ws.effective_selected,
+        visible_paths: ws.visible_paths,
+        all_marked: ws.all_marked,
     }
 }
 
-fn build_playing_json(view: &LibraryView, session: &SessionSnapshot, facts: Option<&PauseFacts>) -> String {
+/// Computes structured playing HUD data from the active session and pause facts.
+pub fn project_playing(view: &LibraryView, session: &SessionSnapshot, facts: Option<&PauseFacts>) -> DesktopPlayingData {
     let title = if session.game.is_empty() {
         if session.console.is_empty() { String::new() } else { crate::session::console_session_name(&session.console) }
     } else {
@@ -1034,36 +1412,78 @@ fn build_playing_json(view: &LibraryView, session: &SessionSnapshot, facts: Opti
         view.catalog.games.iter().find(|g| g.path == session.game).and_then(|g| g.system.clone()).unwrap_or_default()
     };
     let (core, planet, _) = system_core_info(view, &system);
-    let slots: Vec<Value> = facts
+    let slots: Vec<DesktopPlayingSlot> = facts
         .map(|f| {
             f.slots
                 .iter()
-                .map(|s| json!({ "slot": s.slot, "exists": s.exists, "when": s.when, "picture": s.picture }))
+                .map(|s| DesktopPlayingSlot {
+                    slot: s.slot as i32,
+                    exists: s.exists,
+                    when: s.when.clone(),
+                    picture: s.picture.clone(),
+                    active: s.slot == session.slot,
+                })
                 .collect()
         })
-        .unwrap_or_else(|| (1..=8).map(|slot| json!({ "slot": slot, "exists": false, "when": "", "picture": "" })).collect());
-    let cheats: Vec<Value> = facts
+        .unwrap_or_else(|| {
+            (1..=8)
+                .map(|slot| DesktopPlayingSlot {
+                    slot,
+                    exists: false,
+                    when: String::new(),
+                    picture: String::new(),
+                    active: slot as u32 == session.slot,
+                })
+                .collect()
+        });
+    let cheats: Vec<DesktopPlayingCheat> = facts
         .map(|f| {
             f.cheats
                 .iter()
                 .enumerate()
-                .map(|(i, c)| json!({ "index": i, "description": c.description, "on": c.on }))
+                .map(|(i, c)| DesktopPlayingCheat { index: i as i32, description: c.description.clone(), on: c.on, code: String::new() })
                 .collect()
         })
         .unwrap_or_default();
-    let console_options: Vec<Value> = facts
+    let console_options: Vec<DesktopPlayingConsoleOption> = facts
         .map(|f| {
             f.cards
                 .schema
                 .iter()
                 .map(|r| {
-                    json!({
-                        "key": r.key,
-                        "label": r.label,
-                        "value": f.cards.value(&r.key),
-                        "choices": r.choices.clone().unwrap_or_default(),
-                        "choiceLabels": r.choice_labels.clone().unwrap_or_default(),
-                    })
+                    let value = f.cards.value(&r.key);
+                    let choices = r.choices.clone().unwrap_or_default();
+                    let choice_labels = r.choice_labels.clone().unwrap_or_default();
+                    let display_value = choices
+                        .iter()
+                        .position(|c| c == &value)
+                        .and_then(|i| choice_labels.get(i))
+                        .cloned()
+                        .unwrap_or_else(|| value.clone());
+                    DesktopPlayingConsoleOption {
+                        key: r.key.clone(),
+                        label: r.label.clone(),
+                        value,
+                        display_value,
+                        choice_count: choices.len() as i32,
+                        choices,
+                        choice_labels,
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let rewind_marks: Vec<DesktopPlayingRewindMark> = facts
+        .filter(|f| f.rewind_why.is_none() && !f.held.is_empty())
+        .map(|f| {
+            crate::reel::marks_of(&f.held, f.now, f.hz)
+                .into_iter()
+                .map(|m| DesktopPlayingRewindMark {
+                    frame: m.frame as f64,
+                    label: m.label(),
+                    short: m.short(),
+                    picture: f.moment_picture(&m),
+                    now: m.now,
                 })
                 .collect()
         })
@@ -1071,25 +1491,65 @@ fn build_playing_json(view: &LibraryView, session: &SessionSnapshot, facts: Opti
     let latest_rewind = facts.and_then(|f| f.held.last().copied()).unwrap_or(0);
     let has_rewind = facts.is_some_and(|f| f.rewind_why.is_none() && !f.held.is_empty());
 
+    DesktopPlayingData {
+        running: session.running,
+        paused: session.paused,
+        game: session.game.clone(),
+        system,
+        title,
+        console,
+        core,
+        planet,
+        fps_words: session.fps_words.clone(),
+        status: session.status.clone(),
+        slot: session.slot as i32,
+        speed: session.speed as i32,
+        master_cheats: session.master_cheats,
+        has_rewind,
+        latest_rewind_frame: latest_rewind as f64,
+        slots,
+        cheats,
+        console_options,
+        rewind_marks,
+    }
+}
+
+fn build_playing_json(view: &LibraryView, session: &SessionSnapshot, facts: Option<&PauseFacts>) -> String {
+    let p = project_playing(view, session, facts);
+    let slots: Vec<Value> = p.slots.iter().map(|s| json!({ "slot": s.slot, "exists": s.exists, "when": s.when, "picture": s.picture })).collect();
+    let cheats: Vec<Value> = p.cheats.iter().map(|c| json!({ "index": c.index, "description": c.description, "on": c.on })).collect();
+    let console_options: Vec<Value> = p
+        .console_options
+        .iter()
+        .map(|o| {
+            json!({
+                "key": o.key,
+                "label": o.label,
+                "value": o.value,
+                "choices": o.choices,
+                "choiceLabels": o.choice_labels,
+            })
+        })
+        .collect();
     json!({
-        "running": session.running,
-        "paused": session.paused,
-        "game": session.game,
-        "system": system,
-        "title": title,
-        "console": console,
-        "core": core,
-        "planet": planet,
-        "fpsWords": session.fps_words,
-        "status": session.status,
-        "slot": session.slot,
-        "speed": session.speed,
-        "masterCheats": session.master_cheats,
+        "running": p.running,
+        "paused": p.paused,
+        "game": p.game,
+        "system": p.system,
+        "title": p.title,
+        "console": p.console,
+        "core": p.core,
+        "planet": p.planet,
+        "fpsWords": p.fps_words,
+        "status": p.status,
+        "slot": p.slot,
+        "speed": p.speed,
+        "masterCheats": p.master_cheats,
         "slots": slots,
         "cheats": cheats,
         "consoleOptions": console_options,
-        "hasRewind": has_rewind,
-        "latestRewindFrame": latest_rewind,
+        "hasRewind": p.has_rewind,
+        "latestRewindFrame": p.latest_rewind_frame as u64,
     })
     .to_string()
 }
@@ -1293,6 +1753,7 @@ impl cxx_qt::Initialize for qobject::DesktopModel {
         self.as_mut().on_has_game_changed(|m| m.refresh()).release();
         self.as_mut().on_game_paused_changed(|m| m.refresh()).release();
         self.as_mut().on_game_shown_changed(|m| m.refresh()).release();
+        self.as_mut().on_full_screen_changed(|m| m.refresh()).release();
         self.as_mut().on_controllers_changed(|m| m.refresh()).release();
     }
 }
@@ -1404,7 +1865,7 @@ impl qobject::DesktopModel {
     }
 
     pub fn set_console_scope(mut self: Pin<&mut Self>, scope: i32) {
-        let scope = scope.clamp(0, 1);
+        let scope = scope.clamp(0, 2);
         if self.console_scope != scope {
             self.as_mut().rust_mut().state.console_scope = scope;
             self.as_mut().rust_mut().console_scope = scope;
@@ -1710,12 +2171,16 @@ impl qobject::DesktopModel {
         self.refresh();
     }
 
-    pub fn handle_settings_door(mut self: Pin<&mut Self>, name: &QString) {
-        let key = name.to_string();
-        match key.as_str() {
+    pub fn handle_settings_door(self: Pin<&mut Self>, name: &QString) {
+        self.open_door(&name.to_string());
+    }
+
+    pub fn open_door(mut self: Pin<&mut Self>, key: &str) -> bool {
+        match key {
             "themes" => {
                 self.as_mut().set_settings_tool(5);
                 self.refresh();
+                true
             }
             "shaders" => {
                 self.as_mut().set_settings_tool(-1);
@@ -1723,16 +2188,18 @@ impl qobject::DesktopModel {
                     unsafe { Pin::new_unchecked(settings) }.open_shaders_door();
                 }
                 self.refresh();
+                true
             }
             "bindings" | "keyboard" => {
                 self.as_mut().set_settings_tool(-1);
                 if let Some(settings) = unsafe { self.settings.as_mut() } {
                     let mut s = unsafe { Pin::new_unchecked(settings) };
-                    if let Some(row) = s.as_mut().focus_section_row(0, &key) {
+                    if let Some(row) = s.as_mut().focus_section_row(0, key) {
                         s.as_mut().choose(row as i32);
                     }
                 }
                 self.refresh();
+                true
             }
             "levers" => {
                 self.as_mut().set_settings_tool(-1);
@@ -1743,12 +2210,85 @@ impl qobject::DesktopModel {
                     }
                 }
                 self.refresh();
+                true
             }
-            "cores" => self.as_mut().select_settings_section(3),
-            "library" | "packages" => self.as_mut().select_settings_section(4),
-            "scraper" | "compressed" | "cheats" => self.as_mut().door_requested(name.clone()),
-            _ => {}
+            "cores" => {
+                self.as_mut().select_settings_section(3);
+                true
+            }
+            "library" | "packages" => {
+                self.as_mut().select_settings_section(4);
+                true
+            }
+            "scraper" | "compressed" | "cheats" => {
+                self.as_mut().door_requested(QString::from(key));
+                true
+            }
+            _ => false,
         }
+    }
+
+    pub fn open_folder_for(self: Pin<&mut Self>, key: &str) -> bool {
+        let target = if key.is_empty() { self.effective_selected_path() } else { key.to_owned() };
+        let folder = path_folder(&target);
+        if folder.is_empty() {
+            return false;
+        }
+        self.open_folder_requested(QString::from(folder.as_str()));
+        true
+    }
+
+    pub fn launch_from(self: Pin<&mut Self>, path: &str, state: &str) -> bool {
+        if path.is_empty() {
+            return false;
+        }
+        self.launch_from_requested(QString::from(path), QString::from(state));
+        true
+    }
+
+    pub fn add_games_to_collection(self: Pin<&mut Self>, games: Vec<String>, collection_id: &str) -> bool {
+        let Some(lib) = (unsafe { self.library.as_mut() }) else {
+            return false;
+        };
+        if games.is_empty() {
+            return false;
+        }
+        let pin = unsafe { Pin::new_unchecked(lib) };
+        if collection_id == "favourites" {
+            pin.batch_favourite(games, true);
+            return true;
+        }
+        let raw = collection_id.strip_prefix("collection:").unwrap_or(collection_id);
+        let Ok(id) = raw.parse::<i64>() else {
+            return false;
+        };
+        pin.batch_add_to_collection(id, games);
+        true
+    }
+
+    pub fn workspace_data(&self) -> DesktopWorkspaceData {
+        let lib = unsafe { self.library.as_ref() };
+        let empty = LibraryView::empty();
+        let (view, meta) = match lib {
+            Some(l) => (l.view(), l.effective_metadata()),
+            None => (&empty, &[][..]),
+        };
+        let session = self.session_snapshot();
+        let theme_name = self.theme_name.to_string();
+        project_workspace(view, meta, &self.state, &session, &self.state_counts, self.cached.as_ref(), &theme_name, self.controllers)
+    }
+
+    pub fn state(&self) -> &DesktopState {
+        &self.state
+    }
+
+    pub fn playing_data(&self) -> DesktopPlayingData {
+        let lib = unsafe { self.library.as_ref() };
+        let empty = LibraryView::empty();
+        let view = lib.map_or(&empty, |l| l.view());
+        let session = self.session_snapshot();
+        let facts = if session.card_facts.is_empty() { None } else { Some(PauseFacts::from_json(&session.card_facts)) };
+        project_playing(view, &session, facts.as_ref())
     }
 
     pub fn clear_filters(mut self: Pin<&mut Self>) {

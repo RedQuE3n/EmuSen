@@ -310,13 +310,15 @@ ThemeScreen {
                                     objectName: "eclipseDesktopLibraryGrid"
                                     anchors.fill: parent
                                     clip: true
-                                    readonly property int cols: Math.max(2, Math.min(5, Math.floor((gameGrid.width + Math.round(14 * root.px)) / Math.round(212 * root.px))))
-                                    cellWidth: Math.floor(gameGrid.width / gameGrid.cols)
+                                    readonly property real usableWidth: Math.max(1, width - Math.max(12, Math.ceil(gridScrollBar.width) + 2))
+                                    readonly property int cols: Math.max(2, Math.min(5, Math.floor((gameGrid.usableWidth + Math.round(14 * root.px)) / Math.round(212 * root.px))))
+                                    cellWidth: Math.floor(gameGrid.usableWidth / gameGrid.cols)
                                     cellHeight: Math.round(gameGrid.cellWidth * 0.78)
                                     model: Workspace.games
                                     readonly property bool fadeTop: !atYBeginning
                                     readonly property bool fadeBottom: !atYEnd
                                     ScrollBar.vertical: ScrollBar {
+                                        id: gridScrollBar
                                         policy: ScrollBar.AsNeeded
                                     }
 

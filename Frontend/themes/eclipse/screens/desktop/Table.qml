@@ -306,9 +306,11 @@ ThemeScreen {
                                 clip: true
                                 spacing: Math.round(2 * root.px)
                                 model: Workspace.games
+                                readonly property real usableWidth: Math.max(1, width - Math.max(12, Math.ceil(tableScrollBar.width) + 2))
                                 readonly property bool fadeTop: !atYBeginning
                                 readonly property bool fadeBottom: !atYEnd
                                 ScrollBar.vertical: ScrollBar {
+                                    id: tableScrollBar
                                     policy: ScrollBar.AsNeeded
                                 }
 
@@ -335,7 +337,7 @@ ThemeScreen {
                                     activeFocusOnTab: true
                                     Accessible.role: Accessible.Button
                                     Accessible.name: tRow.title
-                                    width: tableRows.width
+                                    width: tableRows.usableWidth
                                     height: root.rowHeight
                                     radius: Math.round(6 * root.px)
                                     color: tRow.marked ? ink.glowWeak : tRow.selected ? ink.surfaceRaised : tRowHover.hovered ? ink.glass : "transparent"

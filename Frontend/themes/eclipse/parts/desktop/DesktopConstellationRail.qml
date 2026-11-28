@@ -247,6 +247,9 @@ Rectangle {
                 anchors.fill: parent
                 leftPadding: Math.round(10 * root.px)
                 rightPadding: Math.round(10 * root.px)
+                topPadding: 0
+                bottomPadding: 0
+                verticalAlignment: TextInput.AlignVCenter
                 color: ink.textStrong
                 placeholderTextColor: ink.dim
                 placeholderText: Words.desktopConsoleFilterPlaceholder
@@ -278,9 +281,11 @@ Rectangle {
                 clip: true
                 spacing: Math.round(3 * root.px)
                 model: Workspace.consoles
+                readonly property real usableWidth: Math.max(1, width - Math.max(12, Math.ceil(consoleScrollBar.width) + 2))
                 readonly property bool fadeTop: !atYBeginning
                 readonly property bool fadeBottom: !atYEnd
                 ScrollBar.vertical: ScrollBar {
+                    id: consoleScrollBar
                     policy: ScrollBar.AsNeeded
                 }
 
@@ -294,7 +299,7 @@ Rectangle {
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: conRow.name
-                    width: consoleList.width
+                    width: consoleList.usableWidth
                     height: Math.round(31 * root.px)
                     radius: Math.round(7 * root.px)
                     color: conRow.current ? ink.glowWeak : conHover.hovered ? ink.surfaceRaised : "transparent"

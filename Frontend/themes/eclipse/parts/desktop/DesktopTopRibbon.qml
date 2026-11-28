@@ -344,6 +344,9 @@ Rectangle {
                     objectName: "eclipseDesktopGlobalSearch"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    topPadding: 0
+                    bottomPadding: 0
+                    verticalAlignment: TextInput.AlignVCenter
                     color: ink.textStrong
                     placeholderTextColor: ink.dim
                     placeholderText: root.settingsMode ? Words.desktopSettingsFilterPlaceholder : Words.desktopSearchPlaceholder

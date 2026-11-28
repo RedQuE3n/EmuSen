@@ -76,6 +76,9 @@ ThemeScreen {
                                 anchors.fill: parent
                                 leftPadding: Math.round(10 * root.px)
                                 rightPadding: Math.round(10 * root.px)
+                                topPadding: 0
+                                bottomPadding: 0
+                                verticalAlignment: TextInput.AlignVCenter
                                 color: ink.textStrong
                                 placeholderTextColor: ink.dim
                                 placeholderText: Words.desktopSettingsFilterPlaceholder
@@ -438,9 +441,11 @@ ThemeScreen {
                                 clip: true
                                 spacing: 0
                                 model: Settings.rows
+                                readonly property real usableWidth: Math.max(1, width - Math.max(12, Math.ceil(settingsScrollBar.width) + 2))
                                 readonly property bool fadeTop: !atYBeginning
                                 readonly property bool fadeBottom: !atYEnd
                                 ScrollBar.vertical: ScrollBar {
+                                    id: settingsScrollBar
                                     policy: ScrollBar.AsNeeded
                                 }
 
@@ -465,7 +470,7 @@ ThemeScreen {
                                     activeFocusOnTab: sRow.shown
                                     Accessible.role: Accessible.Button
                                     Accessible.name: sRow.label
-                                    width: settingsList.width
+                                    width: settingsList.usableWidth
                                     visible: sRow.shown
                                     height: sRow.shown ? Math.round(66 * root.px) : 0
 

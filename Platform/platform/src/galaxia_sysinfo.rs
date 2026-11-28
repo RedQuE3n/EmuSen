@@ -1,37 +1,36 @@
 //! Galaxia's C layer for host hardware and EmuSen process resource telemetry.
 
 use crate::serenity::guard;
-use crate::{fail, status, text};
+use crate::{fail, status};
 use emusen_galaxia::sysinfo::{self, TelemetryPaths};
 
 thread_local! {
     static WAITING: crate::reply::Waiting = const { std::cell::RefCell::new(None) };
 }
 
-/// Captures host hardware and process resource telemetry as compact JSON by the length-query idiom.
-///
-/// # Safety
-/// `paths_json` must be valid for `paths_json_len` bytes, or null; `out` must be valid for `len` bytes, or null.
+/// # Safety: `paths_json` must be valid for `paths_json_len` bytes or null with length 0; `out` must be valid for `len` bytes or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_sys_telemetry_snapshot(paths_json: *const u8, paths_json_len: usize, out: *mut u8, len: usize) -> i64 {
     guard(|s| s as i64, || {
-        let raw = match unsafe { text(paths_json, paths_json_len) } {
+        let raw = match unsafe { crate::reply::text(paths_json, paths_json_len, |code, msg| fail(code, msg)) } {
             Ok(raw) => raw,
             Err(status) => return status as i64,
         };
-        let paths = match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        let paths = match Some(raw.trim()).filter(|s| !s.is_empty()) {
             Some(json) => match serde_json::from_str::<TelemetryPaths>(json) {
                 Ok(parsed) => parsed,
                 Err(err) => return fail(status::PARSE, format!("paths_json is not valid telemetry paths JSON: {err}")) as i64,
             },
             None => TelemetryPaths::default(),
         };
-        let key = raw.unwrap_or("");
+        if out.is_null() {
+            WAITING.with_borrow_mut(|w| *w = None);
+        }
         let make = || -> Result<String, i32> {
             let snap = sysinfo::snapshot(&paths);
             serde_json::to_string(&snap).map_err(|err| fail(status::IO, format!("failed to serialize telemetry snapshot: {err}")))
         };
-        unsafe { crate::reply::answer(&WAITING, 0, key, out, len, make, |s| s) }
+        unsafe { crate::reply::answer(&WAITING, 0, raw, out, len, make, |s| s) }
     })
 }
 
@@ -55,6 +54,7 @@ mod tests {
     fn telemetry_snapshot_validates_inputs_and_returns_structured_json() {
         let bad_utf8 = [0xFFu8];
         assert_eq!(unsafe { emusen_sys_telemetry_snapshot(bad_utf8.as_ptr(), 1, std::ptr::null_mut(), 0) }, status::BAD_STRING as i64);
+        assert_eq!(unsafe { emusen_sys_telemetry_snapshot(std::ptr::null(), 5, std::ptr::null_mut(), 0) }, status::NULL as i64);
         assert_eq!(ask(Some("{not-json")), Err(status::PARSE as i64));
 
         let dir = std::env::temp_dir().join(format!("platform-sysinfo-{}", std::process::id()));
@@ -73,8 +73,13 @@ mod tests {
             "refresh_storage": true
         })
         .to_string();
-        let json_text = ask(Some(&paths)).unwrap();
-        let v: serde_json::Value = serde_json::from_str(&json_text).unwrap();
+        let len1 = unsafe { emusen_sys_telemetry_snapshot(paths.as_ptr(), paths.len(), std::ptr::null_mut(), 0) };
+        assert!(len1 > 0);
+        let mut tiny = [0u8; 4];
+        assert_eq!(unsafe { emusen_sys_telemetry_snapshot(paths.as_ptr(), paths.len(), tiny.as_mut_ptr(), tiny.len()) }, len1);
+        let mut full = vec![0u8; len1 as usize];
+        assert_eq!(unsafe { emusen_sys_telemetry_snapshot(paths.as_ptr(), paths.len(), full.as_mut_ptr(), full.len()) }, len1);
+        let v: serde_json::Value = serde_json::from_slice(&full).unwrap();
         assert_eq!(v["schema"].as_u64(), Some(1));
         assert!(v["host"]["cpu"]["logical_cores"].as_u64().unwrap_or(0) >= 1);
         assert_eq!(v["process"]["storage"]["categories"]["saves"].as_u64(), Some(64));

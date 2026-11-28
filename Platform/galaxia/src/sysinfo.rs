@@ -173,6 +173,7 @@ pub struct ProcessTelemetry {
     pub pid: u32,
     pub cpu_total_host_pct: Option<f64>,
     pub cpu_one_core_pct: Option<f64>,
+    pub peak_thread_one_core_pct: Option<f64>,
     pub single_core_bound: bool,
     pub threads: Vec<ThreadInfo>,
     pub thread_groups: BTreeMap<String, ThreadGroupUsage>,
@@ -375,7 +376,8 @@ struct StorageCacheState {
     key: Option<ResolvedStoragePaths>,
     updated_at: Option<Instant>,
     footprint: Option<StorageFootprint>,
-    in_flight: bool,
+    next_gen: u64,
+    active_gen: Option<u64>,
 }
 
 static SAMPLER: OnceLock<Mutex<SamplerState>> = OnceLock::new();
@@ -395,11 +397,13 @@ pub fn snapshot(paths: &TelemetryPaths) -> SysTelemetrySnapshot {
 }
 
 fn snapshot_with_roots(paths: &TelemetryPaths, proc_root: &Path, sys_root: &Path, cold_delay: Duration) -> SysTelemetrySnapshot {
+    let resolved_paths = ResolvedStoragePaths::from_input(paths);
+    let storage = resolve_storage_footprint_in(storage_lock(), &resolved_paths, paths.refresh_storage, paths.async_storage, spawn_global_storage_refresh);
     let mut state = sampler_lock().lock().unwrap_or_else(|p| p.into_inner());
-    if state.host_stat.is_none() && !cold_delay.is_zero() {
+    if state.at.is_none() && !cold_delay.is_zero() {
         let first_host = read_proc_stat(&proc_root.join("stat"));
         let first_proc = read_process_sample(&proc_root.join("self"));
-        let first_drm = read_drm_fdinfo_sample(&proc_root.join("self"));
+        let first_drm = read_drm_fdinfo_raw(&proc_root.join("self")).sample;
         state.at = Some(Instant::now());
         state.host_stat = first_host;
         state.proc_stat = Some(first_proc);
@@ -408,15 +412,29 @@ fn snapshot_with_roots(paths: &TelemetryPaths, proc_root: &Path, sys_root: &Path
         std::thread::sleep(cold_delay);
         state = sampler_lock().lock().unwrap_or_else(|p| p.into_inner());
     }
-    sample_into_state(&mut state, paths, proc_root, sys_root)
+    sample_into_state_with_storage(&mut state, paths, &resolved_paths, proc_root, sys_root, storage)
 }
 
-fn sample_into_state(state: &mut SamplerState, paths: &TelemetryPaths, proc_root: &Path, sys_root: &Path) -> SysTelemetrySnapshot {
-    let now = Instant::now();
-    let wall_ns = state.at.map(|prev| now.saturating_duration_since(prev).as_nanos() as u64).unwrap_or(0);
+#[cfg(test)]
+fn sample_into_state(state: &mut SamplerState, paths: &TelemetryPaths, proc_root: &Path, sys_root: &Path, cache: &Mutex<StorageCacheState>) -> SysTelemetrySnapshot {
+    let resolved_paths = ResolvedStoragePaths::from_input(paths);
+    let storage = resolve_storage_footprint_in(cache, &resolved_paths, paths.refresh_storage, paths.async_storage, |_, _, _| {});
+    sample_into_state_with_storage(state, paths, &resolved_paths, proc_root, sys_root, storage)
+}
+
+fn sample_into_state_with_storage(
+    state: &mut SamplerState,
+    paths: &TelemetryPaths,
+    resolved_paths: &ResolvedStoragePaths,
+    proc_root: &Path,
+    sys_root: &Path,
+    storage: StorageFootprint,
+) -> SysTelemetrySnapshot {
     let curr_host = read_proc_stat(&proc_root.join("stat"));
     let curr_proc = read_process_sample(&proc_root.join("self"));
-    let curr_drm = read_drm_fdinfo_sample(&proc_root.join("self"));
+    let curr_drm_raw = read_drm_fdinfo_raw(&proc_root.join("self"));
+    let now = Instant::now();
+    let wall_ns = state.at.map(|prev| now.saturating_duration_since(prev).as_nanos() as u64).unwrap_or(0);
     let host_delta = match (&state.host_stat, &curr_host) {
         (Some(prev), Some(curr)) => Some(curr.aggregate.total.saturating_sub(prev.aggregate.total)),
         _ => None,
@@ -430,8 +448,7 @@ fn sample_into_state(state: &mut SamplerState, paths: &TelemetryPaths, proc_root
         paths.gpu_vendor.as_deref(),
         paths.gpu_device.as_deref(),
     );
-    let resolved_paths = ResolvedStoragePaths::from_input(paths);
-    let mounts = read_host_mounts(&proc_root.join("self/mountinfo"), &resolved_paths);
+    let mounts = read_host_mounts(&proc_root.join("self/mountinfo"), resolved_paths);
     let process = build_process_telemetry(
         proc_root,
         cpu.logical_cores,
@@ -440,8 +457,8 @@ fn sample_into_state(state: &mut SamplerState, paths: &TelemetryPaths, proc_root
         state.proc_stat.as_ref(),
         &curr_proc,
         state.drm.as_ref(),
-        &curr_drm,
-        resolve_storage_footprint(&resolved_paths, paths.refresh_storage, paths.async_storage),
+        &curr_drm_raw,
+        storage,
     );
 
     state.at = Some(now);
@@ -449,7 +466,7 @@ fn sample_into_state(state: &mut SamplerState, paths: &TelemetryPaths, proc_root
         state.host_stat = curr_host;
     }
     state.proc_stat = Some(curr_proc);
-    state.drm = Some(curr_drm);
+    state.drm = Some(curr_drm_raw.sample);
 
     SysTelemetrySnapshot { schema: 1, host: HostTelemetry { cpu, memory, gpu, gpus, mounts }, process }
 }
@@ -531,10 +548,10 @@ fn parse_proc_stat_text(text: &str) -> Option<ProcStatSample> {
         if nums.len() < 4 {
             continue;
         }
-        let total: u64 = nums.iter().take(8).sum();
+        let total: u64 = nums.iter().take(8).copied().fold(0u64, u64::saturating_add);
         let idle = nums[3];
         let iowait = nums.get(4).copied().unwrap_or(0);
-        let row = CpuTickRow { total, busy: total.saturating_sub(idle + iowait), iowait };
+        let row = CpuTickRow { total, busy: total.saturating_sub(idle.saturating_add(iowait)), iowait };
         if label == "cpu" {
             aggregate = Some(row);
         } else if let Ok(id) = label[3..].parse::<u32>() {
@@ -621,7 +638,7 @@ fn parse_meminfo(text: &str) -> Option<HostMemory> {
     let free_bytes = map.get("MemFree").copied().unwrap_or(0);
     let buffers_bytes = map.get("Buffers").copied().unwrap_or(0);
     let cached_bytes = map.get("Cached").copied().unwrap_or(0);
-    let available_bytes = map.get("MemAvailable").copied().unwrap_or_else(|| free_bytes + buffers_bytes + cached_bytes);
+    let available_bytes = map.get("MemAvailable").copied().unwrap_or_else(|| free_bytes.saturating_add(buffers_bytes).saturating_add(cached_bytes));
     let used_bytes = total_bytes.saturating_sub(available_bytes);
     let swap_total_bytes = map.get("SwapTotal").copied().unwrap_or(0);
     let swap_free_bytes = map.get("SwapFree").copied().unwrap_or(0);
@@ -740,22 +757,20 @@ struct MountEntry {
 }
 
 fn unescape_mount_path(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
+    let mut out = Vec::with_capacity(raw.len());
     let bytes = raw.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 3 < bytes.len() {
-            let oct = &raw[i + 1..i + 4];
-            if let Ok(code) = u8::from_str_radix(oct, 8) {
-                out.push(code as char);
-                i += 4;
-                continue;
-            }
+        if bytes[i] == b'\\' && i + 4 <= bytes.len() && bytes[i + 1..i + 4].iter().all(|b| matches!(b, b'0'..=b'7')) {
+            let code = ((bytes[i + 1] - b'0') << 6) | ((bytes[i + 2] - b'0') << 3) | (bytes[i + 3] - b'0');
+            out.push(code);
+            i += 4;
+            continue;
         }
-        out.push(bytes[i] as char);
+        out.push(bytes[i]);
         i += 1;
     }
-    out
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 fn parse_mountinfo(text: &str) -> Vec<MountEntry> {
@@ -936,7 +951,7 @@ fn parse_smaps_rollup(text: &str) -> Option<ProcessMemory> {
             _ => {}
         }
     }
-    rss.map(|rss_bytes| ProcessMemory { rss_bytes, pss_bytes: pss, private_bytes: has_priv.then_some(priv_clean + priv_dirty), swap_bytes: swap })
+    rss.map(|rss_bytes| ProcessMemory { rss_bytes, pss_bytes: pss, private_bytes: has_priv.then_some(priv_clean.saturating_add(priv_dirty)), swap_bytes: swap })
 }
 
 fn parse_proc_status_mem(text: &str) -> Option<ProcessMemory> {
@@ -1068,10 +1083,6 @@ fn read_drm_fdinfo_raw(self_dir: &Path) -> DrmRawSnapshot {
     DrmRawSnapshot { clients: seen.len() as u32, sample, vram_bytes: vram_sum, gtt_bytes: gtt_sum }
 }
 
-fn read_drm_fdinfo_sample(self_dir: &Path) -> DrmSample {
-    read_drm_fdinfo_raw(self_dir).sample
-}
-
 fn engine_pct(prev: Option<&DrmSample>, curr: &DrmSample, wall_ns: u64, pick: impl Fn(&DrmClientTicks) -> Option<u64>) -> Option<f64> {
     let prev = prev?;
     if wall_ns == 0 {
@@ -1085,7 +1096,7 @@ fn engine_pct(prev: Option<&DrmSample>, curr: &DrmSample, wall_ns: u64, pick: im
             any = true;
         }
     }
-    any.then(|| ((delta_ns as f64 / wall_ns as f64) * 100.0).max(0.0))
+    any.then(|| ((delta_ns as f64 / wall_ns as f64) * 100.0).clamp(0.0, 100.0))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1097,7 +1108,7 @@ fn build_process_telemetry(
     prev_proc: Option<&ProcessSample>,
     curr_proc: &ProcessSample,
     prev_drm: Option<&DrmSample>,
-    _curr_drm: &DrmSample,
+    drm_raw: &DrmRawSnapshot,
     storage: StorageFootprint,
 ) -> ProcessTelemetry {
     let self_dir = proc_root.join("self");
@@ -1106,19 +1117,20 @@ fn build_process_telemetry(
         .and_then(|s| s.split_whitespace().next()?.parse::<u32>().ok())
         .unwrap_or_else(std::process::id);
 
-    let cpu_pcts = |prev_ticks: Option<u64>, curr_ticks: u64| -> (Option<f64>, Option<f64>) {
+    let cores_f = f64::from(logical_cores.max(1));
+    let cpu_pcts = |prev_ticks: Option<u64>, curr_ticks: u64, max_core_pct: f64| -> (Option<f64>, Option<f64>) {
         match (prev_ticks, host_delta) {
             (Some(p), Some(hd)) if hd > 0 => {
                 let d = curr_ticks.saturating_sub(p);
                 let host = ((d as f64 / hd as f64) * 100.0).clamp(0.0, 100.0);
-                let one_core = (host * f64::from(logical_cores.max(1))).clamp(0.0, 100.0);
-                (Some(host), Some(one_core))
+                let core_eq = (host * cores_f).clamp(0.0, max_core_pct);
+                (Some(host), Some(core_eq))
             }
             _ => (None, None),
         }
     };
 
-    let (cpu_total_host_pct, cpu_one_core_pct) = cpu_pcts(prev_proc.map(|p| p.proc_ticks), curr_proc.proc_ticks);
+    let (cpu_total_host_pct, cpu_one_core_pct) = cpu_pcts(prev_proc.map(|p| p.proc_ticks), curr_proc.proc_ticks, 100.0 * cores_f);
 
     let mut groups: BTreeMap<String, ThreadGroupUsage> = ["core", "audio", "render", "ui", "jobs", "other"]
         .into_iter()
@@ -1131,7 +1143,7 @@ fn build_process_telemetry(
     for (tid, ticks) in sorted_tids {
         let comm = std::fs::read_to_string(self_dir.join(format!("task/{tid}/comm"))).map(|s| s.trim().to_string()).unwrap_or_default();
         let group = classify_thread_group(&comm, tid == pid);
-        let (t_host, t_core) = cpu_pcts(prev_proc.and_then(|p| p.threads.get(&tid).copied()), ticks);
+        let (t_host, t_core) = cpu_pcts(prev_proc.and_then(|p| p.threads.get(&tid).copied()), ticks, 100.0);
         if let Some(entry) = groups.get_mut(group) {
             entry.count += 1;
             if let Some(v) = t_host {
@@ -1144,15 +1156,15 @@ fn build_process_telemetry(
         threads.push(ThreadInfo { tid, comm, group: group.to_string(), cpu_one_core_pct: t_core, cpu_total_host_pct: t_host });
     }
 
-    let max_thread_core = threads.iter().filter_map(|t| t.cpu_one_core_pct).fold(0.0f64, f64::max);
-    let single_core_bound = (max_thread_core >= 85.0 || cpu_one_core_pct.unwrap_or(0.0) >= 85.0) && cpu_total_host_pct.unwrap_or(0.0) < 50.0;
+    let peak_thread_one_core_pct = threads.iter().filter_map(|t| t.cpu_one_core_pct).reduce(f64::max);
+    let saturated = peak_thread_one_core_pct.unwrap_or(0.0) >= 85.0 || (threads.is_empty() && cpu_one_core_pct.unwrap_or(0.0) >= 85.0);
+    let single_core_bound = saturated && cpu_total_host_pct.unwrap_or(0.0) < 50.0;
 
     let memory = std::fs::read_to_string(self_dir.join("smaps_rollup"))
         .ok()
         .and_then(|s| parse_smaps_rollup(&s))
         .or_else(|| std::fs::read_to_string(self_dir.join("status")).ok().and_then(|s| parse_proc_status_mem(&s)));
 
-    let drm_raw = read_drm_fdinfo_raw(&self_dir);
     let gpu = ProcessGpuUsage {
         available: drm_raw.clients > 0,
         gfx_pct: engine_pct(prev_drm, &drm_raw.sample, wall_ns, |t| t.gfx_ns),
@@ -1163,7 +1175,7 @@ fn build_process_telemetry(
         clients: drm_raw.clients,
     };
 
-    ProcessTelemetry { pid, cpu_total_host_pct, cpu_one_core_pct, single_core_bound, threads, thread_groups: groups, memory, gpu, storage }
+    ProcessTelemetry { pid, cpu_total_host_pct, cpu_one_core_pct, peak_thread_one_core_pct, single_core_bound, threads, thread_groups: groups, memory, gpu, storage }
 }
 
 fn dir_bytes(root: Option<&Path>, skip: Option<&Path>) -> u64 {
@@ -1231,26 +1243,41 @@ fn compute_storage_footprint(paths: &ResolvedStoragePaths) -> StorageFootprint {
     }
 }
 
-fn spawn_storage_refresh(paths: ResolvedStoragePaths) {
-    let _ = std::thread::Builder::new().name("galaxia-storage-walk".into()).spawn(move || {
-        let footprint = compute_storage_footprint(&paths);
-        let mut cache = storage_lock().lock().unwrap_or_else(|p| p.into_inner());
-        if cache.key.as_ref() == Some(&paths) {
+fn finish_storage_walk(cache_lock: &Mutex<StorageCacheState>, walk_gen: u64, paths: &ResolvedStoragePaths, footprint: StorageFootprint) {
+    let mut cache = cache_lock.lock().unwrap_or_else(|p| p.into_inner());
+    if cache.active_gen == Some(walk_gen) {
+        if cache.key.as_ref() == Some(paths) {
             cache.footprint = Some(footprint);
             cache.updated_at = Some(Instant::now());
         }
-        cache.in_flight = false;
-    });
+        cache.active_gen = None;
+    }
 }
 
-fn resolve_storage_footprint(paths: &ResolvedStoragePaths, force_refresh: bool, async_only: bool) -> StorageFootprint {
-    let mut cache = storage_lock().lock().unwrap_or_else(|p| p.into_inner());
+fn spawn_global_storage_refresh(cache_lock: &Mutex<StorageCacheState>, walk_gen: u64, paths: ResolvedStoragePaths) {
+    let spawn = std::thread::Builder::new().name("galaxia-storage-walk".into()).spawn(move || {
+        let footprint = compute_storage_footprint(&paths);
+        finish_storage_walk(storage_lock(), walk_gen, &paths, footprint);
+    });
+    if spawn.is_err() {
+        let mut cache = cache_lock.lock().unwrap_or_else(|p| p.into_inner());
+        if cache.active_gen == Some(walk_gen) {
+            cache.active_gen = None;
+        }
+    }
+}
+
+fn resolve_storage_footprint_in<F>(cache_lock: &Mutex<StorageCacheState>, paths: &ResolvedStoragePaths, force_refresh: bool, async_only: bool, spawner: F) -> StorageFootprint
+where
+    F: FnOnce(&Mutex<StorageCacheState>, u64, ResolvedStoragePaths),
+{
+    let mut cache = cache_lock.lock().unwrap_or_else(|p| p.into_inner());
     let same_key = cache.key.as_ref() == Some(paths);
     if !same_key {
         cache.key = Some(paths.clone());
         cache.footprint = None;
         cache.updated_at = None;
-        cache.in_flight = false;
+        cache.active_gen = None;
     }
     let fresh = same_key && cache.updated_at.is_some_and(|t| t.elapsed() < STORAGE_CACHE_TTL);
     if !force_refresh && fresh {
@@ -1259,23 +1286,36 @@ fn resolve_storage_footprint(paths: &ResolvedStoragePaths, force_refresh: bool, 
         }
     }
     if async_only || (!force_refresh && cache.footprint.is_some()) {
-        if !cache.in_flight {
-            cache.in_flight = true;
-            spawn_storage_refresh(paths.clone());
-        }
-        if let Some(mut fp) = cache.footprint.clone() {
+        let to_spawn = if cache.active_gen.is_none() {
+            cache.next_gen = cache.next_gen.wrapping_add(1).max(1);
+            let walk_gen = cache.next_gen;
+            cache.active_gen = Some(walk_gen);
+            Some(walk_gen)
+        } else {
+            None
+        };
+        let reply = if let Some(mut fp) = cache.footprint.clone() {
             fp.stale = true;
-            return fp;
+            fp
+        } else {
+            StorageFootprint { pending: true, ..StorageFootprint::default() }
+        };
+        drop(cache);
+        if let Some(walk_gen) = to_spawn {
+            spawner(cache_lock, walk_gen, paths.clone());
         }
-        return StorageFootprint { pending: true, ..StorageFootprint::default() };
+        return reply;
     }
+    cache.next_gen = cache.next_gen.wrapping_add(1).max(1);
+    let sync_gen = cache.next_gen;
+    cache.active_gen = None;
     drop(cache);
     let footprint = compute_storage_footprint(paths);
-    let mut cache = storage_lock().lock().unwrap_or_else(|p| p.into_inner());
-    cache.key = Some(paths.clone());
-    cache.footprint = Some(footprint.clone());
-    cache.updated_at = Some(Instant::now());
-    cache.in_flight = false;
+    let mut cache = cache_lock.lock().unwrap_or_else(|p| p.into_inner());
+    if cache.next_gen == sync_gen && cache.key.as_ref() == Some(paths) {
+        cache.footprint = Some(footprint.clone());
+        cache.updated_at = Some(Instant::now());
+    }
     footprint
 }
 
@@ -1432,7 +1472,8 @@ cpu cores\t: 2
             ..TelemetryPaths::default()
         };
         let resolved = ResolvedStoragePaths::from_input(&paths);
-        let fp = resolve_storage_footprint(&resolved, true, false);
+        let local_cache = Mutex::new(StorageCacheState::default());
+        let fp = resolve_storage_footprint_in(&local_cache, &resolved, true, false, |_, _, _| {});
         assert_eq!(fp.categories.saves, 100);
         assert_eq!(fp.categories.save_states, 250);
         assert_eq!(fp.categories.media, 400);
@@ -1478,15 +1519,17 @@ cpu cores\t: 2
         std::fs::create_dir_all(&ds).unwrap();
         let paths = TelemetryPaths { data_store: Some(ds.to_string_lossy().into_owned()), ..TelemetryPaths::default() };
         let mut local = SamplerState::default();
+        let local_cache = Mutex::new(StorageCacheState::default());
         write_sample(100, 100, 10, 10, 5);
-        let _ = sample_into_state(&mut local, &paths, &proc_root, &sys_root);
+        let _ = sample_into_state(&mut local, &paths, &proc_root, &sys_root, &local_cache);
         write_sample(200, 200, 12, 100, 7);
-        let snap = sample_into_state(&mut local, &paths, &proc_root, &sys_root);
+        let snap = sample_into_state(&mut local, &paths, &proc_root, &sys_root, &local_cache);
 
         assert_eq!(snap.host.cpu.logical_cores, 2);
         assert!((snap.host.cpu.avg_mhz.unwrap() - 4900.0).abs() < 0.01);
         assert!((snap.process.cpu_total_host_pct.unwrap() - 47.0).abs() < 0.01);
         assert!((snap.process.cpu_one_core_pct.unwrap() - 94.0).abs() < 0.01);
+        assert!((snap.process.peak_thread_one_core_pct.unwrap() - 90.0).abs() < 0.01);
         assert!(snap.process.single_core_bound);
         let core_group = snap.process.thread_groups.get("core").unwrap();
         assert_eq!(core_group.count, 1);
@@ -1513,18 +1556,78 @@ cpu cores\t: 2
         std::fs::create_dir_all(ds.join("Logs")).unwrap();
         std::fs::write(ds.join("Logs/a.log"), vec![0u8; 333]).unwrap();
         let paths = ResolvedStoragePaths::from_input(&TelemetryPaths { data_store: Some(ds.to_string_lossy().into_owned()), async_storage: true, ..TelemetryPaths::default() });
-        let first = resolve_storage_footprint(&paths, false, true);
-        if first.pending {
-            for _ in 0..50 {
-                std::thread::sleep(Duration::from_millis(10));
-                let next = resolve_storage_footprint(&paths, false, true);
-                if !next.pending {
-                    assert_eq!(next.categories.logs, 333);
-                    return;
-                }
+        let local_cache = std::sync::Arc::new(Mutex::new(StorageCacheState::default()));
+        let spawn_cache = local_cache.clone();
+        let first = resolve_storage_footprint_in(&local_cache, &paths, false, true, move |_, walk_gen, p| {
+            std::thread::spawn(move || {
+                let fp = compute_storage_footprint(&p);
+                finish_storage_walk(&spawn_cache, walk_gen, &p, fp);
+            });
+        });
+        assert!(first.pending);
+        let mut loaded = None;
+        for _ in 0..50 {
+            std::thread::sleep(Duration::from_millis(10));
+            let next = resolve_storage_footprint_in(&local_cache, &paths, false, true, |_, _, _| {});
+            if !next.pending {
+                loaded = Some(next);
+                break;
             }
-            panic!("async storage walk did not finish in time");
         }
-        assert_eq!(first.categories.logs, 333);
+        assert_eq!(loaded.expect("async storage walk did not finish in time").categories.logs, 333);
+    }
+
+    #[test]
+    fn unescape_mount_path_handles_utf8_and_octal_escapes_without_panic() {
+        assert_eq!(unescape_mount_path(r"/mnt/nas\040roms"), "/mnt/nas roms");
+        assert_eq!(unescape_mount_path(r"/mnt/caf\303\251"), "/mnt/café");
+        assert_eq!(unescape_mount_path("/mnt/\\é"), "/mnt/\\é");
+        assert_eq!(unescape_mount_path(r"/mnt/\999\"), r"/mnt/\999\");
+    }
+
+    #[test]
+    fn storage_walk_gen_prevents_stale_clobber_and_samples_drm_once() {
+        let tmp = TempDir::new("gen-and-drm");
+        let ds1 = tmp.join("ds1");
+        let ds2 = tmp.join("ds2");
+        std::fs::create_dir_all(ds1.join("Saves")).unwrap();
+        std::fs::create_dir_all(ds2.join("Saves")).unwrap();
+        std::fs::write(ds1.join("Saves/a"), vec![0u8; 10]).unwrap();
+        std::fs::write(ds2.join("Saves/b"), vec![0u8; 20]).unwrap();
+        let p1 = ResolvedStoragePaths::from_input(&TelemetryPaths { data_store: Some(ds1.to_string_lossy().into_owned()), ..TelemetryPaths::default() });
+        let p2 = ResolvedStoragePaths::from_input(&TelemetryPaths { data_store: Some(ds2.to_string_lossy().into_owned()), ..TelemetryPaths::default() });
+
+        let cache = Mutex::new(StorageCacheState::default());
+        let mut stale_gen = 0;
+        let _ = resolve_storage_footprint_in(&cache, &p1, false, true, |_, g, _| stale_gen = g);
+        let mut new_gen = 0;
+        let _ = resolve_storage_footprint_in(&cache, &p2, false, true, |_, g, _| new_gen = g);
+        assert_ne!(stale_gen, new_gen);
+        finish_storage_walk(&cache, stale_gen, &p1, compute_storage_footprint(&p1));
+        assert_eq!(cache.lock().unwrap().active_gen, Some(new_gen));
+        finish_storage_walk(&cache, new_gen, &p2, compute_storage_footprint(&p2));
+        assert_eq!(cache.lock().unwrap().active_gen, None);
+        assert_eq!(cache.lock().unwrap().footprint.as_ref().unwrap().categories.saves, 20);
+
+        let proc_root = tmp.join("proc");
+        let sys_root = tmp.join("sys");
+        let fd_dir = proc_root.join("self/fd");
+        let fdinfo_dir = proc_root.join("self/fdinfo");
+        std::fs::create_dir_all(&fd_dir).unwrap();
+        std::fs::create_dir_all(&fdinfo_dir).unwrap();
+        std::fs::create_dir_all(proc_root.join("self/task")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/dev/dri/renderD128", fd_dir.join("3")).unwrap();
+        std::fs::write(fdinfo_dir.join("3"), "drm-driver: amdgpu\ndrm-client-id: 9\ndrm-engine-gfx: 1000 ns\n").unwrap();
+        let mut sampler = SamplerState::default();
+        let paths = TelemetryPaths { data_store: Some(ds2.to_string_lossy().into_owned()), ..TelemetryPaths::default() };
+        let storage = StorageFootprint::default();
+        let _ = sample_into_state_with_storage(&mut sampler, &paths, &p2, &proc_root, &sys_root, storage.clone());
+        std::thread::sleep(Duration::from_millis(20));
+        std::fs::write(fdinfo_dir.join("3"), "drm-driver: amdgpu\ndrm-client-id: 9\ndrm-engine-gfx: 5000000 ns\n").unwrap();
+        let snap = sample_into_state_with_storage(&mut sampler, &paths, &p2, &proc_root, &sys_root, storage);
+        assert_eq!(snap.process.gpu.clients, 1);
+        assert!(snap.process.gpu.gfx_pct.unwrap() <= 100.0);
+        assert_eq!(sampler.drm.as_ref().unwrap().clients.get("amdgpu:9").unwrap().gfx_ns, Some(5_000_000));
     }
 }

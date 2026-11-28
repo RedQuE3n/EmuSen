@@ -48,6 +48,7 @@ ThemeScreen {
                 spacing: Math.round(6 * root.px)
 
                 Rectangle {
+                    id: backLibraryBtn
                     objectName: "eclipsePlayingBackLibrary"
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
@@ -55,9 +56,16 @@ ThemeScreen {
                     Layout.preferredHeight: Math.round(28 * root.px)
                     radius: height / 2
                     color: libHover.hovered ? ink.surfaceRaised : ink.glass
-                    border.width: 1
-                    border.color: ink.pillBorder
+                    border.width: backLibraryBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                    border.color: backLibraryBtn.activeFocus ? ink.corona : ink.pillBorder
                     implicitWidth: backRow.implicitWidth + Math.round(16 * root.px)
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.workspaceLibrary()
+                            event.accepted = true
+                        }
+                    }
 
                     RowLayout {
                         id: backRow
@@ -85,11 +93,7 @@ ThemeScreen {
                     }
 
                     TapHandler {
-                        onTapped: {
-                            Actions.workspaceSetDrawer(false)
-                            Actions.workspaceView(0)
-                            Actions.sessionClose()
-                        }
+                        onTapped: Actions.workspaceLibrary()
                     }
                 }
 
@@ -148,15 +152,23 @@ ThemeScreen {
 
                 // Pause / Resume toggle.
                 Rectangle {
+                    id: pauseStripBtn
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: Session.paused ? Words.desktopResumeLabel : Words.desktopStripPause
                     Layout.preferredHeight: Math.round(28 * root.px)
                     radius: Math.round(7 * root.px)
                     color: ink.surfaceRaised
-                    border.width: 1
-                    border.color: ink.hairline
+                    border.width: pauseStripBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                    border.color: pauseStripBtn.activeFocus ? ink.corona : ink.hairline
                     implicitWidth: pauseTxt.implicitWidth + Math.round(16 * root.px)
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            if (Session.paused) Actions.sessionResume(); else Actions.sessionPause()
+                            event.accepted = true
+                        }
+                    }
 
                     Text {
                         id: pauseTxt
@@ -175,16 +187,24 @@ ThemeScreen {
 
                 // Rewind action.
                 Rectangle {
+                    id: rewindStripBtn
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: Words.desktopStripRewind
                     Layout.preferredHeight: Math.round(28 * root.px)
                     radius: Math.round(7 * root.px)
                     color: ink.surfaceRaised
-                    border.width: 1
-                    border.color: ink.hairline
+                    border.width: rewindStripBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                    border.color: rewindStripBtn.activeFocus ? ink.corona : ink.hairline
                     opacity: Session.hasRewind ? 1.0 : 0.55
                     implicitWidth: rewindTxt.implicitWidth + Math.round(16 * root.px)
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            if (Session.hasRewind) Actions.sessionRewindTo(Session.latestRewindFrame)
+                            event.accepted = true
+                        }
+                    }
 
                     Text {
                         id: rewindTxt
@@ -214,9 +234,16 @@ ThemeScreen {
                         Layout.preferredHeight: Math.round(28 * root.px)
                         radius: Math.round(7 * root.px)
                         color: stripTabBtn.active ? ink.textStrong : ink.surfaceRaised
-                        border.width: 1
-                        border.color: stripTabBtn.active ? ink.textStrong : ink.hairline
+                        border.width: stripTabBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                        border.color: stripTabBtn.activeFocus ? ink.corona : stripTabBtn.active ? ink.textStrong : ink.hairline
                         implicitWidth: stripTabTxt.implicitWidth + Math.round(16 * root.px)
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                if (Workspace.drawerOpen && Workspace.drawerTab === stripTabBtn.index) Actions.workspaceSetDrawer(false); else { Actions.workspaceSetDrawerTab(stripTabBtn.index); Actions.workspaceSetDrawer(true) }
+                                event.accepted = true
+                            }
+                        }
 
                         Text {
                             id: stripTabTxt
@@ -235,15 +262,23 @@ ThemeScreen {
                 }
 
                 Rectangle {
+                    id: shotStripBtn
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: Words.desktopStripShot
                     Layout.preferredHeight: Math.round(28 * root.px)
                     radius: Math.round(7 * root.px)
                     color: ink.surfaceRaised
-                    border.width: 1
-                    border.color: ink.hairline
+                    border.width: shotStripBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                    border.color: shotStripBtn.activeFocus ? ink.corona : ink.hairline
                     implicitWidth: shotTxt.implicitWidth + Math.round(14 * root.px)
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.sessionScreenshot()
+                            event.accepted = true
+                        }
+                    }
 
                     Text {
                         id: shotTxt
@@ -260,15 +295,23 @@ ThemeScreen {
                 }
 
                 Rectangle {
+                    id: fsStripBtn
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: Words.desktopStripFullscreen
                     Layout.preferredHeight: Math.round(28 * root.px)
                     radius: Math.round(7 * root.px)
                     color: ink.surfaceRaised
-                    border.width: 1
-                    border.color: ink.hairline
+                    border.width: fsStripBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                    border.color: fsStripBtn.activeFocus ? ink.corona : ink.hairline
                     implicitWidth: fsTxt.implicitWidth + Math.round(14 * root.px)
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.toggleFullScreen()
+                            event.accepted = true
+                        }
+                    }
 
                     Text {
                         id: fsTxt
@@ -285,15 +328,23 @@ ThemeScreen {
                 }
 
                 Rectangle {
+                    id: bpStripBtn
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: Words.desktopBigPictureLabel
                     Layout.preferredHeight: Math.round(28 * root.px)
                     radius: height / 2
                     color: ink.surfaceRaised
-                    border.width: 1
-                    border.color: ink.pillBorder
+                    border.width: bpStripBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                    border.color: bpStripBtn.activeFocus ? ink.corona : ink.pillBorder
                     implicitWidth: bpTxt.implicitWidth + Math.round(16 * root.px)
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.setBigScreen(true)
+                            event.accepted = true
+                        }
+                    }
 
                     Text {
                         id: bpTxt

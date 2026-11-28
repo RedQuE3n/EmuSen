@@ -624,6 +624,17 @@ Window {
                 desktopPlayingInputs: !program.bigScreen && desktopModel.drawerOpen && !program.desktopOverlayShown
                 onBigScreenRequested: (big) => program.bigScreen = big
                 onDesktopDoorRequested: (name) => screens.openDesktopDoor(name)
+                onDesktopLibraryRequested: {
+                    player.session.pause()
+                    screens.library()
+                }
+                onDesktopShadersRequested: {
+                    if (desktopModel.gameShown) {
+                        player.session.pause()
+                        screens.library()
+                    }
+                    desktopModel.view = 2
+                }
                 onToolRequested: (key) => screens.openTool(key)
                 onFullScreenToggleRequested: {
                     program.fullScreenAsked = program.visibility !== Window.FullScreen

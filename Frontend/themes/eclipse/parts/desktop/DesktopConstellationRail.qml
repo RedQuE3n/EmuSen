@@ -57,8 +57,15 @@ Rectangle {
                     height: Math.round(32 * root.px)
                     radius: Math.round(7 * root.px)
                     color: placeBtn.current ? ink.glowWeak : placeHover.hovered ? ink.surfaceRaised : "transparent"
-                    border.width: placeBtn.current ? 1 : 0
-                    border.color: ink.coronaSoft
+                    border.width: placeBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : placeBtn.current ? 1 : 0
+                    border.color: placeBtn.activeFocus ? ink.corona : ink.coronaSoft
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.workspaceSelectConsole(placeBtn.key)
+                            event.accepted = true
+                        }
+                    }
 
                     RowLayout {
                         anchors.fill: parent
@@ -158,6 +165,7 @@ Rectangle {
             spacing: Math.round(6 * root.px)
 
             Rectangle {
+                id: scopeActiveBtn
                 activeFocusOnTab: true
                 Accessible.role: Accessible.Button
                 Accessible.name: Words.desktopScopeActive
@@ -165,8 +173,15 @@ Rectangle {
                 Layout.preferredHeight: Math.round(26 * root.px)
                 radius: Math.round(6 * root.px)
                 color: Workspace.consoleScope === 0 ? ink.surfaceRaised : "transparent"
-                border.width: 1
-                border.color: Workspace.consoleScope === 0 ? ink.coronaSoft : ink.hairline
+                border.width: scopeActiveBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                border.color: scopeActiveBtn.activeFocus ? ink.corona : Workspace.consoleScope === 0 ? ink.coronaSoft : ink.hairline
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        Actions.workspaceSetConsoleScope(0)
+                        event.accepted = true
+                    }
+                }
 
                 Text {
                     anchors.centerIn: parent
@@ -183,6 +198,7 @@ Rectangle {
             }
 
             Rectangle {
+                id: scopeAllBtn
                 activeFocusOnTab: true
                 Accessible.role: Accessible.Button
                 Accessible.name: Words.consoleShows[0]
@@ -190,8 +206,15 @@ Rectangle {
                 Layout.preferredHeight: Math.round(26 * root.px)
                 radius: Math.round(6 * root.px)
                 color: Workspace.consoleScope === 1 ? ink.surfaceRaised : "transparent"
-                border.width: 1
-                border.color: Workspace.consoleScope === 1 ? ink.coronaSoft : ink.hairline
+                border.width: scopeAllBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                border.color: scopeAllBtn.activeFocus ? ink.corona : Workspace.consoleScope === 1 ? ink.coronaSoft : ink.hairline
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        Actions.workspaceSetConsoleScope(1)
+                        event.accepted = true
+                    }
+                }
 
                 Text {
                     anchors.centerIn: parent
@@ -275,8 +298,15 @@ Rectangle {
                     height: Math.round(31 * root.px)
                     radius: Math.round(7 * root.px)
                     color: conRow.current ? ink.glowWeak : conHover.hovered ? ink.surfaceRaised : "transparent"
-                    border.width: conRow.current ? 1 : 0
-                    border.color: ink.coronaSoft
+                    border.width: conRow.activeFocus ? Math.max(1.5, Tokens.ringThickness) : conRow.current ? 1 : 0
+                    border.color: conRow.activeFocus ? ink.corona : ink.coronaSoft
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.workspaceSelectConsole(conRow.key)
+                            event.accepted = true
+                        }
+                    }
 
                     RowLayout {
                         anchors.fill: parent

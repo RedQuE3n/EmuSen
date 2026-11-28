@@ -45,8 +45,8 @@ Rectangle {
                     height: Math.round(28 * root.px)
                     radius: height / 2
                     color: dTab.active ? ink.textStrong : ink.surfaceRaised
-                    border.width: 1
-                    border.color: dTab.active ? ink.textStrong : ink.hairline
+                    border.width: dTab.activeFocus ? 2 : 1
+                    border.color: dTab.activeFocus ? ink.corona : (dTab.active ? ink.textStrong : ink.hairline)
 
                     Text {
                         anchors.centerIn: parent
@@ -55,6 +55,13 @@ Rectangle {
                         font.family: Tokens.faceInterface
                         font.pixelSize: Math.max(10, Math.round(11 * root.px))
                         font.weight: Tokens.weightTitle
+                    }
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            event.accepted = true
+                            Actions.workspaceSetDrawerTab(dTab.index)
+                        }
                     }
 
                     TapHandler {
@@ -71,8 +78,8 @@ Rectangle {
                 Layout.preferredHeight: Layout.preferredWidth
                 radius: width / 2
                 color: ink.surfaceRaised
-                border.width: 1
-                border.color: ink.hairline
+                border.width: activeFocus ? 2 : 1
+                border.color: activeFocus ? ink.corona : ink.hairline
 
                 DesktopGlyph {
                     anchors.centerIn: parent
@@ -80,6 +87,13 @@ Rectangle {
                     height: width
                     kind: 5
                     color: ink.textStrong
+                }
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        event.accepted = true
+                        Actions.workspaceSetDrawer(false)
+                    }
                 }
 
                 TapHandler {
@@ -134,8 +148,8 @@ Rectangle {
                         height: Math.round(30 * root.px)
                         radius: Math.round(7 * root.px)
                         color: spdBtn.active ? ink.accent : ink.surfaceRaised
-                        border.width: 1
-                        border.color: spdBtn.active ? ink.accent : ink.hairline
+                        border.width: spdBtn.activeFocus ? 2 : 1
+                        border.color: spdBtn.activeFocus ? ink.corona : (spdBtn.active ? ink.accent : ink.hairline)
 
                         Text {
                             anchors.centerIn: parent
@@ -144,6 +158,13 @@ Rectangle {
                             font.family: Tokens.faceCode
                             font.pixelSize: Math.max(11, Math.round(12 * root.px))
                             font.weight: Tokens.weightTitle
+                        }
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                event.accepted = true
+                                Actions.sessionChooseSpeed(spdBtn.percentVal)
+                            }
                         }
 
                         TapHandler {
@@ -169,8 +190,8 @@ Rectangle {
                 Layout.preferredHeight: Math.round(34 * root.px)
                 radius: Math.round(8 * root.px)
                 color: ink.surfaceRaised
-                border.width: 1
-                border.color: ink.pillBorder
+                border.width: activeFocus ? 2 : 1
+                border.color: activeFocus ? ink.corona : ink.pillBorder
                 implicitWidth: openShadersTxt.implicitWidth + Math.round(24 * root.px)
 
                 Text {
@@ -183,8 +204,15 @@ Rectangle {
                     font.weight: Tokens.weightTitle
                 }
 
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        event.accepted = true
+                        Actions.workspaceShaders()
+                    }
+                }
+
                 TapHandler {
-                    onTapped: Actions.openDesktopDoor(Words.desktopStripShaders.toLowerCase())
+                    onTapped: Actions.workspaceShaders()
                 }
             }
 
@@ -212,6 +240,8 @@ Rectangle {
                     Layout.preferredHeight: Math.round(34 * root.px)
                     radius: Math.round(8 * root.px)
                     color: ink.accent
+                    border.width: activeFocus ? 2 : 0
+                    border.color: ink.corona
 
                     Text {
                         anchors.centerIn: parent
@@ -220,6 +250,13 @@ Rectangle {
                         font.family: Tokens.faceInterface
                         font.pixelSize: Math.max(11, Math.round(12 * root.px))
                         font.weight: Tokens.weightTitle
+                    }
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            event.accepted = true
+                            Actions.sessionSaveState(Session.slot)
+                        }
                     }
 
                     TapHandler {
@@ -235,8 +272,8 @@ Rectangle {
                     Layout.preferredHeight: Math.round(34 * root.px)
                     radius: Math.round(8 * root.px)
                     color: ink.surfaceRaised
-                    border.width: 1
-                    border.color: ink.pillBorder
+                    border.width: activeFocus ? 2 : 1
+                    border.color: activeFocus ? ink.corona : ink.pillBorder
 
                     Text {
                         anchors.centerIn: parent
@@ -245,6 +282,13 @@ Rectangle {
                         font.family: Tokens.faceInterface
                         font.pixelSize: Math.max(11, Math.round(12 * root.px))
                         font.weight: Tokens.weightTitle
+                    }
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            event.accepted = true
+                            Actions.sessionLoadState(Session.slot)
+                        }
                     }
 
                     TapHandler {
@@ -283,8 +327,8 @@ Rectangle {
                         height: Math.round(48 * root.px)
                         radius: Math.round(8 * root.px)
                         color: slotRow.active ? ink.glowWeak : ink.surfaceRaised
-                        border.width: 1
-                        border.color: slotRow.active ? ink.corona : ink.hairline
+                        border.width: slotRow.activeFocus ? 2 : 1
+                        border.color: (slotRow.active || slotRow.activeFocus) ? ink.corona : ink.hairline
 
                         RowLayout {
                             anchors.fill: parent
@@ -328,8 +372,8 @@ Rectangle {
                                 Layout.preferredHeight: Math.round(26 * root.px)
                                 radius: height / 2
                                 color: ink.glass
-                                border.width: 1
-                                border.color: ink.hairline
+                                border.width: activeFocus ? 2 : 1
+                                border.color: activeFocus ? ink.corona : ink.hairline
                                 implicitWidth: loadSlotTxt.implicitWidth + Math.round(14 * root.px)
 
                                 Text {
@@ -341,9 +385,23 @@ Rectangle {
                                     font.pixelSize: Math.max(10, Math.round(11 * root.px))
                                 }
 
+                                Keys.onPressed: (event) => {
+                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                        event.accepted = true
+                                        Actions.sessionLoadState(slotRow.slot)
+                                    }
+                                }
+
                                 TapHandler {
                                     onTapped: Actions.sessionLoadState(slotRow.slot)
                                 }
+                            }
+                        }
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                event.accepted = true
+                                Actions.sessionChooseSlot(slotRow.slot)
                             }
                         }
 
@@ -370,8 +428,8 @@ Rectangle {
                 Layout.preferredHeight: Math.round(38 * root.px)
                 radius: Math.round(8 * root.px)
                 color: ink.surfaceRaised
-                border.width: 1
-                border.color: ink.hairline
+                border.width: activeFocus ? 2 : 1
+                border.color: activeFocus ? ink.corona : ink.hairline
 
                 RowLayout {
                     anchors.fill: parent
@@ -401,6 +459,13 @@ Rectangle {
                             radius: width / 2
                             color: ink.overAccent
                         }
+                    }
+                }
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        event.accepted = true
+                        Actions.sessionSetMasterCheats(!Session.masterCheats)
                     }
                 }
 
@@ -445,8 +510,8 @@ Rectangle {
                         height: Math.round(38 * root.px)
                         radius: Math.round(7 * root.px)
                         color: cheatRow.on ? ink.glowWeak : ink.surfaceRaised
-                        border.width: 1
-                        border.color: cheatRow.on ? ink.coronaSoft : ink.hairline
+                        border.width: cheatRow.activeFocus ? 2 : 1
+                        border.color: cheatRow.activeFocus ? ink.corona : (cheatRow.on ? ink.coronaSoft : ink.hairline)
 
                         RowLayout {
                             anchors.fill: parent
@@ -467,6 +532,13 @@ Rectangle {
                                 Layout.preferredHeight: Layout.preferredWidth
                                 radius: width / 2
                                 color: cheatRow.on ? ink.accent : ink.muted
+                            }
+                        }
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                event.accepted = true
+                                Actions.sessionSwitchCheat(cheatRow.index)
                             }
                         }
 
@@ -514,8 +586,8 @@ Rectangle {
                         height: Math.round(40 * root.px)
                         radius: Math.round(7 * root.px)
                         color: ink.surfaceRaised
-                        border.width: 1
-                        border.color: ink.hairline
+                        border.width: optRow.activeFocus ? 2 : 1
+                        border.color: optRow.activeFocus ? ink.corona : ink.hairline
 
                         RowLayout {
                             anchors.fill: parent
@@ -539,6 +611,13 @@ Rectangle {
                             }
                         }
 
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                event.accepted = true
+                                Actions.sessionStepConsoleOption(optRow.key, 1)
+                            }
+                        }
+
                         TapHandler {
                             onTapped: Actions.sessionStepConsoleOption(optRow.key, 1)
                         }
@@ -554,8 +633,8 @@ Rectangle {
                 Layout.preferredHeight: Math.round(34 * root.px)
                 radius: Math.round(8 * root.px)
                 color: ink.surfaceRaised
-                border.width: 1
-                border.color: ink.hairline
+                border.width: activeFocus ? 2 : 1
+                border.color: activeFocus ? ink.corona : ink.hairline
 
                 Text {
                     anchors.centerIn: parent
@@ -563,6 +642,13 @@ Rectangle {
                     color: ink.textStrong
                     font.family: Tokens.faceInterface
                     font.pixelSize: Math.max(11, Math.round(12 * root.px))
+                }
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        event.accepted = true
+                        Actions.sessionSwapPlayers()
+                    }
                 }
 
                 TapHandler {
@@ -582,8 +668,8 @@ Rectangle {
                     Layout.preferredHeight: Math.round(34 * root.px)
                     radius: Math.round(8 * root.px)
                     color: ink.surfaceRaised
-                    border.width: 1
-                    border.color: ink.hairline
+                    border.width: activeFocus ? 2 : 1
+                    border.color: activeFocus ? ink.corona : ink.hairline
 
                     Text {
                         anchors.centerIn: parent
@@ -591,6 +677,13 @@ Rectangle {
                         color: ink.textStrong
                         font.family: Tokens.faceInterface
                         font.pixelSize: Math.max(11, Math.round(12 * root.px))
+                    }
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            event.accepted = true
+                            Actions.sessionRestart()
+                        }
                     }
 
                     TapHandler {
@@ -606,8 +699,8 @@ Rectangle {
                     Layout.preferredHeight: Math.round(34 * root.px)
                     radius: Math.round(8 * root.px)
                     color: ink.errorFill
-                    border.width: 1
-                    border.color: ink.error
+                    border.width: activeFocus ? 2 : 1
+                    border.color: activeFocus ? ink.corona : ink.error
 
                     Text {
                         anchors.centerIn: parent
@@ -616,6 +709,13 @@ Rectangle {
                         font.family: Tokens.faceInterface
                         font.pixelSize: Math.max(11, Math.round(12 * root.px))
                         font.weight: Tokens.weightTitle
+                    }
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            event.accepted = true
+                            Actions.sessionClose()
+                        }
                     }
 
                     TapHandler {

@@ -194,6 +194,12 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "fullScreenToggleRequested"]
         fn full_screen_toggle_requested(self: Pin<&mut ThemeFeed>);
+        #[qsignal]
+        #[cxx_name = "desktopLibraryRequested"]
+        fn desktop_library_requested(self: Pin<&mut ThemeFeed>);
+        #[qsignal]
+        #[cxx_name = "desktopShadersRequested"]
+        fn desktop_shaders_requested(self: Pin<&mut ThemeFeed>);
     }
 
     impl cxx_qt::Initialize for ThemeFeed {}
@@ -648,7 +654,7 @@ impl ActionSink for Sink {
             return false;
         }
         let Some(d) = (unsafe { feed.desktop.as_mut() }) else { return false };
-        let desktop = unsafe { Pin::new_unchecked(d) };
+        let mut desktop = unsafe { Pin::new_unchecked(d) };
         match action {
             WorkspaceAction::View(v) => {
                 desktop.set_view(*v);
@@ -740,6 +746,21 @@ impl ActionSink for Sink {
                 true
             }
             WorkspaceAction::AddGamesToCollection(games, cid) => desktop.add_games_to_collection(games.clone(), cid),
+            WorkspaceAction::OpenLibrary => {
+                desktop.as_mut().set_drawer_open(false);
+                desktop.set_view(0);
+                unsafe { Pin::new_unchecked(feed) }.desktop_library_requested();
+                true
+            }
+            WorkspaceAction::OpenShaders => {
+                desktop.as_mut().set_drawer_open(false);
+                if desktop.open_door("shaders") {
+                    unsafe { Pin::new_unchecked(feed) }.desktop_shaders_requested();
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 

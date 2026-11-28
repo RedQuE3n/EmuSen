@@ -130,8 +130,10 @@ fn qt_eclipse_desktop_face_renders_all_screens_on_vulkan() {
     save_shot(&mut scene, &shots, "03b-eclipse-desktop-playing-drawer.png");
     assert!(actions.as_mut().workspace_set_drawer(false));
     click_named(&mut scene, "eclipsePlayingBackLibrary");
-    unsafe { Pin::new_unchecked(&mut *screens_obj) }.library();
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
+    wait_for(&mut scene, "eclipseDesktopLibrary", "visible", "true", 2000);
+    assert_eq!(scene.property("desktopModel", "view"), "0", "< Library switches back to Library view");
+    assert_eq!(scene.property("desktopModel", "gameShown"), "false", "< Library exits Playing view");
 
     // 4. Desktop Settings + Themes gallery.
     click_named(&mut scene, "eclipseDesktopNavSettings");

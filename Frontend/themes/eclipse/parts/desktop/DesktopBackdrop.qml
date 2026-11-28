@@ -30,8 +30,8 @@ Item {
             BackdropField {
                 x: root.width - 520 * root.px
                 y: -140 * root.px
-                width: 720 * root.px
-                height: 720 * root.px
+                width: 700 * root.px
+                height: 700 * root.px
                 color: ink.backdropHalo
                 blur: 150 * root.px
                 opacity: 0.14

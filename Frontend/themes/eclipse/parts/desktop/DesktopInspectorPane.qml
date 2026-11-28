@@ -61,6 +61,7 @@ Rectangle {
                     }
 
                     Rectangle {
+                        id: inspFavIconBtn
                         objectName: "eclipseInspectorFavBtn"
                         activeFocusOnTab: true
                         Accessible.role: Accessible.Button
@@ -69,8 +70,15 @@ Rectangle {
                         Layout.preferredHeight: Layout.preferredWidth
                         radius: width / 2
                         color: ink.surfaceRaised
-                        border.width: 1
-                        border.color: Workspace.inspectorFavourite ? ink.accentSoft : ink.hairline
+                        border.width: inspFavIconBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                        border.color: inspFavIconBtn.activeFocus ? ink.corona : Workspace.inspectorFavourite ? ink.accentSoft : ink.hairline
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                Actions.favourite(Workspace.inspectorKey)
+                                event.accepted = true
+                            }
+                        }
 
                         Item {
                             anchors.centerIn: parent
@@ -99,6 +107,7 @@ Rectangle {
                     }
 
                     Rectangle {
+                        id: inspPageIconBtn
                         objectName: "eclipseInspectorPageIconBtn"
                         activeFocusOnTab: true
                         Accessible.role: Accessible.Button
@@ -107,8 +116,15 @@ Rectangle {
                         Layout.preferredHeight: Layout.preferredWidth
                         radius: width / 2
                         color: ink.surfaceRaised
-                        border.width: 1
-                        border.color: ink.hairline
+                        border.width: inspPageIconBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                        border.color: inspPageIconBtn.activeFocus ? ink.corona : ink.hairline
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                Actions.openPage(Workspace.inspectorKey)
+                                event.accepted = true
+                            }
+                        }
 
                         DesktopGlyph {
                             anchors.centerIn: parent
@@ -172,6 +188,7 @@ Rectangle {
                     spacing: Math.round(8 * root.px)
 
                     Rectangle {
+                        id: inspPlayBtn
                         objectName: "eclipseInspectorPlayBtn"
                         activeFocusOnTab: true
                         Accessible.role: Accessible.Button
@@ -180,6 +197,15 @@ Rectangle {
                         Layout.preferredHeight: Math.round(38 * root.px)
                         radius: height / 2
                         color: ink.accent
+                        border.width: inspPlayBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 0
+                        border.color: ink.corona
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                Actions.play(Workspace.inspectorKey)
+                                event.accepted = true
+                            }
+                        }
 
                         RowLayout {
                             anchors.centerIn: parent
@@ -207,6 +233,7 @@ Rectangle {
                     }
 
                     Rectangle {
+                        id: inspResumeBtn
                         objectName: "eclipseInspectorResumeBtn"
                         visible: Workspace.inspectorRunning
                         activeFocusOnTab: true
@@ -216,8 +243,15 @@ Rectangle {
                         Layout.preferredHeight: Math.round(38 * root.px)
                         radius: height / 2
                         color: ink.surfaceRaised
-                        border.width: 1
+                        border.width: inspResumeBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
                         border.color: ink.corona
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                Actions.play(Session.key)
+                                event.accepted = true
+                            }
+                        }
 
                         Text {
                             anchors.centerIn: parent
@@ -278,8 +312,15 @@ Rectangle {
                             Layout.preferredHeight: Math.round(40 * root.px)
                             radius: Math.round(8 * root.px)
                             color: stHover.hovered ? ink.glowWeak : ink.surfaceRaised
-                            border.width: 1
-                            border.color: stRow.isAuto ? ink.accentSoft : ink.hairline
+                            border.width: stRow.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                            border.color: stRow.activeFocus ? ink.corona : stRow.isAuto ? ink.accentSoft : ink.hairline
+
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                    Actions.playFrom(Workspace.inspectorKey, stRow.path)
+                                    event.accepted = true
+                                }
+                            }
 
                             RowLayout {
                                 anchors.fill: parent
@@ -495,6 +536,7 @@ Rectangle {
                     spacing: Math.round(6 * root.px)
 
                     Rectangle {
+                        id: inspPageBtn
                         activeFocusOnTab: true
                         Accessible.role: Accessible.Button
                         Accessible.name: Words.desktopDetailsLabel
@@ -502,8 +544,15 @@ Rectangle {
                         Layout.preferredHeight: Math.round(32 * root.px)
                         radius: Math.round(7 * root.px)
                         color: pageBtnHover.hovered ? ink.cardHover : ink.surfaceRaised
-                        border.width: 1
-                        border.color: ink.hairline
+                        border.width: inspPageBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                        border.color: inspPageBtn.activeFocus ? ink.corona : ink.hairline
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                Actions.openPage(Workspace.inspectorKey)
+                                event.accepted = true
+                            }
+                        }
 
                         Text {
                             anchors.centerIn: parent
@@ -524,6 +573,7 @@ Rectangle {
                     }
 
                     Rectangle {
+                        id: inspFavBtn
                         activeFocusOnTab: true
                         Accessible.role: Accessible.Button
                         Accessible.name: Workspace.inspectorFavourite ? Words.desktopUnfavouriteLabel : Words.desktopFavouriteLabel
@@ -531,8 +581,15 @@ Rectangle {
                         Layout.preferredHeight: Math.round(32 * root.px)
                         radius: Math.round(7 * root.px)
                         color: favBtnHover.hovered ? ink.cardHover : ink.surfaceRaised
-                        border.width: 1
-                        border.color: ink.hairline
+                        border.width: inspFavBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                        border.color: inspFavBtn.activeFocus ? ink.corona : ink.hairline
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                Actions.favourite(Workspace.inspectorKey)
+                                event.accepted = true
+                            }
+                        }
 
                         Text {
                             anchors.centerIn: parent
@@ -553,6 +610,7 @@ Rectangle {
                     }
 
                     Rectangle {
+                        id: inspFolderBtn
                         activeFocusOnTab: true
                         Accessible.role: Accessible.Button
                         Accessible.name: Words.desktopFolderLabel
@@ -560,8 +618,15 @@ Rectangle {
                         Layout.preferredHeight: Math.round(32 * root.px)
                         radius: Math.round(7 * root.px)
                         color: folderBtnHover.hovered ? ink.cardHover : ink.surfaceRaised
-                        border.width: 1
-                        border.color: ink.hairline
+                        border.width: inspFolderBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                        border.color: inspFolderBtn.activeFocus ? ink.corona : ink.hairline
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                Actions.workspaceOpenFolder(Workspace.inspectorKey)
+                                event.accepted = true
+                            }
+                        }
 
                         RowLayout {
                             anchors.centerIn: parent

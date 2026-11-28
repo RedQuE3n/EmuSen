@@ -230,6 +230,13 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "addGamesToCollection"]
         fn add_games_to_collection(self: Pin<&mut ThemeActions>, games: &QStringList, collection_id: &QString) -> bool;
+        /// Desktop Workspace library and shaders doors (1.24).
+        #[qinvokable]
+        #[cxx_name = "workspaceLibrary"]
+        fn workspace_library(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceShaders"]
+        fn workspace_shaders(self: Pin<&mut ThemeActions>) -> bool;
 
         /// Live Session calls (1.23).
         #[qinvokable]
@@ -390,6 +397,8 @@ pub enum WorkspaceAction {
     OpenTool(String),
     ToggleFullScreen,
     AddGamesToCollection(Vec<String>, String),
+    OpenLibrary,
+    OpenShaders,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -761,6 +770,14 @@ impl qobject::ThemeActions {
     pub fn add_games_to_collection(self: Pin<&mut Self>, games: &QStringList, collection_id: &QString) -> bool {
         let list = games.iter().map(|g| g.to_string()).collect();
         self.call_workspace(WorkspaceAction::AddGamesToCollection(list, collection_id.to_string()))
+    }
+
+    pub fn workspace_library(self: Pin<&mut Self>) -> bool {
+        self.call_workspace(WorkspaceAction::OpenLibrary)
+    }
+
+    pub fn workspace_shaders(self: Pin<&mut Self>) -> bool {
+        self.call_workspace(WorkspaceAction::OpenShaders)
     }
 
     pub fn session_pause(self: Pin<&mut Self>) -> bool {

@@ -1,4 +1,4 @@
-//! Eclipse Schema 2 Desktop Face tests (`EmuSen.Theme 1.23`): slots, token layering, interactive views, `R-20261127-10` focus arbitration, and Big Picture parity.
+//! Eclipse Schema 2 Desktop Face tests (`EmuSen.Theme 1.24`): slots, token layering, interactive views, `R-20261127-10` focus arbitration, and Big Picture parity.
 
 use crate::common::{approved_console_core, draw_covers, sandbox, wait_for};
 use crate::eclipse_board;
@@ -169,8 +169,18 @@ fn qt_eclipse_desktop_face_slots_tokens_and_flows_hold() {
     wait_for(&mut scene, "game", "activeFocus", "true", 1000);
 
     click_named(&mut scene, "eclipsePlayingBackLibrary");
-    unsafe { Pin::new_unchecked(&mut *screens_obj) }.library();
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
+    wait_for(&mut scene, "eclipseDesktopLibrary", "visible", "true", 2000);
+    assert_eq!(scene.property("desktopModel", "view"), "0", "< Library switches back to Library view");
+    assert_eq!(scene.property("desktopModel", "drawerOpen"), "false", "< Library closes drawer");
+    assert_eq!(scene.property("desktopModel", "gameShown"), "false", "< Library exits Playing view");
+
+    // Shaders quick-door directly from Library opens #20 Shaders inside Settings.
+    click_named(&mut scene, "eclipseDesktopNavShaders");
+    wait_for(&mut scene, "settingsModel", "shadersShown", "true", 2000);
+    wait_for(&mut scene, "shadersNavScope", "activeFocus", "true", 2000);
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "settingsModel", "shadersShown", "false", 2000);
 
     // Unified Settings + Tools sidebar, Shaders #20 door, and Themes view.
     click_named(&mut scene, "eclipseDesktopNavSettings");

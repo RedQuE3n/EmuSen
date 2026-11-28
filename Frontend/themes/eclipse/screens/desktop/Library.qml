@@ -110,6 +110,7 @@ ThemeScreen {
                             }
 
                             Rectangle {
+                                id: libConsoleOptBtn
                                 visible: Workspace.activeCore.length > 0
                                 activeFocusOnTab: true
                                 Accessible.role: Accessible.Button
@@ -117,9 +118,16 @@ ThemeScreen {
                                 Layout.preferredHeight: Math.round(30 * root.px)
                                 radius: Math.round(8 * root.px)
                                 color: optHover.hovered ? ink.surfaceRaised : ink.glass
-                                border.width: 1
-                                border.color: ink.pillBorder
+                                border.width: libConsoleOptBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                border.color: libConsoleOptBtn.activeFocus ? ink.corona : ink.pillBorder
                                 implicitWidth: optLabel.implicitWidth + Math.round(22 * root.px)
+
+                                Keys.onPressed: (event) => {
+                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                        Actions.consoleOptions(Workspace.consoleKey)
+                                        event.accepted = true
+                                    }
+                                }
 
                                 Text {
                                     id: optLabel
@@ -160,9 +168,16 @@ ThemeScreen {
                                     height: Math.round(28 * root.px)
                                     radius: height / 2
                                     color: filterChip.active ? ink.textStrong : chipHover.hovered ? ink.surfaceRaised : ink.glass
-                                    border.width: 1
-                                    border.color: filterChip.active ? ink.textStrong : ink.hairline
+                                    border.width: filterChip.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                    border.color: filterChip.activeFocus ? ink.corona : filterChip.active ? ink.textStrong : ink.hairline
                                     implicitWidth: chipRow.implicitWidth + Math.round(20 * root.px)
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            Actions.workspaceSetFilter(filterChip.key)
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     RowLayout {
                                         id: chipRow
@@ -200,15 +215,23 @@ ThemeScreen {
                             }
 
                             Rectangle {
+                                id: libSortBtn
                                 activeFocusOnTab: true
                                 Accessible.role: Accessible.Button
                                 Accessible.name: Words.desktopSortLabel
                                 Layout.preferredHeight: Math.round(28 * root.px)
                                 radius: Math.round(7 * root.px)
                                 color: sortHover.hovered ? ink.surfaceRaised : ink.glass
-                                border.width: 1
-                                border.color: ink.hairline
+                                border.width: libSortBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                border.color: libSortBtn.activeFocus ? ink.corona : ink.hairline
                                 implicitWidth: sortRow.implicitWidth + Math.round(20 * root.px)
+
+                                Keys.onPressed: (event) => {
+                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                        Actions.workspaceSetSort((Workspace.sortIndex + 1) % Words.desktopSortLabels.length)
+                                        event.accepted = true
+                                    }
+                                }
 
                                 RowLayout {
                                     id: sortRow
@@ -321,8 +344,19 @@ ThemeScreen {
                                             anchors.margins: Math.round(6 * root.px)
                                             radius: Math.round(Tokens.tileRadius * root.px)
                                             color: ink.surfaceRaised
-                                            border.width: cardSlot.selected ? 2 : 1
-                                            border.color: cardSlot.selected ? ink.corona : cardHover.hovered ? ink.pillBorder : ink.hairline
+                                            border.width: cardItem.activeFocus || cardSlot.selected ? 2 : 1
+                                            border.color: cardItem.activeFocus || cardSlot.selected ? ink.corona : cardHover.hovered ? ink.pillBorder : ink.hairline
+
+                                            Keys.onPressed: (event) => {
+                                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                                    Actions.workspaceSelectGame(cardSlot.key)
+                                                    Actions.play(cardSlot.key)
+                                                    event.accepted = true
+                                                } else if (event.key === Qt.Key_Space) {
+                                                    Actions.workspaceSelectGame(cardSlot.key)
+                                                    event.accepted = true
+                                                }
+                                            }
 
                                             Glow {
                                                 anchors.fill: parent
@@ -371,6 +405,7 @@ ThemeScreen {
 
                                             // Top-right favourite toggle button.
                                             Rectangle {
+                                                id: cardFavBtn
                                                 activeFocusOnTab: true
                                                 Accessible.role: Accessible.Button
                                                 Accessible.name: cardSlot.favourite ? Words.desktopUnfavouriteLabel : Words.desktopFavouriteLabel
@@ -381,6 +416,16 @@ ThemeScreen {
                                                 height: width
                                                 radius: width / 2
                                                 color: ink.overArtScrim
+                                                border.width: cardFavBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 0
+                                                border.color: ink.corona
+
+                                                Keys.onPressed: (event) => {
+                                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                        Actions.workspaceSelectGame(cardSlot.key)
+                                                        Actions.favourite(cardSlot.key)
+                                                        event.accepted = true
+                                                    }
+                                                }
 
                                                 Item {
                                                     anchors.centerIn: parent
@@ -495,6 +540,7 @@ ThemeScreen {
                                 }
 
                                 Rectangle {
+                                    id: libClearFiltersBtn
                                     Layout.alignment: Qt.AlignHCenter
                                     visible: Workspace.searchQuery.length > 0 || Workspace.count !== Workspace.totalCount
                                     activeFocusOnTab: true
@@ -503,9 +549,16 @@ ThemeScreen {
                                     Layout.preferredHeight: Math.round(30 * root.px)
                                     radius: height / 2
                                     color: ink.surfaceRaised
-                                    border.width: 1
-                                    border.color: ink.pillBorder
+                                    border.width: libClearFiltersBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                    border.color: libClearFiltersBtn.activeFocus ? ink.corona : ink.pillBorder
                                     implicitWidth: clearBtnText.implicitWidth + Math.round(24 * root.px)
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            Actions.workspaceClearFilters()
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     Text {
                                         id: clearBtnText

@@ -131,8 +131,8 @@ ThemeScreen {
                                     height: Math.round(34 * root.px)
                                     radius: Math.round(8 * root.px)
                                     color: secBtn.current ? ink.textStrong : secHover.hovered ? ink.surfaceRaised : "transparent"
-                                    border.width: secBtn.current ? 1 : 0
-                                    border.color: ink.coronaSoft
+                                    border.width: secBtn.activeFocus ? 2 : (secBtn.current ? 1 : 0)
+                                    border.color: secBtn.activeFocus ? ink.corona : ink.coronaSoft
 
                                     RowLayout {
                                         anchors.fill: parent
@@ -169,6 +169,13 @@ ThemeScreen {
 
                                     HoverHandler {
                                         id: secHover
+                                    }
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            event.accepted = true
+                                            Actions.settingsSection(secBtn.index)
+                                        }
                                     }
 
                                     TapHandler {
@@ -220,7 +227,7 @@ ThemeScreen {
                                     required property string badge
                                     required property string icon
                                     required property bool attention
-                                    readonly property bool isThemes: toolBtn.name === Words.desktopThemesHeading
+                                    readonly property bool isThemes: toolBtn.key === Workspace.themesDoorKey
                                     readonly property bool current: root.showingThemes && toolBtn.isThemes
                                     activeFocusOnTab: true
                                     Accessible.role: Accessible.Button
@@ -229,6 +236,8 @@ ThemeScreen {
                                     height: Math.round(32 * root.px)
                                     radius: Math.round(8 * root.px)
                                     color: toolBtn.current ? ink.textStrong : toolHover.hovered ? ink.surfaceRaised : "transparent"
+                                    border.width: toolBtn.activeFocus ? 2 : 0
+                                    border.color: ink.corona
 
                                     RowLayout {
                                         anchors.fill: parent
@@ -289,6 +298,13 @@ ThemeScreen {
                                         id: toolHover
                                     }
 
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            event.accepted = true
+                                            if (toolBtn.isThemes) Actions.settingsOpenTool(5); else Actions.toolsOpen(toolBtn.key)
+                                        }
+                                    }
+
                                     TapHandler {
                                         onTapped: if (toolBtn.isThemes) Actions.settingsOpenTool(5); else Actions.toolsOpen(toolBtn.key)
                                     }
@@ -326,8 +342,8 @@ ThemeScreen {
                                 Layout.preferredHeight: Math.round(28 * root.px)
                                 radius: height / 2
                                 color: ink.surfaceRaised
-                                border.width: 1
-                                border.color: ink.pillBorder
+                                border.width: activeFocus ? 2 : 1
+                                border.color: activeFocus ? ink.corona : ink.pillBorder
                                 implicitWidth: backTxt.implicitWidth + Math.round(18 * root.px)
 
                                 Text {
@@ -338,6 +354,13 @@ ThemeScreen {
                                     font.family: Tokens.faceInterface
                                     font.pixelSize: Math.max(11, Math.round(12 * root.px))
                                     font.weight: Tokens.weightTitle
+                                }
+
+                                Keys.onPressed: (event) => {
+                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                        event.accepted = true
+                                        Actions.settingsBack()
+                                    }
                                 }
 
                                 TapHandler {
@@ -374,8 +397,8 @@ ThemeScreen {
                                 Layout.preferredHeight: Math.round(28 * root.px)
                                 radius: height / 2
                                 color: Settings.modifiedOnly ? ink.accent : ink.glass
-                                border.width: 1
-                                border.color: Settings.modifiedOnly ? ink.accent : ink.hairline
+                                border.width: activeFocus ? 2 : 1
+                                border.color: activeFocus ? ink.corona : (Settings.modifiedOnly ? ink.accent : ink.hairline)
                                 implicitWidth: modTxt.implicitWidth + Math.round(20 * root.px)
 
                                 Text {
@@ -386,6 +409,13 @@ ThemeScreen {
                                     font.family: Tokens.faceInterface
                                     font.pixelSize: Math.max(11, Math.round(12 * root.px))
                                     font.weight: Tokens.weightTitle
+                                }
+
+                                Keys.onPressed: (event) => {
+                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                        event.accepted = true
+                                        Actions.settingsSetModifiedOnly(!Settings.modifiedOnly)
+                                    }
                                 }
 
                                 TapHandler {
@@ -406,7 +436,7 @@ ThemeScreen {
                                 objectName: "eclipseDesktopSettingsRows"
                                 anchors.fill: parent
                                 clip: true
-                                spacing: Math.round(8 * root.px)
+                                spacing: 0
                                 model: Settings.rows
                                 readonly property bool fadeTop: !atYBeginning
                                 readonly property bool fadeBottom: !atYEnd
@@ -414,7 +444,7 @@ ThemeScreen {
                                     policy: ScrollBar.AsNeeded
                                 }
 
-                                delegate: Rectangle {
+                                delegate: Item {
                                     id: sRow
                                     required property int index
                                     required property string key
@@ -437,181 +467,220 @@ ThemeScreen {
                                     Accessible.name: sRow.label
                                     width: settingsList.width
                                     visible: sRow.shown
-                                    height: sRow.shown ? Math.round(58 * root.px) : 0
-                                    radius: Math.round(10 * root.px)
-                                    color: sRow.focused ? ink.glowWeak : sRowHover.hovered ? ink.cardHover : ink.surfaceRaised
-                                    border.width: sRow.focused ? 1.5 : 1
-                                    border.color: sRow.focused ? ink.corona : ink.hairline
+                                    height: sRow.shown ? Math.round(66 * root.px) : 0
 
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: Math.round(14 * root.px)
-                                        anchors.rightMargin: Math.round(14 * root.px)
-                                        spacing: Math.round(12 * root.px)
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            Actions.settingsFocus(sRow.index)
+                                            if (sRow.isSwitch || sRow.isDoor) Actions.settingsChoose(sRow.index)
+                                            event.accepted = true
+                                        }
+                                    }
 
-                                        ColumnLayout {
-                                            Layout.fillWidth: true
-                                            spacing: 2
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.top: parent.top
+                                        height: Math.round(58 * root.px)
+                                        radius: Math.round(10 * root.px)
+                                        color: sRow.focused ? ink.glowWeak : sRowHover.hovered ? ink.cardHover : ink.surfaceRaised
+                                        border.width: sRow.focused || sRow.activeFocus ? 1.5 : 1
+                                        border.color: sRow.focused || sRow.activeFocus ? ink.corona : ink.hairline
 
-                                            RowLayout {
-                                                spacing: Math.round(6 * root.px)
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Math.round(14 * root.px)
+                                            anchors.rightMargin: Math.round(14 * root.px)
+                                            spacing: Math.round(12 * root.px)
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 2
+
+                                                RowLayout {
+                                                    spacing: Math.round(6 * root.px)
+
+                                                    Text {
+                                                        text: sRow.label
+                                                        color: ink.textStrong
+                                                        font.family: Tokens.faceInterface
+                                                        font.pixelSize: Math.max(12, Math.round(Tokens.fontRow * root.px))
+                                                        font.weight: Tokens.weightTitle
+                                                    }
+
+                                                    Rectangle {
+                                                        visible: sRow.isModified || sRow.marked
+                                                        Layout.preferredWidth: Math.round(6 * root.px)
+                                                        Layout.preferredHeight: Layout.preferredWidth
+                                                        radius: width / 2
+                                                        color: ink.accent
+                                                    }
+                                                }
 
                                                 Text {
-                                                    text: sRow.label
-                                                    color: ink.textStrong
+                                                    visible: sRow.about.length > 0
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                    text: sRow.about
+                                                    color: ink.dim
                                                     font.family: Tokens.faceInterface
-                                                    font.pixelSize: Math.max(12, Math.round(Tokens.fontRow * root.px))
-                                                    font.weight: Tokens.weightTitle
+                                                    font.pixelSize: Math.max(10, Math.round(11 * root.px))
+                                                }
+                                            }
+
+                                            // Boolean switch control.
+                                            Rectangle {
+                                                visible: sRow.isSwitch
+                                                Layout.preferredWidth: Math.round(44 * root.px)
+                                                Layout.preferredHeight: Math.round(24 * root.px)
+                                                radius: height / 2
+                                                color: sRow.switchOn ? ink.accent : ink.track
+
+                                                Rectangle {
+                                                    x: sRow.switchOn ? parent.width - width - 3 : 3
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    width: Math.round(18 * root.px)
+                                                    height: width
+                                                    radius: width / 2
+                                                    color: ink.overAccent
+                                                }
+                                            }
+
+                                            // Value pill + steppers.
+                                            RowLayout {
+                                                visible: !sRow.isSwitch && sRow.value.length > 0
+                                                spacing: Math.round(6 * root.px)
+
+                                                Rectangle {
+                                                    visible: sRow.isChoice || sRow.isSlider
+                                                    activeFocusOnTab: sRow.shown && (sRow.isChoice || sRow.isSlider)
+                                                    Accessible.role: Accessible.Button
+                                                    Accessible.name: sRow.label
+                                                    Layout.preferredWidth: Math.round(24 * root.px)
+                                                    Layout.preferredHeight: Layout.preferredWidth
+                                                    radius: width / 2
+                                                    color: ink.glass
+                                                    border.width: activeFocus ? 2 : 1
+                                                    border.color: activeFocus ? ink.corona : ink.hairline
+
+                                                    DesktopGlyph {
+                                                        anchors.centerIn: parent
+                                                        width: Math.round(11 * root.px)
+                                                        height: width
+                                                        kind: 3
+                                                        color: ink.textStrong
+                                                    }
+
+                                                    Keys.onPressed: (event) => {
+                                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                            event.accepted = true
+                                                            Actions.settingsFocus(sRow.index)
+                                                            Actions.settingsStep(sRow.index, -1)
+                                                        }
+                                                    }
+
+                                                    TapHandler {
+                                                        onTapped: {
+                                                            Actions.settingsFocus(sRow.index)
+                                                            Actions.settingsStep(sRow.index, -1)
+                                                        }
+                                                    }
                                                 }
 
                                                 Rectangle {
-                                                    visible: sRow.isModified || sRow.marked
-                                                    Layout.preferredWidth: Math.round(6 * root.px)
+                                                    activeFocusOnTab: sRow.shown && !sRow.isSwitch && sRow.value.length > 0
+                                                    Accessible.role: Accessible.Button
+                                                    Accessible.name: sRow.value
+                                                    Layout.preferredHeight: Math.round(28 * root.px)
+                                                    radius: height / 2
+                                                    color: ink.glass
+                                                    border.width: activeFocus ? 2 : 1
+                                                    border.color: activeFocus ? ink.corona : ink.pillBorder
+                                                    implicitWidth: valTxt.implicitWidth + Math.round(20 * root.px)
+
+                                                    Text {
+                                                        id: valTxt
+                                                        anchors.centerIn: parent
+                                                        text: sRow.value
+                                                        color: ink.textStrong
+                                                        font.family: sRow.code ? Tokens.faceCode : Tokens.faceInterface
+                                                        font.pixelSize: Math.max(11, Math.round(12 * root.px))
+                                                        font.weight: Tokens.weightTitle
+                                                    }
+
+                                                    Keys.onPressed: (event) => {
+                                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                            event.accepted = true
+                                                            Actions.settingsFocus(sRow.index)
+                                                            Actions.settingsChoose(sRow.index)
+                                                        }
+                                                    }
+
+                                                    TapHandler {
+                                                        onTapped: {
+                                                            Actions.settingsFocus(sRow.index)
+                                                            Actions.settingsChoose(sRow.index)
+                                                        }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    visible: sRow.isChoice || sRow.isSlider
+                                                    activeFocusOnTab: sRow.shown && (sRow.isChoice || sRow.isSlider)
+                                                    Accessible.role: Accessible.Button
+                                                    Accessible.name: sRow.label
+                                                    Layout.preferredWidth: Math.round(24 * root.px)
                                                     Layout.preferredHeight: Layout.preferredWidth
                                                     radius: width / 2
-                                                    color: ink.accent
+                                                    color: ink.glass
+                                                    border.width: activeFocus ? 2 : 1
+                                                    border.color: activeFocus ? ink.corona : ink.hairline
+
+                                                    DesktopGlyph {
+                                                        anchors.centerIn: parent
+                                                        width: Math.round(11 * root.px)
+                                                        height: width
+                                                        kind: 4
+                                                        color: ink.textStrong
+                                                    }
+
+                                                    Keys.onPressed: (event) => {
+                                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                            event.accepted = true
+                                                            Actions.settingsFocus(sRow.index)
+                                                            Actions.settingsStep(sRow.index, 1)
+                                                        }
+                                                    }
+
+                                                    TapHandler {
+                                                        onTapped: {
+                                                            Actions.settingsFocus(sRow.index)
+                                                            Actions.settingsStep(sRow.index, 1)
+                                                        }
+                                                    }
                                                 }
                                             }
 
-                                            Text {
-                                                visible: sRow.about.length > 0
-                                                Layout.fillWidth: true
-                                                elide: Text.ElideRight
-                                                text: sRow.about
-                                                color: ink.dim
-                                                font.family: Tokens.faceInterface
-                                                font.pixelSize: Math.max(10, Math.round(11 * root.px))
-                                            }
-                                        }
-
-                                        // Boolean switch control.
-                                        Rectangle {
-                                            visible: sRow.isSwitch
-                                            Layout.preferredWidth: Math.round(44 * root.px)
-                                            Layout.preferredHeight: Math.round(24 * root.px)
-                                            radius: height / 2
-                                            color: sRow.switchOn ? ink.accent : ink.track
-
-                                            Rectangle {
-                                                x: sRow.switchOn ? parent.width - width - 3 : 3
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                width: Math.round(18 * root.px)
-                                                height: width
-                                                radius: width / 2
-                                                color: ink.overAccent
-                                            }
-                                        }
-
-                                        // Value pill + steppers.
-                                        RowLayout {
-                                            visible: !sRow.isSwitch && sRow.value.length > 0
-                                            spacing: Math.round(6 * root.px)
-
-                                            Rectangle {
-                                                visible: sRow.isChoice || sRow.isSlider
-                                                activeFocusOnTab: sRow.shown && (sRow.isChoice || sRow.isSlider)
-                                                Accessible.role: Accessible.Button
-                                                Accessible.name: sRow.label
-                                                Layout.preferredWidth: Math.round(24 * root.px)
+                                            DesktopGlyph {
+                                                visible: sRow.isDoor && sRow.value.length === 0
+                                                Layout.preferredWidth: Math.round(13 * root.px)
                                                 Layout.preferredHeight: Layout.preferredWidth
-                                                radius: width / 2
-                                                color: ink.glass
-                                                border.width: 1
-                                                border.color: ink.hairline
-
-                                                DesktopGlyph {
-                                                    anchors.centerIn: parent
-                                                    width: Math.round(11 * root.px)
-                                                    height: width
-                                                    kind: 3
-                                                    color: ink.textStrong
-                                                }
-
-                                                TapHandler {
-                                                    onTapped: {
-                                                        Actions.settingsFocus(sRow.index)
-                                                        Actions.settingsStep(sRow.index, -1)
-                                                    }
-                                                }
-                                            }
-
-                                            Rectangle {
-                                                activeFocusOnTab: sRow.shown && !sRow.isSwitch && sRow.value.length > 0
-                                                Accessible.role: Accessible.Button
-                                                Accessible.name: sRow.value
-                                                Layout.preferredHeight: Math.round(28 * root.px)
-                                                radius: height / 2
-                                                color: ink.glass
-                                                border.width: 1
-                                                border.color: ink.pillBorder
-                                                implicitWidth: valTxt.implicitWidth + Math.round(20 * root.px)
-
-                                                Text {
-                                                    id: valTxt
-                                                    anchors.centerIn: parent
-                                                    text: sRow.value
-                                                    color: ink.textStrong
-                                                    font.family: sRow.code ? Tokens.faceCode : Tokens.faceInterface
-                                                    font.pixelSize: Math.max(11, Math.round(12 * root.px))
-                                                    font.weight: Tokens.weightTitle
-                                                }
-
-                                                TapHandler {
-                                                    onTapped: {
-                                                        Actions.settingsFocus(sRow.index)
-                                                        Actions.settingsChoose(sRow.index)
-                                                    }
-                                                }
-                                            }
-
-                                            Rectangle {
-                                                visible: sRow.isChoice || sRow.isSlider
-                                                activeFocusOnTab: sRow.shown && (sRow.isChoice || sRow.isSlider)
-                                                Accessible.role: Accessible.Button
-                                                Accessible.name: sRow.label
-                                                Layout.preferredWidth: Math.round(24 * root.px)
-                                                Layout.preferredHeight: Layout.preferredWidth
-                                                radius: width / 2
-                                                color: ink.glass
-                                                border.width: 1
-                                                border.color: ink.hairline
-
-                                                DesktopGlyph {
-                                                    anchors.centerIn: parent
-                                                    width: Math.round(11 * root.px)
-                                                    height: width
-                                                    kind: 4
-                                                    color: ink.textStrong
-                                                }
-
-                                                TapHandler {
-                                                    onTapped: {
-                                                        Actions.settingsFocus(sRow.index)
-                                                        Actions.settingsStep(sRow.index, 1)
-                                                    }
-                                                }
+                                                kind: 4
+                                                color: ink.muted
                                             }
                                         }
 
-                                        DesktopGlyph {
-                                            visible: sRow.isDoor && sRow.value.length === 0
-                                            Layout.preferredWidth: Math.round(13 * root.px)
-                                            Layout.preferredHeight: Layout.preferredWidth
-                                            kind: 4
-                                            color: ink.muted
+                                        HoverHandler {
+                                            id: sRowHover
                                         }
-                                    }
 
-                                    HoverHandler {
-                                        id: sRowHover
-                                    }
-
-                                    TapHandler {
-                                        onTapped: {
-                                            Actions.settingsFocus(sRow.index)
-                                            if (sRow.isSwitch || sRow.isDoor) Actions.settingsChoose(sRow.index)
+                                        TapHandler {
+                                            onTapped: {
+                                                Actions.settingsFocus(sRow.index)
+                                                if (sRow.isSwitch || sRow.isDoor) Actions.settingsChoose(sRow.index)
+                                            }
                                         }
-                                    }
+                                        }
                                 }
                             }
                         }
@@ -635,8 +704,8 @@ ThemeScreen {
                                 Layout.preferredHeight: Math.round(28 * root.px)
                                 radius: height / 2
                                 color: ink.surfaceRaised
-                                border.width: 1
-                                border.color: ink.pillBorder
+                                border.width: activeFocus ? 2 : 1
+                                border.color: activeFocus ? ink.corona : ink.pillBorder
                                 implicitWidth: tBackTxt.implicitWidth + Math.round(18 * root.px)
 
                                 Text {
@@ -647,6 +716,13 @@ ThemeScreen {
                                     font.family: Tokens.faceInterface
                                     font.pixelSize: Math.max(11, Math.round(12 * root.px))
                                     font.weight: Tokens.weightTitle
+                                }
+
+                                Keys.onPressed: (event) => {
+                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                        event.accepted = true
+                                        Actions.settingsBack()
+                                    }
                                 }
 
                                 TapHandler {
@@ -688,8 +764,8 @@ ThemeScreen {
                                         height: Math.round(28 * root.px)
                                         radius: height / 2
                                         color: kBtn.active ? ink.textStrong : ink.glass
-                                        border.width: 1
-                                        border.color: kBtn.active ? ink.textStrong : ink.hairline
+                                        border.width: kBtn.activeFocus ? 2 : 1
+                                        border.color: kBtn.activeFocus ? ink.corona : (kBtn.active ? ink.textStrong : ink.hairline)
                                         implicitWidth: kTxt.implicitWidth + Math.round(18 * root.px)
 
                                         Text {
@@ -700,6 +776,13 @@ ThemeScreen {
                                             font.family: Tokens.faceInterface
                                             font.pixelSize: Math.max(11, Math.round(12 * root.px))
                                             font.weight: Tokens.weightTitle
+                                        }
+
+                                        Keys.onPressed: (event) => {
+                                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                event.accepted = true
+                                                Actions.themesSetKind(kBtn.modelData)
+                                            }
                                         }
 
                                         TapHandler {
@@ -744,8 +827,8 @@ ThemeScreen {
                                     height: Math.round(58 * root.px)
                                     radius: Math.round(10 * root.px)
                                     color: themeRow.focused ? ink.glowWeak : ink.surfaceRaised
-                                    border.width: themeRow.focused ? 1.5 : 1
-                                    border.color: themeRow.focused ? ink.corona : ink.hairline
+                                    border.width: themeRow.activeFocus ? 2 : (themeRow.focused ? 1.5 : 1)
+                                    border.color: (themeRow.focused || themeRow.activeFocus) ? ink.corona : ink.hairline
 
                                     RowLayout {
                                         anchors.fill: parent
@@ -797,9 +880,9 @@ ThemeScreen {
                                             Layout.preferredHeight: Math.round(28 * root.px)
                                             radius: height / 2
                                             color: themeRow.active ? ink.surfaceRaised : ink.accent
-                                            border.width: themeRow.active ? 1 : 0
+                                            border.width: activeFocus ? 2 : (themeRow.active ? 1 : 0)
                                             border.color: ink.corona
-                                            implicitWidth: (themeRow.steps ? 28 : useThemeTxt.implicitWidth + 18) * root.px
+                                            implicitWidth: themeRow.steps ? Math.round(28 * root.px) : useThemeTxt.implicitWidth + Math.round(18 * root.px)
 
                                             Text {
                                                 id: useThemeTxt
@@ -821,12 +904,27 @@ ThemeScreen {
                                                 color: themeRow.active ? ink.textStrong : ink.overAccent
                                             }
 
+                                            Keys.onPressed: (event) => {
+                                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                    event.accepted = true
+                                                    Actions.themesFocus(themeRow.index)
+                                                    if (themeRow.steps) Actions.themesStep(themeRow.index, 1); else Actions.themesUse(themeRow.id)
+                                                }
+                                            }
+
                                             TapHandler {
                                                 onTapped: {
                                                     Actions.themesFocus(themeRow.index)
                                                     if (themeRow.steps) Actions.themesStep(themeRow.index, 1); else Actions.themesUse(themeRow.id)
                                                 }
                                             }
+                                        }
+                                    }
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            event.accepted = true
+                                            Actions.themesFocus(themeRow.index)
                                         }
                                     }
 

@@ -2194,6 +2194,7 @@ impl qobject::DesktopModel {
                     return false;
                 }
                 self.as_mut().set_settings_tool(-1);
+                self.as_mut().set_view(2);
                 unsafe { Pin::new_unchecked(settings) }.open_shaders_door();
                 self.refresh();
                 true

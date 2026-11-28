@@ -19,6 +19,7 @@ ThemeScreen {
         anchors.fill: parent
         readonly property real px: Math.max(0.84, root.height / 1000)
         readonly property real rowHeight: Math.min(48 * root.px, Math.max(36 * root.px, Tokens.rowHeight * root.px))
+        readonly property bool inputFocused: Window.activeFocusItem instanceof TextInput
 
         DesktopInk {
             id: ink
@@ -85,6 +86,7 @@ ThemeScreen {
                             }
 
                             Rectangle {
+                                id: tClearFiltersBtn
                                 visible: Workspace.searchQuery.length > 0 || Workspace.count !== Workspace.totalCount
                                 activeFocusOnTab: true
                                 Accessible.role: Accessible.Button
@@ -92,9 +94,16 @@ ThemeScreen {
                                 Layout.preferredHeight: Math.round(28 * root.px)
                                 radius: height / 2
                                 color: ink.surfaceRaised
-                                border.width: 1
-                                border.color: ink.pillBorder
+                                border.width: tClearFiltersBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                border.color: tClearFiltersBtn.activeFocus ? ink.corona : ink.pillBorder
                                 implicitWidth: tClearText.implicitWidth + Math.round(20 * root.px)
+
+                                Keys.onPressed: (event) => {
+                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                        Actions.workspaceClearFilters()
+                                        event.accepted = true
+                                    }
+                                }
 
                                 Text {
                                     id: tClearText
@@ -130,9 +139,16 @@ ThemeScreen {
                                     height: Math.round(26 * root.px)
                                     radius: height / 2
                                     color: tFilterChip.active ? ink.textStrong : ink.glass
-                                    border.width: 1
-                                    border.color: tFilterChip.active ? ink.textStrong : ink.hairline
+                                    border.width: tFilterChip.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                    border.color: tFilterChip.activeFocus ? ink.corona : tFilterChip.active ? ink.textStrong : ink.hairline
                                     implicitWidth: tfRow.implicitWidth + Math.round(18 * root.px)
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            Actions.workspaceSetFilter(tFilterChip.key)
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     RowLayout {
                                         id: tfRow
@@ -182,6 +198,7 @@ ThemeScreen {
                                 spacing: Math.round(8 * root.px)
 
                                 Rectangle {
+                                    id: tSelectAllBtn
                                     objectName: "eclipseDesktopTableSelectAll"
                                     activeFocusOnTab: true
                                     Accessible.role: Accessible.CheckBox
@@ -190,8 +207,15 @@ ThemeScreen {
                                     Layout.preferredHeight: Layout.preferredWidth
                                     radius: Math.round(4 * root.px)
                                     color: Workspace.allMarked ? ink.accent : "transparent"
-                                    border.width: 1
-                                    border.color: Workspace.allMarked ? ink.accent : ink.pillBorder
+                                    border.width: tSelectAllBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                    border.color: tSelectAllBtn.activeFocus ? ink.corona : Workspace.allMarked ? ink.accent : ink.pillBorder
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            Actions.workspaceMarkAll()
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     DesktopGlyph {
                                         anchors.centerIn: parent
@@ -220,6 +244,22 @@ ThemeScreen {
                                         Layout.fillWidth: colHead.index === 0 || colHead.index === 1
                                         Layout.preferredWidth: colHead.index === 0 ? Math.round(220 * root.px) : colHead.index === 1 ? Math.round(130 * root.px) : colHead.index === 2 ? Math.round(108 * root.px) : colHead.index === 3 ? Math.round(58 * root.px) : colHead.index === 4 ? Math.round(98 * root.px) : colHead.index === 5 ? Math.round(88 * root.px) : colHead.index === 6 ? Math.round(78 * root.px) : colHead.index === 7 ? Math.round(72 * root.px) : Math.round(92 * root.px)
                                         Layout.fillHeight: true
+
+                                        Keys.onPressed: (event) => {
+                                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                Actions.workspaceSortByColumn(colHead.index < 7 ? colHead.index : 0)
+                                                event.accepted = true
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: Math.round(4 * root.px)
+                                            visible: colHead.activeFocus
+                                            color: "transparent"
+                                            border.width: Math.max(1.5, Tokens.ringThickness)
+                                            border.color: ink.corona
+                                        }
 
                                         RowLayout {
                                             anchors.verticalCenter: parent.verticalCenter
@@ -299,8 +339,19 @@ ThemeScreen {
                                     height: root.rowHeight
                                     radius: Math.round(6 * root.px)
                                     color: tRow.marked ? ink.glowWeak : tRow.selected ? ink.surfaceRaised : tRowHover.hovered ? ink.glass : "transparent"
-                                    border.width: tRow.marked || tRow.selected ? 1 : 0
-                                    border.color: tRow.marked ? ink.coronaSoft : ink.hairline
+                                    border.width: tRow.activeFocus ? Math.max(1.5, Tokens.ringThickness) : tRow.marked || tRow.selected ? 1 : 0
+                                    border.color: tRow.activeFocus || tRow.marked ? ink.coronaSoft : ink.hairline
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                            Actions.workspaceSelectGame(tRow.key)
+                                            Actions.play(tRow.key)
+                                            event.accepted = true
+                                        } else if (event.key === Qt.Key_Space) {
+                                            Actions.workspaceMarkToggle(tRow.key)
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     RowLayout {
                                         anchors.fill: parent
@@ -309,6 +360,7 @@ ThemeScreen {
                                         spacing: Math.round(8 * root.px)
 
                                         Rectangle {
+                                            id: tRowCheck
                                             activeFocusOnTab: true
                                             Accessible.role: Accessible.CheckBox
                                             Accessible.name: tRow.title
@@ -316,8 +368,15 @@ ThemeScreen {
                                             Layout.preferredHeight: Layout.preferredWidth
                                             radius: Math.round(4 * root.px)
                                             color: tRow.marked ? ink.accent : "transparent"
-                                            border.width: 1
-                                            border.color: tRow.marked ? ink.accent : ink.pillBorder
+                                            border.width: tRowCheck.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                            border.color: tRowCheck.activeFocus ? ink.corona : tRow.marked ? ink.accent : ink.pillBorder
+
+                                            Keys.onPressed: (event) => {
+                                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                    Actions.workspaceMarkToggle(tRow.key)
+                                                    event.accepted = true
+                                                }
+                                            }
 
                                             DesktopGlyph {
                                                 anchors.centerIn: parent
@@ -521,15 +580,23 @@ ThemeScreen {
                                 }
 
                                 Rectangle {
+                                    id: tBatchClearBtn
                                     activeFocusOnTab: true
                                     Accessible.role: Accessible.Button
                                     Accessible.name: Words.desktopClearLabel
                                     Layout.preferredHeight: Math.round(30 * root.px)
                                     radius: height / 2
                                     color: "transparent"
-                                    border.width: 1
-                                    border.color: ink.hairline
+                                    border.width: tBatchClearBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                    border.color: tBatchClearBtn.activeFocus ? ink.corona : ink.hairline
                                     implicitWidth: clearSelLabel.implicitWidth + Math.round(18 * root.px)
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            Actions.workspaceClearMarked()
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     Text {
                                         id: clearSelLabel
@@ -550,15 +617,23 @@ ThemeScreen {
                                 }
 
                                 Rectangle {
+                                    id: tBatchFavBtn
                                     activeFocusOnTab: true
                                     Accessible.role: Accessible.Button
                                     Accessible.name: Words.desktopFavouriteLabel
                                     Layout.preferredHeight: Math.round(32 * root.px)
                                     radius: height / 2
                                     color: ink.surfaceRaised
-                                    border.width: 1
-                                    border.color: ink.pillBorder
+                                    border.width: tBatchFavBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                    border.color: tBatchFavBtn.activeFocus ? ink.corona : ink.pillBorder
                                     implicitWidth: markFavText.implicitWidth + Math.round(20 * root.px)
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            Actions.workspaceBatchFavourite(true)
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     Text {
                                         id: markFavText
@@ -576,15 +651,23 @@ ThemeScreen {
                                 }
 
                                 Rectangle {
+                                    id: tBatchUnfavBtn
                                     activeFocusOnTab: true
                                     Accessible.role: Accessible.Button
                                     Accessible.name: Words.desktopUnmarkFavLabel
                                     Layout.preferredHeight: Math.round(32 * root.px)
                                     radius: height / 2
                                     color: ink.surfaceRaised
-                                    border.width: 1
-                                    border.color: ink.pillBorder
+                                    border.width: tBatchUnfavBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+                                    border.color: tBatchUnfavBtn.activeFocus ? ink.corona : ink.pillBorder
                                     implicitWidth: unmarkFavText.implicitWidth + Math.round(20 * root.px)
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            Actions.workspaceBatchFavourite(false)
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     Text {
                                         id: unmarkFavText
@@ -602,13 +685,23 @@ ThemeScreen {
                                 }
 
                                 Rectangle {
+                                    id: tBatchPlayBtn
                                     activeFocusOnTab: true
                                     Accessible.role: Accessible.Button
                                     Accessible.name: Words.desktopPlayLabel
                                     Layout.preferredHeight: Math.round(32 * root.px)
                                     radius: height / 2
                                     color: ink.accent
+                                    border.width: tBatchPlayBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 0
+                                    border.color: ink.corona
                                     implicitWidth: playMarkedText.implicitWidth + Math.round(22 * root.px)
+
+                                    Keys.onPressed: (event) => {
+                                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                            if (Workspace.markedKeys.length > 0) Actions.play(Workspace.markedKeys[0])
+                                            event.accepted = true
+                                        }
+                                    }
 
                                     Text {
                                         id: playMarkedText
@@ -636,7 +729,7 @@ ThemeScreen {
         }
 
         Shortcut {
-            enabled: root.visible
+            enabled: root.visible && !root.inputFocused
             sequence: "Ctrl+A"
             onActivated: Actions.workspaceMarkAll()
         }

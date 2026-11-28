@@ -86,6 +86,7 @@ Rectangle {
 
         // Sidebar collapse button.
         Rectangle {
+            id: sidebarBtn
             visible: root.showSidebarToggle
             objectName: "eclipseDesktopSidebarBtn"
             activeFocusOnTab: true
@@ -95,8 +96,15 @@ Rectangle {
             Layout.preferredHeight: Layout.preferredWidth
             radius: Math.round(7 * root.px)
             color: Workspace.sidebarOpen ? ink.surfaceRaised : sideHover.hovered ? ink.surfaceRaised : "transparent"
-            border.width: 1
-            border.color: sideHover.hovered ? ink.pillBorder : ink.hairline
+            border.width: sidebarBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+            border.color: sidebarBtn.activeFocus ? ink.corona : sideHover.hovered ? ink.pillBorder : ink.hairline
+
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                    Actions.workspaceSetSidebar(!Workspace.sidebarOpen)
+                    event.accepted = true
+                }
+            }
 
             DesktopGlyph {
                 anchors.centerIn: parent
@@ -130,9 +138,16 @@ Rectangle {
                 Layout.preferredHeight: Math.round(32 * root.px)
                 radius: height / 2
                 color: libTab.active ? ink.glowWeak : libTabHover.hovered ? ink.surfaceRaised : "transparent"
-                border.width: libTab.active ? 1 : 0
+                border.width: libTab.activeFocus ? Math.max(1.5, Tokens.ringThickness) : libTab.active ? 1 : 0
                 border.color: ink.corona
                 implicitWidth: libTabTxt.implicitWidth + Math.round(22 * root.px)
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        Actions.workspaceView(0)
+                        event.accepted = true
+                    }
+                }
 
                 Text {
                     id: libTabTxt
@@ -170,7 +185,16 @@ Rectangle {
                     Layout.preferredHeight: Math.round(32 * root.px)
                     radius: height / 2
                     color: coreQuickHover.hovered ? ink.surfaceRaised : "transparent"
+                    border.width: coreQuickBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 0
+                    border.color: ink.corona
                     implicitWidth: visible ? coreQuickRow.implicitWidth + Math.round(20 * root.px) : 0
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.openTool(coreQuickBtn.key)
+                            event.accepted = true
+                        }
+                    }
 
                     RowLayout {
                         id: coreQuickRow
@@ -214,7 +238,16 @@ Rectangle {
                 Layout.preferredHeight: Math.round(32 * root.px)
                 radius: height / 2
                 color: shadersHover.hovered ? ink.surfaceRaised : "transparent"
+                border.width: shadersTab.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 0
+                border.color: ink.corona
                 implicitWidth: shadersTxt.implicitWidth + Math.round(20 * root.px)
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        Actions.workspaceShaders()
+                        event.accepted = true
+                    }
+                }
 
                 Text {
                     id: shadersTxt
@@ -231,7 +264,7 @@ Rectangle {
                 }
 
                 TapHandler {
-                    onTapped: Actions.openDesktopDoor(Words.desktopStripShaders.toLowerCase())
+                    onTapped: Actions.workspaceShaders()
                 }
             }
 
@@ -246,9 +279,16 @@ Rectangle {
                 Layout.preferredHeight: Math.round(32 * root.px)
                 radius: height / 2
                 color: setTab.active ? ink.glowWeak : setTabHover.hovered ? ink.surfaceRaised : "transparent"
-                border.width: setTab.active ? 1 : 0
+                border.width: setTab.activeFocus ? Math.max(1.5, Tokens.ringThickness) : setTab.active ? 1 : 0
                 border.color: ink.corona
                 implicitWidth: setTabTxt.implicitWidth + Math.round(22 * root.px)
+
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        Actions.workspaceView(2)
+                        event.accepted = true
+                    }
+                }
 
                 Text {
                     id: setTabTxt
@@ -332,6 +372,7 @@ Rectangle {
 
         // Resume pill when a session is suspended.
         Rectangle {
+            id: resumePillBtn
             visible: Session.hasGame
             objectName: "eclipseDesktopResumeBtn"
             activeFocusOnTab: true
@@ -340,7 +381,16 @@ Rectangle {
             Layout.preferredHeight: Math.round(30 * root.px)
             radius: height / 2
             color: ink.accent
+            border.width: resumePillBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 0
+            border.color: ink.corona
             implicitWidth: resTxt.implicitWidth + Math.round(20 * root.px)
+
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                    Actions.play(Session.key)
+                    event.accepted = true
+                }
+            }
 
             Text {
                 id: resTxt
@@ -382,9 +432,16 @@ Rectangle {
                     Layout.preferredHeight: Math.round(26 * root.px)
                     radius: Math.round(6 * root.px)
                     color: gridSwitch.active ? ink.surfaceRaised : "transparent"
-                    border.width: gridSwitch.active ? 1 : 0
-                    border.color: ink.coronaSoft
+                    border.width: gridSwitch.activeFocus ? Math.max(1.5, Tokens.ringThickness) : gridSwitch.active ? 1 : 0
+                    border.color: gridSwitch.activeFocus ? ink.corona : ink.coronaSoft
                     implicitWidth: gridSwRow.implicitWidth + Math.round(14 * root.px)
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.workspaceView(0)
+                            event.accepted = true
+                        }
+                    }
 
                     RowLayout {
                         id: gridSwRow
@@ -422,9 +479,16 @@ Rectangle {
                     Layout.preferredHeight: Math.round(26 * root.px)
                     radius: Math.round(6 * root.px)
                     color: tableSwitch.active ? ink.surfaceRaised : "transparent"
-                    border.width: tableSwitch.active ? 1 : 0
-                    border.color: ink.coronaSoft
+                    border.width: tableSwitch.activeFocus ? Math.max(1.5, Tokens.ringThickness) : tableSwitch.active ? 1 : 0
+                    border.color: tableSwitch.activeFocus ? ink.corona : ink.coronaSoft
                     implicitWidth: tableSwRow.implicitWidth + Math.round(14 * root.px)
+
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            Actions.workspaceView(1)
+                            event.accepted = true
+                        }
+                    }
 
                     RowLayout {
                         id: tableSwRow
@@ -456,6 +520,7 @@ Rectangle {
 
         // Inspector toggle button.
         Rectangle {
+            id: inspectorBtn
             visible: root.showInspectorToggle
             objectName: "eclipseDesktopInspectorBtn"
             activeFocusOnTab: true
@@ -465,8 +530,15 @@ Rectangle {
             Layout.preferredHeight: Layout.preferredWidth
             radius: Math.round(7 * root.px)
             color: Workspace.inspectorOpen ? ink.surfaceRaised : inspHover.hovered ? ink.surfaceRaised : "transparent"
-            border.width: 1
-            border.color: inspHover.hovered ? ink.pillBorder : ink.hairline
+            border.width: inspectorBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+            border.color: inspectorBtn.activeFocus ? ink.corona : inspHover.hovered ? ink.pillBorder : ink.hairline
+
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                    Actions.workspaceSetInspector(!Workspace.inspectorOpen)
+                    event.accepted = true
+                }
+            }
 
             DesktopGlyph {
                 anchors.centerIn: parent
@@ -495,9 +567,16 @@ Rectangle {
             Layout.preferredHeight: Math.round(32 * root.px)
             radius: height / 2
             color: bpHover.hovered ? ink.textStrong : ink.surfaceRaised
-            border.width: 1
-            border.color: ink.pillBorder
+            border.width: bigPictureBtn.activeFocus ? Math.max(1.5, Tokens.ringThickness) : 1
+            border.color: bigPictureBtn.activeFocus ? ink.corona : ink.pillBorder
             implicitWidth: bpRow.implicitWidth + Math.round(20 * root.px)
+
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                    Actions.setBigScreen(true)
+                    event.accepted = true
+                }
+            }
 
             RowLayout {
                 id: bpRow

@@ -852,7 +852,7 @@ impl qobject::SessionModel {
         });
     }
 
-    fn answer_resume(mut self: Pin<&mut Self>, index: i32) {
+    pub fn answer_resume(mut self: Pin<&mut Self>, index: i32) {
         if !self.resume_asked {
             return;
         }
@@ -925,6 +925,11 @@ impl qobject::SessionModel {
             let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone(), self.slot_pictures.clone()));
             self.as_mut().rust_mut().served = served;
         }
+    }
+
+    /// Registers `image://session/` on an external QML engine (such as the theme sandbox).
+    pub fn serve_pictures_on(&self, object: &cxx_qt::QObject) -> bool {
+        pictures::ffi::serve(object, &QString::from(pictures::NAME), PictureSource::new(self.shown.clone(), self.slot_pictures.clone()))
     }
 
     fn set_slot0_picture(&self, path: Option<String>) {
@@ -1190,7 +1195,7 @@ impl qobject::SessionModel {
         self.as_mut().read_card_facts();
     }
 
-    fn pause(mut self: Pin<&mut Self>) {
+    pub fn pause(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().resume_waiting = false;
         if let Some(session) = &self.session {
             session.set_paused(true);
@@ -1254,7 +1259,7 @@ impl qobject::SessionModel {
         }
     }
 
-    fn resume(mut self: Pin<&mut Self>) {
+    pub fn resume(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().backgrounded = false;
         if self.jobs > 0 || self.holding.is_some() || self.from_state.is_some() {
             self.as_mut().rust_mut().resume_waiting = true;
@@ -1498,7 +1503,7 @@ impl qobject::SessionModel {
         QString::default()
     }
 
-    fn close(mut self: Pin<&mut Self>) {
+    pub fn close(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().stepped = false;
         self.as_mut().rust_mut().backgrounded = false;
         *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
@@ -1575,7 +1580,7 @@ impl qobject::SessionModel {
         }
     }
 
-    fn switch_cheat(mut self: Pin<&mut Self>, index: i32, on: bool) {
+    pub fn switch_cheat(mut self: Pin<&mut Self>, index: i32, on: bool) {
         let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
         let Ok(platform) = self.as_mut().platform() else { return };
         let Some(mut given) = self.as_mut().rust_mut().cheats.take() else { return };
@@ -1606,7 +1611,7 @@ impl qobject::SessionModel {
         self.read_card_facts();
     }
 
-    fn set_master_cheats(mut self: Pin<&mut Self>, on: bool) {
+    pub fn set_master_cheats(mut self: Pin<&mut Self>, on: bool) {
         if self.master_cheats != on {
             self.as_mut().rust_mut().master_cheats = on;
             self.as_mut().master_cheats_changed();
@@ -1618,7 +1623,7 @@ impl qobject::SessionModel {
         self.read_card_facts();
     }
 
-    fn choose_slot(mut self: Pin<&mut Self>, slot: u32) {
+    pub fn choose_slot(mut self: Pin<&mut Self>, slot: u32) {
         let slot = slot.clamp(1, pause::SLOTS);
         if self.slot != slot {
             self.as_mut().rust_mut().slot = slot;
@@ -1629,7 +1634,7 @@ impl qobject::SessionModel {
         }
     }
 
-    fn choose_speed(mut self: Pin<&mut Self>, percent: u32) {
+    pub fn choose_speed(mut self: Pin<&mut Self>, percent: u32) {
         if self.speed != percent {
             self.as_mut().rust_mut().speed = percent;
             self.as_mut().speed_changed();
@@ -1650,14 +1655,14 @@ impl qobject::SessionModel {
         }
     }
 
-    fn save_state(self: Pin<&mut Self>, slot: u32) {
+    pub fn save_state(self: Pin<&mut Self>, slot: u32) {
         self.job(move |runtime, session| match runtime.state_slot_save(session, slot) {
             Ok(()) => Ok(format!("State saved to slot {slot}")),
             Err(e) => Err(format!("Save State failed: {e}")),
         });
     }
 
-    fn load_state(self: Pin<&mut Self>, slot: u32) {
+    pub fn load_state(self: Pin<&mut Self>, slot: u32) {
         self.job(move |runtime, session| match runtime.state_slot_load(session, slot) {
             Ok(true) => Ok(format!("State loaded from slot {slot}")),
             Ok(false) => Err(format!("Load State: slot {slot} is empty")),
@@ -1667,7 +1672,7 @@ impl qobject::SessionModel {
 
     /// Named as Mistress names one: the game's file name, then the local time to the millisecond, in Galaxia's
     /// screenshots folder.
-    fn screenshot(mut self: Pin<&mut Self>) {
+    pub fn screenshot(mut self: Pin<&mut Self>) {
         let folder = self.as_mut().platform().ok().and_then(|p| p.directory(emusen_platform_client::galaxia::consts::DIR_SCREENSHOTS).ok().flatten());
         let Some(folder) = folder else { return self.set_problem(QString::from("No screenshots folder.")) };
         let game = self.game.to_string();
@@ -1680,14 +1685,14 @@ impl qobject::SessionModel {
         });
     }
 
-    fn restart(self: Pin<&mut Self>) {
+    pub fn restart(self: Pin<&mut Self>) {
         self.job(|runtime, session| match runtime.reset(session) {
             Ok(()) => Ok("Restarted".to_string()),
             Err(e) => Err(format!("Restart failed: {e}")),
         });
     }
 
-    fn rewind_to(self: Pin<&mut Self>, frame: u64) {
+    pub fn rewind_to(self: Pin<&mut Self>, frame: u64) {
         self.job(move |runtime, session| match runtime.rewind_to(session, frame) {
             Ok(()) => Ok("Rewound".to_string()),
             Err(_) => Err("Rewind: that moment is no longer held".to_string()),
@@ -1717,7 +1722,7 @@ impl qobject::SessionModel {
         });
     }
 
-    fn set_console_setting(mut self: Pin<&mut Self>, key: &QString, value: &QString) {
+    pub fn set_console_setting(mut self: Pin<&mut Self>, key: &QString, value: &QString) {
         let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
         let set = runtime.settings_set(session, emusen_crystal_client::Scope::Console, None, &key.to_string(), Some(&value.to_string()));
         if let Err(e) = set {
@@ -1729,7 +1734,7 @@ impl qobject::SessionModel {
         self.read_card_facts();
     }
 
-    fn swap_players(mut self: Pin<&mut Self>) {
+    pub fn swap_players(mut self: Pin<&mut Self>) {
         // SAFETY: as in `game_input`.
         let swapped = unsafe { GamePads::at(self.pads) }.is_some_and(|pads| pads.swap_players());
         if swapped {

@@ -29,7 +29,7 @@ The 9 excluded crates carry independent `Cargo.lock` files so dependency-fence t
 | `emusen-theme-host` | `Frontend/theme-host` | Member | Sandboxed QML engine host (`ThemeHost`) enforcing URL interception, module allow-listing, package loading, and verified engine teardown. |
 | `emusen-qml-rules` | `Frontend/qml-rules` | Standalone | Pure-Rust static analyzer enforcing the QML zero-logic boundary on internal views and external theme packages. |
 | `emusen-theme-check` | `Frontend/theme-check` | Standalone | Static theme package validator verifying directory layout, `theme.json`, tokens, QML rules, and asset constraints. |
-| `emusen-theme-manifest` | `Frontend/theme-check/manifest` | Standalone | Plain-data parser and schema validator for `theme.json` (`SCHEMA = 1`, API `1.20`). |
+| `emusen-theme-manifest` | `Frontend/theme-check/manifest` | Standalone | Plain-data parser and schema validator for `theme.json` (`SCHEMA = 2`, API `1.23`). |
 | `theme-audit` | `Frontend/theme-check/audit` | Member | Loaded offscreen theme auditor (`theme-audit`) running `ThemeHost` across viewport sizes, variants, reduced motion, and 15 synthetic library states. |
 | `emusen-esde` | `Frontend/esde` | Standalone | Pure-Rust ES-DE theme engine: XML theme loader, element resolution, scene timeline, built-in icon marks, shelf text mapping, font lookup, and corpus measurement (`esde-check`). |
 | `emusen-esde-text` | `Frontend/esde-text` | Standalone | HarfRust + `read-fonts` text shaper reproducing ES-DE's pixel-rounded glyph advances, word wrapping, `lineSpacing` pitch, and `"..."` ellipsis rules. |
@@ -102,7 +102,8 @@ Themes can completely redesign EmuSen's visual experience without gaining filesy
 |---|---|---|
 | `Actions` | `actions.rs` | Host-validated actions a theme may invoke (launch game, switch screen, toggle favorite, open settings/scraper). The host may decline individual actions cleanly. |
 | `Bells` | `bells.rs` | Triggers theme or built-in UI sound cues. |
-| `Browse` | `browse.rs` | Current browsing state: active shelf, selected console, search/filter state, letter-jump index, and focus restoration. |
+| `Browse` | `browse.rs` | Current browsing state: active shelf, selected console, search/filter state, letter-jump index, sort direction, and focus restoration. |
+| `Collections` | `collections.rs` | Read-only game collections directory (`focused`, `totalCount`, `footerRight`, `items`) for Desktop Mode themes. |
 | `Cues` | `cues.rs` | Resolves the 7 theme audio cue slots (`scroll`, `systembrowse`, `select`, `back`, `favorite`, `launch`, `quicksysselect`). |
 | `Device` | `device.rs` | Host environment state: battery charge/status, clock, reduced-motion mode, text scale, and active controller glyph family. |
 | `Help` / `HelpEntries` | `help.rs` | Context-sensitive bottom help-bar prompts (button glyph + action label) tailored to the active screen and focused control. |
@@ -110,26 +111,30 @@ Themes can completely redesign EmuSen's visual experience without gaining filesy
 | `Marks` | `marks.rs` | Built-in console planet marks, logos, and semantic vector glyphs exposed as image sources. |
 | `Page` | `page.rs` | Full game-detail state for the `game` screen: metadata, cover/screenshot art, save states, Moments reel, cheats, disc media, and package actions. |
 | `Rows` | `rows.rs` | Generic read-only list model backing consoles, games, shelves, states, and settings items. |
-| `Session` | `session.rs` | Active or suspended emulation session identity, pause state, and resume availability. |
-| `Settings` | `settings.rs` | Structured settings sections and rows for the `settings` screen (display, audio, controllers, library, shaders, saves, themes). |
+| `Session` | `session.rs` | Active or suspended emulation session identity, pause/resume availability, and live Desktop HUD state (`slots`, `cheats`, `consoleOptions`, `rewindMarks`). |
+| `Settings` | `settings.rs` | Structured settings sections, row metadata, badges, filter, and modified-only state for `settings` and `desktopSettings`. |
 | `Splash` | `splash.rs` | Startup splash timeline, readiness progress, and completion/skip state. |
+| `Themes` | `themes.rs` | Read-only installed EmuSen and ES-DE theme catalog, active theme metadata, validation findings, and preview URLs. |
+| `Tools` | `tools.rs` | Read-only Tools directory (`count`, `focused`, `activeKey`, `busy`, `summary`, `entries`) for Desktop Mode themes. |
 | `Words` | `words.rs` | Complete dictionary of host-owned UI strings so theme QML never hardcodes visible labels. |
+| `Workspace` | `workspace.rs` | Read-only Desktop Mode workspace, catalog, console scope, table sort/filter, batch-selection, and game inspector projection. |
 
 ### 3.3 `theme.json` Manifest Schema
 
-Every QML theme package is described by `theme.json`, validated by `Frontend/theme-check/manifest` (`SCHEMA = 1`, current runtime API `1.20`):
+Every QML theme package is described by `theme.json`, validated by `Frontend/theme-check/manifest` (`SCHEMA = 2`, current runtime API `1.23`):
 
 | Key | Required | Description |
 |---|---|---|
-| `schema` | Yes | Manifest schema version (`1`). |
-| `api` | Yes | Target `EmuSen.Theme` minor API version string (for example `"1.20"` or `"1.3"`). |
+| `schema` | Yes | Manifest schema version (`1` or `2`). |
+| `api` | Yes | Target `EmuSen.Theme` minor API version string (for example `"1.23"` or `"1.22"`). |
 | `name` | Yes | Human-readable theme name. |
 | `author` | Yes | Author or project credit. |
 | `licence` | Yes | Licence identifier or text. |
 | `variants` | Yes | Non-empty subset of `["dark", "light"]`. |
 | `fontSizes` | Optional | Supported font scale multipliers (for example `[1, 1.3]`). |
-| `screens` | Yes | Subset of the 6 canonical screen roles: `home`, `consoles`, `games`, `splash`, `settings`, `game`. Any screen omitted automatically falls back to the built-in reference implementation (or Moonrise for `splash`). |
-| `tokens` | Optional | Per-variant token overrides (`tokens.dark`, `tokens.light`) tuning palette, radii, glow, corona, and fonts. |
+| `screens` | Schema 1 | Subset of the 6 Big Picture screen roles: `home`, `consoles`, `games`, `splash`, `settings`, `game`. |
+| `faces` | Schema 2 | `{ "bigPicture": [...], "desktop": [...] }` listing Big Picture screens and Desktop Mode screens (`library`, `table`, `playing`, `settings`). |
+| `tokens` | Optional | Per-variant token overrides (`tokens.dark`, `tokens.light`, and Schema 2 `tokens.<variant>.desktop`) tuning palette, radii, glow, corona, and fonts. |
 | `cues` | Optional | Custom audio cue files overriding any of the 7 canonical cue names. |
 | `previews` | Optional | Relative paths to preview PNGs displayed in the theme selector. |
 

@@ -254,7 +254,54 @@ fn collect_cards(catalog: &Catalog, metadata: &[(String, crate::esde_shelves::Me
     (out, yours_count, kept_count)
 }
 
+pub struct CollectionItemData {
+    pub id: String,
+    pub name: String,
+    pub count: i32,
+    pub kind: String,
+    pub subtitle: String,
+}
+
+pub struct CollectionsSnapshot {
+    pub focused: i32,
+    pub total_count: i32,
+    pub footer_right: String,
+    pub items: Vec<CollectionItemData>,
+}
+
 impl qobject::CollectionsEclipseModel {
+    pub fn snapshot(&self) -> CollectionsSnapshot {
+        let lib = unsafe { self.library.as_ref() };
+        let (built, yours_count, kept_count) = if let Some(lib) = lib {
+            collect_cards(&lib.view().catalog, lib.effective_metadata())
+        } else {
+            collect_cards(&Catalog::default(), &[])
+        };
+        let total = built.len();
+        let items = built
+            .into_iter()
+            .map(|(meta, _)| {
+                let is_yours = meta.collection_id >= 0 || meta.key == crate::library::FAVOURITES;
+                let kind = if is_yours { "yours" } else { "kept" };
+                let group_label = if is_yours { "yours" } else { "kept by EmuSen" };
+                CollectionItemData {
+                    id: meta.key,
+                    name: meta.name,
+                    count: meta.count as i32,
+                    kind: kind.to_owned(),
+                    subtitle: format!("{} · {group_label}", games(meta.count)),
+                }
+            })
+            .collect();
+        let focused = self.focused.clamp(0, total as i32) as usize;
+        let footer_right = if focused >= total {
+            format!("New collection · {yours_count} made by you, {kept_count} kept by EmuSen")
+        } else {
+            format!("{} of {total} · {yours_count} made by you, {kept_count} kept by EmuSen", focused + 1)
+        };
+        CollectionsSnapshot { focused: self.focused, total_count: total as i32, footer_right, items }
+    }
+
     pub fn refresh(mut self: Pin<&mut Self>) {
         let lib = unsafe { self.library.as_ref() };
         let (built, yours_count, kept_count) = if let Some(lib) = lib {

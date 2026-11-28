@@ -60,6 +60,7 @@ pub mod qobject {
         #[qproperty(QString, description, READ, NOTIFY)]
         #[qproperty(QString, time_played, cxx_name = "timePlayed", READ, NOTIFY)]
         #[qproperty(i32, states, READ, NOTIFY)]
+        #[qproperty(bool, sort_ascending, cxx_name = "sortAscending", READ, NOTIFY)]
         type ThemeBrowse = super::ThemeBrowseRust;
     }
 
@@ -90,6 +91,7 @@ pub struct BrowseFacts {
     pub empty_words: String,
     pub filter: String,
     pub sort: String,
+    pub sort_ascending: bool,
     pub letter: String,
 }
 
@@ -112,6 +114,7 @@ pub struct ThemeBrowseRust {
     filters: *mut ThemeRows,
     filter: QString,
     sort: QString,
+    sort_ascending: bool,
     sort_line: QString,
     letters: *mut ThemeRows,
     letter: QString,
@@ -145,6 +148,7 @@ impl Default for ThemeBrowseRust {
             filters: std::ptr::null_mut(),
             filter: QString::default(),
             sort: QString::default(),
+            sort_ascending: false,
             sort_line: QString::default(),
             letters: std::ptr::null_mut(),
             letter: QString::default(),
@@ -216,6 +220,7 @@ impl qobject::ThemeBrowse {
         text!(self, empty_words, empty_words_changed, facts.empty_words);
         text!(self, filter, filter_changed, facts.filter);
         text!(self, sort, sort_changed, facts.sort);
+        plain!(self, sort_ascending, sort_ascending_changed, facts.sort_ascending);
         text!(self, sort_line, sort_line_changed, emusen_qt_models::listing::sort_line(&facts.sort));
         text!(self, letter, letter_changed, facts.letter);
     }

@@ -489,16 +489,14 @@ Item {
     }
 
     Shortcut {
-        enabled: shellRoot.visible && !shellRoot.model.gameShown
+        enabled: shellRoot.visible && !shellRoot.model.gameShown && !shellRoot.themedViewActive && !shellRoot.settings.listening && !shellRoot.settings.typing && !shellRoot.settings.bindingsShown && !shellRoot.settings.shadersShown
         sequence: "Ctrl+K"
         onActivated: globalSearchInput.forceActiveFocus()
     }
 
     Shortcut {
-        enabled: shellRoot.visible && !shellRoot.model.gameShown
+        enabled: shellRoot.visible && !shellRoot.model.gameShown && shellRoot.model.searchQuery.length > 0 && !shellRoot.settings.listening && !shellRoot.settings.typing && !shellRoot.settings.bindingsShown && !shellRoot.settings.shadersShown
         sequence: "Escape"
-        onActivated: {
-            if (shellRoot.model.searchQuery.length > 0) shellRoot.model.clearFilters()
-        }
+        onActivated: shellRoot.model.clearFilters()
     }
 }

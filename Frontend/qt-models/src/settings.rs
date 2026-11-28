@@ -1367,6 +1367,47 @@ impl SettingsView {
         false
     }
 
+    /// Whether a row currently differs from its default or has an explicit override.
+    pub fn row_modified(&self, index: usize) -> bool {
+        let Some(entry) = self.entries().get(index).cloned() else { return false };
+        if let Some(keyed) = self.keyed(&entry) {
+            let key = text_of(&keyed.row["key"]);
+            let default = text_of(&keyed.row["default"]);
+            let kind = text_of(&keyed.row["kind"]);
+            if keyed.consoles.is_empty() {
+                let current = at(self.document(keyed.model), &key).cloned();
+                let target = typed(current.as_ref(), &kind, &default);
+                return current.is_some_and(|v| v != target);
+            }
+            return keyed.consoles.iter().any(|c| at(&self.read.graphics, &format!("Consoles.{c}.{key}")).is_some());
+        }
+        if let Some(key) = entry["schema"].as_str() {
+            return key != consoles::ENGINE_KEY && self.console().is_some_and(|c| at(&self.read.graphics, &format!("Consoles.{}.{key}", c.console)).is_some());
+        }
+        if let Some(edge) = entry["edge"].as_str().and_then(Edge::by_key) {
+            return self.console().is_some_and(|c| at(&self.read.graphics, &format!("Consoles.{}.{}", c.console, edge.key)).is_some());
+        }
+        if entry["filters"] == "suiting" || entry.get("filter").is_some() {
+            return self.console().is_some_and(|c| at(&self.read.graphics, &format!("Consoles.{}.ScreenFilter", c.console)).is_some());
+        }
+        false
+    }
+
+    /// One badge string per top-level section in `sections()`.
+    pub fn section_badges(&self) -> Vec<String> {
+        let keys = self.section_keys();
+        keys.into_iter()
+            .map(|k| {
+                if k == "consoles" {
+                    let count = self.listed_consoles().len();
+                    if count > 0 { count.to_string() } else { String::new() }
+                } else {
+                    String::new()
+                }
+            })
+            .collect()
+    }
+
     /// X on a row: its value back to its default, Galaxia's, console schema's, cards mode's, edge's or screen's; nothing on a row with none.
     pub fn to_default(&mut self, index: usize) -> Outcome {
         if !self.defaultable(index) {

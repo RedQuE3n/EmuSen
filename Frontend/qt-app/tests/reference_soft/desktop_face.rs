@@ -82,14 +82,14 @@ fn write_schema2_dual_theme(root: &Path) -> PathBuf {
     std::fs::create_dir_all(dest.join("screens/desktop")).expect("create schema2 desktop screens");
     let manifest = serde_json::json!({
         "schema": 2,
-        "api": "1.22",
+        "api": "1.23",
         "name": "DualSpec",
         "author": "Test",
         "licence": "GPL-3.0-or-later",
         "variants": ["dark"],
         "faces": {
             "bigPicture": ["home", "settings"],
-            "desktop": ["library", "table", "settings"]
+            "desktop": ["library", "table", "playing", "settings"]
         },
         "tokens": {
             "dark": {
@@ -146,6 +146,14 @@ ThemeScreen {
             text: (Device.bigScreen ? "BIG" : "DESK") + ":" + Device.form + ":" + Tokens.rowHeight
             color: Tokens.accent
         }
+        Text {
+            objectName: "dualDeskApi123"
+            text: Workspace.view + ":" + Workspace.count + ":" + Tools.count + ":" + Themes.kinds.length + ":" + Collections.totalCount
+        }
+        Text {
+            objectName: "dualDeskFolder"
+            text: Workspace.inspectorFolderPath
+        }
         MouseArea {
             anchors.fill: parent
             onClicked: Actions.setBigScreen(true)
@@ -161,18 +169,42 @@ ThemeScreen {
     Rectangle { objectName: "dualDeskTable"; anchors.fill: parent; color: Tokens.surface }
 }
 "#;
+    let desk_playing = r#"import QtQuick
+import EmuSen.Theme
+
+ThemeScreen {
+    role: ThemeScreen.DesktopPlaying
+    Item {
+        objectName: "dualDeskPlaying"
+        focus: true
+        Text {
+            objectName: "dualPlayingState"
+            text: Session.running + ":" + Workspace.drawerOpen
+        }
+    }
+}
+"#;
     let desk_settings = r#"import QtQuick
 import EmuSen.Theme
 
 ThemeScreen {
     role: ThemeScreen.DesktopSettings
-    Rectangle { objectName: "dualDeskSettings"; anchors.fill: parent; color: Tokens.surface }
+    Rectangle {
+        objectName: "dualDeskSettings"
+        anchors.fill: parent
+        color: Tokens.surface
+        Text {
+            objectName: "dualSettingsMeta"
+            text: Settings.filter + "|" + Settings.modifiedOnly + "|" + Settings.canBack + "|" + Settings.toolIndex
+        }
+    }
 }
 "#;
     std::fs::write(dest.join("screens/Home.qml"), bp_home).unwrap();
     std::fs::write(dest.join("screens/Settings.qml"), bp_settings).unwrap();
     std::fs::write(dest.join("screens/desktop/Library.qml"), desk_lib).unwrap();
     std::fs::write(dest.join("screens/desktop/Table.qml"), desk_table).unwrap();
+    std::fs::write(dest.join("screens/desktop/Playing.qml"), desk_playing).unwrap();
     std::fs::write(dest.join("screens/desktop/Settings.qml"), desk_settings).unwrap();
     dest
 }
@@ -315,9 +347,113 @@ fn desktop_face_covers_host_reference_and_schema2() {
     assert_eq!(prog_desk_form, Form::Desktop.repr, "Program Kit.Tokens.form is Desktop");
     assert_eq!(prog_desk_tokens.get("rowHeight").map(String::as_str), Some("38"), "Program Kit.Tokens receives desktop rowHeight");
     assert_eq!(scene.property("desktopLibrary.theme", "active"), "true");
+    let desk_api_text = node_text(&mut scene, "dualDeskApi123");
+    let api_parts: Vec<&str> = desk_api_text.split(':').collect();
+    assert_eq!(api_parts.len(), 5, "1.23 singletons populated: {desk_api_text}");
+    assert_eq!(api_parts[0], "0", "Workspace.view is Library: {desk_api_text}");
+    assert!(api_parts[1].parse::<i32>().unwrap_or(0) > 0, "Workspace.count > 0: {desk_api_text}");
+    assert!(api_parts[2].parse::<i32>().unwrap_or(0) > 0, "Tools.count > 0: {desk_api_text}");
+    assert!(api_parts[3].parse::<i32>().unwrap_or(0) > 0, "Themes.kinds populated: {desk_api_text}");
+    let folder_leaf = node_text(&mut scene, "dualDeskFolder");
+    assert!(!folder_leaf.is_empty() && !folder_leaf.contains('/') && !folder_leaf.contains('\\'), "Workspace.inspectorFolderPath exposes only leaf folder: {folder_leaf}");
 
     assert!(scene.set_property("desktopModel", "view", "2"));
     wait_for(&mut scene, "theme", "desktopSettings", "true", 2000);
+    scene.wait(80);
+    assert_eq!(scene.property("settingsModel", "themedSettings"), "true", "R-20261127-11: DesktopSettings enables themedSettings without coronaRim");
+    assert_eq!(node_text(&mut scene, "dualSettingsMeta"), "|false|false|-1", "Settings 1.23 metadata fed");
+
+    // Non-Eclipse DesktopSettings blocks #20 Shaders door and supports Themes/Back/Cards tools.
+    let theme_host_obj = scene.object("host.theme");
+    let host_ref = unsafe { <ThemeHost as Upcast<QObject>>::from_base_ptr(theme_host_obj as *const QObject) } as *mut ThemeHost;
+    assert_eq!(unsafe { host_ref.as_ref() }.expect("host").allow_thumb("file:///etc/hosts"), "", "unallowed raw file URL blocked");
+    let theme_engine = unsafe { host_ref.as_ref() }.expect("host").engine();
+    let mut actions = emusen_theme_qt::host::actions(unsafe { Pin::new_unchecked(&mut *theme_engine) }).expect("Actions");
+    assert!(!actions.as_mut().open_desktop_door(&QString::from("shaders")), "shaders door gated off without Eclipse");
+    assert_eq!(scene.property("settingsModel", "shadersShown"), "false");
+    assert!(actions.as_mut().open_desktop_door(&QString::from("themes")), "themes subview opens");
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|true|5", 1000);
+    assert!(actions.as_mut().settings_back(), "settingsBack exits Desktop Settings tool subview");
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|false|-1", 1000);
+    assert!(!actions.as_mut().tools_open(&QString::from("unknown")), "unknown tool rejected");
+    assert!(actions.as_mut().tools_open(&QString::from("cards")), "cards tool opens Desktop Settings");
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|true|-1", 1000);
+    assert!(actions.as_mut().settings_back(), "settingsBack exits cards subpage");
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|false|-1", 1000);
+
+    // DesktopSettings listening & typing focus stays on listener/keyboard rather than desktopShell.
+    let sm_qobj = scene.object("settingsModel") as *const emusen_qt_models::library_model::qobject::QAbstractListModel;
+    let sm_ptr = unsafe { <emusen_qt_models::settings_model::qobject::SettingsModel as Upcast<emusen_qt_models::library_model::qobject::QAbstractListModel>>::from_base_ptr(sm_qobj) };
+    let row_of = |id: &str| -> usize {
+        unsafe { &*sm_ptr }.shown_rows().iter().position(|r| r.id == id).expect(id)
+    };
+    assert!(actions.as_mut().settings_section(0));
+    scene.wait(40);
+    let hotkeys_row = row_of("hotkeys");
+    assert!(actions.as_mut().settings_choose(hotkeys_row as i32));
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|true|-1", 1000);
+    assert!(actions.as_mut().settings_choose(0));
+    wait_for(&mut scene, "settingsModel", "listening", "true", 1000);
+    wait_for(&mut scene, "settingsThemeListener", "activeFocus", "true", 1000);
+    scene.key(0x0100_0000, 0);
+    wait_for(&mut scene, "settingsModel", "listening", "false", 1000);
+    assert!(actions.as_mut().settings_back());
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|false|-1", 1000);
+
+    let lib_sec = unsafe { &*sm_ptr }.sections().iter().position(|s| s.to_string() == "Library").expect("Library section") as i32;
+    assert!(actions.as_mut().settings_section(lib_sec));
+    scene.wait(40);
+    let scrape_run_row = row_of("scraperun");
+    assert!(actions.as_mut().settings_choose(scrape_run_row as i32));
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|true|-1", 1000);
+    let login_row = row_of("scrape:login");
+    assert!(actions.as_mut().settings_choose(login_row as i32));
+    wait_for(&mut scene, "settingsModel", "typing", "true", 1000);
+    wait_for(&mut scene, "settingsTyping", "activeFocus", "true", 1000);
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "settingsModel", "typing", "false", 1000);
+    assert!(actions.as_mut().settings_back());
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|false|-1", 1000);
+
+    // R-20261127-9: Program Tool/Page doors stay in Desktop form without flipping bigScreen.
+    assert!(scene.set_property("desktopModel", "view", "0"));
+    wait_for(&mut scene, "theme", "desktopLibrary", "true", 2000);
+    assert!(actions.as_mut().open_tool(&QString::from("cores")), "Actions.openTool opens Cores in Desktop");
+    wait_for(&mut scene, "screens", "shown", "Cores", 2000);
+    assert_eq!(scene.property("program", "bigScreen"), "false", "openTool keeps bigScreen false");
+    assert_eq!(scene.property("coresScreen", "form"), "Desktop", "Cores adapts to Desktop form");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
+    assert!(actions.as_mut().open_page(&QString::from(scene.property("desktopModel", "selectedKey").as_str())), "Actions.openPage opens GamePage in Desktop");
+    wait_for(&mut scene, "screens", "shown", "Page", 2000);
+    assert_eq!(scene.property("program", "bigScreen"), "false", "openPage keeps bigScreen false");
+    assert_eq!(scene.property("pageFrame", "form"), "Desktop", "PageScreen adapts to Desktop form");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
+
+    // R-20261127-10: Workspace.drawerOpen controls DesktopPlaying slot input focus arbitration.
+    let screens_qobj = scene.object("screens") as *const QObject;
+    let screens_obj = unsafe { <emusen_qt_models::screens::qobject::Screens as Upcast<QObject>>::from_base_ptr(screens_qobj) } as *mut emusen_qt_models::screens::qobject::Screens;
+    unsafe { Pin::new_unchecked(&mut *screens_obj) }.play();
+    wait_for(&mut scene, "screens", "shown", "Game", 2000);
+    wait_for(&mut scene, "theme", "desktopPlaying", "true", 2000);
+    assert!(scene.set_property("desktopModel", "drawerOpen", "false"));
+    wait_for(&mut scene, "game", "activeFocus", "true", 1000);
+    assert_eq!(scene.property("theme", "desktopPlayingInputs"), "false");
+    assert_eq!(scene.property("chosenTheme", "activeFocus"), "false");
+    assert!(actions.as_mut().workspace_set_drawer(true));
+    wait_for(&mut scene, "desktopModel", "drawerOpen", "true", 1000);
+    wait_for(&mut scene, "chosenTheme", "activeFocus", "true", 1000);
+    assert_eq!(scene.property("theme", "desktopPlayingInputs"), "true");
+    assert_eq!(scene.property("game", "activeFocus"), "false");
+    assert!(actions.as_mut().workspace_set_drawer(false));
+    wait_for(&mut scene, "desktopModel", "drawerOpen", "false", 1000);
+    wait_for(&mut scene, "game", "activeFocus", "true", 1000);
+    assert_eq!(scene.property("theme", "desktopPlayingInputs"), "false");
+    assert_eq!(scene.property("chosenTheme", "activeFocus"), "false");
+    unsafe { Pin::new_unchecked(&mut *screens_obj) }.library();
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
+
     assert!(scene.set_property("desktopModel", "view", "0"));
     wait_for(&mut scene, "theme", "desktopLibrary", "true", 2000);
 

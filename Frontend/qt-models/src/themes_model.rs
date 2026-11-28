@@ -545,4 +545,88 @@ impl qobject::ThemesModel {
             self.as_mut().help_changed();
         }
     }
+
+    pub fn snapshot(&self) -> ThemesSnapshot {
+        let rows = self
+            .shown()
+            .into_iter()
+            .filter_map(|item| match item {
+                Item::Choice(c) => {
+                    let choice = self.esde.as_ref()?.choices.get(c)?;
+                    Some(ThemeRowSnapshot {
+                        id: self.esde.as_ref().map_or_else(String::new, |e| e.id.clone()),
+                        label: choice.label.to_owned(),
+                        value: choice.value().to_owned(),
+                        kind: themes::KINDS[Kind::Esde.index()].to_owned(),
+                        steps: true,
+                        active: false,
+                        usable: false,
+                        dual_face: false,
+                        badge: String::new(),
+                        about: String::new(),
+                        preview: String::new(),
+                    })
+                }
+                Item::Theme(_) => {
+                    let row = self.theme_at(item)?;
+                    Some(ThemeRowSnapshot {
+                        id: row.id.clone(),
+                        label: row.name.clone(),
+                        value: row.value(),
+                        kind: themes::KINDS[row.kind.index()].to_owned(),
+                        steps: false,
+                        active: row.current,
+                        usable: row.usable(),
+                        dual_face: row.dual_face,
+                        badge: row.badge().to_owned(),
+                        about: row.line(),
+                        preview: row.preview.clone(),
+                    })
+                }
+            })
+            .collect();
+        ThemesSnapshot {
+            kinds: themes::KINDS.iter().map(|s| (*s).to_owned()).collect(),
+            kind: self.kind.to_string(),
+            focused: self.focused,
+            chosen: self.chosen.to_string(),
+            words: self.words.to_string(),
+            name: self.name.to_string(),
+            line: self.line.to_string(),
+            preview: self.preview.to_string(),
+            findings: self.findings.to_string(),
+            usable: *self.usable(),
+            help: *self.help(),
+            rows,
+        }
+    }
+}
+
+pub struct ThemeRowSnapshot {
+    pub id: String,
+    pub label: String,
+    pub value: String,
+    pub kind: String,
+    pub steps: bool,
+    pub active: bool,
+    pub usable: bool,
+    pub dual_face: bool,
+    pub badge: String,
+    pub about: String,
+    pub preview: String,
+}
+
+pub struct ThemesSnapshot {
+    pub kinds: Vec<String>,
+    pub kind: String,
+    pub focused: i32,
+    pub chosen: String,
+    pub words: String,
+    pub name: String,
+    pub line: String,
+    pub preview: String,
+    pub findings: String,
+    pub usable: bool,
+    pub help: i32,
+    pub rows: Vec<ThemeRowSnapshot>,
 }

@@ -4,7 +4,7 @@
 //! (man theme-check, STATES), fed through the same surfaces. One line per finding.
 
 use core::pin::Pin;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use cxx_qt::QObject;
@@ -19,14 +19,19 @@ use emusen_qt_test::spec::{self, Header};
 use emusen_qt_test::mockup::{self, Mockup};
 use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
-use emusen_theme_manifest::Screen;
+use emusen_theme_manifest::{DesktopScreen, Screen};
+use emusen_qt_models::desktop::{project_playing, project_workspace, DesktopState, SessionSnapshot};
 use emusen_qt_models::library::{Kind, LibraryView, ALL};
 use emusen_qt_models::screens::Shown;
 use emusen_qt_models::{sections, words};
 use emusen_theme_qt::browse::facts_of;
+use emusen_theme_qt::collections::CollectionsFacts;
 use emusen_theme_qt::host;
-use emusen_theme_qt::session::SessionFacts;
+use emusen_theme_qt::session::{live_facts_of, SessionFacts};
+use emusen_theme_qt::themes::ThemesFacts;
+use emusen_theme_qt::tools::ToolsFacts;
 use emusen_theme_qt::view as theme_view;
+use emusen_theme_qt::workspace::facts_of as workspace_facts_of;
 
 use crate::catalogue::Entry;
 use crate::states::{State, DEFAULT};
@@ -89,6 +94,48 @@ fn described(tree: &Tree, id: ElementId) -> String {
     format!("{} {} {label} at {:.0},{:.0} {:.0}x{:.0}", id.0, n.ty, n.x, n.y, n.w, n.h)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AuditTarget {
+    BigPicture(Screen),
+    Desktop(DesktopScreen),
+}
+
+impl AuditTarget {
+    fn file(self) -> &'static str {
+        match self {
+            AuditTarget::BigPicture(s) => s.file(),
+            AuditTarget::Desktop(s) => s.file(),
+        }
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            AuditTarget::BigPicture(s) => title(s),
+            AuditTarget::Desktop(DesktopScreen::Library) => "DesktopLibrary",
+            AuditTarget::Desktop(DesktopScreen::Table) => "DesktopTable",
+            AuditTarget::Desktop(DesktopScreen::Playing) => "DesktopPlaying",
+            AuditTarget::Desktop(DesktopScreen::Settings) => "DesktopSettings",
+        }
+    }
+
+    fn role(self) -> i32 {
+        match self {
+            AuditTarget::BigPicture(s) => role(s),
+            AuditTarget::Desktop(DesktopScreen::Library) => 6,
+            AuditTarget::Desktop(DesktopScreen::Table) => 7,
+            AuditTarget::Desktop(DesktopScreen::Playing) => 8,
+            AuditTarget::Desktop(DesktopScreen::Settings) => 9,
+        }
+    }
+
+    fn form(self) -> WalkForm {
+        match self {
+            AuditTarget::BigPicture(_) => WalkForm::BigScreen,
+            AuditTarget::Desktop(_) => WalkForm::Desktop,
+        }
+    }
+}
+
 /// One finding's line: the screen's file, its kind, the state and the words.
 struct Lines<'a> {
     shown: &'a str,
@@ -96,7 +143,7 @@ struct Lines<'a> {
     /// Where the audit is: the size and the variant being judged, named when a state cannot be read.
     at: String,
     /// Each screen judged, with how many states were judged in full and how many of those against its mockup.
-    held: Vec<(Screen, usize, usize)>,
+    held: Vec<(AuditTarget, usize, usize)>,
     /// Each exemption of a class the tester's ruling accepts, with its ruling: listed, not a finding.
     accepted: Vec<String>,
 }
@@ -110,7 +157,7 @@ pub struct Audited {
 
 impl Lines<'_> {
     /// One state of `screen` judged by every rule to its end, `mocked` when its mockup was compared too.
-    fn judged(&mut self, screen: Screen, mocked: bool) {
+    fn judged(&mut self, screen: AuditTarget, mocked: bool) {
         match self.held.iter_mut().find(|(s, _, _)| *s == screen) {
             Some((_, states, mockups)) => {
                 *states += 1;
@@ -121,18 +168,18 @@ impl Lines<'_> {
     }
 
     fn audited(self) -> Audited {
-        let held = self.held.iter().map(|(s, n, m)| format!("held {} in {n} states, {m} against its mockup", title(*s))).collect();
+        let held = self.held.iter().map(|(s, n, m)| format!("held {} in {n} states, {m} against its mockup", s.title())).collect();
         Audited { lines: self.out, held, accepted: self.accepted }
     }
 
-    fn accept(&mut self, screen: Screen, ruling: &str, words: &str) {
+    fn accept(&mut self, screen: AuditTarget, ruling: &str, words: &str) {
         let line = format!("accepted by {ruling}: {}/{} {words}", self.shown, screen.file());
         if !self.accepted.contains(&line) {
             self.accepted.push(line);
         }
     }
 
-    fn add(&mut self, screen: Screen, kind: &str, words: &str) {
+    fn add(&mut self, screen: AuditTarget, kind: &str, words: &str) {
         let line = format!("{}/{}:1 {kind} {words}", self.shown, screen.file());
         if !self.out.contains(&line) {
             self.out.push(line);
@@ -140,7 +187,7 @@ impl Lines<'_> {
     }
 
     /// Runs one pass of a screen; a panic in it (a view that never settles) is a finding of its own, naming where it stopped.
-    fn guarded(&mut self, screen: Screen, pass: impl FnOnce(&mut Self)) {
+    fn guarded(&mut self, screen: AuditTarget, pass: impl FnOnce(&mut Self)) {
         self.at = "placed, before its first size".to_owned();
         if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pass(&mut *self))) {
             let words = format!(
@@ -154,8 +201,8 @@ impl Lines<'_> {
 }
 
 /// Places a screen in a fresh engine and gives its root's number in the tree, or the host's words when it cannot.
-fn place(scene: &mut Scene<'_>, folder: &str, screen: Screen) -> Result<u64, String> {
-    scene.set_property("scene", "role", &role(screen).to_string());
+fn place(scene: &mut Scene<'_>, folder: &str, screen: AuditTarget) -> Result<u64, String> {
+    scene.set_property("scene", "role", &screen.role().to_string());
     scene.set_property("host", "folder", "");
     scene.set_property("host", "folder", folder);
     scene.wait(100);
@@ -176,16 +223,20 @@ struct Fed<'a> {
     reduced: bool,
     /// The variant Home's Settings line names, as the program's library model words it.
     dark: bool,
-    /// The screen placed, whose section (Library.section) the program's screens name.
-    screen: Screen,
+    /// The target screen placed.
+    target: AuditTarget,
 }
 
-/// The views fed as the program's host feeds them, the kit's tokens set to the big screen, with reduced motion on but for a held clock.
+/// The views fed as the program's host feeds them, with reduced motion on but for a held clock.
 fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, overrides: &[(bool, String, String)], section: Option<&str>) -> Result<(), String> {
     let mut theme = host::library(object(screen)).ok_or("EmuSen.Theme's Library is not in the theme's engine")?;
     theme.as_mut().show_declined(&fed.declined.iter().map(|d| (*d).to_owned()).collect::<Vec<_>>());
     theme.as_mut().show(view, &library.home_lines(view, fed.dark));
-    theme.as_mut().show_section(section_of(fed.screen));
+    let bp_screen = match fed.target {
+        AuditTarget::BigPicture(s) => s,
+        AuditTarget::Desktop(_) => Screen::Home,
+    };
+    theme.as_mut().show_section(section_of(bp_screen));
     // The Games screen's section as the program's showBrowse gives it: the named one, else the first console's, else the All shelf.
     let first = view.rows.rows().iter().find(|r| r.kind == Some(Kind::Console)).map(|r| r.key.clone()).or(Some(ALL.to_owned()));
     if let Some(key) = section.map(str::to_owned).or(first) {
@@ -193,20 +244,36 @@ fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, ove
         browse.as_mut().show_games(theme_view::games_of(view, &key, words::now()));
         browse.as_mut().show(&facts_of(view, &key, "", 0, (false, false, false), false));
     }
-    host::session(object(screen)).ok_or("no Session")?.show(fed.session);
+    if let Some(mut sess) = host::session(object(screen)) {
+        sess.as_mut().show(fed.session);
+        if matches!(fed.target, AuditTarget::Desktop(_)) {
+            let play = project_playing(view, &SessionSnapshot::default(), None);
+            let live = live_facts_of(&play, 1.0, (false, "", "", "", "", "", -2), &|u| u);
+            sess.as_mut().show_live(&live);
+        }
+    }
     host::device(object(screen)).ok_or("no Device")?.show(&library.device);
-    if fed.screen == Screen::Settings {
+    if matches!(fed.target, AuditTarget::BigPicture(Screen::Settings) | AuditTarget::Desktop(DesktopScreen::Settings)) {
         let host_of = SettingsHost::display(screen)?;
         host_of.show()?;
         host::actions(object(screen)).ok_or("no Actions")?.set_sink(Some(Box::new(host_of)));
     }
-    if fed.screen == Screen::Game {
+    if fed.target == AuditTarget::BigPicture(Screen::Game) {
         let host_of = GameHost::of(screen, fed.session);
         host_of.show()?;
         host::actions(object(screen)).ok_or("no Actions")?.set_sink(Some(Box::new(host_of)));
     }
+    if matches!(fed.target, AuditTarget::Desktop(_)) {
+        let state = DesktopState::default();
+        let ws = project_workspace(view, &[], &state, &SessionSnapshot::default(), &BTreeMap::new(), None, "EmuSen", 1);
+        let ws_facts = workspace_facts_of(&ws, &state, false, &|u| u);
+        host::workspace(object(screen)).ok_or("no Workspace")?.show(&ws_facts);
+        host::themes(object(screen)).ok_or("no Themes")?.show(&ThemesFacts::default());
+        host::tools(object(screen)).ok_or("no Tools")?.show(&ToolsFacts::default());
+        host::collections(object(screen)).ok_or("no Collections")?.show(&CollectionsFacts::default());
+    }
     let mut kit = tokens(screen).ok_or("the kit's Tokens are not in the theme's engine")?;
-    kit.as_mut().set_form(kinds::form_of(WalkForm::BigScreen));
+    kit.as_mut().set_form(kinds::form_of(fed.target.form()));
     kit.as_mut().set_reduced_motion(fed.reduced);
     host::set_token_overrides(object(screen), overrides);
     Ok(())
@@ -435,7 +502,8 @@ impl<'a> Pass<'a> {
 }
 
 /// Every state of one placed screen in a pass: the rules at each size in each variant, recorded into `state` when it is named.
-fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state: Option<&Path>, lines: &mut Lines<'_>) {
+fn states(scene: &mut Scene<'_>, screen: AuditTarget, id: u64, pass: &Pass<'_>, state: Option<&Path>, lines: &mut Lines<'_>) {
+    let form = screen.form();
     for &variant in pass.variants {
         let name = format!("{}{}", if variant == Variant::Dark { "dark" } else { "light" }, pass.label);
         if let Some(mut kit) = tokens(id) {
@@ -462,12 +530,16 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 rested(&mut tree, moving);
             }
             let focus = scene.focus(&tree).map(ElementId);
-            // The crowd's reach is the sweep's; every element on the screen is still held to the pointer.
-            let walk = if pass.consoles.is_some() { Vec::new() } else { scene.walk_by(&tree, |s, button| s.key(key_of(button), 0)) };
+            // The crowd's reach and Desktop Mode's pointer surface skip pad sweep.
+            let walk = if form == WalkForm::Desktop || pass.consoles.is_some() {
+                Vec::new()
+            } else {
+                scene.walk_by(&tree, |s, button| s.key(key_of(button), 0))
+            };
             let walked = edges(&walk);
             // A state's focus and held press are put on after the walk, and the screen judged and recorded as they leave it.
             if let Some(name) = pass.focus {
-                if pass.consoles.is_some() {
+                if pass.consoles.is_some() || form == WalkForm::Desktop {
                     focus_named(scene, &tree, name);
                 } else {
                     walk_to(scene, &tree, &walk, name);
@@ -489,7 +561,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 }
                 shown
             });
-            let measures = Measures::of(WalkForm::BigScreen, f64::from(h));
+            let measures = Measures::of(form, f64::from(h));
             if !pass.declined.is_empty() {
                 let judged = held_tree.as_mut().unwrap_or(&mut tree);
                 for words in declined_places(scene, id, judged, pass.declined, (f64::from(w), f64::from(h))) {
@@ -505,21 +577,21 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 }
             }
             // The splash is watched, not operated: nothing on it is clicked, whatever stands at its centre.
-            let pointed: HashSet<ElementId> = if screen == Screen::Splash {
+            let pointed: HashSet<ElementId> = if screen == AuditTarget::BigPicture(Screen::Splash) {
                 HashSet::new()
-            } else if pass.consoles.is_some() {
+            } else if form == WalkForm::Desktop || pass.consoles.is_some() {
                 tree.operable().into_iter().map(ElementId).collect()
             } else {
                 reached(focus, &walked)
             };
             let panel = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
             let smallest = measures.floor * audit::DESKTOP_CAPS * measures.unit;
-            let reach = if pass.consoles.is_some() { Vec::new() } else { pad_reach(&tree.root, focus, &walked) };
+            let reach = if form == WalkForm::Desktop || pass.consoles.is_some() { Vec::new() } else { pad_reach(&tree.root, focus, &walked) };
             let found = [
                 ("fit", fit(&seen.root, panel, measures.slack, smallest), seen),
                 ("reach", reach, &tree),
                 ("pointer", pointer_reach(&tree.root, &pointed), &tree),
-                ("chrome", no_chrome(&seen.root, WalkForm::BigScreen), seen),
+                ("chrome", no_chrome(&seen.root, form), seen),
                 ("name", named(&seen.root), seen),
                 ("contrast", contrast(&seen.root), seen),
             ];
@@ -539,10 +611,10 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             }
             lines.judged(screen, mocked.is_some());
             if let Some(dir) = state {
-                let file = format!("{}-{}-{w}x{h}", title(screen), name.replace(", ", "-").replace(' ', "-"));
+                let file = format!("{}-{}-{w}x{h}", screen.title(), name.replace(", ", "-").replace(' ', "-"));
                 let declared = palette(variant);
                 let header =
-                    Header { state: &file, case: title(screen), kind: "menu", width: w, height: h, measures, palette: &declared };
+                    Header { state: &file, case: screen.title(), kind: "menu", width: w, height: h, measures, palette: &declared };
                 let _ = std::fs::write(dir.join(format!("{file}.spec")), spec::write(seen, &seen.root, &header, shown.map(|f| f.0), &walk));
                 // The walk's last put-back moved the focus home, so whatever that started ends before the picture; a held clock moves nothing.
                 if pass.held {
@@ -814,9 +886,31 @@ pub enum Crowd {
 }
 
 /// Places a screen afresh and feeds it; the host's words, a line each, when it cannot.
-fn placed(scene: &mut Scene<'_>, folder: &str, screen: Screen, feeding: impl FnOnce(u64) -> Result<(), String>) -> Result<u64, String> {
+fn placed(scene: &mut Scene<'_>, folder: &str, screen: AuditTarget, feeding: impl FnOnce(u64) -> Result<(), String>) -> Result<u64, String> {
     let id = place(scene, folder, screen)?;
     feeding(id).map(|_| id)
+}
+
+fn audit_still_and_states(
+    scene: &mut Scene<'_>,
+    target: AuditTarget,
+    id: u64,
+    pass: &Pass<'_>,
+    state: Option<&Path>,
+    sizes: &[(i32, i32)],
+    check_still: bool,
+    lines: &mut Lines<'_>,
+) {
+    lines.guarded(target, |lines| {
+        if check_still && sizes.contains(&SIZES[0]) {
+            lines.at = format!("{}x{}, judged still under reduced motion", SIZES[0].0, SIZES[0].1);
+            scene.resize(SIZES[0].0, SIZES[0].1);
+            if let Some(words) = still(scene) {
+                lines.add(target, "motion", &words);
+            }
+        }
+        states(scene, target, id, pass, state, lines);
+    });
 }
 
 /// The findings of the package at `folder` (named `shown` in the lines), its screens loaded in turn in each state asked.
@@ -853,18 +947,19 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
     let first = &listed[..listed.len().min(1)];
     if let (Some((name, _)), Some((view, names))) = (asked.catalogue, library.catalogue.as_ref()) {
         let screen = Screen::Consoles;
+        let target = AuditTarget::BigPicture(screen);
         logged();
         let label = format!(", {name}");
         let mockup = mockups.iter().find(|(s, _)| *s == screen).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
         let lines_in = |id: u64, dark: bool| relined(id, &library, view, dark);
         let pass = Pass { focus: asked.focus, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &asked.sizes, &label, Some(names)) };
         let session = library.session(view, None)?;
-        let fed = Fed { session: &session, declined: &[], reduced: true, dark: true, screen };
-        match placed(&mut scene, &real, screen, |id| feed(id, &library, view, &fed, &overrides, section)) {
-            Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
-            Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &pass, state, lines)),
+        let fed = Fed { session: &session, declined: &[], reduced: true, dark: true, target };
+        match placed(&mut scene, &real, target, |id| feed(id, &library, view, &fed, &overrides, section)) {
+            Err(words) => words.lines().for_each(|w| lines.add(target, "load", w)),
+            Ok(id) => lines.guarded(target, |lines| states(&mut scene, target, id, &pass, state, lines)),
         }
-        logged().iter().for_each(|w| lines.add(screen, "warning", w));
+        logged().iter().for_each(|w| lines.add(target, "warning", w));
         return Ok(lines.audited());
     }
     for asked_state in &asked.states {
@@ -882,42 +977,50 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
             if asked.crowd == Crowd::Only && !(default && screen == Screen::Consoles) {
                 continue;
             }
+            let target = AuditTarget::BigPicture(screen);
             logged();
             match asked_state.clock {
-                Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, (&label, &listed, &asked.sizes), (state, section, &overrides), &mut lines),
+                Some(ms) => held(&mut scene, &real, target, (&library, &view, &session), ms, (&label, &listed, &asked.sizes), (state, section, &overrides), &mut lines),
                 None => {
-                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true, dark: true, screen };
+                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true, dark: true, target };
                     let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
                     let mockup = mockups.iter().find(|(s, _)| *s == screen && default).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
                     let lines_in = |id: u64, dark: bool| relined(id, &library, &view, dark);
                     let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, relined: Some(&lines_in), ..Pass::plain(&listed, &asked.sizes, &label, None) };
-                    let judged = (asked.crowd != Crowd::Only).then(|| placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)));
+                    let judged = (asked.crowd != Crowd::Only).then(|| placed(&mut scene, &real, target, |id| feed(id, &library, &view, &fed, &overrides, section)));
                     match judged {
                         None => {}
-                        Some(Err(words)) => words.lines().for_each(|w| lines.add(screen, "load", w)),
-                        Some(Ok(id)) => lines.guarded(screen, |lines| {
-                            // Stillness is judged once a screen, at the gate's first size, by the run that judges that size.
-                            if default && asked.sizes.contains(&SIZES[0]) {
-                                lines.at = format!("{}x{}, judged still under reduced motion", SIZES[0].0, SIZES[0].1);
-                                scene.resize(SIZES[0].0, SIZES[0].1);
-                                if let Some(words) = still(&mut scene) {
-                                    lines.add(screen, "motion", &words);
-                                }
-                            }
-                            states(&mut scene, screen, id, &pass, state, lines);
-                        }),
+                        Some(Err(words)) => words.lines().for_each(|w| lines.add(target, "load", w)),
+                        Some(Ok(id)) => audit_still_and_states(&mut scene, target, id, &pass, state, &asked.sizes, default, &mut lines),
                     }
                     if default && screen == Screen::Consoles && asked.crowd != Crowd::Without {
                         // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
                         let crowd = Pass::plain(first, &asked.sizes, ", 120 consoles", Some(&library.crowd_names));
-                        match placed(&mut scene, &real, screen, |id| feed(id, &library, &library.crowd, &fed, &overrides, section)) {
-                            Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
-                            Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &crowd, state, lines)),
+                        match placed(&mut scene, &real, target, |id| feed(id, &library, &library.crowd, &fed, &overrides, section)) {
+                            Err(words) => words.lines().for_each(|w| lines.add(target, "load", w)),
+                            Ok(id) => lines.guarded(target, |lines| states(&mut scene, target, id, &crowd, state, lines)),
                         }
                     }
                 }
             }
-            logged().iter().for_each(|w| lines.add(screen, "warning", w));
+            logged().iter().for_each(|w| lines.add(target, "warning", w));
+        }
+    }
+    if asked.crowd != Crowd::Only && !package.desktop_screens.is_empty() && asked.states.iter().any(|s| s.name == DEFAULT) {
+        let view = library.shaped(crate::states::Library::Synthetic)?;
+        let session = library.session(&view, None)?;
+        let mut desktop_overrides = overrides.clone();
+        desktop_overrides.extend(package.desktop_overrides());
+        for &ds in DesktopScreen::ALL.iter().filter(|s| package.desktop_screens.contains(s)) {
+            let target = AuditTarget::Desktop(ds);
+            logged();
+            let fed = Fed { session: &session, declined: &[], reduced: true, dark: true, target };
+            let pass = Pass::plain(&listed, &asked.sizes, "", None);
+            match placed(&mut scene, &real, target, |id| feed(id, &library, &view, &fed, &desktop_overrides, section)) {
+                Err(words) => words.lines().for_each(|w| lines.add(target, "load", w)),
+                Ok(id) => audit_still_and_states(&mut scene, target, id, &pass, state, &asked.sizes, true, &mut lines),
+            }
+            logged().iter().for_each(|w| lines.add(target, "warning", w));
         }
     }
     Ok(lines.audited())
@@ -952,7 +1055,7 @@ fn place_name(view: &LibraryView, key: &str) -> Option<String> {
 fn held(
     scene: &mut Scene<'_>,
     folder: &str,
-    screen: Screen,
+    target: AuditTarget,
     (library, view, session): (&Synthetic, &LibraryView, &SessionFacts),
     ms: i64,
     (label, variants, sizes): (&str, &[Variant], &[(i32, i32)]),
@@ -961,15 +1064,15 @@ fn held(
 ) {
     for &variant in variants {
         scene.hold_clock(Some(0));
-        let fed = Fed { session, declined: &[], reduced: false, dark: variant == Variant::Dark, screen };
-        let id = placed(scene, folder, screen, |id| {
+        let fed = Fed { session, declined: &[], reduced: false, dark: variant == Variant::Dark, target };
+        let id = placed(scene, folder, target, |id| {
             feed(id, library, view, &fed, overrides, section)?;
             let mut kit = tokens(id).ok_or("the kit's Tokens are not in the theme's engine")?;
             kit.as_mut().set_variant(if variant == Variant::Dark { kinds::Variant::Dark } else { kinds::Variant::Light });
             Ok(())
         });
         match id {
-            Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
+            Err(words) => words.lines().for_each(|w| lines.add(target, "load", w)),
             Ok(id) => {
                 // Contrast is judged at rest: a text whose ink changes over the frame before the held time is mid-change.
                 scene.hold_clock(Some(ms - FRAME_MS));
@@ -977,7 +1080,7 @@ fn held(
                 scene.hold_clock(Some(ms));
                 let moving = changing(&before, &scene.tree());
                 let pass = Pass { held: true, moving: Some(&moving), ..Pass::plain(std::slice::from_ref(&variant), sizes, label, None) };
-                lines.guarded(screen, |lines| states(scene, screen, id, &pass, state, lines));
+                lines.guarded(target, |lines| states(scene, target, id, &pass, state, lines));
             }
         }
         scene.hold_clock(None);

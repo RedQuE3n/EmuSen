@@ -27,11 +27,13 @@ DESCRIPTION
        QtQuick.Controls, EmuSen.Theme, plus relative package folders).
     2. Loaded audit (theme-audit subprocess): runs only when the static
        stage has no findings (unless --static is passed). Places each
-       declared screen in a fresh QML engine through emusen-theme-host
-       against a synthetic library (emusen-client-fixture) under the big
-       screen form with reduced motion enabled, across every declared
-       variant and the five gate sizes (1280x800, 1920x1200, 1920x1080,
-       1280x720, 3840x2160).
+       declared Big Picture screen under the big-screen form and any
+       Schema 2 Desktop Mode screens (faces.desktop) under the desktop
+       form with reduced motion enabled in a fresh QML engine through
+       emusen-theme-host against a synthetic library
+       (emusen-client-fixture), across every declared variant and the
+       five gate sizes (1280x800, 1920x1200, 1920x1080, 1280x720,
+       3840x2160).
 
     Findings print one per line as 'file:line kind words', followed by
     'ok' or 'N findings'. Static finding kinds: schema, api, path,

@@ -3,13 +3,15 @@
 
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{QString, QStringList};
 
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
     }
 
     extern "RustQt" {
@@ -154,6 +156,159 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pageViewPages"]
         fn page_view_pages(self: Pin<&mut ThemeActions>, pages: i32) -> bool;
+
+        /// Desktop Workspace calls (1.23).
+        #[qinvokable]
+        #[cxx_name = "workspaceView"]
+        fn workspace_view(self: Pin<&mut ThemeActions>, view: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetSidebar"]
+        fn workspace_set_sidebar(self: Pin<&mut ThemeActions>, open: bool) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetInspector"]
+        fn workspace_set_inspector(self: Pin<&mut ThemeActions>, open: bool) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetDrawer"]
+        fn workspace_set_drawer(self: Pin<&mut ThemeActions>, open: bool) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetDrawerTab"]
+        fn workspace_set_drawer_tab(self: Pin<&mut ThemeActions>, tab: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSelectConsole"]
+        fn workspace_select_console(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetConsoleFilter"]
+        fn workspace_set_console_filter(self: Pin<&mut ThemeActions>, filter: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetConsoleScope"]
+        fn workspace_set_console_scope(self: Pin<&mut ThemeActions>, scope: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetFilter"]
+        fn workspace_set_filter(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetSearch"]
+        fn workspace_set_search(self: Pin<&mut ThemeActions>, query: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSetSort"]
+        fn workspace_set_sort(self: Pin<&mut ThemeActions>, index: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSortByColumn"]
+        fn workspace_sort_by_column(self: Pin<&mut ThemeActions>, column: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceSelectGame"]
+        fn workspace_select_game(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceMarkToggle"]
+        fn workspace_mark_toggle(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceMarkAll"]
+        fn workspace_mark_all(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceClearMarked"]
+        fn workspace_clear_marked(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceBatchFavourite"]
+        fn workspace_batch_favourite(self: Pin<&mut ThemeActions>, on: bool) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceClearFilters"]
+        fn workspace_clear_filters(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "workspaceOpenFolder"]
+        fn workspace_open_folder(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "playFrom"]
+        fn play_from(self: Pin<&mut ThemeActions>, game: &QString, state: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "openDesktopDoor"]
+        fn open_desktop_door(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "openTool"]
+        fn open_tool(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "toggleFullScreen"]
+        fn toggle_full_screen(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "addGamesToCollection"]
+        fn add_games_to_collection(self: Pin<&mut ThemeActions>, games: &QStringList, collection_id: &QString) -> bool;
+
+        /// Live Session calls (1.23).
+        #[qinvokable]
+        #[cxx_name = "sessionPause"]
+        fn session_pause(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionResume"]
+        fn session_resume(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionRestart"]
+        fn session_restart(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionClose"]
+        fn session_close(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionScreenshot"]
+        fn session_screenshot(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionChooseSlot"]
+        fn session_choose_slot(self: Pin<&mut ThemeActions>, slot: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionSaveState"]
+        fn session_save_state(self: Pin<&mut ThemeActions>, slot: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionLoadState"]
+        fn session_load_state(self: Pin<&mut ThemeActions>, slot: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionChooseSpeed"]
+        fn session_choose_speed(self: Pin<&mut ThemeActions>, percent: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionRewindTo"]
+        fn session_rewind_to(self: Pin<&mut ThemeActions>, frame: f64) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionSetMasterCheats"]
+        fn session_set_master_cheats(self: Pin<&mut ThemeActions>, on: bool) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionSwitchCheat"]
+        fn session_switch_cheat(self: Pin<&mut ThemeActions>, index: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionStepConsoleOption"]
+        fn session_step_console_option(self: Pin<&mut ThemeActions>, key: &QString, by: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionSwapPlayers"]
+        fn session_swap_players(self: Pin<&mut ThemeActions>) -> bool;
+        #[qinvokable]
+        #[cxx_name = "sessionAnswerResume"]
+        fn session_answer_resume(self: Pin<&mut ThemeActions>, resume: bool) -> bool;
+
+        /// Desktop Settings, Themes, and Tools calls (1.23).
+        #[qinvokable]
+        #[cxx_name = "settingsSetFilter"]
+        fn settings_set_filter(self: Pin<&mut ThemeActions>, filter: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "settingsSetModifiedOnly"]
+        fn settings_set_modified_only(self: Pin<&mut ThemeActions>, on: bool) -> bool;
+        #[qinvokable]
+        #[cxx_name = "settingsOpenTool"]
+        fn settings_open_tool(self: Pin<&mut ThemeActions>, index: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "themesSetKind"]
+        fn themes_set_kind(self: Pin<&mut ThemeActions>, kind: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "themesFocus"]
+        fn themes_focus(self: Pin<&mut ThemeActions>, row: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "themesUse"]
+        fn themes_use(self: Pin<&mut ThemeActions>, id: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "themesStep"]
+        fn themes_step(self: Pin<&mut ThemeActions>, row: i32, by: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "themesCheck"]
+        fn themes_check(self: Pin<&mut ThemeActions>, id: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "toolsFocus"]
+        fn tools_focus(self: Pin<&mut ThemeActions>, index: i32) -> bool;
+        #[qinvokable]
+        #[cxx_name = "toolsOpen"]
+        fn tools_open(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
     }
 }
 
@@ -204,6 +359,71 @@ pub enum ScreenAction {
     PageTab(i32),
     PageViewKey(i32, i32),
     PageViewPages(i32),
+    SettingsSetFilter(String),
+    SettingsSetModifiedOnly(bool),
+    SettingsOpenTool(i32),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorkspaceAction {
+    View(i32),
+    SetSidebar(bool),
+    SetInspector(bool),
+    SetDrawer(bool),
+    SetDrawerTab(i32),
+    SelectConsole(String),
+    SetConsoleFilter(String),
+    SetConsoleScope(i32),
+    SetFilter(String),
+    SetSearch(String),
+    SetSort(i32),
+    SortByColumn(i32),
+    SelectGame(String),
+    MarkToggle(String),
+    MarkAll,
+    ClearMarked,
+    BatchFavourite(bool),
+    ClearFilters,
+    OpenFolder(String),
+    PlayFrom(String, String),
+    OpenDesktopDoor(String),
+    OpenTool(String),
+    ToggleFullScreen,
+    AddGamesToCollection(Vec<String>, String),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SessionAction {
+    Pause,
+    Resume,
+    Restart,
+    Close,
+    Screenshot,
+    ChooseSlot(i32),
+    SaveState(i32),
+    LoadState(i32),
+    ChooseSpeed(i32),
+    RewindTo(f64),
+    SetMasterCheats(bool),
+    SwitchCheat(i32),
+    StepConsoleOption(String, i32),
+    SwapPlayers,
+    AnswerResume(bool),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ThemesAction {
+    SetKind(String),
+    Focus(i32),
+    Use(String),
+    Step(i32, i32),
+    Check(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ToolsAction {
+    Focus(i32),
+    Open(String),
 }
 
 /// The host's side: takes an action, or declines it, and says which.
@@ -220,6 +440,18 @@ pub trait ActionSink {
     /// Whether `act` would take the action, asked without acting; a host that declines nothing need not say.
     fn would(&self, _action: &Action) -> bool {
         true
+    }
+    fn workspace(&mut self, _action: &WorkspaceAction) -> bool {
+        false
+    }
+    fn session(&mut self, _action: &SessionAction) -> bool {
+        false
+    }
+    fn themes(&mut self, _action: &ThemesAction) -> bool {
+        false
+    }
+    fn tools(&mut self, _action: &ToolsAction) -> bool {
+        false
     }
 }
 
@@ -240,6 +472,22 @@ impl qobject::ThemeActions {
 
     fn call(mut self: Pin<&mut Self>, action: ScreenAction) -> bool {
         self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.screen(&action))
+    }
+
+    fn call_workspace(mut self: Pin<&mut Self>, action: WorkspaceAction) -> bool {
+        self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.workspace(&action))
+    }
+
+    fn call_session(mut self: Pin<&mut Self>, action: SessionAction) -> bool {
+        self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.session(&action))
+    }
+
+    fn call_themes(mut self: Pin<&mut Self>, action: ThemesAction) -> bool {
+        self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.themes(&action))
+    }
+
+    fn call_tools(mut self: Pin<&mut Self>, action: ToolsAction) -> bool {
+        self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.tools(&action))
     }
 
     pub fn settings_step(self: Pin<&mut Self>, row: i32, by: i32) -> bool {
@@ -404,5 +652,202 @@ impl qobject::ThemeActions {
 
     pub fn set_big_screen(mut self: Pin<&mut Self>, big_screen: bool) -> bool {
         self.as_mut().rust_mut().sink.as_mut().is_some_and(|sink| sink.set_big_screen(big_screen))
+    }
+
+    pub fn settings_set_filter(self: Pin<&mut Self>, filter: &QString) -> bool {
+        self.call(ScreenAction::SettingsSetFilter(filter.to_string()))
+    }
+
+    pub fn settings_set_modified_only(self: Pin<&mut Self>, on: bool) -> bool {
+        self.call(ScreenAction::SettingsSetModifiedOnly(on))
+    }
+
+    pub fn settings_open_tool(self: Pin<&mut Self>, index: i32) -> bool {
+        self.call(ScreenAction::SettingsOpenTool(index))
+    }
+
+    pub fn workspace_view(self: Pin<&mut Self>, view: i32) -> bool {
+        self.call_workspace(WorkspaceAction::View(view))
+    }
+
+    pub fn workspace_set_sidebar(self: Pin<&mut Self>, open: bool) -> bool {
+        self.call_workspace(WorkspaceAction::SetSidebar(open))
+    }
+
+    pub fn workspace_set_inspector(self: Pin<&mut Self>, open: bool) -> bool {
+        self.call_workspace(WorkspaceAction::SetInspector(open))
+    }
+
+    pub fn workspace_set_drawer(self: Pin<&mut Self>, open: bool) -> bool {
+        self.call_workspace(WorkspaceAction::SetDrawer(open))
+    }
+
+    pub fn workspace_set_drawer_tab(self: Pin<&mut Self>, tab: i32) -> bool {
+        self.call_workspace(WorkspaceAction::SetDrawerTab(tab))
+    }
+
+    pub fn workspace_select_console(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::SelectConsole(key.to_string()))
+    }
+
+    pub fn workspace_set_console_filter(self: Pin<&mut Self>, filter: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::SetConsoleFilter(filter.to_string()))
+    }
+
+    pub fn workspace_set_console_scope(self: Pin<&mut Self>, scope: i32) -> bool {
+        self.call_workspace(WorkspaceAction::SetConsoleScope(scope))
+    }
+
+    pub fn workspace_set_filter(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::SetFilter(key.to_string()))
+    }
+
+    pub fn workspace_set_search(self: Pin<&mut Self>, query: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::SetSearch(query.to_string()))
+    }
+
+    pub fn workspace_set_sort(self: Pin<&mut Self>, index: i32) -> bool {
+        self.call_workspace(WorkspaceAction::SetSort(index))
+    }
+
+    pub fn workspace_sort_by_column(self: Pin<&mut Self>, column: i32) -> bool {
+        self.call_workspace(WorkspaceAction::SortByColumn(column))
+    }
+
+    pub fn workspace_select_game(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::SelectGame(key.to_string()))
+    }
+
+    pub fn workspace_mark_toggle(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::MarkToggle(key.to_string()))
+    }
+
+    pub fn workspace_mark_all(self: Pin<&mut Self>) -> bool {
+        self.call_workspace(WorkspaceAction::MarkAll)
+    }
+
+    pub fn workspace_clear_marked(self: Pin<&mut Self>) -> bool {
+        self.call_workspace(WorkspaceAction::ClearMarked)
+    }
+
+    pub fn workspace_batch_favourite(self: Pin<&mut Self>, on: bool) -> bool {
+        self.call_workspace(WorkspaceAction::BatchFavourite(on))
+    }
+
+    pub fn workspace_clear_filters(self: Pin<&mut Self>) -> bool {
+        self.call_workspace(WorkspaceAction::ClearFilters)
+    }
+
+    pub fn workspace_open_folder(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::OpenFolder(key.to_string()))
+    }
+
+    pub fn play_from(self: Pin<&mut Self>, game: &QString, state: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::PlayFrom(game.to_string(), state.to_string()))
+    }
+
+    pub fn open_desktop_door(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::OpenDesktopDoor(key.to_string()))
+    }
+
+    pub fn open_tool(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call_workspace(WorkspaceAction::OpenTool(key.to_string()))
+    }
+
+    pub fn toggle_full_screen(self: Pin<&mut Self>) -> bool {
+        self.call_workspace(WorkspaceAction::ToggleFullScreen)
+    }
+
+    pub fn add_games_to_collection(self: Pin<&mut Self>, games: &QStringList, collection_id: &QString) -> bool {
+        let list = games.iter().map(|g| g.to_string()).collect();
+        self.call_workspace(WorkspaceAction::AddGamesToCollection(list, collection_id.to_string()))
+    }
+
+    pub fn session_pause(self: Pin<&mut Self>) -> bool {
+        self.call_session(SessionAction::Pause)
+    }
+
+    pub fn session_resume(self: Pin<&mut Self>) -> bool {
+        self.call_session(SessionAction::Resume)
+    }
+
+    pub fn session_restart(self: Pin<&mut Self>) -> bool {
+        self.call_session(SessionAction::Restart)
+    }
+
+    pub fn session_close(self: Pin<&mut Self>) -> bool {
+        self.call_session(SessionAction::Close)
+    }
+
+    pub fn session_screenshot(self: Pin<&mut Self>) -> bool {
+        self.call_session(SessionAction::Screenshot)
+    }
+
+    pub fn session_choose_slot(self: Pin<&mut Self>, slot: i32) -> bool {
+        self.call_session(SessionAction::ChooseSlot(slot))
+    }
+
+    pub fn session_save_state(self: Pin<&mut Self>, slot: i32) -> bool {
+        self.call_session(SessionAction::SaveState(slot))
+    }
+
+    pub fn session_load_state(self: Pin<&mut Self>, slot: i32) -> bool {
+        self.call_session(SessionAction::LoadState(slot))
+    }
+
+    pub fn session_choose_speed(self: Pin<&mut Self>, percent: i32) -> bool {
+        self.call_session(SessionAction::ChooseSpeed(percent))
+    }
+
+    pub fn session_rewind_to(self: Pin<&mut Self>, frame: f64) -> bool {
+        self.call_session(SessionAction::RewindTo(frame))
+    }
+
+    pub fn session_set_master_cheats(self: Pin<&mut Self>, on: bool) -> bool {
+        self.call_session(SessionAction::SetMasterCheats(on))
+    }
+
+    pub fn session_switch_cheat(self: Pin<&mut Self>, index: i32) -> bool {
+        self.call_session(SessionAction::SwitchCheat(index))
+    }
+
+    pub fn session_step_console_option(self: Pin<&mut Self>, key: &QString, by: i32) -> bool {
+        self.call_session(SessionAction::StepConsoleOption(key.to_string(), by))
+    }
+
+    pub fn session_swap_players(self: Pin<&mut Self>) -> bool {
+        self.call_session(SessionAction::SwapPlayers)
+    }
+
+    pub fn session_answer_resume(self: Pin<&mut Self>, resume: bool) -> bool {
+        self.call_session(SessionAction::AnswerResume(resume))
+    }
+
+    pub fn themes_set_kind(self: Pin<&mut Self>, kind: &QString) -> bool {
+        self.call_themes(ThemesAction::SetKind(kind.to_string()))
+    }
+
+    pub fn themes_focus(self: Pin<&mut Self>, row: i32) -> bool {
+        self.call_themes(ThemesAction::Focus(row))
+    }
+
+    pub fn themes_use(self: Pin<&mut Self>, id: &QString) -> bool {
+        self.call_themes(ThemesAction::Use(id.to_string()))
+    }
+
+    pub fn themes_step(self: Pin<&mut Self>, row: i32, by: i32) -> bool {
+        self.call_themes(ThemesAction::Step(row, by))
+    }
+
+    pub fn themes_check(self: Pin<&mut Self>, id: &QString) -> bool {
+        self.call_themes(ThemesAction::Check(id.to_string()))
+    }
+
+    pub fn tools_focus(self: Pin<&mut Self>, index: i32) -> bool {
+        self.call_tools(ToolsAction::Focus(index))
+    }
+
+    pub fn tools_open(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.call_tools(ToolsAction::Open(key.to_string()))
     }
 }

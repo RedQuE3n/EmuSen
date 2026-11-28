@@ -10,6 +10,7 @@ Kit.NormalizedCanvas {
     id: screen
     required property ToolModel tool
     property int padFamily
+    property bool bigScreen: true
     property Clock clock: null
     property string clockText: ""
     property int battery: -1
@@ -54,7 +55,7 @@ Kit.NormalizedCanvas {
         property bool backdrop: screen.tool.cardOpen || screen.tool.asking
         anchors.fill: parent
         visible: !screen.eclipseAnyActive
-        form: Kit.Forms.BigScreen
+        form: screen.bigScreen ? Kit.Forms.BigScreen : Kit.Forms.Desktop
         // While searching, the rows hold the keys once a shoulder has given them the focus (R-20261111-31).
         focus: !screen.eclipseAnyActive && screen.inputs && !screen.tool.cardOpen && !screen.tool.searchKeys
         padFamily: screen.padFamily

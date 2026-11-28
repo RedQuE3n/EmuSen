@@ -8,19 +8,24 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QList, QString, QStringList};
 use emusen_kit_qt::kinds::Form;
+use emusen_qt_models::collections_eclipse::qobject::CollectionsEclipseModel;
+use emusen_qt_models::desktop::qobject::DesktopModel;
 use emusen_qt_models::game_model::qobject::GameModel;
 use emusen_qt_models::game_page_model::qobject::GamePageModel;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
+use emusen_qt_models::session_model::qobject::SessionModel;
 use emusen_qt_models::settings_model::qobject::SettingsModel;
+use emusen_qt_models::themes_model::qobject::ThemesModel;
+use emusen_qt_models::tools_hub::qobject::ToolsHubModel;
 use emusen_qt_models::{help, list_card, screens, themes, words};
 use emusen_theme_host::host::qobject::Role;
-use emusen_theme_qt::actions::{Action, ActionSink, ScreenAction};
+use emusen_theme_qt::actions::{Action, ActionSink, ScreenAction, SessionAction, ThemesAction, ToolsAction, WorkspaceAction};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::host;
 use emusen_theme_qt::page::{action_rows, board_row_rows, card_rows, content_rows, media_tile_rows, pill_rows, PageFacts};
 use emusen_theme_qt::session::SessionFacts;
-use emusen_theme_qt::view;
+use emusen_theme_qt::{collections, session as theme_session, themes as theme_themes, tools as theme_tools, view, workspace};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
@@ -117,6 +122,23 @@ pub mod qobject {
         #[cxx_name = "showPage"]
         unsafe fn show_page(self: Pin<&mut ThemeFeed>, page: *mut QObject);
 
+        /// Desktop Workspace, Themes, Tools, Collections, and live Session feeds (1.23).
+        #[qinvokable]
+        #[cxx_name = "showDesktop"]
+        unsafe fn show_desktop(self: Pin<&mut ThemeFeed>, desktop: *mut QObject);
+        #[qinvokable]
+        #[cxx_name = "showThemes"]
+        unsafe fn show_themes(self: Pin<&mut ThemeFeed>, themes: *mut QObject);
+        #[qinvokable]
+        #[cxx_name = "showTools"]
+        unsafe fn show_tools(self: Pin<&mut ThemeFeed>, tools: *mut QObject);
+        #[qinvokable]
+        #[cxx_name = "showCollections"]
+        unsafe fn show_collections(self: Pin<&mut ThemeFeed>, collections: *mut QObject);
+        #[qinvokable]
+        #[cxx_name = "showSessionLive"]
+        unsafe fn show_session_live(self: Pin<&mut ThemeFeed>, session: *mut QObject);
+
         /// The host's engine as it is now: its `Actions` carried by this feed, and everything shown so far shown again.
         #[qinvokable]
         fn attach(self: Pin<&mut ThemeFeed>);
@@ -163,6 +185,15 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "bigScreenRequested"]
         fn big_screen_requested(self: Pin<&mut ThemeFeed>, big_screen: bool);
+        #[qsignal]
+        #[cxx_name = "desktopDoorRequested"]
+        fn desktop_door_requested(self: Pin<&mut ThemeFeed>, key: QString);
+        #[qsignal]
+        #[cxx_name = "toolRequested"]
+        fn tool_requested(self: Pin<&mut ThemeFeed>, key: QString);
+        #[qsignal]
+        #[cxx_name = "fullScreenToggleRequested"]
+        fn full_screen_toggle_requested(self: Pin<&mut ThemeFeed>);
     }
 
     impl cxx_qt::Initialize for ThemeFeed {}
@@ -243,9 +274,20 @@ pub struct ThemeFeedRust {
     /// The window's Settings and page models, which a theme's screens read and act through.
     settings: *mut SettingsModel,
     page: *mut GamePageModel,
+    desktop: *mut DesktopModel,
+    themes_model: *mut ThemesModel,
+    tools_hub: *mut ToolsHubModel,
+    collections_model: *mut CollectionsEclipseModel,
+    session_model: *mut SessionModel,
     /// A feed of Settings or of the page queued and not yet run, so the changes of one press feed once.
     settings_queued: bool,
     page_queued: bool,
+    desktop_queued: bool,
+    themes_queued: bool,
+    tools_queued: bool,
+    collections_queued: bool,
+    session_live_queued: bool,
+    pictures_served_gen: Cell<i32>,
     session: Option<Shown>,
     section: Option<Section>,
     settings_shown: bool,
@@ -282,8 +324,19 @@ impl Default for ThemeFeedRust {
             library: std::ptr::null(),
             settings: std::ptr::null_mut(),
             page: std::ptr::null_mut(),
+            desktop: std::ptr::null_mut(),
+            themes_model: std::ptr::null_mut(),
+            tools_hub: std::ptr::null_mut(),
+            collections_model: std::ptr::null_mut(),
+            session_model: std::ptr::null_mut(),
             settings_queued: false,
             page_queued: false,
+            desktop_queued: false,
+            themes_queued: false,
+            tools_queued: false,
+            collections_queued: false,
+            session_live_queued: false,
+            pictures_served_gen: Cell::new(-1),
             session: None,
             section: None,
             settings_shown: false,
@@ -328,6 +381,10 @@ impl Drop for ThemeFeedRust {
 /// `object` is a `T` or null.
 unsafe fn model<T: Upcast<QAbstractListModel>>(object: *mut cxx_qt::QObject) -> *const T {
     unsafe { T::from_base_ptr(object as *const QAbstractListModel) }
+}
+
+unsafe fn qobj_model<T: Upcast<cxx_qt::QObject>>(object: *mut cxx_qt::QObject) -> *mut T {
+    unsafe { T::from_base_ptr(object as *const cxx_qt::QObject) as *mut T }
 }
 
 /// What the window does for an action: each of the theme's `Actions` as one of the feed's signals.
@@ -492,6 +549,11 @@ impl ActionSink for Sink {
                 let took = within(*section, s.sections().iter().count());
                 if took {
                     self.chip_return = 0;
+                    if !feed.big_screen {
+                        if let Some(desktop) = unsafe { feed.desktop.as_mut() } {
+                            unsafe { Pin::new_unchecked(desktop) }.set_settings_tool(-1);
+                        }
+                    }
                     s.set_section(*section);
                 }
                 took
@@ -515,6 +577,14 @@ impl ActionSink for Sink {
                     return true;
                 }
                 self.chip_return = 0;
+                if !feed.big_screen {
+                    if let Some(desktop) = unsafe { feed.desktop.as_mut() } {
+                        if *desktop.settings_tool_index() >= 0 {
+                            unsafe { Pin::new_unchecked(desktop) }.settings_back();
+                            return true;
+                        }
+                    }
+                }
                 s.back()
             }
             (ScreenAction::PageSection(section), _, Some(p)) => {
@@ -546,6 +616,21 @@ impl ActionSink for Sink {
                 p.view_pages(*pages);
                 true
             }
+            (ScreenAction::SettingsSetFilter(filter), Some(_), _) => {
+                let Some(d) = (unsafe { feed.desktop.as_mut() }) else { return false };
+                unsafe { Pin::new_unchecked(d) }.set_settings_filter(QString::from(filter.as_str()));
+                true
+            }
+            (ScreenAction::SettingsSetModifiedOnly(on), Some(_), _) => {
+                let Some(d) = (unsafe { feed.desktop.as_mut() }) else { return false };
+                unsafe { Pin::new_unchecked(d) }.set_settings_modified_only(*on);
+                true
+            }
+            (ScreenAction::SettingsOpenTool(index), Some(_), _) => {
+                let Some(d) = (unsafe { feed.desktop.as_mut() }) else { return false };
+                unsafe { Pin::new_unchecked(d) }.open_settings_tool(*index);
+                true
+            }
             _ => false,
         }
     }
@@ -556,6 +641,250 @@ impl ActionSink for Sink {
         feed.as_mut().big_screen_requested(big_screen);
         true
     }
+
+    fn workspace(&mut self, action: &WorkspaceAction) -> bool {
+        let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
+        if feed.big_screen || !feed.draws_any_desktop() {
+            return false;
+        }
+        let Some(d) = (unsafe { feed.desktop.as_mut() }) else { return false };
+        let desktop = unsafe { Pin::new_unchecked(d) };
+        match action {
+            WorkspaceAction::View(v) => {
+                desktop.set_view(*v);
+                true
+            }
+            WorkspaceAction::SetSidebar(open) => {
+                desktop.set_sidebar_open(*open);
+                true
+            }
+            WorkspaceAction::SetInspector(open) => {
+                desktop.set_inspector_open(*open);
+                true
+            }
+            WorkspaceAction::SetDrawer(open) => {
+                desktop.set_drawer_open(*open);
+                true
+            }
+            WorkspaceAction::SetDrawerTab(tab) => {
+                desktop.set_drawer_tab(*tab);
+                true
+            }
+            WorkspaceAction::SelectConsole(key) => {
+                desktop.set_console_key(QString::from(key.as_str()));
+                true
+            }
+            WorkspaceAction::SetConsoleFilter(filter) => {
+                desktop.set_console_filter(QString::from(filter.as_str()));
+                true
+            }
+            WorkspaceAction::SetConsoleScope(scope) => {
+                desktop.set_console_scope(workspace::from_workspace_scope(*scope));
+                true
+            }
+            WorkspaceAction::SetFilter(key) => {
+                desktop.set_filter_key(QString::from(key.as_str()));
+                true
+            }
+            WorkspaceAction::SetSearch(query) => {
+                desktop.set_search_query(QString::from(query.as_str()));
+                true
+            }
+            WorkspaceAction::SetSort(index) => {
+                desktop.set_sort_index(*index);
+                true
+            }
+            WorkspaceAction::SortByColumn(col) => {
+                desktop.sort_by_column(*col);
+                true
+            }
+            WorkspaceAction::SelectGame(key) => {
+                desktop.select_game(&QString::from(key.as_str()));
+                true
+            }
+            WorkspaceAction::MarkToggle(key) => {
+                desktop.mark_toggle(&QString::from(key.as_str()));
+                true
+            }
+            WorkspaceAction::MarkAll => {
+                desktop.mark_all();
+                true
+            }
+            WorkspaceAction::ClearMarked => {
+                desktop.clear_marked();
+                true
+            }
+            WorkspaceAction::BatchFavourite(on) => {
+                desktop.batch_favourite(*on);
+                true
+            }
+            WorkspaceAction::ClearFilters => {
+                desktop.clear_filters();
+                true
+            }
+            WorkspaceAction::OpenFolder(key) => desktop.open_folder_for(key),
+            WorkspaceAction::PlayFrom(game, state) => desktop.launch_from(game, state),
+            WorkspaceAction::OpenDesktopDoor(key) => {
+                if desktop.open_door(key) {
+                    true
+                } else if key == "shaders" || key == "cards" {
+                    false
+                } else {
+                    unsafe { Pin::new_unchecked(feed) }.desktop_door_requested(QString::from(key.as_str()));
+                    true
+                }
+            }
+            WorkspaceAction::OpenTool(key) => open_desktop_tool(feed, key),
+            WorkspaceAction::ToggleFullScreen => {
+                unsafe { Pin::new_unchecked(feed) }.full_screen_toggle_requested();
+                true
+            }
+            WorkspaceAction::AddGamesToCollection(games, cid) => desktop.add_games_to_collection(games.clone(), cid),
+        }
+    }
+
+    fn session(&mut self, action: &SessionAction) -> bool {
+        let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
+        let allowed = !feed.big_screen
+            && (feed.draws(Role::DesktopPlaying)
+                || (matches!(action, SessionAction::AnswerResume(_)) && (feed.draws(Role::DesktopLibrary) || feed.draws(Role::DesktopTable))));
+        if !allowed {
+            return false;
+        }
+        let Some(sm) = (unsafe { feed.session_model.as_mut() }) else { return false };
+        let mut s = unsafe { Pin::new_unchecked(sm) };
+        match action {
+            SessionAction::Pause => {
+                s.as_mut().pause();
+                true
+            }
+            SessionAction::Resume => {
+                s.as_mut().resume();
+                true
+            }
+            SessionAction::Restart => {
+                s.as_mut().restart();
+                true
+            }
+            SessionAction::Close => {
+                s.as_mut().close();
+                true
+            }
+            SessionAction::Screenshot => {
+                s.as_mut().screenshot();
+                true
+            }
+            SessionAction::ChooseSlot(slot) => {
+                s.as_mut().choose_slot((*slot).clamp(0, 99) as u32);
+                true
+            }
+            SessionAction::SaveState(slot) => {
+                s.as_mut().save_state((*slot).clamp(0, 99) as u32);
+                true
+            }
+            SessionAction::LoadState(slot) => {
+                s.as_mut().load_state((*slot).clamp(0, 99) as u32);
+                true
+            }
+            SessionAction::ChooseSpeed(percent) => {
+                s.as_mut().choose_speed((*percent).max(0) as u32);
+                true
+            }
+            SessionAction::RewindTo(frame) => {
+                s.as_mut().rewind_to((*frame).max(0.0) as u64);
+                true
+            }
+            SessionAction::SetMasterCheats(on) => {
+                s.as_mut().set_master_cheats(*on);
+                true
+            }
+            SessionAction::SwitchCheat(index) => {
+                let current_on = unsafe { feed.desktop.as_ref() }
+                    .and_then(|d| d.playing_data().cheats.into_iter().find(|c| c.index == *index))
+                    .is_some_and(|c| c.on);
+                s.as_mut().switch_cheat(*index, !current_on);
+                true
+            }
+            SessionAction::StepConsoleOption(key, by) => {
+                let Some(opt) = unsafe { feed.desktop.as_ref() }
+                    .and_then(|d| d.playing_data().console_options.into_iter().find(|o| o.key == *key && !o.choices.is_empty()))
+                else {
+                    return false;
+                };
+                let cur = opt.choices.iter().position(|c| c == &opt.value).unwrap_or(0) as isize;
+                let next_idx = (cur + *by as isize).rem_euclid(opt.choices.len() as isize) as usize;
+                let next_val = &opt.choices[next_idx];
+                s.as_mut().set_console_setting(&QString::from(key.as_str()), &QString::from(next_val.as_str()));
+                true
+            }
+            SessionAction::SwapPlayers => {
+                s.as_mut().swap_players();
+                true
+            }
+            SessionAction::AnswerResume(resume) => {
+                s.as_mut().answer_resume(if *resume { 0 } else { 1 });
+                true
+            }
+        }
+    }
+
+    fn themes(&mut self, action: &ThemesAction) -> bool {
+        let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
+        if feed.big_screen || !feed.draws(Role::DesktopSettings) {
+            return false;
+        }
+        let Some(tm) = (unsafe { feed.themes_model.as_mut() }) else { return false };
+        let mut t = unsafe { Pin::new_unchecked(tm) };
+        match action {
+            ThemesAction::SetKind(kind) => {
+                t.as_mut().set_kind(QString::from(kind.as_str()));
+                true
+            }
+            ThemesAction::Focus(row) => {
+                t.as_mut().set_focused(*row);
+                true
+            }
+            ThemesAction::Use(id) => {
+                t.as_mut().use_theme(&QString::from(id.as_str()));
+                true
+            }
+            ThemesAction::Step(row, by) => {
+                t.as_mut().step(*row, *by);
+                true
+            }
+            ThemesAction::Check(id) => {
+                t.as_mut().check(&QString::from(id.as_str()));
+                true
+            }
+        }
+    }
+
+    fn tools(&mut self, action: &ToolsAction) -> bool {
+        let Some(feed) = (unsafe { self.feed.get().as_mut() }) else { return false };
+        if feed.big_screen || (!feed.draws(Role::DesktopSettings) && !feed.draws(Role::DesktopLibrary)) {
+            return false;
+        }
+        let Some(tm) = (unsafe { feed.tools_hub.as_mut() }) else { return false };
+        let t = unsafe { Pin::new_unchecked(tm) };
+        match action {
+            ToolsAction::Focus(index) => {
+                t.set_focused(*index);
+                true
+            }
+            ToolsAction::Open(key) => open_desktop_tool(feed, key),
+        }
+    }
+}
+
+fn open_desktop_tool(feed: &mut qobject::ThemeFeed, key: &str) -> bool {
+    if key == "cards" {
+        return unsafe { feed.desktop.as_mut() }.is_some_and(|d| unsafe { Pin::new_unchecked(d) }.open_door("cards"));
+    }
+    if emusen_qt_models::screens::tool_screen(key).is_none() {
+        return false;
+    }
+    unsafe { Pin::new_unchecked(feed) }.tool_requested(QString::from(key));
+    true
 }
 
 impl cxx_qt::Initialize for qobject::ThemeFeed {
@@ -680,6 +1009,7 @@ impl qobject::ThemeFeed {
         facts.empty_words = games.empty_words().to_owned();
         facts.filter = games.filter_key();
         facts.sort = games.sort_words().to_owned();
+        facts.sort_ascending = games.sort_ascending();
         facts.letter = letter;
         let cache_key = (host_gen, self.library_gen.get(), *games.revision(), section.key.clone(), self.now);
         let rebuild = *self.browse_key.borrow() != Some(cache_key.clone());
@@ -727,6 +1057,10 @@ impl qobject::ThemeFeed {
         unsafe { self.host.as_ref() }.is_some_and(|h| h.provides(role))
     }
 
+    fn draws_any_desktop(&self) -> bool {
+        self.draws(Role::DesktopLibrary) || self.draws(Role::DesktopTable) || self.draws(Role::DesktopPlaying) || self.draws(Role::DesktopSettings)
+    }
+
     /// Whether a theme's call of Settings is taken: the theme draws Settings or DesktopSettings and the window shows it.
     fn settings_taken(&self) -> bool {
         self.settings_shown && self.draws(if self.big_screen { Role::Settings } else { Role::DesktopSettings })
@@ -742,15 +1076,204 @@ impl qobject::ThemeFeed {
         if !self.draws(Role::Settings) && !self.draws(Role::DesktopSettings) {
             return;
         }
-        let facts = match emusen_theme_qt::settings::facts_of(settings.view(), settings.shown_rows(), *settings.focused()) {
+        let mut facts = match emusen_theme_qt::settings::facts_of(settings.view(), settings.shown_rows(), *settings.focused()) {
             Ok(facts) => facts,
             Err(why) => {
                 eprintln!("theme feed: Settings not shown to the theme: {why}");
                 return;
             }
         };
+        if !self.big_screen {
+            if let Some(desktop) = unsafe { self.desktop.as_ref() } {
+                facts.filter = desktop.settings_filter().to_string();
+                facts.modified_only = *desktop.settings_modified_only();
+                facts.tool_index = *desktop.settings_tool_index();
+                facts.can_back = !settings.trail().is_empty() || facts.tool_index >= 0;
+            }
+        }
         if let Some(view) = self.engine().and_then(host::settings) {
             view.show(&facts);
+        }
+    }
+
+    /// # Safety: `desktop` is the window's `DesktopModel`, alive as long as the feed.
+    pub unsafe fn show_desktop(mut self: Pin<&mut Self>, desktop: *mut cxx_qt::QObject) {
+        self.as_mut().rust_mut().desktop = unsafe { qobj_model::<DesktopModel>(desktop) };
+        if self.desktop_queued {
+            return;
+        }
+        self.as_mut().rust_mut().desktop_queued = true;
+        let queued = self.qt_thread().queue(|mut feed| {
+            feed.as_mut().rust_mut().desktop_queued = false;
+            feed.feed_desktop();
+            feed.feed_session_live();
+            feed.feed_settings();
+        });
+        if queued.is_err() {
+            self.as_mut().rust_mut().desktop_queued = false;
+            self.feed_desktop();
+            self.feed_session_live();
+            self.feed_settings();
+        }
+    }
+
+    fn feed_desktop(&self) {
+        if !self.draws_any_desktop() {
+            return;
+        }
+        let Some(desktop) = (unsafe { self.desktop.as_ref() }) else { return };
+        let Some(engine) = self.engine() else { return };
+        let ws = desktop.workspace_data();
+        let facts = workspace::facts_of(&ws, desktop.state(), *desktop.full_screen(), &|u| self.thumb_or_url(u));
+        if let Some(view) = host::workspace(engine) {
+            view.show(&facts);
+        }
+    }
+
+    /// # Safety: `themes` is a `ThemesModel`, alive as long as the feed.
+    pub unsafe fn show_themes(mut self: Pin<&mut Self>, themes: *mut cxx_qt::QObject) {
+        self.as_mut().rust_mut().themes_model = unsafe { model::<ThemesModel>(themes) } as *mut ThemesModel;
+        if self.themes_queued {
+            return;
+        }
+        self.as_mut().rust_mut().themes_queued = true;
+        let queued = self.qt_thread().queue(|mut feed| {
+            feed.as_mut().rust_mut().themes_queued = false;
+            feed.feed_themes();
+        });
+        if queued.is_err() {
+            self.as_mut().rust_mut().themes_queued = false;
+            self.feed_themes();
+        }
+    }
+
+    fn feed_themes(&self) {
+        if !self.draws_any_desktop() {
+            return;
+        }
+        let Some(themes) = (unsafe { self.themes_model.as_ref() }) else { return };
+        let Some(engine) = self.engine() else { return };
+        let snap = themes.snapshot();
+        let facts = theme_themes::facts_of(&snap, &|u| self.thumb_or_url(u));
+        if let Some(view) = host::themes(engine) {
+            view.show(&facts);
+        }
+    }
+
+    /// # Safety: `tools` is a `ToolsHubModel`, alive as long as the feed.
+    pub unsafe fn show_tools(mut self: Pin<&mut Self>, tools: *mut cxx_qt::QObject) {
+        self.as_mut().rust_mut().tools_hub = unsafe { qobj_model::<ToolsHubModel>(tools) };
+        if self.tools_queued {
+            return;
+        }
+        self.as_mut().rust_mut().tools_queued = true;
+        let queued = self.qt_thread().queue(|mut feed| {
+            feed.as_mut().rust_mut().tools_queued = false;
+            feed.feed_tools();
+        });
+        if queued.is_err() {
+            self.as_mut().rust_mut().tools_queued = false;
+            self.feed_tools();
+        }
+    }
+
+    fn feed_tools(&self) {
+        if !self.draws_any_desktop() {
+            return;
+        }
+        let Some(tools) = (unsafe { self.tools_hub.as_ref() }) else { return };
+        let Some(engine) = self.engine() else { return };
+        let snap = tools.snapshot();
+        let facts = theme_tools::facts_of(&snap);
+        if let Some(view) = host::tools(engine) {
+            view.show(&facts);
+        }
+    }
+
+    /// # Safety: `collections` is a `CollectionsEclipseModel`, alive as long as the feed.
+    pub unsafe fn show_collections(mut self: Pin<&mut Self>, collections_ptr: *mut cxx_qt::QObject) {
+        self.as_mut().rust_mut().collections_model = unsafe { qobj_model::<CollectionsEclipseModel>(collections_ptr) };
+        if self.collections_queued {
+            return;
+        }
+        self.as_mut().rust_mut().collections_queued = true;
+        let queued = self.qt_thread().queue(|mut feed| {
+            feed.as_mut().rust_mut().collections_queued = false;
+            feed.feed_collections();
+        });
+        if queued.is_err() {
+            self.as_mut().rust_mut().collections_queued = false;
+            self.feed_collections();
+        }
+    }
+
+    fn feed_collections(&self) {
+        if !self.draws_any_desktop() {
+            return;
+        }
+        let Some(col) = (unsafe { self.collections_model.as_ref() }) else { return };
+        let Some(engine) = self.engine() else { return };
+        let snap = col.snapshot();
+        let facts = collections::facts_of(&snap);
+        if let Some(view) = host::collections(engine) {
+            view.show(&facts);
+        }
+    }
+
+    /// # Safety: `session` is the window's `SessionModel`, alive as long as the feed.
+    pub unsafe fn show_session_live(mut self: Pin<&mut Self>, session_ptr: *mut cxx_qt::QObject) {
+        self.as_mut().rust_mut().session_model = unsafe { qobj_model::<SessionModel>(session_ptr) };
+        if self.session_live_queued {
+            return;
+        }
+        self.as_mut().rust_mut().session_live_queued = true;
+        let queued = self.qt_thread().queue(|mut feed| {
+            feed.as_mut().rust_mut().session_live_queued = false;
+            feed.feed_session_live();
+        });
+        if queued.is_err() {
+            self.as_mut().rust_mut().session_live_queued = false;
+            self.feed_session_live();
+        }
+    }
+
+    fn ensure_session_pictures_on_engine(&self) {
+        let host_gen = unsafe { self.host.as_ref() }.map_or(-1, |h| *h.generation());
+        if host_gen < 0 || self.pictures_served_gen.get() == host_gen {
+            return;
+        }
+        let Some(sm) = (unsafe { self.session_model.as_ref() }) else { return };
+        let Some(engine) = self.engine() else { return };
+        if sm.serve_pictures_on(&*engine) {
+            self.pictures_served_gen.set(host_gen);
+        }
+    }
+
+    fn feed_session_live(&self) {
+        self.ensure_session_pictures_on_engine();
+        if !self.draws_any_desktop() {
+            return;
+        }
+        let Some(sm) = (unsafe { self.session_model.as_ref() }) else { return };
+        let Some(engine) = self.engine() else { return };
+        let play = unsafe { self.desktop.as_ref() }.map_or_else(Default::default, |d| d.playing_data());
+        let resume = (
+            *sm.resume_asked(),
+            sm.resume_subject().to_string(),
+            sm.resume_picture().to_string(),
+            sm.resume_when().to_string(),
+            sm.resume_console().to_string(),
+            sm.resume_core().to_string(),
+            *sm.resume_planet(),
+        );
+        let facts = theme_session::live_facts_of(
+            &play,
+            *sm.sound_volume(),
+            (resume.0, &resume.1, &resume.2, &resume.3, &resume.4, &resume.5, resume.6),
+            &|u| self.thumb_or_url(u),
+        );
+        if let Some(view) = host::session(engine) {
+            view.show_live(&facts);
         }
     }
 
@@ -779,15 +1302,7 @@ impl qobject::ThemeFeed {
 
     /// Proxies out-of-store regular image files through the host's `image://thumb/<id>` provider.
     fn thumb_or_url(&self, url: String) -> String {
-        if url.is_empty() || url.starts_with("qrc:") || url.starts_with("image:") {
-            return url;
-        }
-        let Some(host) = (unsafe { self.host.as_ref() }) else { return url };
-        if host.allows_url(&url) {
-            return url;
-        }
-        let allowed = host.allow_thumb(&url);
-        if allowed.is_empty() { url } else { allowed }
+        proxy_thumb_url(unsafe { self.host.as_ref() }, url)
     }
 
     fn feed_page(&self) {
@@ -1044,6 +1559,11 @@ impl qobject::ThemeFeed {
         self.feed_browse();
         self.feed_settings();
         self.feed_page();
+        self.feed_desktop();
+        self.feed_themes();
+        self.feed_tools();
+        self.feed_collections();
+        self.feed_session_live();
     }
 
     pub fn push(self: Pin<&mut Self>, button: i32, down: bool) {
@@ -1066,4 +1586,29 @@ pub(crate) fn host_overrides(host: *const qobject::ThemeHost, big_screen: bool) 
         }
     }
     overrides
+}
+
+fn proxy_thumb_url(host: Option<&qobject::ThemeHost>, url: String) -> String {
+    if url.is_empty() || url.starts_with("qrc:") || url.starts_with("image:") {
+        return url;
+    }
+    let Some(host) = host else { return String::new() };
+    if host.allows_url(&url) {
+        return url;
+    }
+    host.allow_thumb(&url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::proxy_thumb_url;
+
+    #[test]
+    fn thumb_or_url_rejects_raw_file_urls_without_host() {
+        assert_eq!(proxy_thumb_url(None, "file:///home/player/Roms/snes/cover.png".to_owned()), "");
+        assert_eq!(proxy_thumb_url(None, "/home/player/Roms/snes/cover.png".to_owned()), "");
+        assert_eq!(proxy_thumb_url(None, "image://thumb/42".to_owned()), "image://thumb/42");
+        assert_eq!(proxy_thumb_url(None, "qrc:/emusen/icons/pad.svg".to_owned()), "qrc:/emusen/icons/pad.svg");
+        assert_eq!(proxy_thumb_url(None, String::new()), "");
+    }
 }

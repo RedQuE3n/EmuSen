@@ -2,9 +2,38 @@
 //! curated view over emusen-qt-models that the host feeds through the functions of `host`; a theme only reads them and
 //! asks for changes through `Actions`. The kit's types are re-exported by name from `qml/`, never the whole kit.
 
+macro_rules! set_plain {
+    ($me:expr, $changed:expr, $field:ident, $val:expr) => {{
+        let v = $val;
+        if $me.$field != v {
+            $me.as_mut().rust_mut().$field = v;
+            $changed = true;
+        }
+    }};
+}
+
+macro_rules! set_text {
+    ($me:expr, $changed:expr, $field:ident, $val:expr) => {{
+        let v = cxx_qt_lib::QString::from($val.as_str());
+        if $me.$field != v {
+            $me.as_mut().rust_mut().$field = v;
+            $changed = true;
+        }
+    }};
+}
+
+pub(crate) fn to_qstring_list(items: &[String]) -> cxx_qt_lib::QStringList {
+    let mut list = cxx_qt_lib::QList::<cxx_qt_lib::QString>::default();
+    for item in items {
+        list.append(cxx_qt_lib::QString::from(item.as_str()));
+    }
+    cxx_qt_lib::QStringList::from(&list)
+}
+
 pub mod actions;
 pub mod bells;
 pub mod browse;
+pub mod collections;
 pub mod cues;
 pub mod device;
 pub mod glue;
@@ -16,8 +45,11 @@ pub mod rows;
 pub mod session;
 pub mod settings;
 pub mod splash;
+pub mod themes;
+pub mod tools;
 pub mod view;
 pub mod words;
+pub mod workspace;
 
 /// The host's way to the singletons of the engine a theme runs in: given that engine or any object it made, each
 /// singleton to feed, made by the engine on the first ask.
@@ -25,6 +57,7 @@ pub mod host {
     use crate::actions::qobject::ThemeActions;
     use crate::bells::qobject::ThemeBells;
     use crate::browse::qobject::ThemeBrowse;
+    use crate::collections::qobject::ThemeCollections;
     use crate::cues::qobject::ThemeCues;
     use crate::device::qobject::ThemeDevice;
     use crate::glue::ffi;
@@ -34,7 +67,10 @@ pub mod host {
     use crate::session::qobject::ThemeSession;
     use crate::settings::qobject::ThemeSettings;
     use crate::splash::qobject::ThemeSplash;
+    use crate::themes::qobject::ThemeThemes;
+    use crate::tools::qobject::ThemeTools;
     use crate::words::qobject::ThemeWords;
+    use crate::workspace::qobject::ThemeWorkspace;
     use core::pin::Pin;
     use cxx_qt::casting::Upcast;
     use cxx_qt::QObject;
@@ -99,6 +135,22 @@ pub mod host {
 
     pub fn splash(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeSplash>> {
         find(within, "Splash")
+    }
+
+    pub fn workspace(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeWorkspace>> {
+        find(within, "Workspace")
+    }
+
+    pub fn themes(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeThemes>> {
+        find(within, "Themes")
+    }
+
+    pub fn tools(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeTools>> {
+        find(within, "Tools")
+    }
+
+    pub fn collections(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeCollections>> {
+        find(within, "Collections")
     }
 
     /// The kit's tokens in the theme's engine, which the host keeps in step with the program's (reduced motion).

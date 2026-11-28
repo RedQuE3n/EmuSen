@@ -47,6 +47,98 @@ pub mod qobject {
         #[qproperty(QString, name, READ, CONSTANT)]
         /// From 1.11: Left with Right named as one key, "◀ ▶", as the Settings boards' help line draws it.
         #[qproperty(QString, key_pair, cxx_name = "keyPair", READ, CONSTANT)]
+        /// From 1.23: Desktop Mode labels owned by emusen-qt-models::words.
+        #[qproperty(QStringList, desktop_nav_tabs, cxx_name = "desktopNavTabs", READ, CONSTANT)]
+        #[qproperty(QStringList, desktop_view_modes, cxx_name = "desktopViewModes", READ, CONSTANT)]
+        #[qproperty(QStringList, desktop_sort_labels, cxx_name = "desktopSortLabels", READ, CONSTANT)]
+        #[qproperty(QStringList, desktop_table_columns, cxx_name = "desktopTableColumns", READ, CONSTANT)]
+        #[qproperty(QStringList, desktop_drawer_tabs, cxx_name = "desktopDrawerTabs", READ, CONSTANT)]
+        #[qproperty(QString, desktop_search_placeholder, cxx_name = "desktopSearchPlaceholder", READ, CONSTANT)]
+        #[qproperty(QString, desktop_big_picture_label, cxx_name = "desktopBigPictureLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_big_picture_hint, cxx_name = "desktopBigPictureHint", READ, CONSTANT)]
+        #[qproperty(QString, desktop_resume_label, cxx_name = "desktopResumeLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_sidebar_tip, cxx_name = "desktopSidebarTip", READ, CONSTANT)]
+        #[qproperty(QString, desktop_inspector_tip, cxx_name = "desktopInspectorTip", READ, CONSTANT)]
+        #[qproperty(QString, desktop_constellation_heading, cxx_name = "desktopConstellationHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_all_games_label, cxx_name = "desktopAllGamesLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_recent_label, cxx_name = "desktopRecentLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_consoles_heading, cxx_name = "desktopConsolesHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_scope_active, cxx_name = "desktopScopeActive", READ, CONSTANT)]
+        #[qproperty(QString, desktop_console_filter_placeholder, cxx_name = "desktopConsoleFilterPlaceholder", READ, CONSTANT)]
+        #[qproperty(QString, desktop_idle_status, cxx_name = "desktopIdleStatus", READ, CONSTANT)]
+        #[qproperty(QString, desktop_running_status, cxx_name = "desktopRunningStatus", READ, CONSTANT)]
+        #[qproperty(QString, desktop_paused_status, cxx_name = "desktopPausedStatus", READ, CONSTANT)]
+        #[qproperty(QString, desktop_no_controllers, cxx_name = "desktopNoControllers", READ, CONSTANT)]
+        #[qproperty(QString, desktop_batch_guarantee_title, cxx_name = "desktopBatchGuaranteeTitle", READ, CONSTANT)]
+        #[qproperty(QString, desktop_contract_note, cxx_name = "desktopContractNote", READ, CONSTANT)]
+        #[qproperty(QString, desktop_filter_resume_ready, cxx_name = "desktopFilterResumeReady", READ, CONSTANT)]
+        #[qproperty(QString, desktop_filter_unplayed, cxx_name = "desktopFilterUnplayed", READ, CONSTANT)]
+        #[qproperty(QString, desktop_sort_label, cxx_name = "desktopSortLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_console_options_label, cxx_name = "desktopConsoleOptionsLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_resume_badge, cxx_name = "desktopResumeBadge", READ, CONSTANT)]
+        #[qproperty(QString, desktop_inspector_heading, cxx_name = "desktopInspectorHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_play_label, cxx_name = "desktopPlayLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_save_states_label, cxx_name = "desktopSaveStatesLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_no_states_label, cxx_name = "desktopNoStatesLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_program_facts_label, cxx_name = "desktopProgramFactsLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_fact_core, cxx_name = "desktopFactCore", READ, CONSTANT)]
+        #[qproperty(QString, desktop_fact_played, cxx_name = "desktopFactPlayed", READ, CONSTANT)]
+        #[qproperty(QString, desktop_fact_players, cxx_name = "desktopFactPlayers", READ, CONSTANT)]
+        #[qproperty(QString, desktop_fact_genre, cxx_name = "desktopFactGenre", READ, CONSTANT)]
+        #[qproperty(QString, desktop_fact_file, cxx_name = "desktopFactFile", READ, CONSTANT)]
+        #[qproperty(QString, desktop_fact_size, cxx_name = "desktopFactSize", READ, CONSTANT)]
+        #[qproperty(QString, desktop_fact_last_played, cxx_name = "desktopFactLastPlayed", READ, CONSTANT)]
+        #[qproperty(QString, desktop_favourite_label, cxx_name = "desktopFavouriteLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_unfavourite_label, cxx_name = "desktopUnfavouriteLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_details_label, cxx_name = "desktopDetailsLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_folder_label, cxx_name = "desktopFolderLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_table_heading, cxx_name = "desktopTableHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_clear_filters_label, cxx_name = "desktopClearFiltersLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_clear_label, cxx_name = "desktopClearLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_unmark_fav_label, cxx_name = "desktopUnmarkFavLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_dash, cxx_name = "desktopDash", READ, CONSTANT)]
+        #[qproperty(QString, desktop_strip_pause, cxx_name = "desktopStripPause", READ, CONSTANT)]
+        #[qproperty(QString, desktop_strip_rewind, cxx_name = "desktopStripRewind", READ, CONSTANT)]
+        #[qproperty(QString, desktop_strip_states, cxx_name = "desktopStripStates", READ, CONSTANT)]
+        #[qproperty(QString, desktop_strip_shaders, cxx_name = "desktopStripShaders", READ, CONSTANT)]
+        #[qproperty(QString, desktop_strip_cheats, cxx_name = "desktopStripCheats", READ, CONSTANT)]
+        #[qproperty(QString, desktop_strip_shot, cxx_name = "desktopStripShot", READ, CONSTANT)]
+        #[qproperty(QString, desktop_strip_fullscreen, cxx_name = "desktopStripFullscreen", READ, CONSTANT)]
+        #[qproperty(QString, desktop_quick_save_label, cxx_name = "desktopQuickSaveLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_quick_load_label, cxx_name = "desktopQuickLoadLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_slot_prefix, cxx_name = "desktopSlotPrefix", READ, CONSTANT)]
+        #[qproperty(QString, desktop_empty_slot_label, cxx_name = "desktopEmptySlotLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_rewind_available, cxx_name = "desktopRewindAvailable", READ, CONSTANT)]
+        #[qproperty(QString, desktop_no_rewind_label, cxx_name = "desktopNoRewindLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_master_cheats_label, cxx_name = "desktopMasterCheatsLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_no_cheats_label, cxx_name = "desktopNoCheatsLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_shaders_heading, cxx_name = "desktopShadersHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_no_display_rows_label, cxx_name = "desktopNoDisplayRowsLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_speed_label, cxx_name = "desktopSpeedLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_swap_players_label, cxx_name = "desktopSwapPlayersLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_restart_label, cxx_name = "desktopRestartLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_quit_game_label, cxx_name = "desktopQuitGameLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_settings_filter_placeholder, cxx_name = "desktopSettingsFilterPlaceholder", READ, CONSTANT)]
+        #[qproperty(QString, desktop_settings_heading, cxx_name = "desktopSettingsHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_tools_heading, cxx_name = "desktopToolsHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_modified_only_label, cxx_name = "desktopModifiedOnlyLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_back_label, cxx_name = "desktopBackLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_themes_heading, cxx_name = "desktopThemesHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_themes_subtitle, cxx_name = "desktopThemesSubtitle", READ, CONSTANT)]
+        #[qproperty(QString, desktop_use_theme_label, cxx_name = "desktopUseThemeLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_in_use_label, cxx_name = "desktopInUseLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_dual_face_badge, cxx_name = "desktopDualFaceBadge", READ, CONSTANT)]
+        #[qproperty(QString, desktop_big_picture_badge, cxx_name = "desktopBigPictureBadge", READ, CONSTANT)]
+        #[qproperty(QString, desktop_esde_badge, cxx_name = "desktopEsdeBadge", READ, CONSTANT)]
+        #[qproperty(QString, desktop_check_theme_label, cxx_name = "desktopCheckThemeLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_about_detail_heading, cxx_name = "desktopAboutDetailHeading", READ, CONSTANT)]
+        #[qproperty(QString, desktop_status_hints, cxx_name = "desktopStatusHints", READ, CONSTANT)]
+        #[qproperty(QString, desktop_never_played, cxx_name = "desktopNeverPlayed", READ, CONSTANT)]
+        #[qproperty(QString, desktop_read_in_place, cxx_name = "desktopReadInPlace", READ, CONSTANT)]
+        #[qproperty(QString, desktop_none_label, cxx_name = "desktopNoneLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_library_manager_label, cxx_name = "desktopLibraryManagerLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_resume_auto_label, cxx_name = "desktopResumeAutoLabel", READ, CONSTANT)]
+        #[qproperty(QString, desktop_speed_max_label, cxx_name = "desktopSpeedMaxLabel", READ, CONSTANT)]
         type ThemeWords = super::ThemeWordsRust;
     }
 
@@ -150,6 +242,97 @@ pub struct ThemeWordsRust {
     console_sorts: cxx_qt_lib::QStringList,
     key_pair: QString,
     now: f64,
+    desktop_nav_tabs: cxx_qt_lib::QStringList,
+    desktop_view_modes: cxx_qt_lib::QStringList,
+    desktop_sort_labels: cxx_qt_lib::QStringList,
+    desktop_table_columns: cxx_qt_lib::QStringList,
+    desktop_drawer_tabs: cxx_qt_lib::QStringList,
+    desktop_search_placeholder: QString,
+    desktop_big_picture_label: QString,
+    desktop_big_picture_hint: QString,
+    desktop_resume_label: QString,
+    desktop_sidebar_tip: QString,
+    desktop_inspector_tip: QString,
+    desktop_constellation_heading: QString,
+    desktop_all_games_label: QString,
+    desktop_recent_label: QString,
+    desktop_consoles_heading: QString,
+    desktop_scope_active: QString,
+    desktop_console_filter_placeholder: QString,
+    desktop_idle_status: QString,
+    desktop_running_status: QString,
+    desktop_paused_status: QString,
+    desktop_no_controllers: QString,
+    desktop_batch_guarantee_title: QString,
+    desktop_contract_note: QString,
+    desktop_filter_resume_ready: QString,
+    desktop_filter_unplayed: QString,
+    desktop_sort_label: QString,
+    desktop_console_options_label: QString,
+    desktop_resume_badge: QString,
+    desktop_inspector_heading: QString,
+    desktop_play_label: QString,
+    desktop_save_states_label: QString,
+    desktop_no_states_label: QString,
+    desktop_program_facts_label: QString,
+    desktop_fact_core: QString,
+    desktop_fact_played: QString,
+    desktop_fact_players: QString,
+    desktop_fact_genre: QString,
+    desktop_fact_file: QString,
+    desktop_fact_size: QString,
+    desktop_fact_last_played: QString,
+    desktop_favourite_label: QString,
+    desktop_unfavourite_label: QString,
+    desktop_details_label: QString,
+    desktop_folder_label: QString,
+    desktop_table_heading: QString,
+    desktop_clear_filters_label: QString,
+    desktop_clear_label: QString,
+    desktop_unmark_fav_label: QString,
+    desktop_dash: QString,
+    desktop_strip_pause: QString,
+    desktop_strip_rewind: QString,
+    desktop_strip_states: QString,
+    desktop_strip_shaders: QString,
+    desktop_strip_cheats: QString,
+    desktop_strip_shot: QString,
+    desktop_strip_fullscreen: QString,
+    desktop_quick_save_label: QString,
+    desktop_quick_load_label: QString,
+    desktop_slot_prefix: QString,
+    desktop_empty_slot_label: QString,
+    desktop_rewind_available: QString,
+    desktop_no_rewind_label: QString,
+    desktop_master_cheats_label: QString,
+    desktop_no_cheats_label: QString,
+    desktop_shaders_heading: QString,
+    desktop_no_display_rows_label: QString,
+    desktop_speed_label: QString,
+    desktop_swap_players_label: QString,
+    desktop_restart_label: QString,
+    desktop_quit_game_label: QString,
+    desktop_settings_filter_placeholder: QString,
+    desktop_settings_heading: QString,
+    desktop_tools_heading: QString,
+    desktop_modified_only_label: QString,
+    desktop_back_label: QString,
+    desktop_themes_heading: QString,
+    desktop_themes_subtitle: QString,
+    desktop_use_theme_label: QString,
+    desktop_in_use_label: QString,
+    desktop_dual_face_badge: QString,
+    desktop_big_picture_badge: QString,
+    desktop_esde_badge: QString,
+    desktop_check_theme_label: QString,
+    desktop_about_detail_heading: QString,
+    desktop_status_hints: QString,
+    desktop_never_played: QString,
+    desktop_read_in_place: QString,
+    desktop_none_label: QString,
+    desktop_library_manager_label: QString,
+    desktop_resume_auto_label: QString,
+    desktop_speed_max_label: QString,
 }
 
 impl Default for ThemeWordsRust {
@@ -181,6 +364,97 @@ impl Default for ThemeWordsRust {
             console_sorts: string_list(&words::CONSOLE_SORTS),
             key_pair: QString::from(words::KEY_PAIR),
             now: 0.0,
+            desktop_nav_tabs: string_list(&words::DESKTOP_NAV_TABS),
+            desktop_view_modes: string_list(&words::DESKTOP_VIEW_MODES),
+            desktop_sort_labels: string_list(&words::DESKTOP_SORT_LABELS),
+            desktop_table_columns: string_list(&words::DESKTOP_TABLE_COLUMNS),
+            desktop_drawer_tabs: string_list(&words::DESKTOP_DRAWER_TABS),
+            desktop_search_placeholder: QString::from(words::DESKTOP_SEARCH_PLACEHOLDER),
+            desktop_big_picture_label: QString::from(words::DESKTOP_BIG_PICTURE_LABEL),
+            desktop_big_picture_hint: QString::from(words::DESKTOP_BIG_PICTURE_HINT),
+            desktop_resume_label: QString::from(words::DESKTOP_RESUME_LABEL),
+            desktop_sidebar_tip: QString::from(words::DESKTOP_SIDEBAR_TIP),
+            desktop_inspector_tip: QString::from(words::DESKTOP_INSPECTOR_TIP),
+            desktop_constellation_heading: QString::from(words::DESKTOP_CONSTELLATION_HEADING),
+            desktop_all_games_label: QString::from(words::DESKTOP_ALL_GAMES_LABEL),
+            desktop_recent_label: QString::from(words::DESKTOP_RECENT_LABEL),
+            desktop_consoles_heading: QString::from(words::DESKTOP_CONSOLES_HEADING),
+            desktop_scope_active: QString::from(words::DESKTOP_SCOPE_ACTIVE),
+            desktop_console_filter_placeholder: QString::from(words::DESKTOP_CONSOLE_FILTER_PLACEHOLDER),
+            desktop_idle_status: QString::from(words::DESKTOP_IDLE_STATUS),
+            desktop_running_status: QString::from(words::DESKTOP_RUNNING_STATUS),
+            desktop_paused_status: QString::from(words::DESKTOP_PAUSED_STATUS),
+            desktop_no_controllers: QString::from(words::DESKTOP_NO_CONTROLLERS),
+            desktop_batch_guarantee_title: QString::from(words::DESKTOP_BATCH_GUARANTEE_TITLE),
+            desktop_contract_note: QString::from(words::DESKTOP_CONTRACT_NOTE),
+            desktop_filter_resume_ready: QString::from(words::DESKTOP_FILTER_RESUME_READY),
+            desktop_filter_unplayed: QString::from(words::DESKTOP_FILTER_UNPLAYED),
+            desktop_sort_label: QString::from(words::DESKTOP_SORT_LABEL),
+            desktop_console_options_label: QString::from(words::DESKTOP_CONSOLE_OPTIONS_LABEL),
+            desktop_resume_badge: QString::from(words::DESKTOP_RESUME_BADGE),
+            desktop_inspector_heading: QString::from(words::DESKTOP_INSPECTOR_HEADING),
+            desktop_play_label: QString::from(words::DESKTOP_PLAY_LABEL),
+            desktop_save_states_label: QString::from(words::DESKTOP_SAVE_STATES_LABEL),
+            desktop_no_states_label: QString::from(words::DESKTOP_NO_STATES_LABEL),
+            desktop_program_facts_label: QString::from(words::DESKTOP_PROGRAM_FACTS_LABEL),
+            desktop_fact_core: QString::from(words::DESKTOP_FACT_CORE),
+            desktop_fact_played: QString::from(words::DESKTOP_FACT_PLAYED),
+            desktop_fact_players: QString::from(words::DESKTOP_FACT_PLAYERS),
+            desktop_fact_genre: QString::from(words::DESKTOP_FACT_GENRE),
+            desktop_fact_file: QString::from(words::DESKTOP_FACT_FILE),
+            desktop_fact_size: QString::from(words::DESKTOP_FACT_SIZE),
+            desktop_fact_last_played: QString::from(words::DESKTOP_FACT_LAST_PLAYED),
+            desktop_favourite_label: QString::from(words::DESKTOP_FAVOURITE_LABEL),
+            desktop_unfavourite_label: QString::from(words::DESKTOP_UNFAVOURITE_LABEL),
+            desktop_details_label: QString::from(words::DESKTOP_DETAILS_LABEL),
+            desktop_folder_label: QString::from(words::DESKTOP_FOLDER_LABEL),
+            desktop_table_heading: QString::from(words::DESKTOP_TABLE_HEADING),
+            desktop_clear_filters_label: QString::from(words::DESKTOP_CLEAR_FILTERS_LABEL),
+            desktop_clear_label: QString::from(words::DESKTOP_CLEAR_LABEL),
+            desktop_unmark_fav_label: QString::from(words::DESKTOP_UNMARK_FAV_LABEL),
+            desktop_dash: QString::from(words::DESKTOP_DASH),
+            desktop_strip_pause: QString::from(words::DESKTOP_STRIP_PAUSE),
+            desktop_strip_rewind: QString::from(words::DESKTOP_STRIP_REWIND),
+            desktop_strip_states: QString::from(words::DESKTOP_STRIP_STATES),
+            desktop_strip_shaders: QString::from(words::DESKTOP_STRIP_SHADERS),
+            desktop_strip_cheats: QString::from(words::DESKTOP_STRIP_CHEATS),
+            desktop_strip_shot: QString::from(words::DESKTOP_STRIP_SHOT),
+            desktop_strip_fullscreen: QString::from(words::DESKTOP_STRIP_FULLSCREEN),
+            desktop_quick_save_label: QString::from(words::DESKTOP_QUICK_SAVE_LABEL),
+            desktop_quick_load_label: QString::from(words::DESKTOP_QUICK_LOAD_LABEL),
+            desktop_slot_prefix: QString::from(words::DESKTOP_SLOT_PREFIX),
+            desktop_empty_slot_label: QString::from(words::DESKTOP_EMPTY_SLOT_LABEL),
+            desktop_rewind_available: QString::from(words::DESKTOP_REWIND_AVAILABLE),
+            desktop_no_rewind_label: QString::from(words::DESKTOP_NO_REWIND_LABEL),
+            desktop_master_cheats_label: QString::from(words::DESKTOP_MASTER_CHEATS_LABEL),
+            desktop_no_cheats_label: QString::from(words::DESKTOP_NO_CHEATS_LABEL),
+            desktop_shaders_heading: QString::from(words::DESKTOP_SHADERS_HEADING),
+            desktop_no_display_rows_label: QString::from(words::DESKTOP_NO_DISPLAY_ROWS_LABEL),
+            desktop_speed_label: QString::from(words::DESKTOP_SPEED_LABEL),
+            desktop_swap_players_label: QString::from(words::DESKTOP_SWAP_PLAYERS_LABEL),
+            desktop_restart_label: QString::from(words::DESKTOP_RESTART_LABEL),
+            desktop_quit_game_label: QString::from(words::DESKTOP_QUIT_GAME_LABEL),
+            desktop_settings_filter_placeholder: QString::from(words::DESKTOP_SETTINGS_FILTER_PLACEHOLDER),
+            desktop_settings_heading: QString::from(words::DESKTOP_SETTINGS_HEADING),
+            desktop_tools_heading: QString::from(words::DESKTOP_TOOLS_HEADING),
+            desktop_modified_only_label: QString::from(words::DESKTOP_MODIFIED_ONLY_LABEL),
+            desktop_back_label: QString::from(words::DESKTOP_BACK_LABEL),
+            desktop_themes_heading: QString::from(words::DESKTOP_THEMES_HEADING),
+            desktop_themes_subtitle: QString::from(words::DESKTOP_THEMES_SUBTITLE),
+            desktop_use_theme_label: QString::from(words::DESKTOP_USE_THEME_LABEL),
+            desktop_in_use_label: QString::from(words::DESKTOP_IN_USE_LABEL),
+            desktop_dual_face_badge: QString::from(words::DESKTOP_DUAL_FACE_BADGE),
+            desktop_big_picture_badge: QString::from(words::DESKTOP_BIG_PICTURE_BADGE),
+            desktop_esde_badge: QString::from(words::DESKTOP_ESDE_BADGE),
+            desktop_check_theme_label: QString::from(words::DESKTOP_CHECK_THEME_LABEL),
+            desktop_about_detail_heading: QString::from(words::DESKTOP_ABOUT_DETAIL_HEADING),
+            desktop_status_hints: QString::from(words::DESKTOP_STATUS_HINTS),
+            desktop_never_played: QString::from(words::DESKTOP_NEVER_PLAYED),
+            desktop_read_in_place: QString::from(words::DESKTOP_READ_IN_PLACE),
+            desktop_none_label: QString::from(words::DESKTOP_NONE_LABEL),
+            desktop_library_manager_label: QString::from(words::DESKTOP_LIBRARY_MANAGER_LABEL),
+            desktop_resume_auto_label: QString::from(words::DESKTOP_RESUME_AUTO_LABEL),
+            desktop_speed_max_label: QString::from(words::DESKTOP_SPEED_MAX_LABEL),
         }
     }
 }

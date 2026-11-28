@@ -84,6 +84,8 @@ pub enum Ask {
     Section(String),
     /// A Settings door opened from Desktop Mode (`scraper`, `compressed`, `cheats`).
     DesktopDoor(String),
+    /// A tool opened directly from Desktop Mode (`cores`, `themes`, `scraper`, `cheats`, jobs).
+    DesktopTool(String),
 }
 
 /// A top section of the program: its key, its name as a nav says it, the screen it opens, the key that screen is opened
@@ -456,6 +458,9 @@ pub fn step_for_face_at(big_screen: bool, eclipse: bool, themed: bool, shown: Sh
     if let Ask::DesktopDoor(key) = ask {
         return settings_door(key);
     }
+    if let Ask::DesktopTool(key) = ask {
+        return open_tool(key);
+    }
     if !big_screen {
         match ask {
             Ask::Play
@@ -638,6 +643,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openDesktopDoor"]
         fn open_desktop_door(self: Pin<&mut Screens>, key: &QString);
+        /// Opens a Tool suite screen triggered from Desktop Mode.
+        #[qinvokable]
+        #[cxx_name = "openTool"]
+        fn open_tool_screen(self: Pin<&mut Screens>, key: &QString);
         /// Quit EmuSen answered Yes: the program ends.
         #[qsignal]
         fn quit(self: Pin<&mut Screens>);
@@ -942,6 +951,13 @@ impl qobject::Screens {
         }
     }
 
+    pub fn open_tool_screen(self: Pin<&mut Self>, key: &QString) {
+        let k = key.to_string();
+        if !k.is_empty() {
+            self.ask(Ask::DesktopTool(k));
+        }
+    }
+
     fn ask(self: Pin<&mut Self>, ask: Ask) {
         let _ = self.qt_thread().queue(move |screens| screens.apply(ask));
     }
@@ -973,6 +989,9 @@ impl qobject::Screens {
             Shown::Search | Shown::SearchGrid if self.eclipse && self.search_origin == Some(Shown::Home) && step_ask == Ask::Back => Some((Shown::Home, None)),
             Shown::Game | Shown::Pause if close_origin(self.themed, self.play_origin, self.play_started, &step_ask).is_some() => {
                 close_origin(self.themed, self.play_origin, self.play_started, &step_ask).map(|s| (s, None))
+            }
+            _ if !self.big_screen && matches!(was, Shown::Tool | Shown::Cores | Shown::Themes) && step_ask == Ask::Back && self.tool_origin != Some(Shown::Page) => {
+                Some((library_of(self.themed), None))
             }
             _ => tool_back(self.themed, self.tool_origin, was, &step_ask)
                 .map(|s| (s, None))

@@ -21,6 +21,10 @@ Item {
     // The window's Settings and game page models, for a theme that draws either screen; none, and neither slot is made.
     property SettingsModel settingsModel: null
     property GamePageModel pageModel: null
+    property DesktopModel desktopModel: null
+    property ThemesModel themesModel: null
+    property ToolsHubModel toolsModel: null
+    property CollectionsEclipseModel collectionsModel: null
     property alias controllers: feed.controllers
     property alias family: feed.family
     // The machine's battery, -1 for none, and whether it charges, as the window's Battery reads them.
@@ -88,6 +92,9 @@ Item {
     signal focused(string game)
     signal favourite(string game)
     signal bigScreenRequested(bool bigScreen)
+    signal desktopDoorRequested(string key)
+    signal toolRequested(string key)
+    signal fullScreenToggleRequested()
     signal focusActiveSlot()
     onFocusActiveSlot: {
         if (desktopLibrarySlot.focus) desktopLibrarySlot.forceActiveFocus()
@@ -171,6 +178,9 @@ Item {
         onFavourite: (game) => themed.favourite(game)
         onSelected: (index) => themed.library.select(index)
         onBigScreenRequested: (bigScreen) => themed.bigScreenRequested(bigScreen)
+        onDesktopDoorRequested: (key) => themed.desktopDoorRequested(key)
+        onToolRequested: (key) => themed.toolRequested(key)
+        onFullScreenToggleRequested: themed.fullScreenToggleRequested()
     }
     // A new engine is fed everything the feed holds, and the models as they stand, since a host made at run time (the
     // Themes tab's Use) has held nothing yet; each feed after is the one model that changed.
@@ -197,6 +207,92 @@ Item {
     Connections {
         target: host
         function onGenerationChanged() { feed.showPage(themed.pageModel) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showDesktop(themed.desktopModel) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showThemes(themed.themesModel) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showTools(themed.toolsModel) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showCollections(themed.collectionsModel) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showSessionLive(themed.session) }
+    }
+    Connections {
+        target: themed.desktopModel
+        function onConsolesJsonChanged() { feed.showDesktop(themed.desktopModel) }
+        function onGamesJsonChanged() { feed.showDesktop(themed.desktopModel) }
+        function onInspectorJsonChanged() { feed.showDesktop(themed.desktopModel) }
+        function onPlayingJsonChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSettingsJsonChanged() { feed.showDesktop(themed.desktopModel) }
+        function onStatusTextChanged() { feed.showDesktop(themed.desktopModel) }
+        function onViewChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSidebarOpenChanged() { feed.showDesktop(themed.desktopModel) }
+        function onInspectorOpenChanged() { feed.showDesktop(themed.desktopModel) }
+        function onDrawerOpenChanged() { feed.showDesktop(themed.desktopModel) }
+        function onDrawerTabChanged() { feed.showDesktop(themed.desktopModel) }
+        function onConsoleKeyChanged() { feed.showDesktop(themed.desktopModel) }
+        function onFilterKeyChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSearchQueryChanged() { feed.showDesktop(themed.desktopModel) }
+        function onConsoleFilterChanged() { feed.showDesktop(themed.desktopModel) }
+        function onConsoleScopeChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSortIndexChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSortAscendingChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSelectedKeyChanged() { feed.showDesktop(themed.desktopModel) }
+        function onMarkedKeysChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSettingsFilterChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSettingsModifiedOnlyChanged() { feed.showDesktop(themed.desktopModel) }
+        function onSettingsToolIndexChanged() { feed.showDesktop(themed.desktopModel) }
+        function onFullScreenChanged() { feed.showDesktop(themed.desktopModel) }
+    }
+    Connections {
+        target: themed.session
+        function onRunningChanged() { feed.showSessionLive(themed.session) }
+        function onPausedChanged() { feed.showSessionLive(themed.session) }
+        function onFpsWordsChanged() { feed.showSessionLive(themed.session) }
+        function onStatusChanged() { feed.showSessionLive(themed.session) }
+        function onSlotChanged() { feed.showSessionLive(themed.session) }
+        function onSpeedChanged() { feed.showSessionLive(themed.session) }
+        function onMasterCheatsChanged() { feed.showSessionLive(themed.session) }
+        function onCardFactsChanged() { feed.showSessionLive(themed.session) }
+        function onSoundVolumeChanged() { feed.showSessionLive(themed.session) }
+        function onResumeAskedChanged() { feed.showSessionLive(themed.session) }
+    }
+    Connections {
+        target: themed.themesModel
+        function onModelReset() { feed.showThemes(themed.themesModel) }
+        function onDataChanged() { feed.showThemes(themed.themesModel) }
+        function onFocusedChanged() { feed.showThemes(themed.themesModel) }
+        function onKindChanged() { feed.showThemes(themed.themesModel) }
+        function onChosenChanged() { feed.showThemes(themed.themesModel) }
+        function onWordsChanged() { feed.showThemes(themed.themesModel) }
+        function onNameChanged() { feed.showThemes(themed.themesModel) }
+        function onLineChanged() { feed.showThemes(themed.themesModel) }
+        function onPreviewChanged() { feed.showThemes(themed.themesModel) }
+        function onFindingsChanged() { feed.showThemes(themed.themesModel) }
+        function onUsableChanged() { feed.showThemes(themed.themesModel) }
+        function onHelpChanged() { feed.showThemes(themed.themesModel) }
+    }
+    Connections {
+        target: themed.toolsModel
+        function onViewChanged() { feed.showTools(themed.toolsModel) }
+        function onFocusedChanged() { feed.showTools(themed.toolsModel) }
+    }
+    Connections {
+        target: themed.collectionsModel
+        function onViewChanged() { feed.showCollections(themed.collectionsModel) }
+        function onCardsJsonChanged() { feed.showCollections(themed.collectionsModel) }
+        function onFocusedChanged() { feed.showCollections(themed.collectionsModel) }
     }
     // Each change of Settings' or the page's model, which the feed queues, so the changes of one press feed once.
     Connections {

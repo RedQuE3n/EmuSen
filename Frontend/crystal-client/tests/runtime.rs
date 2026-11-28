@@ -120,7 +120,11 @@ fn a_player_s_core_is_approved_routed_opened_and_run_through_the_api() {
     assert!(rt.settings_get(0, Scope::Console, Some(TEST_SYSTEM), "NoSuchKey").unwrap().is_none());
 
     let table = rt.session_service(id, 0).unwrap();
-    assert_eq!(table.info(id).unwrap().id, id);
+    assert!(!table.raw_session_services().is_null());
+    let svc_info = table.info(id).unwrap();
+    assert_eq!(svc_info.id, id);
+    assert_eq!(svc_info.system, TEST_SYSTEM);
+    assert_eq!(svc_info.byte_order, "little");
     let state = world.root.join("one.state");
     table.state_save(id, Some(state.to_str().unwrap())).unwrap();
     table.state_load(id, state.to_str().unwrap()).unwrap();

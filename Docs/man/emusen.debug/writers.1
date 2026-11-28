@@ -2,20 +2,23 @@ NAME
     writers - find static write references to an address
 
 SYNOPSIS
-    writers <addr> [<scanstart> <scanlen>]
+    writers [<space>] <addr> [<scanstart> <scanlen>] [--json]
 
 DESCRIPTION
-    Scans CpuBus for instructions that statically store to hex address
-    <addr>. By default the scan covers <addr>'s own bank from $8000 to
-    $FFFF; supply hex <scanstart> and <scanlen> to scan another range.
+    Scans CpuBus (or the named processor's code space when <space> is
+    given) for instructions that statically store to hex address <addr>.
+    By default the scan covers <addr>'s own bank from $8000 to $FFFF;
+    supply hex <scanstart> and <scanlen> to scan another range.
 
-    Only statically encoded addressing modes (absolute and absolute-long)
-    are detected. Indexed or indirect writes are not visible to static
-    analysis; use watch(1) or 'bp write' in bp(1) for runtime write
-    detection.
+    Only statically encoded addressing modes on systems with a static
+    disassembler are detected. When static disassembly is unavailable or
+    when writes use indexed or indirect addressing, --json reports
+    "supported": false with runtime watch(1) guidance; use 'watch add'
+    and 'watch summary' for runtime write detection across all consoles.
 
 EXAMPLES
     writers 13c6
+    writers WRAM 007E --json
     writers 13c6 808000 8000
 
 EXIT STATUS

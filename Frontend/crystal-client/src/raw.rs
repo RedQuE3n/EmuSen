@@ -4,8 +4,8 @@
 #![allow(non_camel_case_types, non_upper_case_globals, non_snake_case, dead_code, clippy::all)]
 
 pub const EMUSEN_SESSION_MAJOR: u32 = 1;
-pub const EMUSEN_SESSION_MINOR: u32 = 3;
-pub const EMUSEN_SESSION_VERSION: u32 = 65539;
+pub const EMUSEN_SESSION_MINOR: u32 = 4;
+pub const EMUSEN_SESSION_VERSION: u32 = 65540;
 pub const EMUSEN_SESSION_SERVICE: &[u8; 15] = b"emusen.session\0";
 pub const EMUSEN_SVC_NULL: i32 = -1;
 pub const EMUSEN_SVC_BAD_STRING: i32 = -5;
@@ -532,10 +532,22 @@ pub struct emusen_session_v1 {
             engine_len: usize,
         ) -> i64,
     >,
+    pub freeze_add_wide: ::std::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::std::os::raw::c_void,
+            session: u32,
+            space: *const u8,
+            space_len: usize,
+            address: u32,
+            value: u64,
+            width: u32,
+            big_endian: u32,
+        ) -> i64,
+    >,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of emusen_session_v1"][::std::mem::size_of::<emusen_session_v1>() - 672usize];
+    ["Size of emusen_session_v1"][::std::mem::size_of::<emusen_session_v1>() - 680usize];
     ["Alignment of emusen_session_v1"][::std::mem::align_of::<emusen_session_v1>() - 8usize];
     ["Offset of field: emusen_session_v1::size"][::std::mem::offset_of!(emusen_session_v1, size) - 0usize];
     ["Offset of field: emusen_session_v1::version"][::std::mem::offset_of!(emusen_session_v1, version) - 4usize];
@@ -622,6 +634,7 @@ const _: () = {
     ["Offset of field: emusen_session_v1::games"][::std::mem::offset_of!(emusen_session_v1, games) - 648usize];
     ["Offset of field: emusen_session_v1::open_game"][::std::mem::offset_of!(emusen_session_v1, open_game) - 656usize];
     ["Offset of field: emusen_session_v1::open_console"][::std::mem::offset_of!(emusen_session_v1, open_console) - 664usize];
+    ["Offset of field: emusen_session_v1::freeze_add_wide"][::std::mem::offset_of!(emusen_session_v1, freeze_add_wide) - 672usize];
 };
 impl Default for emusen_session_v1 {
     fn default() -> Self {

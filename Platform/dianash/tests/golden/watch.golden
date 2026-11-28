@@ -2,12 +2,12 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command watch
-usage 1   watch add <space> <addr> <len> [write|read|both]
+usage 1   watch add <space> <addr> <len> [write|read|both] [--json]
 usage 2                                 register a watch, prints matching accesses live + stores them
 usage 3                                 (default write, matching this command's original behavior)
-usage 4   watch list                    list active watches with their IDs and access kind
+usage 4   watch list [--json]           list active watches with their IDs and access kind
 usage 5   watch log <id> [<count>]      show a watch's recorded events (default 20)
-usage 6   watch summary <id>            group a watch's recorded events by access site (Context),
+usage 6   watch summary <id> [--json]   group a watch's recorded events by access site (Context),
 usage 7                                 showing each unique site once with a hit count instead of
 usage 8                                 every individual event - the dynamic, addressing-mode-agnostic
 usage 9                                 equivalent of `readers`/`writers`, which only find statically-

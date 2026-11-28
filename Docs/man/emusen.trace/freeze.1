@@ -1,52 +1,53 @@
 NAME
-    freeze - pin a memory address by undoing writes to it
+    freeze - pin a memory value across frames
 
 SYNOPSIS
-    freeze add <space> <addr> [<value>]
-    freeze list
-    freeze remove <id>
-    freeze clear
+    freeze add <space> <addr> [<value>] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]
+    freeze list [--json]
+    freeze remove <id> [--json]
+    freeze clear [--json]
 
 DESCRIPTION
-    Pins hex address <addr> in writable memory space <space> to hex byte
-    <value> (or to the byte currently stored there if <value> is omitted).
+    Pins hex address <addr> (width 1, 2, or 4 bytes; default 1, or 4 with
+    --float) in writable memory space <space> to <value>, or snapshots the
+    live value at <addr> when <value> is omitted. Endianness defaults to
+    the space's hardware byte order unless overridden with --le or --be.
     Read-only memory spaces are refused.
 
-    On cores with immediate write interception, any store of a different
-    byte is undone immediately before subsequent instructions observe it,
-    and 'freeze list' counts how many writes were blocked. On cores using
-    the stable ABI, writes are checked at frame end and restored like a
-    per-frame poke, and 'freeze list' counts frames whose end found the
-    byte changed.
-
-    Writes matching the pinned value are ignored and not counted, and the
-    restore write itself does not re-trigger the freeze.
+    Crystal checks active freezes once per frame at frame end and writes
+    the pinned bytes back whenever any byte in the span differs from the
+    pinned representation. 'freeze list' reports 'blocked' as the count of
+    frames whose end found the pinned value modified; for immediate
+    execution-time write interception or instruction PC attribution, use
+    watch(1) or 'bp write' in bp(1).
 
 OPTIONS
-    add <space> <addr> [<value>]
-        Freeze <addr> in <space> at <value> (or its current byte).
+    add <space> <addr> [<value>] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]
+        Freeze 1, 2, or 4 bytes at <addr> in <space> to <value> (or
+        snapshot the current value when <value> is omitted).
 
-    list
-        List active freezes with their IDs, targets, values, and blocked
-        counts.
+    list [--json]
+        List active freezes with their IDs, targets, values, widths,
+        byte orders, and blocked counts.
 
-    remove <id>
+    remove <id> [--json]
         Remove freeze #<id>.
 
-    clear
+    clear [--json]
         Remove all active freezes.
 
 EXAMPLES
     freeze add WRAM 13c6
     freeze add WRAM 0dbf 63
-    freeze list
+    freeze add RDRAM 100 999 -w 2 --be --dec --json
+    freeze list --json
     freeze remove 1
     freeze clear
 
 EXIT STATUS
     0   Command completed (or usage/refusal message printed).
-    1   No target attached, unknown space, invalid hex argument, or
-        session service fault.
+    1   No target attached, unknown space, invalid argument, or session
+        service fault.
 
 SEE ALSO
     cheat(1), watch(1), search(1), counters(1), spaces(1)

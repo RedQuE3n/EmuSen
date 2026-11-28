@@ -428,6 +428,20 @@ unsafe extern "C" fn freeze_add(ctx: *mut c_void, session: u32, space: *const u8
     number(unsafe { table(ctx, session, |c| registries::freeze_add(c, space, address, value)) })
 }
 
+unsafe extern "C" fn freeze_add_wide(
+    ctx: *mut c_void,
+    session: u32,
+    space: *const u8,
+    space_len: usize,
+    address: u32,
+    value: u64,
+    width: u32,
+    big_endian: u32,
+) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    number(unsafe { table(ctx, session, |c| registries::freeze_add_wide(c, space, address, value, width, big_endian)) })
+}
+
 unsafe extern "C" fn freeze_remove(ctx: *mut c_void, session: u32, id: u32) -> i32 {
     code(unsafe { table(ctx, session, |c| registries::freeze_remove(c, id)) })
 }
@@ -672,6 +686,7 @@ fn template() -> emusen_session_v1 {
         audio_peek: Some(audio_peek),
         cheat_op: Some(cheat_op),
         cheat_codecs: Some(cheat_codecs),
+        freeze_add_wide: Some(freeze_add_wide),
     }
 }
 

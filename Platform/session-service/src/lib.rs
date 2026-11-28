@@ -41,8 +41,9 @@ pub type Answer<T> = Result<T, Refusal>;
 /// The service as one session sees it: the table, and the session it names (0, the host's current one).
 #[derive(Clone, Copy)]
 pub struct Session<'a> {
-    table: &'a emusen_session_v1,
+    table: *const emusen_session_v1,
     session: u32,
+    _marker: std::marker::PhantomData<&'a emusen_session_v1>,
 }
 
 /// Text passed in: a pointer and a length, the null pointer for the absent string.
@@ -51,6 +52,19 @@ fn text(value: Option<&str>) -> (*const u8, usize) {
         Some(text) => (text.as_ptr(), text.len()),
         None => (std::ptr::null(), 0),
     }
+}
+
+macro_rules! opt_entry {
+    ($self:expr, $f:ident) => {{
+        let end = std::mem::offset_of!(emusen_session_v1, $f) + std::mem::size_of::<usize>();
+        if $self.table_size() >= end { unsafe { std::ptr::addr_of!((*$self.table).$f).read() } } else { None }
+    }};
+}
+
+macro_rules! req_entry {
+    ($self:expr, $f:ident) => {
+        opt_entry!($self, $f).ok_or_else(|| Session::missing(stringify!($f)))?
+    };
 }
 
 impl<'a> Session<'a> {
@@ -62,14 +76,27 @@ impl<'a> Session<'a> {
         if table.is_null() {
             return None;
         }
-        let table = unsafe { &*(table as *const emusen_session_v1) };
-        let whole = std::mem::size_of::<emusen_session_v1>();
-        (table.version >> 16 == abi::MAJOR && table.size as usize >= whole).then_some(Session { table, session: 0 })
+        let ptr = table as *const emusen_session_v1;
+        let min_v10 = std::mem::offset_of!(emusen_session_v1, events_drain) + std::mem::size_of::<usize>();
+        let size = unsafe { std::ptr::addr_of!((*ptr).size).read() } as usize;
+        if size < min_v10 {
+            return None;
+        }
+        let version = unsafe { std::ptr::addr_of!((*ptr).version).read() };
+        (version >> 16 == abi::MAJOR).then_some(Session { table: ptr, session: 0, _marker: std::marker::PhantomData })
+    }
+
+    fn table_size(&self) -> usize {
+        unsafe { std::ptr::addr_of!((*self.table).size).read() as usize }
+    }
+
+    fn ctx(&self) -> *mut c_void {
+        unsafe { std::ptr::addr_of!((*self.table).ctx).read() }
     }
 
     /// The provider's minor version.
     pub fn minor(&self) -> u32 {
-        self.table.version & 0xFFFF
+        unsafe { std::ptr::addr_of!((*self.table).version).read() & 0xFFFF }
     }
 
     /// The processor argument that names none, where the provider knows it (1.1); before that, processor 0.
@@ -87,6 +114,16 @@ impl<'a> Session<'a> {
         Ok(self.info()?.text("engine"))
     }
 
+    /// System id, as `info` gives it.
+    pub fn system(&self) -> Answer<String> {
+        Ok(self.info()?.text("system"))
+    }
+
+    /// Native byte order, as `info` gives it.
+    pub fn byte_order(&self) -> Answer<space::Endian> {
+        Ok(self.info()?.optional_text("byte_order").as_deref().and_then(space::Endian::from_str).unwrap_or(space::Endian::Little))
+    }
+
     /// Whether `info` lists a capability.
     pub fn can(&self, capability: &str) -> Answer<bool> {
         Ok(self.info()?.list("capabilities").iter().any(|c| c.as_str() == Some(capability)))
@@ -98,8 +135,8 @@ impl<'a> Session<'a> {
 
     /// The words for the failure just returned, on this thread.
     fn last_error(&self) -> String {
-        let Some(last) = self.table.last_error else { return String::new() };
-        let ctx = self.table.ctx;
+        let Some(last) = opt_entry!(self, last_error) else { return String::new() };
+        let ctx = self.ctx();
         let length = unsafe { last(ctx, std::ptr::null_mut(), 0) };
         if length <= 0 {
             return String::new();
@@ -147,341 +184,373 @@ impl<'a> Session<'a> {
     }
 
     pub fn info(&self) -> Answer<Value> {
-        let f = self.table.info.ok_or_else(|| Self::missing("info"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, info);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn summary(&self) -> Answer<String> {
-        let f = self.table.summary.ok_or_else(|| Self::missing("summary"))?;
-        self.string(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, summary);
+        self.string(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn run_control(&self, op: u32, processor: u32, argument: i64) -> Answer<i64> {
-        let f = self.table.run_control.ok_or_else(|| Self::missing("run_control"))?;
-        self.checked(unsafe { f(self.table.ctx, self.session, op, processor, argument) })
+        let f = req_entry!(self, run_control);
+        self.checked(unsafe { f(self.ctx(), self.session, op, processor, argument) })
     }
 
     pub fn halt_state(&self, processor: u32) -> Answer<Value> {
-        let f = self.table.halt_state.ok_or_else(|| Self::missing("halt_state"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, o, l) })
+        let f = req_entry!(self, halt_state);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, o, l) })
     }
 
     pub fn spaces(&self) -> Answer<Value> {
-        let f = self.table.spaces.ok_or_else(|| Self::missing("spaces"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, spaces);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn space_read(&self, space: &str, address: u32, length: usize) -> Answer<Vec<u8>> {
-        let f = self.table.space_read.ok_or_else(|| Self::missing("space_read"))?;
+        let f = req_entry!(self, space_read);
         let mut bytes = vec![0u8; length];
-        let read = self.checked(unsafe { f(self.table.ctx, self.session, space.as_ptr(), space.len(), address, bytes.as_mut_ptr(), bytes.len()) })?;
+        let read = self.checked(unsafe { f(self.ctx(), self.session, space.as_ptr(), space.len(), address, bytes.as_mut_ptr(), bytes.len()) })?;
         bytes.truncate((read as usize).min(length));
         Ok(bytes)
     }
 
     pub fn space_write(&self, space: &str, address: u32, data: &[u8]) -> Answer<()> {
-        let f = self.table.space_write.ok_or_else(|| Self::missing("space_write"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, space.as_ptr(), space.len(), address, data.as_ptr(), data.len()) })
+        let f = req_entry!(self, space_write);
+        self.done(unsafe { f(self.ctx(), self.session, space.as_ptr(), space.len(), address, data.as_ptr(), data.len()) })
     }
 
     pub fn resolve_physical(&self, address: u32) -> Answer<Value> {
-        let f = self.table.resolve_physical.ok_or_else(|| Self::missing("resolve_physical"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, address, o, l) })
+        let f = req_entry!(self, resolve_physical);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, address, o, l) })
     }
 
     pub fn processors(&self) -> Answer<Value> {
-        let f = self.table.processors.ok_or_else(|| Self::missing("processors"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, processors);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn registers(&self, processor: u32) -> Answer<Value> {
-        let f = self.table.registers.ok_or_else(|| Self::missing("registers"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, o, l) })
+        let f = req_entry!(self, registers);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, o, l) })
     }
 
     pub fn set_register(&self, processor: u32, name: &str, value: u64) -> Answer<()> {
-        let f = self.table.set_register.ok_or_else(|| Self::missing("set_register"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, processor, name.as_ptr(), name.len(), value) })
+        let f = req_entry!(self, set_register);
+        self.done(unsafe { f(self.ctx(), self.session, processor, name.as_ptr(), name.len(), value) })
     }
 
     pub fn disassemble(&self, processor: u32, space: Option<&str>, address: u32, count: u32, hints: Option<&str>) -> Answer<Value> {
-        let f = self.table.disassemble.ok_or_else(|| Self::missing("disassemble"))?;
+        let f = req_entry!(self, disassemble);
         let (s, sl) = text(space);
         let (h, hl) = text(hints);
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, s, sl, address, count, h, hl, o, l) })
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, s, sl, address, count, h, hl, o, l) })
     }
 
     pub fn bp_add(&self, processor: u32, spec: &str) -> Answer<i64> {
-        let f = self.table.bp_add.ok_or_else(|| Self::missing("bp_add"))?;
-        self.checked(unsafe { f(self.table.ctx, self.session, processor, spec.as_ptr(), spec.len()) })
+        let f = req_entry!(self, bp_add);
+        self.checked(unsafe { f(self.ctx(), self.session, processor, spec.as_ptr(), spec.len()) })
     }
 
     pub fn bp_add_data(&self, processor: u32, spec: &str) -> Answer<i64> {
-        let f = self.table.bp_add_data.ok_or_else(|| Self::missing("bp_add_data"))?;
-        self.checked(unsafe { f(self.table.ctx, self.session, processor, spec.as_ptr(), spec.len()) })
+        let f = req_entry!(self, bp_add_data);
+        self.checked(unsafe { f(self.ctx(), self.session, processor, spec.as_ptr(), spec.len()) })
     }
 
     pub fn bp_set_enabled(&self, processor: u32, id: u32, enabled: bool) -> Answer<()> {
-        let f = self.table.bp_set_enabled.ok_or_else(|| Self::missing("bp_set_enabled"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, processor, id, u32::from(enabled)) })
+        let f = req_entry!(self, bp_set_enabled);
+        self.done(unsafe { f(self.ctx(), self.session, processor, id, u32::from(enabled)) })
     }
 
     pub fn bp_remove(&self, processor: u32, id: u32) -> Answer<()> {
-        let f = self.table.bp_remove.ok_or_else(|| Self::missing("bp_remove"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, processor, id) })
+        let f = req_entry!(self, bp_remove);
+        self.done(unsafe { f(self.ctx(), self.session, processor, id) })
     }
 
     pub fn bp_list(&self, processor: u32) -> Answer<Value> {
-        let f = self.table.bp_list.ok_or_else(|| Self::missing("bp_list"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, o, l) })
+        let f = req_entry!(self, bp_list);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, o, l) })
     }
 
     pub fn bp_log(&self, processor: u32, count: u32) -> Answer<Value> {
-        let f = self.table.bp_log.ok_or_else(|| Self::missing("bp_log"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, count, o, l) })
+        let f = req_entry!(self, bp_log);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, count, o, l) })
     }
 
     pub fn bp_log_clear(&self, processor: u32) -> Answer<()> {
-        let f = self.table.bp_log_clear.ok_or_else(|| Self::missing("bp_log_clear"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, processor) })
+        let f = req_entry!(self, bp_log_clear);
+        self.done(unsafe { f(self.ctx(), self.session, processor) })
     }
 
     pub fn bp_arm_condition(&self, processor: u32, name: &str, flags: u32) -> Answer<()> {
-        let f = self.table.bp_arm_condition.ok_or_else(|| Self::missing("bp_arm_condition"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, processor, name.as_ptr(), name.len(), flags) })
+        let f = req_entry!(self, bp_arm_condition);
+        self.done(unsafe { f(self.ctx(), self.session, processor, name.as_ptr(), name.len(), flags) })
     }
 
     pub fn bp_conditions(&self, processor: u32) -> Answer<Value> {
-        let f = self.table.bp_conditions.ok_or_else(|| Self::missing("bp_conditions"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, o, l) })
+        let f = req_entry!(self, bp_conditions);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, o, l) })
     }
 
     pub fn bp_depth_guard(&self, processor: u32, depth: i32) -> Answer<()> {
-        let f = self.table.bp_depth_guard.ok_or_else(|| Self::missing("bp_depth_guard"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, processor, depth) })
+        let f = req_entry!(self, bp_depth_guard);
+        self.done(unsafe { f(self.ctx(), self.session, processor, depth) })
     }
 
     pub fn bp_forbid_range(&self, processor: u32, address: u32, end: u32) -> Answer<i64> {
-        let f = self.table.bp_forbid_range.ok_or_else(|| Self::missing("bp_forbid_range"))?;
-        self.checked(unsafe { f(self.table.ctx, self.session, processor, address, end) })
+        let f = req_entry!(self, bp_forbid_range);
+        self.checked(unsafe { f(self.ctx(), self.session, processor, address, end) })
     }
 
     pub fn bp_uninitialized(&self, processor: u32, space: Option<&str>, size: u32) -> Answer<()> {
-        let f = self.table.bp_uninitialized.ok_or_else(|| Self::missing("bp_uninitialized"))?;
+        let f = req_entry!(self, bp_uninitialized);
         let (s, sl) = text(space);
-        self.done(unsafe { f(self.table.ctx, self.session, processor, s, sl, size) })
+        self.done(unsafe { f(self.ctx(), self.session, processor, s, sl, size) })
     }
 
     pub fn watch_add(&self, space: &str, address: u32, length: u32, kind: u32) -> Answer<i64> {
-        let f = self.table.watch_add.ok_or_else(|| Self::missing("watch_add"))?;
-        self.checked(unsafe { f(self.table.ctx, self.session, space.as_ptr(), space.len(), address, length, kind) })
+        let f = req_entry!(self, watch_add);
+        self.checked(unsafe { f(self.ctx(), self.session, space.as_ptr(), space.len(), address, length, kind) })
     }
 
     pub fn watch_remove(&self, id: u32) -> Answer<()> {
-        let f = self.table.watch_remove.ok_or_else(|| Self::missing("watch_remove"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, id) })
+        let f = req_entry!(self, watch_remove);
+        self.done(unsafe { f(self.ctx(), self.session, id) })
     }
 
     pub fn watch_list(&self) -> Answer<Value> {
-        let f = self.table.watch_list.ok_or_else(|| Self::missing("watch_list"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, watch_list);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn watch_events(&self, id: u32, count: u32) -> Answer<Value> {
-        let f = self.table.watch_events.ok_or_else(|| Self::missing("watch_events"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, id, count, o, l) })
+        let f = req_entry!(self, watch_events);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, id, count, o, l) })
     }
 
     pub fn watch_summary(&self, id: u32) -> Answer<Value> {
-        let f = self.table.watch_summary.ok_or_else(|| Self::missing("watch_summary"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, id, o, l) })
+        let f = req_entry!(self, watch_summary);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, id, o, l) })
     }
 
     pub fn watch_clear(&self, id: u32) -> Answer<()> {
-        let f = self.table.watch_clear.ok_or_else(|| Self::missing("watch_clear"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, id) })
+        let f = req_entry!(self, watch_clear);
+        self.done(unsafe { f(self.ctx(), self.session, id) })
     }
 
     pub fn framelog_add(&self, space: &str, address: u32, width: u32) -> Answer<i64> {
-        let f = self.table.framelog_add.ok_or_else(|| Self::missing("framelog_add"))?;
-        self.checked(unsafe { f(self.table.ctx, self.session, space.as_ptr(), space.len(), address, width) })
+        let f = req_entry!(self, framelog_add);
+        self.checked(unsafe { f(self.ctx(), self.session, space.as_ptr(), space.len(), address, width) })
     }
 
     pub fn framelog_remove(&self, id: u32) -> Answer<()> {
-        let f = self.table.framelog_remove.ok_or_else(|| Self::missing("framelog_remove"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, id) })
+        let f = req_entry!(self, framelog_remove);
+        self.done(unsafe { f(self.ctx(), self.session, id) })
     }
 
     pub fn framelog_list(&self) -> Answer<Value> {
-        let f = self.table.framelog_list.ok_or_else(|| Self::missing("framelog_list"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, framelog_list);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn framelog_samples(&self, id: u32, count: u32) -> Answer<Value> {
-        let f = self.table.framelog_samples.ok_or_else(|| Self::missing("framelog_samples"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, id, count, o, l) })
+        let f = req_entry!(self, framelog_samples);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, id, count, o, l) })
     }
 
     pub fn framelog_clear(&self, id: u32) -> Answer<()> {
-        let f = self.table.framelog_clear.ok_or_else(|| Self::missing("framelog_clear"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, id) })
+        let f = req_entry!(self, framelog_clear);
+        self.done(unsafe { f(self.ctx(), self.session, id) })
     }
 
     /// `coverage_op` with JSON arguments, its answer as raw bytes (JSON, a map, or nothing for a change).
     pub fn coverage_op(&self, processor: u32, op: u32, args: &[u8]) -> Answer<Vec<u8>> {
-        let f = self.table.coverage_op.ok_or_else(|| Self::missing("coverage_op"))?;
-        self.bytes(|o, l| unsafe { f(self.table.ctx, self.session, processor, op, args.as_ptr(), args.len(), o, l) })
+        let f = req_entry!(self, coverage_op);
+        self.bytes(|o, l| unsafe { f(self.ctx(), self.session, processor, op, args.as_ptr(), args.len(), o, l) })
     }
 
     pub fn profile_op(&self, processor: u32, op: u32, args: &str) -> Answer<Vec<u8>> {
-        let f = self.table.profile_op.ok_or_else(|| Self::missing("profile_op"))?;
-        self.bytes(|o, l| unsafe { f(self.table.ctx, self.session, processor, op, args.as_ptr(), args.len(), o, l) })
+        let f = req_entry!(self, profile_op);
+        self.bytes(|o, l| unsafe { f(self.ctx(), self.session, processor, op, args.as_ptr(), args.len(), o, l) })
     }
 
     pub fn counters_op(&self, op: u32, args: &str) -> Answer<Vec<u8>> {
-        let f = self.table.counters_op.ok_or_else(|| Self::missing("counters_op"))?;
-        self.bytes(|o, l| unsafe { f(self.table.ctx, self.session, op, args.as_ptr(), args.len(), o, l) })
+        let f = req_entry!(self, counters_op);
+        self.bytes(|o, l| unsafe { f(self.ctx(), self.session, op, args.as_ptr(), args.len(), o, l) })
     }
 
     pub fn call_stack(&self, processor: u32, count: u32) -> Answer<Value> {
-        let f = self.table.call_stack.ok_or_else(|| Self::missing("call_stack"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, count, o, l) })
+        let f = req_entry!(self, call_stack);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, count, o, l) })
     }
 
     pub fn freeze_add(&self, space: &str, address: u32, value: u32) -> Answer<i64> {
-        let f = self.table.freeze_add.ok_or_else(|| Self::missing("freeze_add"))?;
-        self.checked(unsafe { f(self.table.ctx, self.session, space.as_ptr(), space.len(), address, value) })
+        let f = req_entry!(self, freeze_add);
+        self.checked(unsafe { f(self.ctx(), self.session, space.as_ptr(), space.len(), address, value) })
+    }
+
+    pub fn freeze_add_wide(&self, space: &str, address: u32, value: u64, width: u32, big_endian: bool) -> Answer<i64> {
+        if let Some(f) = opt_entry!(self, freeze_add_wide) {
+            return self.checked(unsafe {
+                f(self.ctx(), self.session, space.as_ptr(), space.len(), address, value, width, u32::from(big_endian))
+            });
+        }
+        let max = match width {
+            1 => 0xFF,
+            2 => 0xFFFF,
+            4 => 0xFFFF_FFFF,
+            _ => return Err(Refusal::new(status::BAD_ARGUMENT, "freeze width must be 1, 2, or 4")),
+        };
+        if value > max {
+            return Err(Refusal::new(status::BAD_ARGUMENT, "freeze value exceeds width"));
+        }
+        let mut ids = Vec::with_capacity(width as usize);
+        for i in 0..width {
+            let shift = if big_endian { 8 * (width - 1 - i) } else { 8 * i };
+            let byte = ((value >> shift) & 0xFF) as u32;
+            match self.freeze_add(space, address.wrapping_add(i), byte) {
+                Ok(id) => ids.push(id),
+                Err(err) => {
+                    for prev in ids {
+                        drop(self.freeze_remove(prev as u32));
+                    }
+                    return Err(err);
+                }
+            }
+        }
+        Ok(ids[0])
     }
 
     pub fn freeze_remove(&self, id: u32) -> Answer<()> {
-        let f = self.table.freeze_remove.ok_or_else(|| Self::missing("freeze_remove"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, id) })
+        let f = req_entry!(self, freeze_remove);
+        self.done(unsafe { f(self.ctx(), self.session, id) })
     }
 
     pub fn freeze_list(&self) -> Answer<Value> {
-        let f = self.table.freeze_list.ok_or_else(|| Self::missing("freeze_list"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, freeze_list);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn freeze_clear(&self) -> Answer<()> {
-        let f = self.table.freeze_clear.ok_or_else(|| Self::missing("freeze_clear"))?;
-        self.done(unsafe { f(self.table.ctx, self.session) })
+        let f = req_entry!(self, freeze_clear);
+        self.done(unsafe { f(self.ctx(), self.session) })
     }
 
     pub fn label_add(&self, address: u32, name: &str, comment: Option<&str>) -> Answer<()> {
-        let f = self.table.label_add.ok_or_else(|| Self::missing("label_add"))?;
+        let f = req_entry!(self, label_add);
         let (c, cl) = text(comment);
-        self.done(unsafe { f(self.table.ctx, self.session, address, name.as_ptr(), name.len(), c, cl) })
+        self.done(unsafe { f(self.ctx(), self.session, address, name.as_ptr(), name.len(), c, cl) })
     }
 
     pub fn label_remove(&self, name: Option<&str>, address: u32) -> Answer<()> {
-        let f = self.table.label_remove.ok_or_else(|| Self::missing("label_remove"))?;
+        let f = req_entry!(self, label_remove);
         let (n, nl) = text(name);
-        self.done(unsafe { f(self.table.ctx, self.session, n, nl, address) })
+        self.done(unsafe { f(self.ctx(), self.session, n, nl, address) })
     }
 
     pub fn label_list(&self) -> Answer<Value> {
-        let f = self.table.label_list.ok_or_else(|| Self::missing("label_list"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, label_list);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn label_at(&self, address: u32) -> Answer<Value> {
-        let f = self.table.label_at.ok_or_else(|| Self::missing("label_at"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, address, o, l) })
+        let f = req_entry!(self, label_at);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, address, o, l) })
     }
 
     pub fn label_load(&self, text: &str) -> Answer<Value> {
-        let f = self.table.label_load.ok_or_else(|| Self::missing("label_load"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, text.as_ptr(), text.len(), o, l) })
+        let f = req_entry!(self, label_load);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, text.as_ptr(), text.len(), o, l) })
     }
 
     pub fn label_save(&self) -> Answer<String> {
-        let f = self.table.label_save.ok_or_else(|| Self::missing("label_save"))?;
-        self.string(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, label_save);
+        self.string(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn label_clear(&self) -> Answer<()> {
-        let f = self.table.label_clear.ok_or_else(|| Self::missing("label_clear"))?;
-        self.done(unsafe { f(self.table.ctx, self.session) })
+        let f = req_entry!(self, label_clear);
+        self.done(unsafe { f(self.ctx(), self.session) })
     }
 
     pub fn dma_channels(&self) -> Answer<Value> {
-        let f = self.table.dma_channels.ok_or_else(|| Self::missing("dma_channels"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, dma_channels);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn dma_log_op(&self, op: u32, args: &str) -> Answer<Vec<u8>> {
-        let f = self.table.dma_log_op.ok_or_else(|| Self::missing("dma_log_op"))?;
-        self.bytes(|o, l| unsafe { f(self.table.ctx, self.session, op, args.as_ptr(), args.len(), o, l) })
+        let f = req_entry!(self, dma_log_op);
+        self.bytes(|o, l| unsafe { f(self.ctx(), self.session, op, args.as_ptr(), args.len(), o, l) })
     }
 
     pub fn register_flow_op(&self, op: u32, args: &str) -> Answer<Vec<u8>> {
-        let f = self.table.register_flow_op.ok_or_else(|| Self::missing("register_flow_op"))?;
-        self.bytes(|o, l| unsafe { f(self.table.ctx, self.session, op, args.as_ptr(), args.len(), o, l) })
+        let f = req_entry!(self, register_flow_op);
+        self.bytes(|o, l| unsafe { f(self.ctx(), self.session, op, args.as_ptr(), args.len(), o, l) })
     }
 
     pub fn coprocessor_history(&self, count: u32) -> Answer<Value> {
-        let f = self.table.coprocessor_history.ok_or_else(|| Self::missing("coprocessor_history"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, count, o, l) })
+        let f = req_entry!(self, coprocessor_history);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, count, o, l) })
     }
 
     pub fn vectors(&self) -> Answer<Value> {
-        let f = self.table.vectors.ok_or_else(|| Self::missing("vectors"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, vectors);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn tilemap_entry(&self, space: &str, address: u32) -> Answer<Value> {
-        let f = self.table.tilemap_entry.ok_or_else(|| Self::missing("tilemap_entry"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, space.as_ptr(), space.len(), address, o, l) })
+        let f = req_entry!(self, tilemap_entry);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, space.as_ptr(), space.len(), address, o, l) })
     }
 
     pub fn tile_pixels(&self, space: &str, address: u32, bpp: u32) -> Answer<Vec<u8>> {
-        let f = self.table.tile_pixels.ok_or_else(|| Self::missing("tile_pixels"))?;
-        self.bytes(|o, l| unsafe { f(self.table.ctx, self.session, space.as_ptr(), space.len(), address, bpp, o, l) })
+        let f = req_entry!(self, tile_pixels);
+        self.bytes(|o, l| unsafe { f(self.ctx(), self.session, space.as_ptr(), space.len(), address, bpp, o, l) })
     }
 
     pub fn sprites(&self) -> Answer<Value> {
-        let f = self.table.sprites.ok_or_else(|| Self::missing("sprites"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, sprites);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn palettes(&self) -> Answer<Value> {
-        let f = self.table.palettes.ok_or_else(|| Self::missing("palettes"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, palettes);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn audio_channels(&self) -> Answer<Value> {
-        let f = self.table.audio_channels.ok_or_else(|| Self::missing("audio_channels"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, audio_channels);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn set_channel_muted(&self, channel: u32, muted: bool) -> Answer<()> {
-        let f = self.table.set_channel_muted.ok_or_else(|| Self::missing("set_channel_muted"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, channel, u32::from(muted)) })
+        let f = req_entry!(self, set_channel_muted);
+        self.done(unsafe { f(self.ctx(), self.session, channel, u32::from(muted)) })
     }
 
     pub fn evaluate(&self, processor: u32, expression: &str) -> Answer<Value> {
-        let f = self.table.evaluate.ok_or_else(|| Self::missing("evaluate"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, expression.as_ptr(), expression.len(), o, l) })
+        let f = req_entry!(self, evaluate);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, expression.as_ptr(), expression.len(), o, l) })
     }
 
     pub fn symbols(&self, processor: u32, filter: Option<&str>) -> Answer<Value> {
-        let f = self.table.symbols.ok_or_else(|| Self::missing("symbols"))?;
+        let f = req_entry!(self, symbols);
         let (t, tl) = text(filter);
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, processor, t, tl, o, l) })
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, processor, t, tl, o, l) })
     }
 
     /// `cheat_op`: a read's record, or a change's id or count as the value, with no record.
     pub fn cheat_op(&self, op: u32, args: &[u8]) -> Answer<(Vec<u8>, i64)> {
-        let f = self.table.cheat_op.ok_or_else(|| Self::missing("cheat_op"))?;
-        let first = self.checked(unsafe { f(self.table.ctx, self.session, op, args.as_ptr(), args.len(), std::ptr::null_mut(), 0) })?;
+        let f = req_entry!(self, cheat_op);
+        let first = self.checked(unsafe { f(self.ctx(), self.session, op, args.as_ptr(), args.len(), std::ptr::null_mut(), 0) })?;
         if !reads_a_record(op, args) {
             return Ok((Vec::new(), first));
         }
         let mut length = first;
         loop {
             let mut buffer = vec![0u8; length as usize];
-            let total = self.checked(unsafe { f(self.table.ctx, self.session, op, args.as_ptr(), args.len(), buffer.as_mut_ptr(), buffer.len()) })?;
+            let total = self.checked(unsafe { f(self.ctx(), self.session, op, args.as_ptr(), args.len(), buffer.as_mut_ptr(), buffer.len()) })?;
             if total <= length {
                 buffer.truncate(total as usize);
                 return Ok((buffer, total));
@@ -491,56 +560,56 @@ impl<'a> Session<'a> {
     }
 
     pub fn cheat_codecs(&self) -> Answer<Value> {
-        let f = self.table.cheat_codecs.ok_or_else(|| Self::missing("cheat_codecs"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, cheat_codecs);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn trace(&self, processor: u32, count: u32) -> Answer<()> {
-        let f = self.table.trace.ok_or_else(|| Self::missing("trace"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, processor, count) })
+        let f = req_entry!(self, trace);
+        self.done(unsafe { f(self.ctx(), self.session, processor, count) })
     }
 
     pub fn trace_off(&self, processor: u32) -> Answer<()> {
-        let f = self.table.trace_off.ok_or_else(|| Self::missing("trace_off"))?;
-        self.done(unsafe { f(self.table.ctx, self.session, processor) })
+        let f = req_entry!(self, trace_off);
+        self.done(unsafe { f(self.ctx(), self.session, processor) })
     }
 
     pub fn telemetry(&self, kind: u32) -> Answer<Value> {
-        let f = self.table.telemetry.ok_or_else(|| Self::missing("telemetry"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, kind, o, l) })
+        let f = req_entry!(self, telemetry);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, kind, o, l) })
     }
 
     pub fn state_save(&self, path: Option<&str>) -> Answer<()> {
-        let f = self.table.state_save.ok_or_else(|| Self::missing("state_save"))?;
+        let f = req_entry!(self, state_save);
         let (p, pl) = text(path);
-        self.done(unsafe { f(self.table.ctx, self.session, p, pl) })
+        self.done(unsafe { f(self.ctx(), self.session, p, pl) })
     }
 
     pub fn state_load(&self, path: Option<&str>) -> Answer<()> {
-        let f = self.table.state_load.ok_or_else(|| Self::missing("state_load"))?;
+        let f = req_entry!(self, state_load);
         let (p, pl) = text(path);
-        self.done(unsafe { f(self.table.ctx, self.session, p, pl) })
+        self.done(unsafe { f(self.ctx(), self.session, p, pl) })
     }
 
     pub fn state_default_path(&self) -> Answer<String> {
-        let f = self.table.state_default_path.ok_or_else(|| Self::missing("state_default_path"))?;
-        self.string(|o, l| unsafe { f(self.table.ctx, self.session, o, l) })
+        let f = req_entry!(self, state_default_path);
+        self.string(|o, l| unsafe { f(self.ctx(), self.session, o, l) })
     }
 
     pub fn log_switch(&self, on: bool) -> Answer<()> {
-        let f = self.table.log_switch.ok_or_else(|| Self::missing("log_switch"))?;
-        self.done(unsafe { f(self.table.ctx, u32::from(on)) })
+        let f = req_entry!(self, log_switch);
+        self.done(unsafe { f(self.ctx(), u32::from(on)) })
     }
 
     pub fn log_status(&self) -> Answer<bool> {
-        let f = self.table.log_status.ok_or_else(|| Self::missing("log_status"))?;
-        let code = unsafe { f(self.table.ctx) };
+        let f = req_entry!(self, log_status);
+        let code = unsafe { f(self.ctx()) };
         self.checked(i64::from(code)).map(|on| on != 0)
     }
 
     pub fn events_drain(&self, kinds: u32) -> Answer<Value> {
-        let f = self.table.events_drain.ok_or_else(|| Self::missing("events_drain"))?;
-        self.json(|o, l| unsafe { f(self.table.ctx, self.session, kinds, o, l) })
+        let f = req_entry!(self, events_drain);
+        self.json(|o, l| unsafe { f(self.ctx(), self.session, kinds, o, l) })
     }
 }
 
@@ -633,4 +702,98 @@ pub fn object(members: &[(&str, String)]) -> String {
 /// A string as a JSON value, written by serde_json.
 pub fn quoted(text: &str) -> String {
     serde_json::to_string(&text).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[derive(Default)]
+    struct MockCtx {
+        single_calls: RefCell<Vec<(String, u32, u32)>>,
+        wide_calls: RefCell<Vec<(String, u32, u64, u32, u32)>>,
+        removed_ids: RefCell<Vec<u32>>,
+        fail_on_call: usize,
+    }
+
+    unsafe extern "C" fn mock_freeze_add(ctx: *mut c_void, _s: u32, sp: *const u8, sp_len: usize, addr: u32, val: u32) -> i64 {
+        let c = unsafe { &*(ctx as *const MockCtx) };
+        let space = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(sp, sp_len)) }.to_string();
+        let mut calls = c.single_calls.borrow_mut();
+        if c.fail_on_call != 0 && calls.len() + 1 == c.fail_on_call {
+            return abi::status::FAULT as i64;
+        }
+        calls.push((space, addr, val));
+        calls.len() as i64
+    }
+
+    unsafe extern "C" fn mock_freeze_remove(ctx: *mut c_void, _s: u32, id: u32) -> i32 {
+        let c = unsafe { &*(ctx as *const MockCtx) };
+        c.removed_ids.borrow_mut().push(id);
+        0
+    }
+
+    unsafe extern "C" fn mock_freeze_add_wide(
+        ctx: *mut c_void,
+        _s: u32,
+        sp: *const u8,
+        sp_len: usize,
+        addr: u32,
+        val: u64,
+        w: u32,
+        be: u32,
+    ) -> i64 {
+        let c = unsafe { &*(ctx as *const MockCtx) };
+        let space = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(sp, sp_len)) }.to_string();
+        let mut calls = c.wide_calls.borrow_mut();
+        calls.push((space, addr, val, w, be));
+        99
+    }
+
+    fn empty_table(ctx: *mut MockCtx, size: u32, version: u32) -> emusen_session_v1 {
+        emusen_session_v1 {
+            size,
+            version,
+            ctx: ctx as *mut c_void,
+            freeze_add: Some(mock_freeze_add),
+            freeze_remove: Some(mock_freeze_remove),
+            ..abi::blank_table()
+        }
+    }
+
+    #[test]
+    fn freeze_add_wide_uses_v14_or_decomposes_on_v13() {
+        let mut ctx = MockCtx::default();
+        let mut t14 = empty_table(&mut ctx, std::mem::size_of::<emusen_session_v1>() as u32, abi::VERSION);
+        t14.freeze_add_wide = Some(mock_freeze_add_wide);
+        let s14 = unsafe { Session::from_table((&t14 as *const emusen_session_v1).cast()) }.unwrap();
+        assert_eq!(s14.freeze_add_wide("RDRAM", 0x100, 0x1234_5678, 4, true).unwrap(), 99);
+        assert_eq!(ctx.wide_calls.borrow().as_slice(), &[("RDRAM".to_string(), 0x100, 0x1234_5678, 4, 1)]);
+
+        let v13_size = std::mem::offset_of!(emusen_session_v1, freeze_add_wide) as u32;
+        let t13 = empty_table(&mut ctx, v13_size, (1 << 16) | 3);
+        let s13 = unsafe { Session::from_table((&t13 as *const emusen_session_v1).cast()) }.unwrap();
+        assert!(s13.freeze_add_wide("WRAM", 0x20, 0x1_0000, 2, false).unwrap_err().is(abi::status::BAD_ARGUMENT));
+        assert!(ctx.single_calls.borrow().is_empty());
+        assert_eq!(s13.freeze_add_wide("WRAM", 0x20, 0xABCD, 2, false).unwrap(), 1);
+        assert_eq!(s13.freeze_add_wide("RDRAM", 0x40, 0x1122_3344, 4, true).unwrap(), 3);
+        assert_eq!(
+            ctx.single_calls.borrow().as_slice(),
+            &[
+                ("WRAM".to_string(), 0x20, 0xCD),
+                ("WRAM".to_string(), 0x21, 0xAB),
+                ("RDRAM".to_string(), 0x40, 0x11),
+                ("RDRAM".to_string(), 0x41, 0x22),
+                ("RDRAM".to_string(), 0x42, 0x33),
+                ("RDRAM".to_string(), 0x43, 0x44),
+            ]
+        );
+
+        let mut fail_ctx = MockCtx { fail_on_call: 2, ..MockCtx::default() };
+        let t13_fail = empty_table(&mut fail_ctx, v13_size, (1 << 16) | 3);
+        let s13_fail = unsafe { Session::from_table((&t13_fail as *const emusen_session_v1).cast()) }.unwrap();
+        assert!(s13_fail.freeze_add_wide("WRAM", 0x20, 0xABCD, 2, false).unwrap_err().is(abi::status::FAULT));
+        assert_eq!(fail_ctx.removed_ids.borrow().as_slice(), &[1]);
+    }
 }

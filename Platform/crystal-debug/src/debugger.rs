@@ -60,6 +60,7 @@ pub struct SpaceView {
     pub size: i32,
     pub writable: bool,
     pub side_effects: bool,
+    pub big_endian: bool,
 }
 
 /// One counter with the value last read, `DebugCounterValue`.
@@ -377,11 +378,7 @@ impl Debugger {
         let plain = std::cell::RefCell::new(Plain { machine, info: &self.info });
         let info = &self.info;
         self.frame_log.record_frame(frame, |space, address, width| {
-            let big = match info.space_named(space).and_then(|s| s.byte_order.as_deref()) {
-                Some("big") => true,
-                Some("little") => false,
-                _ => big,
-            };
+            let big = space_is_big_endian(info, big, space);
             let mut value = 0i64;
             for i in 0..width {
                 let b = plain.borrow_mut().read(space, address.wrapping_add(i)) as i64;
@@ -715,6 +712,14 @@ impl Debugger {
             .map(|s| s.name.as_str())
     }
 
+    pub fn big_endian(&self) -> bool {
+        self.big_endian
+    }
+
+    pub fn space_big_endian(&self, name: &str) -> bool {
+        space_is_big_endian(&self.info, self.big_endian, name)
+    }
+
     /// `GetMemorySpaces`.
     pub fn spaces(&self, machine: &Machine) -> Vec<SpaceView> {
         if !self.attached {
@@ -723,7 +728,13 @@ impl Debugger {
         self.info
             .spaces
             .iter()
-            .map(|s| SpaceView { name: s.name.clone(), size: machine.space_size(s.id).unwrap_or(0).min(i32::MAX as u64) as i32, writable: !s.read_only, side_effects: s.side_effects })
+            .map(|s| SpaceView {
+                name: s.name.clone(),
+                size: machine.space_size(s.id).unwrap_or(0).min(i32::MAX as u64) as i32,
+                writable: !s.read_only,
+                side_effects: s.side_effects,
+                big_endian: self.space_big_endian(&s.name),
+            })
             .collect()
     }
 
@@ -735,6 +746,18 @@ impl Debugger {
     pub fn space_read(&mut self, machine: &mut Machine, name: &str, address: i32) -> u8 {
         let Some(i) = self.space_index(name).filter(|_| self.attached) else { return 0 };
         Machined { machine, info: &self.info, cheats: &self.cheats, applied: &mut self.applied }.read_listed(i, address)
+    }
+
+    /// Bulk bytes of a listed space with one cheat refresh, by the space's rule.
+    pub fn space_read_bulk(&mut self, machine: &mut Machine, name: &str, address: i32, into: &mut [u8]) {
+        if into.is_empty() {
+            return;
+        }
+        let Some(i) = self.space_index(name).filter(|_| self.attached) else {
+            into.fill(0);
+            return;
+        };
+        Machined { machine, info: &self.info, cheats: &self.cheats, applied: &mut self.applied }.read_listed_bulk(i, address, into);
     }
 
     /// A byte written to a listed space, unless it is read-only.
@@ -1448,4 +1471,12 @@ fn phase_milliseconds(machine: &Machine, scratch: &mut [i64; 32], into: &mut [f6
         into[i] = scratch[i] as f64 / 1e6;
     }
     (n, true)
+}
+
+fn space_is_big_endian(info: &Info, fallback: bool, space: &str) -> bool {
+    match info.space_named(space).and_then(|s| s.byte_order.as_deref()) {
+        Some("big") => true,
+        Some("little") => false,
+        _ => fallback,
+    }
 }

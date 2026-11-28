@@ -2,10 +2,10 @@ NAME
     watch - record reads and writes to a memory range without halting
 
 SYNOPSIS
-    watch add <space> <addr> <len> [write|read|both]
-    watch list
+    watch add <space> <addr> <len> [write|read|both] [--json]
+    watch list [--json]
     watch log <id> [<count>]
-    watch summary <id>
+    watch summary <id> [--json]
     watch clear <id>
     watch remove <id>
 
@@ -23,11 +23,11 @@ DESCRIPTION
     instruction address as context.
 
 OPTIONS
-    add <space> <addr> <len> [write|read|both]
+    add <space> <addr> <len> [write|read|both] [--json]
         Add a watch over <len> hex bytes starting at hex <addr> in <space>
-        (default access kind: 'write').
+        (default access kind: 'write'). With --json, prints {"id", ...}.
 
-    list
+    list [--json]
         List active watches with IDs, spaces, address ranges, and access
         kinds.
 
@@ -35,7 +35,7 @@ OPTIONS
         Show the last <count> recorded (sequence, kind, address, value,
         context) events for watch #<id> (default 20), newest last.
 
-    summary <id>
+    summary <id> [--json]
         Group watch #<id>'s buffered events by access site (PC context)
         with hit counts - the runtime, addressing-mode-agnostic complement
         to readers(1) and writers(1).
@@ -48,10 +48,10 @@ OPTIONS
 
 EXAMPLES
     watch add WRAM 13c6 1
-    watch add RAM 20000 4 read
-    watch list
+    watch add RAM 20000 4 read --json
+    watch list --json
     watch log 1
-    watch summary 1
+    watch summary 1 --json
     watch remove 1
 
 EXIT STATUS

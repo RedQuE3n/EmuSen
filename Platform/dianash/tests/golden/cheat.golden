@@ -8,46 +8,49 @@ usage 3                                      its formatting (see `gg` if it gues
 usage 4                                      both formats use the same 8 hex-digit
 usage 5                                      characters, so this is a best-effort guess,
 usage 6                                      not a guarantee)
-usage 7   cheat poke <space> <addr> <value> [description]
+usage 7   cheat poke <space> <addr> <value> [description] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]
 usage 8                                      add a raw RAM-poke cheat directly, bypassing
 usage 9                                      code decoding (e.g. an address you already
-usage 10                                      found with `search`)
-usage 11   cheat gg <code> [description]     decode a real SNES Game Genie code (8
-usage 12                                      characters) and add it as a ROM patch, enabled
-usage 13                                      - use this instead of `add` when its guess is
-usage 14                                      wrong for a code formatted unconventionally
-usage 15   cheat rompatch <addr> <value> [<compare>|-] [description]
-usage 16                                      add a Game Genie-style ROM-read intercept
-usage 17                                      directly, bypassing code decoding: substitute
-usage 18                                      <value> for reads of cartridge address <addr>.
-usage 19                                      <compare> gates the patch to only apply while
-usage 20                                      the real byte there equals it (pass - to skip,
-usage 21                                      an unconditional patch - what every real SNES
-usage 22                                      Game Genie code decodes to; unlike NES/Genesis,
-usage 23                                      SNES Game Genie codes never carry a compare)
-usage 24   cheat list                         list every cheat with its ID, kind, and state
-usage 25   cheat master [on|off]              one switch over every cheat at once, without
-usage 26                                      touching any cheat's own enabled state (no
-usage 27                                      argument reports which way it is set)
-usage 28   cheat enable <id>                  turn a cheat back on
-usage 29   cheat disable <id>                 turn a cheat off without removing it
-usage 30   cheat remove <id>                  remove a cheat entirely
-usage 31   cheat clear                        remove every cheat
-usage 32   cheat save <name>                  write every cheat to
-usage 33                                      /etc/EmuSen/cheats/<name>.json
-usage 34   cheat load <name>                  add every cheat from that file to whatever
-usage 35                                      is already loaded (`cheat clear` first to
-usage 36                                      replace rather than merge)
-usage 37   cheat files                        list the saved cheat files
-usage 38   cheat import <path.cht>            import RetroArch/libretro .cht cheats, added
-usage 39                                      disabled so nothing turns on by surprise
-usage 40   cheat export <path.cht>            write RAM-poke cheats out as a .cht file
-usage 41   cheat db [status]                  where the cheat database is, and what is in it
-usage 42   cheat db find <game>               search the database for a game
-usage 43   cheat db load <game>               import that game's cheats, disabled
-usage 44   cheat db update                    download the libretro cheat database (CC BY-SA 4.0)
-usage 45   cheat db prune [--apply]           delete the systems no core in this build can use
-uncovered 44 -- it downloads the libretro database over the network, which the corpus does not reach
+usage 10                                     found with `search`)
+usage 11  cheat from-freeze <id> [--keep|--remove] [--json] [description]
+usage 12                                     graduate an active freeze into a persisted
+usage 13                                     custom cheat
+usage 14  cheat gg <code> [description]     decode a real SNES Game Genie code (8
+usage 15                                     characters) and add it as a ROM patch, enabled
+usage 16                                     - use this instead of `add` when its guess is
+usage 17                                     wrong for a code formatted unconventionally
+usage 18  cheat rompatch <addr> <value> [<compare>|-] [description]
+usage 19                                     add a Game Genie-style ROM-read intercept
+usage 20                                     directly, bypassing code decoding: substitute
+usage 21                                     <value> for reads of cartridge address <addr>.
+usage 22                                     <compare> gates the patch to only apply while
+usage 23                                     the real byte there equals it (pass - to skip,
+usage 24                                     an unconditional patch - what every real SNES
+usage 25                                     Game Genie code decodes to; unlike NES/Genesis,
+usage 26                                     SNES Game Genie codes never carry a compare)
+usage 27  cheat list [--json]                list every cheat with its ID, kind, and state
+usage 28  cheat master [on|off]              one switch over every cheat at once, without
+usage 29                                     touching any cheat's own enabled state (no
+usage 30                                     argument reports which way it is set)
+usage 31  cheat enable <id>                  turn a cheat back on
+usage 32  cheat disable <id>                 turn a cheat off without removing it
+usage 33  cheat remove <id>                  remove a cheat entirely
+usage 34  cheat clear                        remove every cheat
+usage 35  cheat save <name>                  write every cheat to
+usage 36                                     /etc/EmuSen/cheats/<name>.json
+usage 37  cheat load <name>                  add every cheat from that file to whatever
+usage 38                                     is already loaded (`cheat clear` first to
+usage 39                                     replace rather than merge)
+usage 40  cheat files                        list the saved cheat files
+usage 41  cheat import <path.cht>            import RetroArch/libretro .cht cheats, added
+usage 42                                     disabled so nothing turns on by surprise
+usage 43  cheat export <path.cht>            write RAM-poke cheats out as a .cht file
+usage 44  cheat db [status]                  where the cheat database is, and what is in it
+usage 45  cheat db find <game>               search the database for a game
+usage 46  cheat db load <game>               import that game's cheats, disabled
+usage 47  cheat db update                    download the libretro cheat database (CC BY-SA 4.0)
+usage 48  cheat db prune [--apply]           delete the systems no core in this build can use
+uncovered 47 -- it downloads the libretro database over the network, which the corpus does not reach
 
 case with no target
 target none

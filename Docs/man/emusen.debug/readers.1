@@ -2,19 +2,22 @@ NAME
     readers - find static read references to an address
 
 SYNOPSIS
-    readers <addr> [<scanstart> <scanlen>]
+    readers [<space>] <addr> [<scanstart> <scanlen>] [--json]
 
 DESCRIPTION
-    Scans CpuBus for instructions that statically read hex address
-    <addr>. By default the scan covers <addr>'s own bank from $8000 to
-    $FFFF; supply hex <scanstart> and <scanlen> to scan another range.
+    Scans CpuBus (or the named processor's code space when <space> is
+    given) for instructions that statically read hex address <addr>. By
+    default the scan covers <addr>'s own bank from $8000 to $FFFF; supply
+    hex <scanstart> and <scanlen> to scan another range.
 
-    Only statically encoded addressing modes (absolute and absolute-long)
-    are detected. Indexed or indirect reads are not visible to static
-    analysis; use bp(1) with 'bp read' for runtime read detection.
+    Only statically encoded addressing modes on systems with a static
+    disassembler are detected. When static disassembly is unavailable or
+    when reads use indexed or indirect addressing, use 'watch add ...
+    read' in watch(1) or 'bp read' in bp(1) for runtime read detection.
 
 EXAMPLES
     readers 13c6
+    readers WRAM 007E --json
     readers 13c6 808000 8000
 
 EXIT STATUS

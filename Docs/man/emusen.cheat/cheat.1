@@ -3,10 +3,11 @@ NAME
 
 SYNOPSIS
     cheat add <code> [description]
-    cheat poke <space> <addr> <value> [description]
+    cheat poke <space> <addr> <value> [description] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]
+    cheat from-freeze <id> [--keep|--remove] [--json] [description]
     cheat gg <code> [description]
     cheat rompatch <addr> <value> [<compare>|-] [description]
-    cheat list
+    cheat list [--json]
     cheat master [on|off]
     cheat enable <id>
     cheat disable <id>
@@ -53,8 +54,15 @@ OPTIONS
         Decode <code> with the target's registered codec and add it
         enabled. Defaults description to <code>.
 
-    poke <space> <addr> <value> [description]
-        Add a 1-byte RAM poke at hex <addr> in memory space <space>.
+    poke <space> <addr> <value> [description] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]
+        Add a 1-, 2-, or 4-byte RAM poke at hex <addr> in memory space
+        <space>, using the space's native byte order unless --le or --be
+        is given. Flags are stripped before collecting trailing
+        [description] words.
+
+    from-freeze <id> [--keep|--remove] [--json] [description]
+        Convert an active freeze #<id> into an enabled RAM cheat, keeping
+        the freeze unless --remove is given.
 
     gg <code> [description]
         Decode <code> with the target's explicit Game Genie-style codec
@@ -65,7 +73,7 @@ OPTIONS
         <value>. When <compare> is given (and not '-'), apply only while
         the real byte equals <compare>.
 
-    list
+    list [--json]
         List all cheats with ID, state, kind, writes, and description.
 
     master [on|off]
@@ -149,8 +157,10 @@ CHEAT DATABASE
 
 EXAMPLES
     cheat poke WRAM 9c 63 infinite lives
+    cheat poke RDRAM 100 999 -w 2 --be --dec --json Max HP
+    cheat from-freeze 1 --remove --json Infinite ammo
     cheat add D00002000005+810001001234 lives
-    cheat list
+    cheat list --json
     cheat disable 1
     cheat master off
     cheat save zelda

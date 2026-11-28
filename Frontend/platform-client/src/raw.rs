@@ -219,6 +219,42 @@ pub const EMUSEN_LIBRARY_IO: i32 = -1146;
 pub const EMUSEN_GAMES_SERVICE: &[u8; 13] = b"emusen.games\0";
 pub const EMUSEN_GAMES_SERVICE_MAJOR: u32 = 1;
 pub const EMUSEN_GAMES_SERVICE_MINOR: u32 = 0;
+pub const DIANASH_MODULE_ABI_MAJOR: u32 = 1;
+pub const DIANASH_MODULE_ABI_MINOR: u32 = 1;
+pub const DIANASH_MODULE_ABI_VERSION: u32 = 65537;
+pub const DIANASH_OK: u32 = 0;
+pub const DIANASH_NULL: i32 = -1;
+pub const DIANASH_BAD_STRING: i32 = -5;
+pub const DIANASH_BUFFER_TOO_SMALL: i32 = -7;
+pub const DIANASH_NOT_SUPPORTED: i32 = -256;
+pub const DIANASH_BAD_STRUCT: i32 = -263;
+pub const DIANASH_UNKNOWN_COMMAND: i32 = -265;
+pub const DIANASH_SERVICE_MISSING: i32 = -266;
+pub const DIANASH_BUSY: i32 = -267;
+pub const DIANASH_ABSENT: i32 = -268;
+pub const DIANASH_EXISTS: i32 = -269;
+pub const DIANASH_NO_SUCH_SESSION: i32 = -270;
+pub const DIANASH_LAST_SESSION: i32 = -271;
+pub const DIANASH_BAD_MANIFEST: i32 = -272;
+pub const DIANASH_OUTSIDE: i32 = -273;
+pub const DIANASH_FAULT: i32 = -320;
+pub const DIANASH_CALL_READ_ONLY_CONTEXT: u32 = 1;
+pub const DIANASH_CALL_INTERACTIVE: u32 = 2;
+pub const DIANASH_CALL_AT_PROMPT: u32 = 4;
+pub const DIANASH_RESOLVE_READ: u32 = 1;
+pub const DIANASH_RESOLVE_WRITE: u32 = 2;
+pub const DIANASH_RESOLVE_REMOVE: u32 = 4;
+pub const DIANASH_SETTINGS_CONSOLE: u32 = 0;
+pub const DIANASH_SETTINGS_GAME: u32 = 1;
+pub const DIANASH_SETTINGS_DENIED: i32 = -274;
+pub const DIANASH_ABI_MAJOR: u32 = 1;
+pub const DIANASH_ABI_MINOR: u32 = 1;
+pub const DIANASH_ABI_VERSION: u32 = 65537;
+pub const DIANASH_DONE: u32 = 0;
+pub const DIANASH_NEEDS_MORE: u32 = 1;
+pub const DIANASH_EXIT: u32 = 2;
+pub const DIANASH_CONFIG_SESSIONS: u32 = 1;
+pub const DIANASH_CONFIG_INTERACTIVE: u32 = 2;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct emusen_scrape_service_v2 {
@@ -733,6 +769,337 @@ const _: () = {
     ["Offset of field: emusen_games_service_v1::games"][::std::mem::offset_of!(emusen_games_service_v1, games) - 16usize];
     ["Offset of field: emusen_games_service_v1::last_error"][::std::mem::offset_of!(emusen_games_service_v1, last_error) - 24usize];
 };
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct dianash_bytes {
+    pub data: *const u8,
+    pub len: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_bytes"][::std::mem::size_of::<dianash_bytes>() - 16usize];
+    ["Alignment of dianash_bytes"][::std::mem::align_of::<dianash_bytes>() - 8usize];
+    ["Offset of field: dianash_bytes::data"][::std::mem::offset_of!(dianash_bytes, data) - 0usize];
+    ["Offset of field: dianash_bytes::len"][::std::mem::offset_of!(dianash_bytes, len) - 8usize];
+};
+impl Default for dianash_bytes {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct dianash_terminal {
+    pub size: u32,
+    pub columns: u32,
+    pub rows: u32,
+    pub raw_capable: u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_terminal"][::std::mem::size_of::<dianash_terminal>() - 16usize];
+    ["Alignment of dianash_terminal"][::std::mem::align_of::<dianash_terminal>() - 4usize];
+    ["Offset of field: dianash_terminal::size"][::std::mem::offset_of!(dianash_terminal, size) - 0usize];
+    ["Offset of field: dianash_terminal::columns"][::std::mem::offset_of!(dianash_terminal, columns) - 4usize];
+    ["Offset of field: dianash_terminal::rows"][::std::mem::offset_of!(dianash_terminal, rows) - 8usize];
+    ["Offset of field: dianash_terminal::raw_capable"][::std::mem::offset_of!(dianash_terminal, raw_capable) - 12usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct dianash_io {
+    pub size: u32,
+    pub ctx: *mut ::std::os::raw::c_void,
+    pub out: ::std::option::Option<unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void, data: *const u8, len: usize) -> i32>,
+    pub err: ::std::option::Option<unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void, data: *const u8, len: usize) -> i32>,
+    pub resolve: ::std::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::std::os::raw::c_void,
+            path: *const u8,
+            len: usize,
+            flags: u32,
+            out: *mut u8,
+            cap: usize,
+            needed: *mut i64,
+        ) -> i32,
+    >,
+    pub display: ::std::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::std::os::raw::c_void,
+            real: *const u8,
+            len: usize,
+            out: *mut u8,
+            cap: usize,
+            needed: *mut i64,
+        ) -> i32,
+    >,
+    pub cancelled: ::std::option::Option<unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void) -> i32>,
+    pub slot: ::std::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::std::os::raw::c_void,
+            state: *mut *mut ::std::os::raw::c_void,
+            release: *mut ::std::option::Option<unsafe extern "C" fn(state: *mut ::std::os::raw::c_void)>,
+        ) -> i32,
+    >,
+    pub environment: ::std::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::std::os::raw::c_void,
+            name: *const u8,
+            len: usize,
+            out: *mut u8,
+            cap: usize,
+            needed: *mut i64,
+        ) -> i32,
+    >,
+    pub terminal: ::std::option::Option<unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void, out: *mut dianash_terminal) -> i32>,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_io"][::std::mem::size_of::<dianash_io>() - 80usize];
+    ["Alignment of dianash_io"][::std::mem::align_of::<dianash_io>() - 8usize];
+    ["Offset of field: dianash_io::size"][::std::mem::offset_of!(dianash_io, size) - 0usize];
+    ["Offset of field: dianash_io::ctx"][::std::mem::offset_of!(dianash_io, ctx) - 8usize];
+    ["Offset of field: dianash_io::out"][::std::mem::offset_of!(dianash_io, out) - 16usize];
+    ["Offset of field: dianash_io::err"][::std::mem::offset_of!(dianash_io, err) - 24usize];
+    ["Offset of field: dianash_io::resolve"][::std::mem::offset_of!(dianash_io, resolve) - 32usize];
+    ["Offset of field: dianash_io::display"][::std::mem::offset_of!(dianash_io, display) - 40usize];
+    ["Offset of field: dianash_io::cancelled"][::std::mem::offset_of!(dianash_io, cancelled) - 48usize];
+    ["Offset of field: dianash_io::slot"][::std::mem::offset_of!(dianash_io, slot) - 56usize];
+    ["Offset of field: dianash_io::environment"][::std::mem::offset_of!(dianash_io, environment) - 64usize];
+    ["Offset of field: dianash_io::terminal"][::std::mem::offset_of!(dianash_io, terminal) - 72usize];
+};
+impl Default for dianash_io {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct dianash_service {
+    pub size: u32,
+    pub name: dianash_bytes,
+    pub major: u32,
+    pub minor: u32,
+    pub table: *const ::std::os::raw::c_void,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_service"][::std::mem::size_of::<dianash_service>() - 40usize];
+    ["Alignment of dianash_service"][::std::mem::align_of::<dianash_service>() - 8usize];
+    ["Offset of field: dianash_service::size"][::std::mem::offset_of!(dianash_service, size) - 0usize];
+    ["Offset of field: dianash_service::name"][::std::mem::offset_of!(dianash_service, name) - 8usize];
+    ["Offset of field: dianash_service::major"][::std::mem::offset_of!(dianash_service, major) - 24usize];
+    ["Offset of field: dianash_service::minor"][::std::mem::offset_of!(dianash_service, minor) - 28usize];
+    ["Offset of field: dianash_service::table"][::std::mem::offset_of!(dianash_service, table) - 32usize];
+};
+impl Default for dianash_service {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct dianash_settings_v1 {
+    pub size: u32,
+    pub ctx: *mut ::std::os::raw::c_void,
+    pub get: ::std::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::std::os::raw::c_void,
+            scope: u32,
+            target: dianash_bytes,
+            key: dianash_bytes,
+            out: *mut u8,
+            cap: usize,
+            needed: *mut i64,
+        ) -> i32,
+    >,
+    pub set: ::std::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::std::os::raw::c_void,
+            scope: u32,
+            target: dianash_bytes,
+            key: dianash_bytes,
+            value: dianash_bytes,
+        ) -> i32,
+    >,
+    pub approve: ::std::option::Option<unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void, sha256: dianash_bytes) -> i32>,
+    pub revoke: ::std::option::Option<unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void, sha256: dianash_bytes) -> i32>,
+    pub last_error:
+        ::std::option::Option<unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void, out: *mut u8, cap: usize, needed: *mut i64) -> i32>,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_settings_v1"][::std::mem::size_of::<dianash_settings_v1>() - 56usize];
+    ["Alignment of dianash_settings_v1"][::std::mem::align_of::<dianash_settings_v1>() - 8usize];
+    ["Offset of field: dianash_settings_v1::size"][::std::mem::offset_of!(dianash_settings_v1, size) - 0usize];
+    ["Offset of field: dianash_settings_v1::ctx"][::std::mem::offset_of!(dianash_settings_v1, ctx) - 8usize];
+    ["Offset of field: dianash_settings_v1::get"][::std::mem::offset_of!(dianash_settings_v1, get) - 16usize];
+    ["Offset of field: dianash_settings_v1::set"][::std::mem::offset_of!(dianash_settings_v1, set) - 24usize];
+    ["Offset of field: dianash_settings_v1::approve"][::std::mem::offset_of!(dianash_settings_v1, approve) - 32usize];
+    ["Offset of field: dianash_settings_v1::revoke"][::std::mem::offset_of!(dianash_settings_v1, revoke) - 40usize];
+    ["Offset of field: dianash_settings_v1::last_error"][::std::mem::offset_of!(dianash_settings_v1, last_error) - 48usize];
+};
+impl Default for dianash_settings_v1 {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct dianash_call {
+    pub size: u32,
+    pub command: dianash_bytes,
+    pub argv: *const dianash_bytes,
+    pub argc: usize,
+    pub stdin_data: dianash_bytes,
+    pub stdin_present: u32,
+    pub flags: u32,
+    pub cwd: dianash_bytes,
+    pub user: dianash_bytes,
+    pub io: *const dianash_io,
+    pub services: *const dianash_service,
+    pub service_count: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_call"][::std::mem::size_of::<dianash_call>() - 120usize];
+    ["Alignment of dianash_call"][::std::mem::align_of::<dianash_call>() - 8usize];
+    ["Offset of field: dianash_call::size"][::std::mem::offset_of!(dianash_call, size) - 0usize];
+    ["Offset of field: dianash_call::command"][::std::mem::offset_of!(dianash_call, command) - 8usize];
+    ["Offset of field: dianash_call::argv"][::std::mem::offset_of!(dianash_call, argv) - 24usize];
+    ["Offset of field: dianash_call::argc"][::std::mem::offset_of!(dianash_call, argc) - 32usize];
+    ["Offset of field: dianash_call::stdin_data"][::std::mem::offset_of!(dianash_call, stdin_data) - 40usize];
+    ["Offset of field: dianash_call::stdin_present"][::std::mem::offset_of!(dianash_call, stdin_present) - 56usize];
+    ["Offset of field: dianash_call::flags"][::std::mem::offset_of!(dianash_call, flags) - 60usize];
+    ["Offset of field: dianash_call::cwd"][::std::mem::offset_of!(dianash_call, cwd) - 64usize];
+    ["Offset of field: dianash_call::user"][::std::mem::offset_of!(dianash_call, user) - 80usize];
+    ["Offset of field: dianash_call::io"][::std::mem::offset_of!(dianash_call, io) - 96usize];
+    ["Offset of field: dianash_call::services"][::std::mem::offset_of!(dianash_call, services) - 104usize];
+    ["Offset of field: dianash_call::service_count"][::std::mem::offset_of!(dianash_call, service_count) - 112usize];
+};
+impl Default for dianash_call {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct dianash_result {
+    pub size: u32,
+    pub exit_status: i32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_result"][::std::mem::size_of::<dianash_result>() - 8usize];
+    ["Alignment of dianash_result"][::std::mem::align_of::<dianash_result>() - 4usize];
+    ["Offset of field: dianash_result::size"][::std::mem::offset_of!(dianash_result, size) - 0usize];
+    ["Offset of field: dianash_result::exit_status"][::std::mem::offset_of!(dianash_result, exit_status) - 4usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct dianash_shell {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct dianash_config {
+    pub size: u32,
+    pub flags: u32,
+    pub root: dianash_bytes,
+    pub budget_ms: u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_config"][::std::mem::size_of::<dianash_config>() - 32usize];
+    ["Alignment of dianash_config"][::std::mem::align_of::<dianash_config>() - 8usize];
+    ["Offset of field: dianash_config::size"][::std::mem::offset_of!(dianash_config, size) - 0usize];
+    ["Offset of field: dianash_config::flags"][::std::mem::offset_of!(dianash_config, flags) - 4usize];
+    ["Offset of field: dianash_config::root"][::std::mem::offset_of!(dianash_config, root) - 8usize];
+    ["Offset of field: dianash_config::budget_ms"][::std::mem::offset_of!(dianash_config, budget_ms) - 24usize];
+};
+impl Default for dianash_config {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct dianash_host_result {
+    pub size: u32,
+    pub exit_status: i32,
+    pub request: u64,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_host_result"][::std::mem::size_of::<dianash_host_result>() - 16usize];
+    ["Alignment of dianash_host_result"][::std::mem::align_of::<dianash_host_result>() - 8usize];
+    ["Offset of field: dianash_host_result::size"][::std::mem::offset_of!(dianash_host_result, size) - 0usize];
+    ["Offset of field: dianash_host_result::exit_status"][::std::mem::offset_of!(dianash_host_result, exit_status) - 4usize];
+    ["Offset of field: dianash_host_result::request"][::std::mem::offset_of!(dianash_host_result, request) - 8usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct dianash_host_commands {
+    pub size: u32,
+    pub manifest: dianash_bytes,
+    pub ctx: *mut ::std::os::raw::c_void,
+    pub run: ::std::option::Option<
+        unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void, call: *const dianash_call, result: *mut dianash_host_result) -> i32,
+    >,
+    pub jobs: ::std::option::Option<unsafe extern "C" fn(ctx: *mut ::std::os::raw::c_void, call: *const dianash_call) -> i32>,
+    pub kill: ::std::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::std::os::raw::c_void,
+            call: *const dianash_call,
+            id: *const u8,
+            id_len: usize,
+            result: *mut dianash_host_result,
+        ) -> i32,
+    >,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of dianash_host_commands"][::std::mem::size_of::<dianash_host_commands>() - 56usize];
+    ["Alignment of dianash_host_commands"][::std::mem::align_of::<dianash_host_commands>() - 8usize];
+    ["Offset of field: dianash_host_commands::size"][::std::mem::offset_of!(dianash_host_commands, size) - 0usize];
+    ["Offset of field: dianash_host_commands::manifest"][::std::mem::offset_of!(dianash_host_commands, manifest) - 8usize];
+    ["Offset of field: dianash_host_commands::ctx"][::std::mem::offset_of!(dianash_host_commands, ctx) - 24usize];
+    ["Offset of field: dianash_host_commands::run"][::std::mem::offset_of!(dianash_host_commands, run) - 32usize];
+    ["Offset of field: dianash_host_commands::jobs"][::std::mem::offset_of!(dianash_host_commands, jobs) - 40usize];
+    ["Offset of field: dianash_host_commands::kill"][::std::mem::offset_of!(dianash_host_commands, kill) - 48usize];
+};
+impl Default for dianash_host_commands {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 pub struct PlatformLibrary {
     __library: ::libloading::Library,
     pub emusen_platform_abi_version: unsafe extern "C" fn() -> u32,
@@ -1442,6 +1809,34 @@ pub struct PlatformLibrary {
         unsafe extern "C" fn(lib: *mut emusen_library, request: *const u8, len: usize, out: *mut u8, out_len: usize) -> i64,
     pub emusen_library_change:
         unsafe extern "C" fn(lib: *mut emusen_library, request: *const u8, len: usize, out: *mut u8, out_len: usize) -> i64,
+    pub dianash_abi_version: unsafe extern "C" fn() -> u32,
+    pub dianash_version_text: unsafe extern "C" fn(out: *mut u8, len: usize) -> i64,
+    pub dianash_last_error: unsafe extern "C" fn(out: *mut u8, len: usize) -> i64,
+    pub dianash_new: unsafe extern "C" fn(config: *const dianash_config) -> *mut dianash_shell,
+    pub dianash_free: unsafe extern "C" fn(sh: *mut dianash_shell) -> i32,
+    pub dianash_add_commands: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, commands: *const dianash_host_commands) -> i32,
+    pub dianash_set_services: unsafe extern "C" fn(sh: *mut dianash_shell, services: *const dianash_service, count: usize) -> i32,
+    pub dianash_session_set_services:
+        unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, services: *const dianash_service, count: usize) -> i32,
+    pub dianash_submit: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, line: *const u8, len: usize) -> i32,
+    pub dianash_output_take: unsafe extern "C" fn(sh: *mut dianash_shell, out: *mut u8, len: usize) -> i64,
+    pub dianash_requests_drain: unsafe extern "C" fn(sh: *mut dianash_shell, out: *mut u8, len: usize) -> i64,
+    pub dianash_last_status: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, status: *mut i32) -> i32,
+    pub dianash_is_read_only: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, line: *const u8, len: usize) -> i32,
+    pub dianash_awaiting: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32) -> i32,
+    pub dianash_cancel: unsafe extern "C" fn(sh: *mut dianash_shell) -> i32,
+    pub dianash_prompt: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, out: *mut u8, len: usize) -> i64,
+    pub dianash_history: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, out: *mut u8, len: usize) -> i64,
+    pub dianash_banner: unsafe extern "C" fn(sh: *mut dianash_shell, out: *mut u8, len: usize) -> i64,
+    pub dianash_commands: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, out: *mut u8, len: usize) -> i64,
+    pub dianash_user: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, out: *mut u8, len: usize) -> i64,
+    pub dianash_set_user: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, name: *const u8, len: usize) -> i32,
+    pub dianash_sessions: unsafe extern "C" fn(sh: *mut dianash_shell, out: *mut u8, len: usize) -> i64,
+    pub dianash_session_new: unsafe extern "C" fn(sh: *mut dianash_shell) -> i64,
+    pub dianash_session_attach: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, name: *const u8, len: usize) -> i32,
+    pub dianash_session_switch: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32) -> i32,
+    pub dianash_session_kill: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32) -> i32,
+    pub dianash_session_replace: unsafe extern "C" fn(sh: *mut dianash_shell, session: u32, replacement: u32) -> i32,
 }
 impl PlatformLibrary {
     pub unsafe fn new<P>(path: P) -> Result<Self, ::libloading::Error>
@@ -1735,6 +2130,33 @@ impl PlatformLibrary {
         let emusen_library_identity = unsafe { __library.get(b"emusen_library_identity\0") }.map(|sym| *sym)?;
         let emusen_library_get = unsafe { __library.get(b"emusen_library_get\0") }.map(|sym| *sym)?;
         let emusen_library_change = unsafe { __library.get(b"emusen_library_change\0") }.map(|sym| *sym)?;
+        let dianash_abi_version = unsafe { __library.get(b"dianash_abi_version\0") }.map(|sym| *sym)?;
+        let dianash_version_text = unsafe { __library.get(b"dianash_version_text\0") }.map(|sym| *sym)?;
+        let dianash_last_error = unsafe { __library.get(b"dianash_last_error\0") }.map(|sym| *sym)?;
+        let dianash_new = unsafe { __library.get(b"dianash_new\0") }.map(|sym| *sym)?;
+        let dianash_free = unsafe { __library.get(b"dianash_free\0") }.map(|sym| *sym)?;
+        let dianash_add_commands = unsafe { __library.get(b"dianash_add_commands\0") }.map(|sym| *sym)?;
+        let dianash_set_services = unsafe { __library.get(b"dianash_set_services\0") }.map(|sym| *sym)?;
+        let dianash_session_set_services = unsafe { __library.get(b"dianash_session_set_services\0") }.map(|sym| *sym)?;
+        let dianash_submit = unsafe { __library.get(b"dianash_submit\0") }.map(|sym| *sym)?;
+        let dianash_output_take = unsafe { __library.get(b"dianash_output_take\0") }.map(|sym| *sym)?;
+        let dianash_requests_drain = unsafe { __library.get(b"dianash_requests_drain\0") }.map(|sym| *sym)?;
+        let dianash_last_status = unsafe { __library.get(b"dianash_last_status\0") }.map(|sym| *sym)?;
+        let dianash_is_read_only = unsafe { __library.get(b"dianash_is_read_only\0") }.map(|sym| *sym)?;
+        let dianash_awaiting = unsafe { __library.get(b"dianash_awaiting\0") }.map(|sym| *sym)?;
+        let dianash_cancel = unsafe { __library.get(b"dianash_cancel\0") }.map(|sym| *sym)?;
+        let dianash_prompt = unsafe { __library.get(b"dianash_prompt\0") }.map(|sym| *sym)?;
+        let dianash_history = unsafe { __library.get(b"dianash_history\0") }.map(|sym| *sym)?;
+        let dianash_banner = unsafe { __library.get(b"dianash_banner\0") }.map(|sym| *sym)?;
+        let dianash_commands = unsafe { __library.get(b"dianash_commands\0") }.map(|sym| *sym)?;
+        let dianash_user = unsafe { __library.get(b"dianash_user\0") }.map(|sym| *sym)?;
+        let dianash_set_user = unsafe { __library.get(b"dianash_set_user\0") }.map(|sym| *sym)?;
+        let dianash_sessions = unsafe { __library.get(b"dianash_sessions\0") }.map(|sym| *sym)?;
+        let dianash_session_new = unsafe { __library.get(b"dianash_session_new\0") }.map(|sym| *sym)?;
+        let dianash_session_attach = unsafe { __library.get(b"dianash_session_attach\0") }.map(|sym| *sym)?;
+        let dianash_session_switch = unsafe { __library.get(b"dianash_session_switch\0") }.map(|sym| *sym)?;
+        let dianash_session_kill = unsafe { __library.get(b"dianash_session_kill\0") }.map(|sym| *sym)?;
+        let dianash_session_replace = unsafe { __library.get(b"dianash_session_replace\0") }.map(|sym| *sym)?;
         Ok(PlatformLibrary {
             __library,
             emusen_platform_abi_version,
@@ -2016,6 +2438,33 @@ impl PlatformLibrary {
             emusen_library_identity,
             emusen_library_get,
             emusen_library_change,
+            dianash_abi_version,
+            dianash_version_text,
+            dianash_last_error,
+            dianash_new,
+            dianash_free,
+            dianash_add_commands,
+            dianash_set_services,
+            dianash_session_set_services,
+            dianash_submit,
+            dianash_output_take,
+            dianash_requests_drain,
+            dianash_last_status,
+            dianash_is_read_only,
+            dianash_awaiting,
+            dianash_cancel,
+            dianash_prompt,
+            dianash_history,
+            dianash_banner,
+            dianash_commands,
+            dianash_user,
+            dianash_set_user,
+            dianash_sessions,
+            dianash_session_new,
+            dianash_session_attach,
+            dianash_session_switch,
+            dianash_session_kill,
+            dianash_session_replace,
         })
     }
     pub unsafe fn emusen_platform_abi_version(&self) -> u32 {
@@ -3644,5 +4093,92 @@ impl PlatformLibrary {
         out_len: usize,
     ) -> i64 {
         unsafe { (self.emusen_library_change)(lib, request, len, out, out_len) }
+    }
+    pub unsafe fn dianash_abi_version(&self) -> u32 {
+        unsafe { (self.dianash_abi_version)() }
+    }
+    pub unsafe fn dianash_version_text(&self, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_version_text)(out, len) }
+    }
+    pub unsafe fn dianash_last_error(&self, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_last_error)(out, len) }
+    }
+    pub unsafe fn dianash_new(&self, config: *const dianash_config) -> *mut dianash_shell {
+        unsafe { (self.dianash_new)(config) }
+    }
+    pub unsafe fn dianash_free(&self, sh: *mut dianash_shell) -> i32 {
+        unsafe { (self.dianash_free)(sh) }
+    }
+    pub unsafe fn dianash_add_commands(&self, sh: *mut dianash_shell, session: u32, commands: *const dianash_host_commands) -> i32 {
+        unsafe { (self.dianash_add_commands)(sh, session, commands) }
+    }
+    pub unsafe fn dianash_set_services(&self, sh: *mut dianash_shell, services: *const dianash_service, count: usize) -> i32 {
+        unsafe { (self.dianash_set_services)(sh, services, count) }
+    }
+    pub unsafe fn dianash_session_set_services(
+        &self,
+        sh: *mut dianash_shell,
+        session: u32,
+        services: *const dianash_service,
+        count: usize,
+    ) -> i32 {
+        unsafe { (self.dianash_session_set_services)(sh, session, services, count) }
+    }
+    pub unsafe fn dianash_submit(&self, sh: *mut dianash_shell, session: u32, line: *const u8, len: usize) -> i32 {
+        unsafe { (self.dianash_submit)(sh, session, line, len) }
+    }
+    pub unsafe fn dianash_output_take(&self, sh: *mut dianash_shell, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_output_take)(sh, out, len) }
+    }
+    pub unsafe fn dianash_requests_drain(&self, sh: *mut dianash_shell, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_requests_drain)(sh, out, len) }
+    }
+    pub unsafe fn dianash_last_status(&self, sh: *mut dianash_shell, session: u32, status: *mut i32) -> i32 {
+        unsafe { (self.dianash_last_status)(sh, session, status) }
+    }
+    pub unsafe fn dianash_is_read_only(&self, sh: *mut dianash_shell, session: u32, line: *const u8, len: usize) -> i32 {
+        unsafe { (self.dianash_is_read_only)(sh, session, line, len) }
+    }
+    pub unsafe fn dianash_awaiting(&self, sh: *mut dianash_shell, session: u32) -> i32 {
+        unsafe { (self.dianash_awaiting)(sh, session) }
+    }
+    pub unsafe fn dianash_cancel(&self, sh: *mut dianash_shell) -> i32 {
+        unsafe { (self.dianash_cancel)(sh) }
+    }
+    pub unsafe fn dianash_prompt(&self, sh: *mut dianash_shell, session: u32, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_prompt)(sh, session, out, len) }
+    }
+    pub unsafe fn dianash_history(&self, sh: *mut dianash_shell, session: u32, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_history)(sh, session, out, len) }
+    }
+    pub unsafe fn dianash_banner(&self, sh: *mut dianash_shell, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_banner)(sh, out, len) }
+    }
+    pub unsafe fn dianash_commands(&self, sh: *mut dianash_shell, session: u32, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_commands)(sh, session, out, len) }
+    }
+    pub unsafe fn dianash_user(&self, sh: *mut dianash_shell, session: u32, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_user)(sh, session, out, len) }
+    }
+    pub unsafe fn dianash_set_user(&self, sh: *mut dianash_shell, session: u32, name: *const u8, len: usize) -> i32 {
+        unsafe { (self.dianash_set_user)(sh, session, name, len) }
+    }
+    pub unsafe fn dianash_sessions(&self, sh: *mut dianash_shell, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.dianash_sessions)(sh, out, len) }
+    }
+    pub unsafe fn dianash_session_new(&self, sh: *mut dianash_shell) -> i64 {
+        unsafe { (self.dianash_session_new)(sh) }
+    }
+    pub unsafe fn dianash_session_attach(&self, sh: *mut dianash_shell, session: u32, name: *const u8, len: usize) -> i32 {
+        unsafe { (self.dianash_session_attach)(sh, session, name, len) }
+    }
+    pub unsafe fn dianash_session_switch(&self, sh: *mut dianash_shell, session: u32) -> i32 {
+        unsafe { (self.dianash_session_switch)(sh, session) }
+    }
+    pub unsafe fn dianash_session_kill(&self, sh: *mut dianash_shell, session: u32) -> i32 {
+        unsafe { (self.dianash_session_kill)(sh, session) }
+    }
+    pub unsafe fn dianash_session_replace(&self, sh: *mut dianash_shell, session: u32, replacement: u32) -> i32 {
+        unsafe { (self.dianash_session_replace)(sh, session, replacement) }
     }
 }

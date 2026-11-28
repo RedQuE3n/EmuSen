@@ -1,23 +1,26 @@
 NAME
-    write - write one byte to a memory space
+    write - write 1, 2, or 4 bytes to a memory space
 
 SYNOPSIS
-    write <space> <addr> <value>
+    write <space> <addr> <value> [-w 1|2|4] [--le|--be] [--dec|--float] [--json]
 
 DESCRIPTION
-    Writes a single hex byte <value> into memory space <space> at hex
-    address <addr>. Refuses read-only memory spaces (see spaces(1)).
+    Writes a 1-, 2-, or 4-byte value into writable memory space <space> at
+    hex address <addr>. Defaults to 1-byte hexadecimal (or 4 bytes when
+    --float is passed) and uses the space's native byte order unless --le
+    or --be is specified. Refuses read-only memory spaces (see spaces(1)).
 
     For persistent per-frame writes or ROM-read intercepts, use cheat(1).
     For bulk writes from a file, use load(1).
 
 EXAMPLES
     write WRAM 10 ff
+    write RDRAM 100 999 -w 2 --be --dec --json
 
 EXIT STATUS
-    0   Byte written (or usage/read-only refusal printed).
-    1   No target attached, unknown space, invalid hex argument, or
-        session service fault.
+    0   Value written (or usage/read-only refusal printed).
+    1   No target attached, unknown space, invalid argument, or session
+        service fault.
 
 SEE ALSO
     mem(1), load(1), dump(1), spaces(1), cheat(1)

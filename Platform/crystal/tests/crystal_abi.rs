@@ -290,7 +290,7 @@ fn the_statuses_follow_the_session_service_s_in_the_band() {
 fn no_session_service_function_has_a_twin() {
     let declared: BTreeSet<String> = prototypes(&code(&header()), "emusen_crystal_").into_iter().map(|(n, _, _)| n).collect();
     let table = table_functions(true);
-    assert_eq!(table.len(), 82, "the session service's 1.3 table has 82 functions");
+    assert_eq!(table.len(), 83, "the session service's 1.4 table has 83 functions");
     let twins: Vec<&str> = table.iter().map(|(n, _, _)| n.as_str()).filter(|n| declared.contains(&format!("emusen_crystal_{n}"))).collect();
     assert_eq!(twins, ["last_error", "sessions"], "a table function declared again as an export of the frontend API");
 }

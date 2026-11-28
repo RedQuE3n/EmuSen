@@ -583,6 +583,26 @@ pub fn freeze_add(c: &Call, name: Raw, address: u32, value: u32) -> Answer<i64> 
     })
 }
 
+/// A 1, 2, or 4-byte value held at `address` in the chosen byte order at each frame's end.
+pub fn freeze_add_wide(c: &Call, name: Raw, address: u32, value: u64, width: u32, big_endian: u32) -> Answer<i64> {
+    c.change(|e, _| {
+        let name = name.text()?;
+        c.target()?;
+        let max = match width {
+            1 => 0xFF,
+            2 => 0xFFFF,
+            4 => 0xFFFF_FFFF,
+            _ => return Err(refused(status::BAD_ARGUMENT, "freeze width must be 1, 2, or 4")),
+        };
+        if value > max {
+            return Err(refused(status::BAD_ARGUMENT, format!("frozen value 0x{value:X} exceeds {width}-byte width")));
+        }
+        let (d, m) = dm(e);
+        let named = space(d, m.as_deref(), name)?;
+        Ok(d.freezes.add_wide(&named, address as i32, value, width as i32, big_endian != 0) as i64)
+    })
+}
+
 pub fn freeze_remove(c: &Call, id: u32) -> Answer<i64> {
     c.change(|e, _| {
         c.target()?;
@@ -599,7 +619,15 @@ pub fn freeze_list(c: &Call) -> Answer<Vec<u8>> {
         let mut j = Json::new();
         j.begin_array();
         for f in e.debug.d.freezes.all() {
-            j.begin_object().int("id", f.id as i64).str("space", &f.space).u64("address", f.address as u32 as u64).int("value", f.value as i64).int("blocked", f.blocked).end_object();
+            j.begin_object()
+                .int("id", f.id as i64)
+                .str("space", &f.space)
+                .u64("address", f.address as u32 as u64)
+                .u64("value", f.value)
+                .int("width", f.width as i64)
+                .bool("big_endian", f.big_endian)
+                .int("blocked", f.blocked)
+                .end_object();
         }
         j.end_array();
         Ok(j.finish().into_bytes())

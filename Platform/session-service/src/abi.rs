@@ -7,7 +7,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 3;
+pub const MINOR: u32 = 4;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 /// A processor argument naming none: the session's own registries, as a command that names no processor reaches
@@ -272,6 +272,7 @@ pub struct emusen_session_v1 {
     pub games: Option<unsafe extern "C" fn(Ctx, Out, usize) -> i64>,
     pub open_game: Option<unsafe extern "C" fn(Ctx, u32, In, usize, In, usize) -> i64>,
     pub open_console: Option<unsafe extern "C" fn(Ctx, u32, In, usize, In, usize) -> i64>,
+    pub freeze_add_wide: Option<unsafe extern "C" fn(Ctx, u32, In, usize, u32, u64, u32, u32) -> i64>,
 }
 
 /// The offset of each field, by name, for the test that holds them to a C compiler's.
@@ -288,5 +289,105 @@ pub fn offsets() -> Vec<(&'static str, usize)> {
         label_clear, dma_channels, dma_log_op, register_flow_op, coprocessor_history, vectors, tilemap_entry, tile_pixels,
         sprites, palettes, audio_channels, set_channel_muted, evaluate, symbols, cheat_op, cheat_codecs, trace, trace_off,
         telemetry, tile_sheet, palette_swatch, audio_peek, state_save, state_load, state_default_path, log_switch,
-        log_status, events_drain, games, open_game, open_console)
+        log_status, events_drain, games, open_game, open_console, freeze_add_wide)
+}
+
+/// # Safety: If non-null, `out` must be valid for writes of at least `len.min(src.len())` bytes.
+pub unsafe fn copy_answer(src: &[u8], out: *mut u8, len: usize) -> i64 {
+    if !out.is_null() && len >= src.len() {
+        unsafe { std::ptr::copy_nonoverlapping(src.as_ptr(), out, src.len()) };
+    }
+    src.len() as i64
+}
+
+/// Returns a zeroed `emusen_session_v1` table at `VERSION` with all function pointers set to `None`.
+pub const fn blank_table() -> emusen_session_v1 {
+    emusen_session_v1 {
+        size: std::mem::size_of::<emusen_session_v1>() as u32,
+        version: VERSION,
+        ctx: std::ptr::null_mut(),
+        last_error: None,
+        sessions: None,
+        info: None,
+        summary: None,
+        run_control: None,
+        halt_state: None,
+        spaces: None,
+        space_read: None,
+        space_write: None,
+        resolve_physical: None,
+        processors: None,
+        registers: None,
+        set_register: None,
+        disassemble: None,
+        bp_add: None,
+        bp_add_data: None,
+        bp_set_enabled: None,
+        bp_remove: None,
+        bp_list: None,
+        bp_log: None,
+        bp_log_clear: None,
+        bp_arm_condition: None,
+        bp_conditions: None,
+        bp_depth_guard: None,
+        bp_forbid_range: None,
+        bp_uninitialized: None,
+        watch_add: None,
+        watch_remove: None,
+        watch_list: None,
+        watch_events: None,
+        watch_summary: None,
+        watch_clear: None,
+        framelog_add: None,
+        framelog_remove: None,
+        framelog_list: None,
+        framelog_samples: None,
+        framelog_clear: None,
+        coverage_op: None,
+        profile_op: None,
+        counters_op: None,
+        call_stack: None,
+        freeze_add: None,
+        freeze_remove: None,
+        freeze_list: None,
+        freeze_clear: None,
+        label_add: None,
+        label_remove: None,
+        label_list: None,
+        label_at: None,
+        label_load: None,
+        label_save: None,
+        label_clear: None,
+        dma_channels: None,
+        dma_log_op: None,
+        register_flow_op: None,
+        coprocessor_history: None,
+        vectors: None,
+        tilemap_entry: None,
+        tile_pixels: None,
+        sprites: None,
+        palettes: None,
+        audio_channels: None,
+        set_channel_muted: None,
+        evaluate: None,
+        symbols: None,
+        cheat_op: None,
+        cheat_codecs: None,
+        trace: None,
+        trace_off: None,
+        telemetry: None,
+        tile_sheet: None,
+        palette_swatch: None,
+        audio_peek: None,
+        state_save: None,
+        state_load: None,
+        state_default_path: None,
+        log_switch: None,
+        log_status: None,
+        events_drain: None,
+        games: None,
+        open_game: None,
+        open_console: None,
+        freeze_add_wide: None,
+    }
 }

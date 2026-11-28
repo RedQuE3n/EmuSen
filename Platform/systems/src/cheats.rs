@@ -240,6 +240,51 @@ pub fn encode(id: &str, address: i32, value: u32) -> Option<String> {
     }
 }
 
+/// Encodes a RAM poke into a native Action Replay / GameShark code when `codec_id` supports `width`; `None` otherwise.
+pub fn encode_ram(codec_id: &str, address: u32, value: u32, width: u8) -> Option<String> {
+    match codec_id {
+        "snes.par" if width == 1 => {
+            let addr = if address < 0x2_0000 { 0x7E_0000 + address } else if address <= 0xFF_FFFF { address } else { return None };
+            if matches!(addr >> 16, 0xFE | 0xFF | 0xC0) {
+                return None;
+            }
+            Some(format!("{addr:06X}{:02X}", value & 0xFF))
+        }
+        "md.ar" => {
+            let addr = if (0xE0_0000..=0xFF_FFFF).contains(&address) { address } else { 0xFF_0000 | (address & 0xFFFF) };
+            match width {
+                1 => Some(format!("{addr:06X}:{:02X}", value & 0xFF)),
+                2 => Some(format!("{addr:06X}:{:04X}", value & 0xFFFF)),
+                4 => Some(format!("{addr:06X}:{value:08X}")),
+                _ => None,
+            }
+        }
+        "n64.gs" => {
+            let addr = address & 0x00FF_FFFF;
+            match width {
+                1 => Some(format!("80{addr:06X} {:04X}", value & 0xFF)),
+                2 if addr & 1 == 0 => Some(format!("81{addr:06X} {:04X}", value & 0xFFFF)),
+                _ => None,
+            }
+        }
+        "psx.gs" => {
+            let addr = address & 0x1F_FFFF;
+            match width {
+                1 => Some(format!("30{addr:06X} {:04X}", value & 0xFF)),
+                2 => Some(format!("80{addr:06X} {:04X}", value & 0xFFFF)),
+                _ => None,
+            }
+        }
+        "gb.gs" if width == 1 => Some(format!("01{:02X}{:02X}{:02X}", value & 0xFF, address & 0xFF, (address >> 8) & 0xFF)),
+        "sms.par" if width == 1 => {
+            let addr = 0xC000 | (address & 0x1FFF);
+            Some(format!("00{addr:04X}-{:02X}", value & 0xFF))
+        }
+        "nes.raw" if width == 1 => Some(format!("{:04X}:{:02X}", address & 0xFFFF, value & 0xFF)),
+        _ => None,
+    }
+}
+
 /// An answer as JSON: `can`, then `decode` (`address` and `value`), `compare` (a byte or null) and `writes` (a list or
 /// null), each of the three an object with `format` (the words) or `range` where it refused.
 pub fn answer_json(a: &Answer) -> String {
@@ -334,5 +379,42 @@ mod tests {
         }
         assert_eq!(space(codec("snes.par").unwrap()), Some("CpuBus"));
         assert_eq!(space(codec("snes.gg").unwrap()), None);
+    }
+
+    #[test]
+    fn encode_ram_round_trips_through_decode() {
+        let snes = encode_ram("snes.par", 0x09C2, 0x63, 1).unwrap();
+        assert_eq!(decode("snes.par", &snes).unwrap().writes.unwrap().unwrap()[0].address, 0x09C2);
+        assert_eq!(decode("snes.par", &snes).unwrap().decode.unwrap().1, 0x63);
+
+        let md1 = encode_ram("md.ar", 0x1234, 0x55, 1).unwrap();
+        let md2 = encode_ram("md.ar", 0x1234, 0x1234, 2).unwrap();
+        let md4 = encode_ram("md.ar", 0x1234, 0xDEAD_BEEF, 4).unwrap();
+        assert_eq!(decode("md.ar", &md1).unwrap().writes.unwrap().unwrap()[0].value, 0x55);
+        assert_eq!(decode("md.ar", &md2).unwrap().writes.unwrap().unwrap()[0].value, 0x1234);
+        assert_eq!(decode("md.ar", &md4).unwrap().writes.unwrap().unwrap()[0].value, 0xDEAD_BEEF);
+
+        let n64_1 = encode_ram("n64.gs", 0x10_0001, 0x42, 1).unwrap();
+        let n64_2 = encode_ram("n64.gs", 0x10_0002, 0xBEEF, 2).unwrap();
+        assert_eq!(decode("n64.gs", &n64_1).unwrap().writes.unwrap().unwrap()[0].value, 0x42);
+        assert_eq!(decode("n64.gs", &n64_2).unwrap().writes.unwrap().unwrap()[0].value, 0xBEEF);
+        assert_eq!(encode_ram("n64.gs", 0x10_0001, 0xBEEF, 2), None);
+
+        let psx_1 = encode_ram("psx.gs", 0x05_4321, 0x77, 1).unwrap();
+        let psx_2 = encode_ram("psx.gs", 0x05_4322, 0x03E7, 2).unwrap();
+        assert_eq!(decode("psx.gs", &psx_1).unwrap().writes.unwrap().unwrap()[0].value, 0x77);
+        assert_eq!(decode("psx.gs", &psx_2).unwrap().writes.unwrap().unwrap()[0].value, 0x03E7);
+
+        let gb = encode_ram("gb.gs", 0xC123, 0x99, 1).unwrap();
+        assert_eq!(decode("gb.gs", &gb).unwrap().decode, Ok((0xC123, 0x99)));
+
+        let sms = encode_ram("sms.par", 0x00DE, 0x03, 1).unwrap();
+        assert_eq!(decode("sms.par", &sms).unwrap().decode, Ok((0x00DE, 0x03)));
+
+        let nes = encode_ram("nes.raw", 0x007E, 0x09, 1).unwrap();
+        assert_eq!(decode("nes.raw", &nes).unwrap().decode, Ok((0x007E, 0x09)));
+
+        assert_eq!(encode_ram("snes.gg", 0x100, 1, 1), None);
+        assert_eq!(encode_ram("ps2.raw", 0x100, 1, 4), None);
     }
 }

@@ -2,7 +2,7 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command mem
-usage 1   mem <space> <addr> [<len>]    hexdump <len> bytes (default 16) from <space> at <addr>
+usage 1   mem <space> <addr> [<len>] [--json]  hexdump <len> bytes (default 16) from <space> at <addr>
 
 case with no target
 target none

@@ -90,6 +90,36 @@ impl Machined<'_> {
         self.read_space(&name, at)
     }
 
+    /// Bulk bytes of a listed space with one leading cheat refresh, wrapped identically to `read_listed`.
+    pub fn read_listed_bulk(&mut self, index: usize, address: i32, into: &mut [u8]) {
+        if into.is_empty() {
+            return;
+        }
+        refresh_cheats(self.machine, self.info, self.cheats, self.applied);
+        let s = &self.info.spaces[index];
+        let id = s.id;
+        if s.view {
+            let _ = self.machine.space_read(id, address as u32, into);
+            return;
+        }
+        let size = self.space_size(index);
+        if size <= 0 {
+            let mut one = [0u8; 1];
+            let _ = self.machine.space_read(id, 0, &mut one);
+            into.fill(one[0]);
+            return;
+        }
+        let mut pos = address;
+        let mut rest = into;
+        while !rest.is_empty() {
+            let start = wrap(pos, size);
+            let chunk = ((size - start) as usize).min(rest.len());
+            let _ = self.machine.space_read(id, start as u32, &mut rest[..chunk]);
+            pos = pos.wrapping_add(chunk as i32);
+            rest = &mut rest[chunk..];
+        }
+    }
+
     pub fn write_listed(&mut self, index: usize, address: i32, value: u8) {
         let s = &self.info.spaces[index];
         if s.read_only {

@@ -1,49 +1,87 @@
 NAME
-    search - iterative memory value search
+    search - iterative memory value and pointer search
 
 SYNOPSIS
-    search <space> <value> [<width>]
-    search refine <value>
-    search changed|unchanged|increased|decreased
-    search list [<count>]
-    search reset
+    search <space> <value> [<width>] [flags]
+    search unknown <space> [flags]
+    search eq|ne|gt|lt <space> <value> [flags]
+    search between <space> <lo> <hi> [flags]
+    search refine|eq|ne|gt|lt <value> [flags]
+    search between <lo> <hi> [flags]
+    search changed|unchanged|increased|decreased [flags]
+    search incby|decby <delta> [flags]
+    search pointer <space> <target> [--max-offset N] [--base-start A] [--base-end B] [--le|--be] [--signed-offset] [--json]
+    search pointer rescan <target> [--max-offset N] [--json]
+    search undo [--json]
+    search list [<count>] [--dec|--hex] [--json]
+    search reset [--json]
 
 DESCRIPTION
-    Finds unknown memory addresses (such as scores, lives, or flags) by
-    scanning a memory space for an initial value and narrowing candidates
+    Finds unknown memory addresses (scores, lives, coordinates, floats, or
+    pointers) by capturing a memory space snapshot and narrowing candidates
     as gameplay progresses.
 
-    One search session is active per shell; starting a new
-    'search <space> <value>' replaces any existing candidates. Values and
-    counts are parsed as hexadecimal. Refuses spaces backed by live
-    hardware registers with read side effects (such as CpuBus); use a
-    plain memory space such as WRAM.
+    One search session is active per shell with up to 8 undo steps backed
+    by compact bitset/sparse storage. Endianness defaults to the target
+    space's hardware byte order unless overridden with --le or --be.
+    Refuses spaces backed by live hardware registers with read side
+    effects (such as CpuBus); use a plain memory space such as WRAM or
+    RDRAM.
 
 OPTIONS
-    <space> <value> [<width>]
-        Start a new search in <space> for little-endian <value> of byte
-        width <width> (1, 2, or 4; default 1).
+    -w <1|2|4>, --width <1|2|4>
+        Scalar width in bytes (default 1; 4 when --float is given).
 
-    refine <value>
-        Keep only candidate addresses currently equal to <value>.
+    --signed | --unsigned | --float
+        Interpret bytes as signed integer, unsigned integer (default), or
+        32-bit IEEE-754 float (requires width 4).
 
-    changed | unchanged | increased | decreased
-        Keep only candidates whose current value changed, stayed equal,
-        increased, or decreased relative to the previous scan or refine.
+    --le | --be
+        Override little-endian or big-endian byte order.
+
+    --dec | --hex
+        Parse and display values in decimal or hexadecimal (default hex).
+
+    --aligned | --unaligned
+        Step by <width> bytes or by 1 byte. Positional 'search <space>
+        <value>' defaults to unaligned; 'search unknown|eq|ne|gt|lt|between'
+        defaults to aligned when width > 1 on spaces larger than 64 KiB.
+
+    --json
+        Emit structured JSON output.
+
+    unknown <space>
+        Capture a full baseline snapshot without initial value filtering.
+
+    eq | ne | gt | lt <value> | between <lo> <hi>
+        Start a new search when <space> is given, or narrow an active
+        search when <space> is omitted.
+
+    changed | unchanged | increased | decreased | incby <n> | decby <n>
+        Narrow candidates relative to the previous scan snapshot.
+
+    pointer <space> <target> | pointer rescan <target>
+        Scan 4-byte aligned pointers P inside [base_start, base_end] where
+        P <= target <= P + max_offset (default max_offset 0x1000), or
+        rescan saved pointer bases against a moved target.
+
+    undo
+        Restore the previous candidate set and snapshot (up to 8 levels).
 
     list [<count>]
-        Print up to <count> current candidates and their live values
-        (default 20, parsed as hex).
+        Print up to <count> current candidates with live, previous, and
+        delta values (default 20).
 
     reset
-        Discard the active search session.
+        Discard the active search session and undo history.
 
 EXAMPLES
+    search unknown WRAM -w 2 --dec
+    search decby 5 --dec
+    search undo
     search WRAM 64
-    search refine 65
-    search decreased
-    search list 10
-    search reset
+    search list 10 --json
+    search pointer RDRAM 80123450 --max-offset 400 --json
 
 EXIT STATUS
     0   Search step completed (or usage/refusal message printed).

@@ -10,8 +10,8 @@
  * 45 Galaxia serves the front end's own settings rows (EmuSen_Galaxia.md, section 3.15); since 48 a cheat database the host
  * downloaded is installed here too, and a .cht read answers a game's own list (EmuSen_RustPlatform.md, section 56); since
  * 49 the emusen.scrape service 2.1 makes one of a game's own pictures its cover (EmuSen_Backend.md, section 30.6); since
- * 50 Galaxia reads the machine's battery (EmuSen_RustPlatform.md, section 58). The
- * rules are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
+ * 50 Galaxia reads the machine's battery (EmuSen_RustPlatform.md, section 58); since 51 Galaxia snapshots host hardware
+ * and process resource telemetry. The rules are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
  *
  *  - The host calls and the library returns. The library never calls the host: what the C# reports through a
  *    delegate is returned to it, as a status, as words or as queued diagnostics.
@@ -46,7 +46,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 50u
+#define EMUSEN_PLATFORM_ABI_VERSION 51u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -496,6 +496,16 @@ int64_t emusen_galaxia_settings_rows(uint8_t *out, size_t len);
  * the system has no reader. A null root reads the kernel's own tree; a test names a made-up one.
  */
 int32_t emusen_galaxia_battery(const uint8_t *root, size_t root_len, uint8_t *charging);
+
+/* ---- Galaxia: host and process system telemetry (since 51) ---- */
+
+/*
+ * A snapshot of host CPU, memory, GPU, storage mounts, and EmuSen process resource usage (CPU, threads, RAM,
+ * DRM GPU/VRAM, and cached Galaxia directory sizes) as compact JSON by the length-query idiom. `paths_json` is
+ * optional UTF-8 JSON naming directory overrides (`data_store`, `games`, `saves`, etc.); null or empty uses defaults.
+ * PARSE with words for invalid JSON.
+ */
+int64_t emusen_sys_telemetry_snapshot(const uint8_t *paths_json, size_t paths_json_len, uint8_t *out, size_t len);
 
 /* ---- Galaxia: the error log (EmuSen_Settings_Reference.md, section 4.70) ---- */
 

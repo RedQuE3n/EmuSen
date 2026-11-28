@@ -13,4 +13,6 @@ name = "emusen_session"
 
 [dependencies]
 dianash-module = { path = "../dianash-module" }
+emusen-galaxia = { path = "../galaxia" }
 emusen-session-service = { path = "../session-service" }
+serde_json.workspace = true

@@ -18,3 +18,7 @@ dianash-module = { path = "../dianash-module" }
 # JSON read and written.
 serde_json.workspace = true
 emusen-session-service = { path = "../session-service" }
+emusen-systems = { path = "../systems" }
+
+[dev-dependencies]
+emusen-dianash = { path = "../dianash" }

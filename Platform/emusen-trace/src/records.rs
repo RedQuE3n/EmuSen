@@ -4,11 +4,11 @@
 use crate::control::{has_call_stack, upper};
 use crate::{required, scoped, session, Run};
 use dianash_module::{Answer, Call};
-use serde_json::Value;
+use serde_json::{json, Value};
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope;
-use emusen_session_service::space::{find, read};
-use emusen_session_service::words::{describe, hex, in_logs, parse_hex};
+use emusen_session_service::space::{all, find, read};
+use emusen_session_service::words::{describe, hex, hex_digits, in_logs, parse_hex, parse_value_bits, split_common_flags};
 use emusen_session_service::{object, quoted, Record, Refusal, Session};
 
 /// An op's answer read as JSON.
@@ -134,48 +134,127 @@ pub fn freeze(call: &Call, parts: &[String]) -> Run {
     }
     match parts[1].to_lowercase().as_str() {
         "add" => {
-            if parts.len() < 4 {
-                return Ok(Answer::ok("Usage: freeze add <space> <addr> [<value>]"));
+            let (pos, flags) = split_common_flags(&parts[2..])?;
+            if pos.len() < 2 {
+                return Ok(Answer::ok("Usage: freeze add <space> <addr> [<value>] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]"));
             }
-            let space = find(&session, &parts[2])?;
+            let space = find(&session, &pos[0])?;
             if !space.writable {
                 return Ok(Answer::fail(format!("{} is not writable, so nothing can write to it to be undone.", space.name)));
             }
-            let address = parse_hex(&parts[3])?;
-            if address < 0 || address >= space.size {
+            let address = parse_hex(&pos[1])?;
+            let width = flags.width.unwrap_or(if flags.float { 4 } else { 1 });
+            if address < 0 || i64::from(address) + i64::from(width) > i64::from(space.size) {
                 return Ok(Answer::fail(format!("0x{address:X} is outside {} (0x0-0x{:X}).", space.name, space.size.wrapping_sub(1))));
             }
-            let value = if parts.len() > 4 { parse_hex(&parts[4])? as u8 } else { read(&session, &space, address, 1)?.first().copied().unwrap_or(0) };
-            let id = session.freeze_add(&space.name, address as u32, u32::from(value))?;
-            Ok(Answer::ok(format!("Frozen #{id}: {} 0x{address:X} = 0x{value:02X}.", space.name)))
+            let big_endian = flags.endian.unwrap_or(space.byte_order).is_big();
+            let decimal = flags.decimal.unwrap_or(flags.float);
+            let value = if pos.len() >= 3 {
+                if width == 1 && !flags.float && !decimal && flags.width.is_none() {
+                    u64::from(parse_hex(&pos[2])? as u8)
+                } else {
+                    u64::from(parse_value_bits(&pos[2], width, decimal, flags.float)?)
+                }
+            } else {
+                let raw = read(&session, &space, address, width)?;
+                let mut acc = 0u64;
+                for i in 0..width as usize {
+                    let b = u64::from(raw.get(i).copied().unwrap_or(0));
+                    acc = if big_endian { (acc << 8) | b } else { acc | (b << (8 * i)) };
+                }
+                acc
+            };
+            let id = session.freeze_add_wide(&space.name, address as u32, value, width as u32, big_endian)?;
+            if flags.json {
+                let digits = hex_digits(space.size);
+                return Ok(Answer::ok(json!({
+                    "id": id,
+                    "space": space.name,
+                    "address": address as u32,
+                    "addr_hex": format!("{:0digits$X}", address as u32),
+                    "value": value,
+                    "width": width,
+                    "big_endian": big_endian,
+                }).to_string()));
+            }
+            if width == 1 && !flags.float && flags.width.is_none() {
+                Ok(Answer::ok(format!("Frozen #{id}: {} 0x{address:X} = 0x{value:02X}.", space.name)))
+            } else {
+                let digits = (width as usize) * 2;
+                let order = if big_endian { "BE" } else { "LE" };
+                Ok(Answer::ok(format!("Frozen #{id}: {} 0x{address:X} = 0x{value:0digits$X} ({width}-byte {order}).", space.name)))
+            }
         }
         "list" => {
-            let all = session.freeze_list()?;
-            if all.items().is_empty() {
+            let (_, flags) = split_common_flags(&parts[2..])?;
+            let all_freezes = session.freeze_list()?;
+            if flags.json {
+                let spaces = all(&session).unwrap_or_default();
+                let freezes: Vec<Value> = all_freezes
+                    .items()
+                    .iter()
+                    .map(|f| {
+                        let space_name = f.text("space");
+                        let size = spaces.iter().find(|s| s.name.eq_ignore_ascii_case(&space_name)).map_or(0x1_0000, |s| s.size);
+                        let digits = hex_digits(size);
+                        let addr = f.address("address") as u32;
+                        let width = f.optional_int("width").unwrap_or(1);
+                        json!({
+                            "id": f.int("id"),
+                            "space": space_name,
+                            "address": addr,
+                            "addr_hex": format!("{addr:0digits$X}"),
+                            "value": f.int("value"),
+                            "width": width,
+                            "big_endian": f.flag("big_endian"),
+                            "blocked": f.int("blocked"),
+                        })
+                    })
+                    .collect();
+                return Ok(Answer::ok(json!({"freezes": freezes}).to_string()));
+            }
+            if all_freezes.items().is_empty() {
                 return Ok(Answer::ok("No frozen addresses."));
             }
-            let rows: Vec<String> = all
+            let rows: Vec<String> = all_freezes
                 .items()
                 .iter()
-                .map(|f| format!("  #{}: {} 0x{:X} = 0x{:02X} ({} write(s) undone)", f.int("id"), f.text("space"), f.address("address"), f.int("value"), f.int("blocked")))
+                .map(|f| {
+                    let width = f.optional_int("width").unwrap_or(1).max(1) as usize;
+                    let digits = width * 2;
+                    let suffix = if width > 1 { format!(" ({width}-byte {})", if f.flag("big_endian") { "BE" } else { "LE" }) } else { String::new() };
+                    format!("  #{}: {} 0x{:X} = 0x{:0digits$X}{suffix} ({} write(s) undone)", f.int("id"), f.text("space"), f.address("address"), f.int("value"), f.int("blocked"))
+                })
                 .collect();
             Ok(Answer::ok(rows.join("\n")))
         }
         "remove" => {
-            if parts.len() < 3 {
+            let (pos, flags) = split_common_flags(&parts[2..])?;
+            if pos.is_empty() {
                 return Ok(Answer::ok("Usage: freeze remove <id>"));
             }
-            let id = parse_hex(&parts[2])?;
+            let id = parse_hex(&pos[0])?;
             Ok(match session.freeze_remove(id as u32) {
-                Ok(()) => Answer::ok(format!("Frozen address #{id} released.")),
+                Ok(()) => {
+                    if flags.json {
+                        Answer::ok(json!({"removed": true, "id": id}).to_string())
+                    } else {
+                        Answer::ok(format!("Frozen address #{id} released."))
+                    }
+                }
                 Err(refusal) if refusal.is(status::NO_SUCH_ID) => Answer::fail(format!("No frozen address #{id}.")),
                 Err(refusal) => return Err(refusal.words),
             })
         }
         "clear" => {
+            let (_, flags) = split_common_flags(&parts[2..])?;
             let count = session.freeze_list()?.items().len();
             session.freeze_clear()?;
-            Ok(Answer::ok(format!("{count} frozen address(es) released.")))
+            if flags.json {
+                Ok(Answer::ok(json!({"cleared": count}).to_string()))
+            } else {
+                Ok(Answer::ok(format!("{count} frozen address(es) released.")))
+            }
         }
         _ => Ok(Answer::ok(format!("Unknown 'freeze' subcommand '{}'.{}.", parts[1], hint_and_try(&parts[1], &["add", "list", "remove", "clear"])))),
     }
@@ -745,5 +824,130 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
             Ok(Answer::ok(out.trim_end()))
         }
         _ => Ok(Answer::ok(format!("Unknown dma subcommand '{}'. Try log|stats, or `dma` alone for the channel table.", parts[1]))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use emusen_dianash::shell::{Config, Shell, Submitted};
+    use emusen_session_service::abi::{self, emusen_session_v1};
+    use serde_json::Value;
+    use std::cell::RefCell;
+    use std::ffi::c_void;
+
+    struct FakeTrace {
+        ram: Vec<u8>,
+        freezes: RefCell<Vec<(i32, String, u32, u64, u32, bool)>>,
+        watches: RefCell<Vec<(i32, String, u32, u32, u32)>>,
+    }
+
+    unsafe extern "C" fn fake_info(_c: *mut c_void, _s: u32, o: *mut u8, l: usize) -> i64 {
+        unsafe { abi::copy_answer(br#"{"id":1,"engine":"Fake","system":"n64","byte_order":"big","capabilities":["freezes","watches"]}"#, o, l) }
+    }
+
+    unsafe extern "C" fn fake_spaces(c: *mut c_void, _s: u32, o: *mut u8, l: usize) -> i64 {
+        let f = unsafe { &*(c as *const FakeTrace) };
+        let doc = format!(r#"[{{"name":"RDRAM","size":{},"writable":true,"side_effects":false,"byte_order":"big"}}]"#, f.ram.len());
+        unsafe { abi::copy_answer(doc.as_bytes(), o, l) }
+    }
+
+    unsafe extern "C" fn fake_space_read(c: *mut c_void, _s: u32, _sp: *const u8, _sl: usize, addr: u32, o: *mut u8, l: usize) -> i64 {
+        let f = unsafe { &*(c as *const FakeTrace) };
+        let start = (addr as usize).min(f.ram.len());
+        let n = l.min(f.ram.len() - start);
+        if !o.is_null() && n > 0 {
+            unsafe { std::slice::from_raw_parts_mut(o, n) }.copy_from_slice(&f.ram[start..start + n]);
+        }
+        l as i64
+    }
+
+    unsafe extern "C" fn fake_freeze_add_wide(c: *mut c_void, _s: u32, sp: *const u8, sl: usize, addr: u32, val: u64, w: u32, be: u32) -> i64 {
+        let f = unsafe { &*(c as *const FakeTrace) };
+        let space = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(sp, sl)) }.to_string();
+        let mut list = f.freezes.borrow_mut();
+        let id = (list.len() + 1) as i32;
+        list.push((id, space, addr, val, w, be != 0));
+        i64::from(id)
+    }
+
+    unsafe extern "C" fn fake_freeze_list(c: *mut c_void, _s: u32, o: *mut u8, l: usize) -> i64 {
+        let f = unsafe { &*(c as *const FakeTrace) };
+        let arr: Vec<Value> = f
+            .freezes
+            .borrow()
+            .iter()
+            .map(|(id, sp, addr, val, w, be)| serde_json::json!({"id": id, "space": sp, "address": addr, "value": val, "width": w, "big_endian": be, "blocked": 3}))
+            .collect();
+        let doc = Value::Array(arr).to_string();
+        unsafe { abi::copy_answer(doc.as_bytes(), o, l) }
+    }
+
+    unsafe extern "C" fn fake_watch_add(c: *mut c_void, _s: u32, sp: *const u8, sl: usize, addr: u32, len: u32, kind: u32) -> i64 {
+        let f = unsafe { &*(c as *const FakeTrace) };
+        let space = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(sp, sl)) }.to_string();
+        let mut list = f.watches.borrow_mut();
+        let id = (list.len() + 1) as i32;
+        list.push((id, space, addr, len, kind));
+        i64::from(id)
+    }
+
+    unsafe extern "C" fn fake_watch_list(c: *mut c_void, _s: u32, o: *mut u8, l: usize) -> i64 {
+        let f = unsafe { &*(c as *const FakeTrace) };
+        let arr: Vec<Value> = f
+            .watches
+            .borrow()
+            .iter()
+            .map(|(id, sp, addr, len, kind)| serde_json::json!({"id": id, "space": sp, "address": addr, "length": len, "kind": kind}))
+            .collect();
+        let doc = Value::Array(arr).to_string();
+        unsafe { abi::copy_answer(doc.as_bytes(), o, l) }
+    }
+
+    unsafe extern "C" fn fake_watch_summary(_c: *mut c_void, _s: u32, _id: u32, o: *mut u8, l: usize) -> i64 {
+        unsafe { abi::copy_answer(br#"{"total":7,"retained":7,"sites":[{"context":"PC=$80012340","count":7}]}"#, o, l) }
+    }
+
+    #[test]
+    fn freeze_wide_snapshot_and_watch_json() {
+        let mut ram = vec![0u8; 64];
+        ram[0x10..0x12].copy_from_slice(&0x1234u16.to_be_bytes());
+        let mut fake = FakeTrace { ram, freezes: RefCell::new(Vec::new()), watches: RefCell::new(Vec::new()) };
+        let table = emusen_session_v1 {
+            ctx: (&mut fake as *mut FakeTrace).cast(),
+            info: Some(fake_info),
+            spaces: Some(fake_spaces),
+            space_read: Some(fake_space_read),
+            watch_add: Some(fake_watch_add),
+            watch_list: Some(fake_watch_list),
+            watch_summary: Some(fake_watch_summary),
+            freeze_list: Some(fake_freeze_list),
+            freeze_add_wide: Some(fake_freeze_add_wide),
+            ..abi::blank_table()
+        };
+        let mut sh = Shell::new(Config { sessions: false, ..Config::default() });
+        sh.add_module(&crate::MODULE).unwrap();
+        sh.set_service_table(abi::SERVICE, abi::MAJOR, abi::MINOR, (&table as *const emusen_session_v1).cast()).unwrap();
+
+        let mut run = |line: &str| -> Value {
+            assert_eq!(sh.submit(0, line).unwrap(), Submitted::Done);
+            serde_json::from_str(&sh.take_output()).unwrap()
+        };
+        let f1 = run("freeze add RDRAM 10 -w 2 --be --json");
+        assert_eq!(f1["value"], 0x1234);
+        assert_eq!(f1["width"], 2);
+        assert_eq!(f1["big_endian"], true);
+
+        let fl = run("freeze list --json");
+        assert_eq!(fl["freezes"][0]["value"], 0x1234);
+        assert_eq!(fl["freezes"][0]["blocked"], 3);
+
+        let wa = run("watch add RDRAM 10 2 write --json");
+        assert_eq!(wa["id"], 1);
+        let wl = run("watch list --json");
+        assert_eq!(wl["watches"][0]["space"], "RDRAM");
+        let ws = run("watch summary 1 --json");
+        assert_eq!(ws["space"], "RDRAM");
+        assert_eq!(ws["hits"][0]["pc"], "PC=$80012340");
+        assert_eq!(ws["hits"][0]["count"], 7);
     }
 }

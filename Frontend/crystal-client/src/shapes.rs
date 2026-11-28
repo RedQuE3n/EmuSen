@@ -528,6 +528,8 @@ pub struct SaveSlot {
 pub struct ServiceInfo {
     pub id: SessionId,
     pub engine: String,
+    pub system: String,
+    pub byte_order: String,
     pub frame: u64,
     pub max_sprites: Option<u32>,
     pub tilemap_entry_stride: Option<u32>,

@@ -59,7 +59,7 @@ fn capabilities(e: &mut Engine) -> Vec<&'static str> {
     caps
 }
 
-/// `{"id","engine","frame","max_sprites","tilemap_entry_stride","capabilities"}`, `Info`.
+/// `{"id","engine","system","byte_order","frame","max_sprites","tilemap_entry_stride","capabilities"}`, `Info`.
 pub fn info(c: &Call) -> Answer<Vec<u8>> {
     c.target()?;
     c.read(|e, _| {
@@ -68,6 +68,8 @@ pub fn info(c: &Call) -> Answer<Vec<u8>> {
         j.begin_object()
             .int("id", c.s.id as i64)
             .str("engine", &e.name)
+            .str("system", &e.debug.d.info().system)
+            .str("byte_order", if e.debug.d.big_endian() { "big" } else { "little" })
             .int("frame", e.total_frames())
             .int("max_sprites", e.debug.d.max_sprites() as i64)
             .int("tilemap_entry_stride", e.debug.d.tilemap_entry_stride() as i64)
@@ -224,7 +226,7 @@ pub fn halt_state(c: &Call, processor: u32) -> Answer<Vec<u8>> {
     })
 }
 
-/// `[{"name","size","writable","side_effects"}]`.
+/// `[{"name","size","writable","side_effects","byte_order"}]`.
 pub fn spaces(c: &Call) -> Answer<Vec<u8>> {
     c.target()?;
     c.read(|e, _| {
@@ -232,14 +234,15 @@ pub fn spaces(c: &Call) -> Answer<Vec<u8>> {
         let mut j = Json::new();
         j.begin_array();
         for s in m.map(|m| d.spaces(m)).unwrap_or_default() {
-            j.begin_object().str("name", &s.name).int("size", s.size as i64).bool("writable", s.writable).bool("side_effects", s.side_effects).end_object();
+            let order = if s.big_endian { "big" } else { "little" };
+            j.begin_object().str("name", &s.name).int("size", s.size as i64).bool("writable", s.writable).bool("side_effects", s.side_effects).str("byte_order", order).end_object();
         }
         j.end_array();
         Ok(j.finish().into_bytes())
     })
 }
 
-/// `len` bytes from `address` of a space into `into`, each read as the space reads any address.
+/// `len` bytes from `address` of a space into `into`, read in bulk with one cheat refresh.
 pub fn space_read(c: &Call, name: Raw, address: u32, into: &mut [u8]) -> Answer<()> {
     let name = name.text()?;
     c.target()?;
@@ -247,10 +250,7 @@ pub fn space_read(c: &Call, name: Raw, address: u32, into: &mut [u8]) -> Answer<
         let (d, m) = dm(e);
         let canonical = space(d, m.as_deref(), name)?;
         let Some(m) = m else { return Ok(()) };
-        let at = address as i32;
-        for (i, b) in into.iter_mut().enumerate() {
-            *b = d.space_read(m, &canonical, at.wrapping_add(i as i32));
-        }
+        d.space_read_bulk(m, &canonical, address as i32, into);
         Ok(())
     })
 }

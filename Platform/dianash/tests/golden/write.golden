@@ -2,7 +2,7 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command write
-usage 1   write <space> <addr> <value>  write one byte (only if <space> is writable)
+usage 1   write <space> <addr> <value> [-w 1|2|4] [--le|--be] [--dec|--float] [--json]  write 1, 2, or 4 bytes
 
 case with no target
 target none

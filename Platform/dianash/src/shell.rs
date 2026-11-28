@@ -559,6 +559,17 @@ impl Shell {
         Ok(())
     }
 
+    /// Registers a single named service table for all sessions in this shell.
+    pub fn set_service_table(&mut self, name: &str, major: u32, minor: u32, table: *const std::ffi::c_void) -> Result<(), i32> {
+        self.set_services(&[abi::dianash_service {
+            size: std::mem::size_of::<abi::dianash_service>() as u32,
+            name: abi::dianash_bytes::of(name.as_bytes()),
+            major,
+            minor,
+            table,
+        }])
+    }
+
     /// The services one session's calls are handed in place of the shell's of the same name, until the next set.
     pub fn set_session_services(&mut self, session: u32, services: &[abi::dianash_service]) -> Result<(), i32> {
         let id = self.resolve(session).ok_or(status::NO_SUCH_SESSION)?;

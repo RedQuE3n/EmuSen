@@ -9,12 +9,16 @@ fn the_committed_binding_is_bindgen_s_output_for_the_headers() {
     let here = Path::new(env!("CARGO_MANIFEST_DIR"));
     let platform = here.join("../../Platform/include");
     let library = here.join("../../Platform/library/include");
+    let dianash = here.join("../../Platform/dianash/include");
     let made = bindgen::Builder::default()
         .header(platform.join("emusen_platform.h").to_str().unwrap())
         .header(library.join("emusen_library.h").to_str().unwrap())
         .header(platform.join("emusen_games_service.h").to_str().unwrap())
+        .header(dianash.join("dianash.h").to_str().unwrap())
         .clang_arg(format!("-I{}", platform.display()))
-        .allowlist_file(".*/emusen_(platform|scrape_service|library|games_service)\\.h")
+        .clang_arg(format!("-I{}", dianash.display()))
+        .allowlist_file(".*/(emusen_(platform|scrape_service|library|games_service)|dianash(_module)?)\\.h")
+        .blocklist_function("dianash_module_.*")
         .dynamic_library_name("PlatformLibrary")
         .dynamic_link_require_all(true)
         .derive_default(true)

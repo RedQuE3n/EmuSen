@@ -3,9 +3,9 @@
 
 use crate::{core_name, required, session, Run};
 use dianash_module::{Answer, Call};
-use serde_json::Value;
+use serde_json::{json, Value};
 use emusen_session_service::scope::{self, Cpu};
-use emusen_session_service::words::{describe, hex, label_at, parse_hex};
+use emusen_session_service::words::{describe, hex, label_at, parse_hex, split_common_flags};
 use emusen_session_service::{abi, Record, Session};
 
 /// A register as the service reports it.
@@ -448,20 +448,74 @@ pub fn disasm(call: &Call, parts: &[String]) -> Run {
 pub fn scan(call: &Call, parts: &[String], command: &str, kind: &str) -> Run {
     let session = session(call)?;
     if parts.len() < 2 {
-        return Ok(Answer::ok(format!("Usage: {command} <addr> [<scanstart> <scanlen>]")));
+        return Ok(Answer::ok(format!("Usage: {command} [<space>] <addr> [<scanstart> <scanlen>] [--json]")));
     }
-    let target = parse_hex(&parts[1])?;
-    let (start, length) = if parts.len() >= 4 { (parse_hex(&parts[2])?, parse_hex(&parts[3])?) } else { ((target & 0xFF0000) | 0x8000, 0x8000) };
-    let listing = instructions(&session.disassemble(0, Some("CpuBus"), start as u32, length as u32, None)?);
+    let (pos, flags) = split_common_flags(&parts[1..])?;
+    if pos.is_empty() {
+        return Ok(Answer::ok(format!("Usage: {command} [<space>] <addr> [<scanstart> <scanlen>] [--json]")));
+    }
+    let (target_space, space_size, idx) = if pos.len() >= 2 {
+        if let Ok(sp) = crate::memory::find(&session, &pos[0]) {
+            (sp.name, sp.size, 1usize)
+        } else {
+            let sz = crate::memory::find(&session, "CpuBus").map_or(0x1_0000, |s| s.size);
+            ("CpuBus".to_string(), sz, 0usize)
+        }
+    } else {
+        let sz = crate::memory::find(&session, "CpuBus").map_or(0x1_0000, |s| s.size);
+        ("CpuBus".to_string(), sz, 0usize)
+    };
+    let digits = if space_size > 0x100_0000 { 8 } else { 6 };
+    let target = parse_hex(&pos[idx])?;
+    let (start, length) = if pos.len() >= idx + 3 {
+        (parse_hex(&pos[idx + 1])?, parse_hex(&pos[idx + 2])?)
+    } else {
+        ((target & 0xFF0000) | 0x8000, 0x8000)
+    };
+    let code_space = if target_space == "CpuBus" {
+        "CpuBus".to_string()
+    } else {
+        scope::cpus(&session)
+            .ok()
+            .and_then(|cpus| cpus.into_iter().next().and_then(|c| c.code_space))
+            .unwrap_or_else(|| "CpuBus".to_string())
+    };
+    let listing = instructions(&session.disassemble(0, Some(&code_space), start as u32, length as u32, None)?);
     let end = start.wrapping_add(length);
+    let mut hits = Vec::new();
     let mut matches = Vec::new();
     for instruction in &listing {
         if instruction.address >= end {
             break;
         }
         if instruction.reference.as_ref().is_some_and(|(k, t)| k == kind && *t == target) {
-            matches.push(format!("  ${}: {} {}", hex(instruction.address, 6), instruction.mnemonic, instruction.operands));
+            matches.push(format!("  ${}: {} {}", hex(instruction.address, digits), instruction.mnemonic, instruction.operands));
+            hits.push(json!({
+                "address": instruction.address as u32,
+                "addr_hex": hex(instruction.address, digits),
+                "mnemonic": instruction.mnemonic,
+                "operands": instruction.operands,
+            }));
         }
+    }
+    if flags.json {
+        let supported = !listing.is_empty();
+        let advice = if supported {
+            Value::Null
+        } else if kind == "call" {
+            Value::String(format!("Set an execute breakpoint at ${} instead (static disassembly unavailable).", hex(target, digits)))
+        } else {
+            let watch_kind = if kind == "read" { "read" } else { "write" };
+            Value::String(format!("Use runtime watchpoint: watch add {target_space} {} 1 {watch_kind}", hex(target, digits)))
+        };
+        return Ok(Answer::ok(json!({
+            "supported": supported,
+            "space": target_space,
+            "target": target as u32,
+            "target_hex": hex(target, digits),
+            "advice": advice,
+            "matches": hits,
+        }).to_string()));
     }
     if matches.is_empty() {
         let verb = match kind {
@@ -469,7 +523,7 @@ pub fn scan(call: &Call, parts: &[String], command: &str, kind: &str) -> Run {
             "write" => "writes to",
             _ => "reads of",
         };
-        return Ok(Answer::ok(format!("No statically-resolvable {verb} ${} found in ${}-${}.", hex(target, 6), hex(start, 6), hex(end.wrapping_sub(1), 6))));
+        return Ok(Answer::ok(format!("No statically-resolvable {verb} ${} found in ${}-${}.", hex(target, digits), hex(start, digits), hex(end.wrapping_sub(1), digits))));
     }
     Ok(Answer::ok(matches.join("\n")))
 }

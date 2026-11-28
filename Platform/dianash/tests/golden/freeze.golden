@@ -2,10 +2,11 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command freeze
-usage 1   freeze add <space> <addr> [<value>]  pin <addr>; without <value>, at whatever it holds now
-usage 2   freeze list                          list frozen addresses and how many writes each blocked
-usage 3   freeze remove <id>                   unfreeze one address
-usage 4   freeze clear                         unfreeze everything
+usage 1   freeze add <space> <addr> [<value>] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]
+usage 2                                 pin <addr>; without <value>, snapshots live value
+usage 3   freeze list [--json]          list frozen addresses and how many writes each blocked
+usage 4   freeze remove <id> [--json]   unfreeze one address
+usage 5   freeze clear [--json]         unfreeze everything
 
 case with no target
 target none

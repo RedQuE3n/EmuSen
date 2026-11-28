@@ -384,8 +384,10 @@ name = "emusen-cheat"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
+ "emusen-dianash",
  "emusen-session-service",
  "emusen-suggest",
+ "emusen-systems",
  "serde_json",
 ]
 
@@ -484,6 +486,7 @@ name = "emusen-debug"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
+ "emusen-dianash",
  "emusen-session-service",
  "emusen-suggest",
  "serde_json",
@@ -850,6 +853,7 @@ name = "emusen-trace"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
+ "emusen-dianash",
  "emusen-session-service",
  "emusen-suggest",
  "serde_json",

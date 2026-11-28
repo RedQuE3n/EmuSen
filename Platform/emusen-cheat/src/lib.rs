@@ -3,10 +3,10 @@
 //! formats (EmuSen_DianaSh.md §9.2); a .cht file is read and written through the call's resolve. See §8.1 and §13.11.
 
 use dianash_module::{Answer, Call, Manifest, Module};
-use serde_json::Value;
+use serde_json::{json, Value};
 use emusen_session_service::abi::{self, cheat, status};
 use emusen_session_service::space::find;
-use emusen_session_service::words::parse_hex;
+use emusen_session_service::words::{hex_digits, parse_hex, parse_value_bits, split_common_flags, split_flags_before_tail};
 use emusen_session_service::{object, quoted, Record, Refusal, Session};
 
 pub const USAGE: &str = concat!(
@@ -16,10 +16,13 @@ pub const USAGE: &str = concat!(
     "                                     both formats use the same 8 hex-digit\n",
     "                                     characters, so this is a best-effort guess,\n",
     "                                     not a guarantee)\n",
-    "  cheat poke <space> <addr> <value> [description]\n",
+    "  cheat poke <space> <addr> <value> [description] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]\n",
     "                                     add a raw RAM-poke cheat directly, bypassing\n",
     "                                     code decoding (e.g. an address you already\n",
     "                                     found with `search`)\n",
+    "  cheat from-freeze <id> [--keep|--remove] [--json] [description]\n",
+    "                                     graduate an active freeze into a persisted\n",
+    "                                     custom cheat\n",
     "  cheat gg <code> [description]     decode a real SNES Game Genie code (8\n",
     "                                     characters) and add it as a ROM patch, enabled\n",
     "                                     - use this instead of `add` when its guess is\n",
@@ -33,7 +36,7 @@ pub const USAGE: &str = concat!(
     "                                     an unconditional patch - what every real SNES\n",
     "                                     Game Genie code decodes to; unlike NES/Genesis,\n",
     "                                     SNES Game Genie codes never carry a compare)\n",
-    "  cheat list                         list every cheat with its ID, kind, and state\n",
+    "  cheat list [--json]                list every cheat with its ID, kind, and state\n",
     "  cheat master [on|off]              one switch over every cheat at once, without\n",
     "                                     touching any cheat's own enabled state (no\n",
     "                                     argument reports which way it is set)\n",
@@ -225,7 +228,7 @@ fn run(call: &Call, parts: &[String]) -> Run {
     let session = Session::from_service(call.service(abi::SERVICE, abi::MAJOR))?;
     session.info()?;
     if parts.len() < 2 {
-        return Ok(Answer::ok("Usage: cheat add|poke|gg|rompatch|list|master|enable|disable|remove|clear|save|load|files|import|export ..."));
+        return Ok(Answer::ok("Usage: cheat add|poke|from-freeze|gg|rompatch|list|master|enable|disable|remove|clear|save|load|files|import|export ..."));
     }
     let sub = parts[1].to_lowercase();
     let codecs = session.cheat_codecs()?;
@@ -265,15 +268,81 @@ fn run(call: &Call, parts: &[String]) -> Run {
             Ok(Answer::ok(format!("Cheat #{id} added (detected {} format): {space} 0x{address:06X} = 0x{value:02X} ({description})", auto.name)))
         }
         "poke" => {
-            if parts.len() < 5 {
-                return Ok(Answer::ok("Usage: cheat poke <space> <addr> <value> [description]"));
+            let (pos, _, desc_tokens, flags) = split_flags_before_tail(&parts[2..], 3, &[])?;
+            if pos.len() < 3 {
+                return Ok(Answer::ok("Usage: cheat poke <space> <addr> <value> [-w 1|2|4] [--le|--be] [--dec|--float] [--json] [description]"));
             }
-            find(&session, &parts[2])?;
-            let address = parse_hex(&parts[3])?;
-            let value = i64::from(parse_hex(&parts[4])? as u8);
-            let description = if parts.len() > 5 { rest(5) } else { format!("{} 0x{address:X}", parts[2]) };
-            let id = add_poke(&session, &parts[2], address, value, &description)?;
-            Ok(Answer::ok(format!("Cheat #{id} added: {} 0x{address:X} = 0x{value:02X} ({description})", parts[2])))
+            let space = find(&session, &pos[0])?;
+            let address = parse_hex(&pos[1])?;
+            let width = flags.width.unwrap_or(if flags.float { 4 } else { 1 });
+            let big_endian = flags.endian.unwrap_or(space.byte_order).is_big();
+            let decimal = flags.decimal.unwrap_or(flags.float);
+            let value = if width == 1 && !flags.float && !decimal && flags.width.is_none() {
+                u32::from(parse_hex(&pos[2])? as u8)
+            } else {
+                parse_value_bits(&pos[2], width, decimal, flags.float)?
+            };
+            let description = if desc_tokens.is_empty() { format!("{} 0x{address:X}", space.name) } else { desc_tokens.join(" ") };
+            let id = add_poke_wide(&session, &space.name, address, i64::from(value), width, big_endian, &description)?;
+            if flags.json {
+                let native_code = native_ram_code(&session, &space.name, address as u32, value, width as u8, big_endian);
+                let digits = hex_digits(space.size);
+                return Ok(Answer::ok(json!({
+                    "id": id,
+                    "name": description,
+                    "space": space.name,
+                    "address": address as u32,
+                    "addr_hex": format!("{:0digits$X}", address as u32),
+                    "value": value,
+                    "width": width,
+                    "big_endian": big_endian,
+                    "native_code": native_code,
+                }).to_string()));
+            }
+            if width == 1 && !flags.float && flags.width.is_none() {
+                Ok(Answer::ok(format!("Cheat #{id} added: {} 0x{address:X} = 0x{value:02X} ({description})", pos[0])))
+            } else {
+                let digits = (width as usize) * 2;
+                let order = if big_endian { "BE" } else { "LE" };
+                Ok(Answer::ok(format!("Cheat #{id} added: {} 0x{address:X} = 0x{value:0digits$X} ({width}-byte {order}) ({description})", space.name)))
+            }
+        }
+        "from-freeze" => {
+            let (pos, extra, desc_tokens, flags) = split_flags_before_tail(&parts[2..], 1, &["--keep", "--remove"])?;
+            if pos.is_empty() {
+                return Ok(Answer::ok("Usage: cheat from-freeze <id> [--keep|--remove] [--json] [description]"));
+            }
+            let remove = extra.iter().any(|t| t == "--remove");
+            let freeze_id = parse_hex(&pos[0])?;
+            let freezes = session.freeze_list()?;
+            let Some(found) = freezes.items().iter().find(|f| f.int("id") == i64::from(freeze_id)) else {
+                return Ok(Answer::fail(format!("No frozen address #{freeze_id}.")));
+            };
+            let space_name = found.text("space");
+            let address = found.address("address");
+            let value = found.int("value") as u32;
+            let width = found.optional_int("width").unwrap_or(1) as i32;
+            let big_endian = found.flag("big_endian");
+            let description = if desc_tokens.is_empty() { format!("{space_name} 0x{address:X}") } else { desc_tokens.join(" ") };
+            let id = add_poke_wide(&session, &space_name, address, i64::from(value), width, big_endian, &description)?;
+            if remove {
+                session.freeze_remove(freeze_id as u32)?;
+            }
+            let native_code = native_ram_code(&session, &space_name, address as u32, value, width as u8, big_endian);
+            if flags.json {
+                return Ok(Answer::ok(json!({
+                    "id": id,
+                    "name": description,
+                    "space": space_name,
+                    "address": address as u32,
+                    "value": value,
+                    "width": width,
+                    "big_endian": big_endian,
+                    "native_code": native_code,
+                }).to_string()));
+            }
+            let digits = (width.max(1) as usize) * 2;
+            Ok(Answer::ok(format!("Cheat #{id} added from freeze #{freeze_id}: {space_name} 0x{address:X} = 0x{value:0digits$X} ({description})")))
         }
         "gg" => {
             if parts.len() < 3 {
@@ -309,8 +378,26 @@ fn run(call: &Call, parts: &[String]) -> Run {
             Ok(Answer::ok(format!("Cheat #{id} added: ROM 0x{address:06X} = 0x{value:02X}{condition} ({description})")))
         }
         "list" => {
+            let (_, flags) = split_common_flags(&parts[2..])?;
             let list = op(&session, cheat::LIST, "{}")?;
             let cheats = list.list("cheats");
+            if flags.json {
+                let rows: Vec<Value> = cheats
+                    .iter()
+                    .enumerate()
+                    .map(|(index, c)| {
+                        json!({
+                            "index": index,
+                            "id": c.int("id"),
+                            "name": c.text("description"),
+                            "enabled": c.flag("enabled"),
+                            "kind": c.text("kind"),
+                            "writes": c.field("writes").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
+                        })
+                    })
+                    .collect();
+                return Ok(Answer::ok(Value::Array(rows).to_string()));
+            }
             if cheats.is_empty() {
                 return Ok(Answer::ok("No cheats added."));
             }
@@ -444,16 +531,42 @@ fn run(call: &Call, parts: &[String]) -> Run {
             Ok(Answer::ok(lines.join("\n")))
         }
         _ => {
-            let subcommands = ["add", "poke", "gg", "rompatch", "list", "master", "enable", "disable", "remove", "clear", "save", "load", "files", "import", "export", "db"];
+            let subcommands = ["add", "poke", "from-freeze", "gg", "rompatch", "list", "master", "enable", "disable", "remove", "clear", "save", "load", "files", "import", "export", "db"];
             Ok(Answer::ok(format!("Unknown 'cheat' subcommand '{sub}'.{} Try {}.", emusen_suggest::hint(&sub, &subcommands, 2), subcommands.join("/"))))
         }
     }
 }
 
-/// `AddRamPoke`: one write of one byte, in the space as the command was given it.
+/// `AddRamPoke`: one write in the space as the command was given it.
 fn add_poke(session: &Session, space: &str, address: i32, value: i64, description: &str) -> Result<i64, Refusal> {
-    let write = object(&[("space", quoted(space)), ("address", (address as u32).to_string()), ("value", value.to_string())]);
-    change(session, cheat::ADD, &object(&[("kind", quoted("ram")), ("writes", format!("[{write}]")), ("description", quoted(description))]))
+    add_poke_wide(session, space, address, value, 1, false, description)
+}
+
+fn add_poke_wide(session: &Session, space: &str, address: i32, value: i64, width: i32, big_endian: bool, description: &str) -> Result<i64, Refusal> {
+    let write = object(&[
+        ("space", quoted(space)),
+        ("address", (address as u32).to_string()),
+        ("value", value.to_string()),
+        ("width", width.to_string()),
+        ("big_endian", big_endian.to_string()),
+    ]);
+    change(session, cheat::ADD, &object(&[("kind", quoted("ram")), ("writes", format!("[{write}]")), ("description", quoted(description)), ("enabled", "true".to_string())]))
+}
+
+fn native_ram_code(session: &Session, space: &str, address: u32, value: u32, width: u8, big_endian: bool) -> Option<String> {
+    let system = session.system().ok()?;
+    let (auto, _) = emusen_systems::cheats::pair(&system);
+    let codec = auto?;
+    let expected_space = emusen_systems::cheats::space(codec);
+    let matches_space = expected_space.is_some_and(|s| s.eq_ignore_ascii_case(space))
+        || (codec.id == "snes.par" && space.eq_ignore_ascii_case("WRAM"));
+    if !matches_space {
+        return None;
+    }
+    if width > 1 && big_endian != matches!(codec.id, "md.ar" | "n64.gs") {
+        return None;
+    }
+    emusen_systems::cheats::encode_ram(codec.id, address, value, width)
 }
 
 /// The plan's lines: what would go, biggest first, and what stays.
@@ -589,5 +702,116 @@ mod tests {
         assert!(looks_like_game_genie("DD62-6DAD"));
         assert!(!looks_like_game_genie("7E0019:01"));
         assert!(!looks_like_game_genie("DD626DAD"));
+    }
+
+    #[test]
+    fn poke_wide_from_freeze_and_list_json() {
+        use emusen_dianash::shell::{Config, Shell, Submitted};
+        use emusen_session_service::abi::{self, emusen_session_v1};
+        use std::cell::RefCell;
+        use std::ffi::c_void;
+
+        struct FakeCheatCtx {
+            cheats: RefCell<Vec<Value>>,
+            freezes: RefCell<Vec<(u32, String, u32, u32, i32, bool)>>,
+        }
+
+        unsafe extern "C" fn fake_info(_c: *mut c_void, _s: u32, o: *mut u8, l: usize) -> i64 {
+            unsafe { abi::copy_answer(br#"{"id":1,"engine":"Fake","system":"n64","byte_order":"big","capabilities":["freezes","cheats"]}"#, o, l) }
+        }
+
+        unsafe extern "C" fn fake_spaces(_c: *mut c_void, _s: u32, o: *mut u8, l: usize) -> i64 {
+            unsafe { abi::copy_answer(br#"[{"name":"RDRAM","size":4096,"writable":true,"side_effects":false,"byte_order":"big"}]"#, o, l) }
+        }
+
+        unsafe extern "C" fn fake_codecs(_c: *mut c_void, _s: u32, o: *mut u8, l: usize) -> i64 {
+            unsafe { abi::copy_answer(br#"{"auto":{"name":"GameShark","kind":"RamPoke","space":"RDRAM"},"explicit":null,"systems":["n64"]}"#, o, l) }
+        }
+
+        unsafe extern "C" fn fake_freeze_list(c: *mut c_void, _s: u32, o: *mut u8, l: usize) -> i64 {
+            let f = unsafe { &*(c as *const FakeCheatCtx) };
+            let arr: Vec<Value> = f
+                .freezes
+                .borrow()
+                .iter()
+                .map(|(id, sp, addr, val, w, be)| json!({"id": id, "space": sp, "address": addr, "value": val, "width": w, "big_endian": be, "blocked": 1}))
+                .collect();
+            unsafe { abi::copy_answer(Value::Array(arr).to_string().as_bytes(), o, l) }
+        }
+
+        unsafe extern "C" fn fake_freeze_remove(c: *mut c_void, _s: u32, id: u32) -> i32 {
+            let f = unsafe { &*(c as *const FakeCheatCtx) };
+            f.freezes.borrow_mut().retain(|x| x.0 != id);
+            0
+        }
+
+        unsafe extern "C" fn fake_cheat_op(c: *mut c_void, _s: u32, op_code: u32, args: *const u8, args_len: usize, o: *mut u8, l: usize) -> i64 {
+            let f = unsafe { &*(c as *const FakeCheatCtx) };
+            let text = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(args, args_len)) };
+            match op_code {
+                abi::cheat::ADD => {
+                    let mut entry: Value = serde_json::from_str(text).unwrap();
+                    let mut list = f.cheats.borrow_mut();
+                    let id = (list.len() + 1) as i64;
+                    entry["id"] = json!(id);
+                    entry["enabled"] = json!(true);
+                    list.push(entry);
+                    id
+                }
+                abi::cheat::LIST => {
+                    let doc = json!({"master": true, "cheats": *f.cheats.borrow()}).to_string();
+                    unsafe { abi::copy_answer(doc.as_bytes(), o, l) }
+                }
+                _ => -1103,
+            }
+        }
+
+        let mut ctx = FakeCheatCtx {
+            cheats: RefCell::new(Vec::new()),
+            freezes: RefCell::new(vec![(7, "RDRAM".to_string(), 0x1002, 0x03E7, 2, true)]),
+        };
+        let table = emusen_session_v1 {
+            ctx: (&mut ctx as *mut FakeCheatCtx).cast(),
+            info: Some(fake_info),
+            spaces: Some(fake_spaces),
+            freeze_remove: Some(fake_freeze_remove),
+            freeze_list: Some(fake_freeze_list),
+            cheat_op: Some(fake_cheat_op),
+            cheat_codecs: Some(fake_codecs),
+            ..abi::blank_table()
+        };
+        let mut sh = Shell::new(Config { sessions: false, ..Config::default() });
+        sh.add_module(&crate::MODULE).unwrap();
+        sh.set_service_table(abi::SERVICE, abi::MAJOR, abi::MINOR, (&table as *const emusen_session_v1).cast()).unwrap();
+
+        let mut run = |line: &str| -> String {
+            assert_eq!(sh.submit(0, line).unwrap(), Submitted::Done);
+            sh.take_output()
+        };
+
+        let legacy = run("cheat poke RDRAM 1004 FF Infinite ammo -w 2 --json");
+        assert!(legacy.contains("Infinite ammo -w 2 --json"), "{legacy}");
+
+        let wide_le: Value = serde_json::from_str(&run("cheat poke RDRAM 1008 999 -w 2 --le --dec --json LE HP")).unwrap();
+        assert_eq!(wide_le["big_endian"], false);
+        assert_eq!(wide_le["native_code"], Value::Null);
+
+        let wide: Value = serde_json::from_str(&run("cheat poke RDRAM 1006 999 -w 2 --be --dec --json Max HP")).unwrap();
+        assert_eq!(wide["name"], "Max HP");
+        assert_eq!(wide["width"], 2);
+        assert_eq!(wide["big_endian"], true);
+        assert_eq!(wide["native_code"], "81001006 03E7");
+
+        let from_fz: Value = serde_json::from_str(&run("cheat from-freeze 7 --remove --json Infinite gold")).unwrap();
+        assert_eq!(from_fz["name"], "Infinite gold");
+        assert_eq!(from_fz["value"], 999);
+        assert_eq!(from_fz["native_code"], "81001002 03E7");
+        assert!(ctx.freezes.borrow().is_empty());
+
+        let listed: Value = serde_json::from_str(&run("cheat list --json")).unwrap();
+        assert_eq!(listed.as_array().unwrap().len(), 4);
+        assert_eq!(listed[1]["writes"][0]["big_endian"], false);
+        assert_eq!(listed[2]["writes"][0]["width"], 2);
+        assert_eq!(listed[2]["writes"][0]["big_endian"], true);
     }
 }

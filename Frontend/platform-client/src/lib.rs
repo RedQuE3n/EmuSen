@@ -9,6 +9,7 @@
 pub mod audio;
 pub mod bindings;
 pub mod cheats;
+pub mod dianash;
 mod error;
 pub mod firmware;
 pub mod galaxia;

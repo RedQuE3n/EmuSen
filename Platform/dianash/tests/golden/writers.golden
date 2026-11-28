@@ -2,7 +2,7 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command writers
-usage 1   writers <addr> [<scanstart> <scanlen>]
+usage 1   writers [<space>] <addr> [<scanstart> <scanlen>] [--json]
 usage 2                                 find instructions statically writing to <addr>,
 usage 3                                 scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
 

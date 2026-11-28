@@ -89,6 +89,11 @@ impl SessionService {
         &self.rt
     }
 
+    /// Borrowed `emusen_session_v1` table pointer, valid for the lifetime of this service handle.
+    pub fn raw_session_services(&self) -> *const raw::emusen_session_v1 {
+        self.table.as_ptr()
+    }
+
     /// The table's own sessions: its session, or none for the table with no game.
     pub fn sessions(&self) -> Result<Vec<SessionRow>> {
         let f = entry!(self, sessions);

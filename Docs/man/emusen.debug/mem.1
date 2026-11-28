@@ -2,17 +2,18 @@ NAME
     mem - hexdump a range of memory
 
 SYNOPSIS
-    mem <space> <addr> [<len>]
+    mem <space> <addr> [<len>] [--json]
 
 DESCRIPTION
     Prints <len> bytes (default 16) from memory space <space> starting at
     <addr> as a 16-byte-per-row hexadecimal and printable-ASCII dump.
     <space> is a name listed by spaces(1). Both <addr> and <len> are
-    parsed as hexadecimal (optional '0x' or '$' prefix accepted).
+    parsed as hexadecimal (optional '0x' or '$' prefix accepted). Pass
+    --json for structured 16-byte rows.
 
 EXAMPLES
     mem WRAM 0
-    mem CpuBus 8000 64
+    mem CpuBus 8000 64 --json
 
 EXIT STATUS
     0   Memory dumped (or usage message printed).

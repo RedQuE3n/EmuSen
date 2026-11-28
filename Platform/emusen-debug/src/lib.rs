@@ -17,8 +17,8 @@ pub(crate) type Run = Result<Answer, String>;
 /// The commands this module has, with their read-only flags and today's usage lines.
 pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("spaces", true, "  spaces                        list available memory spaces"),
-    ("mem", true, "  mem <space> <addr> [<len>]    hexdump <len> bytes (default 16) from <space> at <addr>"),
-    ("write", false, "  write <space> <addr> <value>  write one byte (only if <space> is writable)"),
+    ("mem", true, "  mem <space> <addr> [<len>] [--json]  hexdump <len> bytes (default 16) from <space> at <addr>"),
+    ("write", false, "  write <space> <addr> <value> [-w 1|2|4] [--le|--be] [--dec|--float] [--json]  write 1, 2, or 4 bytes"),
     ("regs", true, concat!(
         "  regs                          CPU + video (+ APU/coprocessor) registers\n",
         "  regs <cpu>                    just one processor's registers - `cpus` lists them\n",
@@ -50,17 +50,18 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("vectors", true, "  vectors                       where each interrupt vector points, resolved through labels"),
     ("addr", true, "  addr <addr>                   what a CPU-bus address decodes to (ROM offset, RAM, a register)"),
     ("search", false, concat!(
-        "  search <space> <val> [<w>]    start a new search: find every address currently equal to <val>\n",
-        "                                (width <w> in bytes: 1, 2, or 4 - default 1, little-endian)\n",
-        "  search refine <val>           narrow the current search to addresses now equal to <val>\n",
-        "  search changed|unchanged      narrow to addresses whose value did/didn't change since last search/refine\n",
-        "  search increased|decreased    narrow to addresses whose value went up/down since last search/refine\n",
-        "  search list [<count>]         list current candidate addresses + values (default 20)\n",
-        "  search reset                  clear the current search"
+        "  search <space> <val> [<w>] [flags]  start a new search: find every address equal to <val>\n",
+        "                                (flags: -w 1|2|4, --signed|--unsigned|--float, --le|--be, --dec|--hex, --aligned|--unaligned, --json)\n",
+        "  search unknown <space> [flags]  capture full RAM baseline without filtering\n",
+        "  search eq|ne|gt|lt <space> <val> [flags] | search between <space> <lo> <hi> [flags]\n",
+        "  search refine|eq|ne|gt|lt <val> | search between <lo> <hi>\n",
+        "  search changed|unchanged|increased|decreased | search incby|decby <n>\n",
+        "  search pointer <space> <target> [--max-offset N] | search pointer rescan <target>\n",
+        "  search undo | search list [<count>] | search reset"
     )),
     ("memfind", true, concat!(
-        "  memfind <space> <bytes> [<max>]  find every offset where <bytes> occurs (hex pairs, '??' matches\n",
-        "                                any byte, separators optional) - default at most 20 hits"
+        "  memfind <space> <bytes> [<max>] [--json]  find every offset where <bytes> occurs (hex pairs, '??'\n",
+        "                                matches any byte, separators optional) - default at most 20 hits"
     )),
     ("snapshot", false, concat!(
         "  snapshot <space> <name>       capture <space>'s full current contents under <name>\n",
@@ -95,12 +96,12 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)"
     )),
     ("writers", true, concat!(
-        "  writers <addr> [<scanstart> <scanlen>]\n",
+        "  writers [<space>] <addr> [<scanstart> <scanlen>] [--json]\n",
         "                                find instructions statically writing to <addr>,\n",
         "                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)"
     )),
     ("readers", true, concat!(
-        "  readers <addr> [<scanstart> <scanlen>]\n",
+        "  readers [<space>] <addr> [<scanstart> <scanlen>] [--json]\n",
         "                                find instructions statically reading <addr>,\n",
         "                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)"
     )),

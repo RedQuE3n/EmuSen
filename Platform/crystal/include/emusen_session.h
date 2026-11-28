@@ -51,7 +51,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_SESSION_MAJOR 1u
-#define EMUSEN_SESSION_MINOR 3u
+#define EMUSEN_SESSION_MINOR 4u
 #define EMUSEN_SESSION_VERSION ((EMUSEN_SESSION_MAJOR << 16) | EMUSEN_SESSION_MINOR)
 
 /* The name a module asks the shell for, with the major after an @. */
@@ -447,6 +447,11 @@ typedef struct emusen_session_v1 {
      * it with "starts_empty". */
     int64_t (*open_console)(void *ctx, uint32_t session, const uint8_t *console, size_t console_len,
                             const uint8_t *engine, size_t engine_len);
+
+    /* -- Wide freezes (@since 1.4): holds width bytes (1, 2, or 4) at address in the chosen byte order --- */
+    /* changes. -> the id. big_endian is 0 for little-endian, non-zero for big-endian. */
+    int64_t (*freeze_add_wide)(void *ctx, uint32_t session, const uint8_t *space, size_t space_len,
+                               uint32_t address, uint64_t value, uint32_t width, uint32_t big_endian);
 } emusen_session_v1;
 
 #ifdef __cplusplus

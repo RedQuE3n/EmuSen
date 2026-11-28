@@ -2,21 +2,62 @@
 
 use crate::{Record, Session};
 
+/// Native byte order of a memory space or system.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Endian {
+    Little,
+    Big,
+}
+
+impl Endian {
+    pub fn from_str(text: &str) -> Option<Endian> {
+        match text {
+            "big" => Some(Endian::Big),
+            "little" => Some(Endian::Little),
+            _ => None,
+        }
+    }
+
+    pub fn is_big(self) -> bool {
+        self == Endian::Big
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Endian::Big => "big",
+            Endian::Little => "little",
+        }
+    }
+}
+
 /// One memory space as `spaces` lists it.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Space {
     pub name: String,
     pub size: i32,
     pub writable: bool,
     pub side_effects: bool,
+    pub byte_order: Endian,
 }
 
 /// Every space of the session, in its order.
 pub fn all(session: &Session) -> Result<Vec<Space>, String> {
-    Ok(session
-        .spaces()?
-        .items()
+    let raw = session.spaces()?;
+    let items = raw.items();
+    let fallback = if items.iter().any(|s| s.optional_text("byte_order").is_none()) {
+        session.byte_order().unwrap_or(Endian::Little)
+    } else {
+        Endian::Little
+    };
+    Ok(items
         .iter()
-        .map(|s| Space { name: s.text("name"), size: s.int("size") as i32, writable: s.flag("writable"), side_effects: s.flag("side_effects") })
+        .map(|s| Space {
+            name: s.text("name"),
+            size: s.int("size") as i32,
+            writable: s.flag("writable"),
+            side_effects: s.flag("side_effects"),
+            byte_order: s.optional_text("byte_order").as_deref().and_then(Endian::from_str).unwrap_or(fallback),
+        })
         .collect())
 }
 

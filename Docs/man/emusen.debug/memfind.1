@@ -2,7 +2,7 @@ NAME
     memfind - locate a byte sequence in a memory space
 
 SYNOPSIS
-    memfind <space> <bytes> [<max>]
+    memfind <space> <bytes> [<max>] [--json]
 
 DESCRIPTION
     Scans memory space <space> in one pass for every offset matching the
@@ -15,12 +15,13 @@ DESCRIPTION
     equivalent). Use '??' as a wildcard matching any single byte.
 
     Stops after <max> hits (default 20, decimal > 0) and notes when more
-    matches exist. Refuses spaces backed by live hardware registers with
-    read side effects (such as CpuBus).
+    matches exist. Pass --json for structured hit objects. Refuses spaces
+    backed by live hardware registers with read side effects (such as
+    CpuBus).
 
 EXAMPLES
     memfind WRAM 00FFFFFFFF00FF00
-    memfind VRAM 00??FF??11 5
+    memfind VRAM '00??FF??11' 5 --json
     memfind ROM 4E696E74656E646F
 
 EXIT STATUS

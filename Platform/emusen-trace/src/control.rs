@@ -4,9 +4,10 @@ use crate::{required, scoped, session, usage, Run};
 use dianash_module::{Answer, Call};
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope::{self, Cpu};
-use emusen_session_service::space::find;
-use emusen_session_service::words::{describe, hex, parse_hex, parse_range};
+use emusen_session_service::space::{all, find};
+use emusen_session_service::words::{describe, hex, hex_digits, parse_hex, parse_range, split_common_flags};
 use emusen_session_service::{object, quoted, Record, Session};
+use serde_json::{json, Value};
 
 /// Upper case.
 pub(crate) fn upper(text: &str) -> String {
@@ -351,23 +352,56 @@ pub fn watch(call: &Call, parts: &[String]) -> Run {
     let sub = parts[1].to_lowercase();
     match sub.as_str() {
         "add" => {
-            if parts.len() < 5 {
-                return Ok(Answer::ok("Usage: watch add <space> <addr> <len> [write|read|both]"));
+            let (pos, flags) = split_common_flags(&parts[2..])?;
+            if pos.len() < 3 {
+                return Ok(Answer::ok("Usage: watch add <space> <addr> <len> [write|read|both] [--json]"));
             }
-            find(&session, &parts[2])?;
-            let addr = parse_hex(&parts[3])?;
-            let len = parse_hex(&parts[4])?;
-            let kind = match parts.get(5).map(|k| k.to_lowercase()).as_deref() {
+            let space = find(&session, &pos[0])?;
+            let addr = parse_hex(&pos[1])?;
+            let len = parse_hex(&pos[2])?;
+            let kind = match pos.get(3).map(|k| k.to_lowercase()).as_deref() {
                 None | Some("write") => abi::watch::WRITE,
                 Some("read") => abi::watch::READ,
                 Some("both") => abi::watch::BOTH,
-                Some(_) => return Err(format!("Unknown watch kind '{}'. Use write, read, or both.", parts[5])),
+                Some(_) => return Err(format!("Unknown watch kind '{}'. Use write, read, or both.", pos[3])),
             };
-            let id = session.watch_add(&parts[2], addr as u32, len as u32, kind)?;
-            Ok(Answer::ok(format!("Watch #{id} added: {} 0x{addr:X}-0x{:X} ({})", parts[2], addr.wrapping_add(len).wrapping_sub(1), watch_kind(i64::from(kind)))))
+            let id = session.watch_add(&space.name, addr as u32, len as u32, kind)?;
+            if flags.json {
+                return Ok(Answer::ok(json!({
+                    "id": id,
+                    "space": space.name,
+                    "address": addr as u32,
+                    "length": len as u32,
+                    "kind": watch_kind(i64::from(kind)),
+                }).to_string()));
+            }
+            Ok(Answer::ok(format!("Watch #{id} added: {} 0x{addr:X}-0x{:X} ({})", pos[0], addr.wrapping_add(len).wrapping_sub(1), watch_kind(i64::from(kind)))))
         }
         "list" => {
+            let (_, flags) = split_common_flags(&parts[2..])?;
             let list = session.watch_list()?;
+            if flags.json {
+                let spaces = all(&session).unwrap_or_default();
+                let watches: Vec<Value> = list
+                    .items()
+                    .iter()
+                    .map(|w| {
+                        let start = w.address("address") as u32;
+                        let space_name = w.text("space");
+                        let size = spaces.iter().find(|s| s.name.eq_ignore_ascii_case(&space_name)).map_or(0x1_0000, |s| s.size);
+                        let digits = hex_digits(size);
+                        json!({
+                            "id": w.int("id"),
+                            "space": space_name,
+                            "address": start,
+                            "addr_hex": format!("{start:0digits$X}"),
+                            "length": w.int("length"),
+                            "kind": watch_kind(w.int("kind")),
+                        })
+                    })
+                    .collect();
+                return Ok(Answer::ok(json!({"watches": watches}).to_string()));
+            }
             if list.items().is_empty() {
                 return Ok(Answer::ok("No active watches."));
             }
@@ -402,15 +436,47 @@ pub fn watch(call: &Call, parts: &[String]) -> Run {
             Ok(Answer::ok(rows.join("\n")))
         }
         "summary" => {
-            if parts.len() < 3 {
-                return Ok(Answer::ok("Usage: watch summary <id>"));
+            let (pos, flags) = split_common_flags(&parts[2..])?;
+            if pos.is_empty() {
+                return Ok(Answer::ok("Usage: watch summary <id> [--json]"));
             }
-            let id = parse_hex(&parts[2])?;
+            let id = parse_hex(&pos[0])?;
             let summary = match session.watch_summary(id as u32) {
                 Ok(summary) => Some(summary),
                 Err(refusal) if refusal.is(status::NO_SUCH_ID) => None,
                 Err(refusal) => return Err(refusal.words),
             };
+            if flags.json {
+                let meta = session
+                    .watch_list()
+                    .ok()
+                    .and_then(|l| l.items().iter().find(|w| w.int("id") == i64::from(id)).cloned());
+                let space_name = meta.as_ref().map_or_else(String::new, |w| w.text("space"));
+                let address = meta.as_ref().map_or(0u32, |w| w.address("address") as u32);
+                let length = meta.as_ref().map_or(0i64, |w| w.int("length"));
+                let kind_str = meta.as_ref().map_or("write", |w| watch_kind(w.int("kind")));
+                let hits: Vec<Value> = summary
+                    .as_ref()
+                    .map(|s| {
+                        s.list("sites")
+                            .iter()
+                            .map(|site| json!({"pc": site.text("context"), "count": site.int("count").max(0) as u64}))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let total = summary.as_ref().map_or(0, |s| s.int("total"));
+                let retained = summary.as_ref().map_or(0, |s| s.int("retained"));
+                return Ok(Answer::ok(json!({
+                    "id": id,
+                    "space": space_name,
+                    "address": address,
+                    "length": length,
+                    "kind": kind_str,
+                    "total": total,
+                    "retained": retained,
+                    "hits": hits,
+                }).to_string()));
+            }
             let Some(summary) = summary.filter(|s| !s.list("sites").is_empty()) else {
                 return Ok(Answer::ok(format!("No events recorded for watch #{id} (or it doesn't exist).")));
             };

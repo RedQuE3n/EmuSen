@@ -226,7 +226,9 @@ pub struct Frozen {
     pub id: i32,
     pub space: String,
     pub address: i32,
-    pub value: u8,
+    pub value: u64,
+    pub width: i32,
+    pub big_endian: bool,
     pub blocked: i64,
 }
 
@@ -247,13 +249,30 @@ impl FreezeRegistry {
 
     /// A byte pinned, or a pinned byte's value changed.
     pub fn add(&mut self, space: &str, address: i32, value: u8) -> i32 {
-        if let Some(f) = self.frozen.iter_mut().find(|f| f.address == address && f.space.eq_ignore_ascii_case(&space)) {
+        self.add_wide(space, address, u64::from(value), 1, false)
+    }
+
+    /// A 1, 2, or 4-byte value pinned in the chosen byte order, or updated in place.
+    pub fn add_wide(&mut self, space: &str, address: i32, value: u64, width: i32, big_endian: bool) -> i32 {
+        let width = match width {
+            2 | 4 => width,
+            _ => 1,
+        };
+        let mask = match width {
+            1 => 0xFF,
+            2 => 0xFFFF,
+            _ => 0xFFFF_FFFF,
+        };
+        let value = value & mask;
+        if let Some(f) = self.frozen.iter_mut().find(|f| f.address == address && f.space.eq_ignore_ascii_case(space)) {
             f.value = value;
+            f.width = width;
+            f.big_endian = big_endian;
             return f.id;
         }
         let id = self.next_id;
         self.next_id += 1;
-        self.frozen.push(Frozen { id, space: space.to_string(), address, value, blocked: 0 });
+        self.frozen.push(Frozen { id, space: space.to_string(), address, value, width, big_endian, blocked: 0 });
         id
     }
 
@@ -271,14 +290,46 @@ impl FreezeRegistry {
         &self.frozen
     }
 
-    /// `Enforce`: each pinned byte found changed is written back, once a frame.
+    /// `Enforce`: each pinned span found changed is written back, once a frame.
     pub fn enforce(&mut self, mut read: impl FnMut(&str, i32) -> u8, mut write: impl FnMut(&str, i32, u8)) {
         for f in &mut self.frozen {
-            if read(&f.space, f.address) == f.value {
+            let width = f.width;
+            let byte_at = |i: i32| -> u8 {
+                let shift = if f.big_endian { 8 * (width - 1 - i) } else { 8 * i };
+                ((f.value >> shift) & 0xFF) as u8
+            };
+            if (0..width).all(|i| read(&f.space, f.address.wrapping_add(i)) == byte_at(i)) {
                 continue;
             }
             f.blocked += 1;
-            write(&f.space, f.address, f.value);
+            for i in 0..width {
+                write(&f.space, f.address.wrapping_add(i), byte_at(i));
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FreezeRegistry;
+
+    #[test]
+    fn add_wide_enforces_le_and_be_and_counts_blocked() {
+        let ram = std::cell::RefCell::new([0u8; 32]);
+        let mut reg = FreezeRegistry::new();
+        let id_le = reg.add_wide("WRAM", 0x02, 0x1234, 2, false);
+        let id_be = reg.add_wide("WRAM", 0x08, 0xDEAD_BEEF, 4, true);
+        reg.enforce(|_, a| ram.borrow()[a as usize], |_, a, v| ram.borrow_mut()[a as usize] = v);
+        assert_eq!(&ram.borrow()[0x02..0x04], &[0x34, 0x12]);
+        assert_eq!(&ram.borrow()[0x08..0x0C], &[0xDE, 0xAD, 0xBE, 0xEF]);
+        assert_eq!(reg.all().iter().find(|f| f.id == id_le).unwrap().blocked, 1);
+        assert_eq!(reg.all().iter().find(|f| f.id == id_be).unwrap().blocked, 1);
+        reg.enforce(|_, a| ram.borrow()[a as usize], |_, a, v| ram.borrow_mut()[a as usize] = v);
+        assert_eq!(reg.all().iter().find(|f| f.id == id_le).unwrap().blocked, 1);
+        assert_eq!(reg.all().iter().find(|f| f.id == id_be).unwrap().blocked, 1);
+        ram.borrow_mut()[0x03] = 0x99;
+        reg.enforce(|_, a| ram.borrow()[a as usize], |_, a, v| ram.borrow_mut()[a as usize] = v);
+        assert_eq!(ram.borrow()[0x03], 0x12);
+        assert_eq!(reg.all().iter().find(|f| f.id == id_le).unwrap().blocked, 2);
     }
 }

@@ -85,22 +85,30 @@ eval main symbols player
 
 ```sh
 # Snapshot a memory space before and after an in-game change, then diff
-snapshot before wram
+snapshot wram before
 # ... perform action in game ...
-snapshot after wram
-diff before after
+diff before
 
-# Search RAM interactively or find byte patterns directly
-memfind wram 0x03 0x00 0xFF
+# Search RAM iteratively (unknown baseline, delta, signed/float, 1-level pointers) or scan byte patterns
+search unknown wram -w 2 --dec
+# ... gain 50 gold in game ...
+search incby 50 --dec
+search list 10 --dec
+memfind wram "03 ?? FF"
 
-# Break or log on memory writes and reads (requires EMUSEN_CAP_DEBUG_READS for reads)
-watch write wram 0x007E break
-watch read wram 0x007E log pc
+# Pin a value across frames or promote it to a persisted custom cheat
+freeze add wram 007E 99 --dec
+cheat from-freeze 1 --remove "Infinite lives"
+
+# Record writes/reads dynamically (requires EMUSEN_CAP_DEBUG_READS for reads)
+watch add wram 007E 1 write
+watch add wram 007E 1 read
 resume
+watch summary 1
 
-# Inspect recent writers, readers, callers, and the live call stack
-writers wram 0x007E
-readers wram 0x007E
+# Inspect static writers, readers, callers, and the live call stack
+writers wram 007E
+readers wram 007E
 callers main 0x8120
 bt
 ```

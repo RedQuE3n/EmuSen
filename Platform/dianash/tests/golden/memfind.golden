@@ -2,8 +2,8 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command memfind
-usage 1   memfind <space> <bytes> [<max>]  find every offset where <bytes> occurs (hex pairs, '??' matches
-usage 2                                 any byte, separators optional) - default at most 20 hits
+usage 1   memfind <space> <bytes> [<max>] [--json]  find every offset where <bytes> occurs (hex pairs, '??'
+usage 2                                 matches any byte, separators optional) - default at most 20 hits
 
 case with no target
 target none

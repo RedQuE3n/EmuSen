@@ -18,12 +18,12 @@ pub(crate) type Run = Result<Answer, String>;
 pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("cophist", true, "  cophist [<reg>] [<count>]     Coprocessor register history (default: all regs, last 16)"),
     ("watch", false, concat!(
-        "  watch add <space> <addr> <len> [write|read|both]\n",
+        "  watch add <space> <addr> <len> [write|read|both] [--json]\n",
         "                                register a watch, prints matching accesses live + stores them\n",
         "                                (default write, matching this command's original behavior)\n",
-        "  watch list                    list active watches with their IDs and access kind\n",
+        "  watch list [--json]           list active watches with their IDs and access kind\n",
         "  watch log <id> [<count>]      show a watch's recorded events (default 20)\n",
-        "  watch summary <id>            group a watch's recorded events by access site (Context),\n",
+        "  watch summary <id> [--json]   group a watch's recorded events by access site (Context),\n",
         "                                showing each unique site once with a hit count instead of\n",
         "                                every individual event - the dynamic, addressing-mode-agnostic\n",
         "                                equivalent of `readers`/`writers`, which only find statically-\n",
@@ -75,10 +75,11 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "  counters cold <addr> <len>    addresses in the range nothing ever touched"
     )),
     ("freeze", false, concat!(
-        "  freeze add <space> <addr> [<value>]  pin <addr>; without <value>, at whatever it holds now\n",
-        "  freeze list                          list frozen addresses and how many writes each blocked\n",
-        "  freeze remove <id>                   unfreeze one address\n",
-        "  freeze clear                         unfreeze everything"
+        "  freeze add <space> <addr> [<value>] [-w 1|2|4] [--le|--be] [--dec|--float] [--json]\n",
+        "                                pin <addr>; without <value>, snapshots live value\n",
+        "  freeze list [--json]          list frozen addresses and how many writes each blocked\n",
+        "  freeze remove <id> [--json]   unfreeze one address\n",
+        "  freeze clear [--json]         unfreeze everything"
     )),
     ("profile", false, concat!(
         "  profile on                    start charging instructions to the innermost routine\n",

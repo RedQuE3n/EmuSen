@@ -2,13 +2,14 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command search
-usage 1   search <space> <val> [<w>]    start a new search: find every address currently equal to <val>
-usage 2                                 (width <w> in bytes: 1, 2, or 4 - default 1, little-endian)
-usage 3   search refine <val>           narrow the current search to addresses now equal to <val>
-usage 4   search changed|unchanged      narrow to addresses whose value did/didn't change since last search/refine
-usage 5   search increased|decreased    narrow to addresses whose value went up/down since last search/refine
-usage 6   search list [<count>]         list current candidate addresses + values (default 20)
-usage 7   search reset                  clear the current search
+usage 1   search <space> <val> [<w>] [flags]  start a new search: find every address equal to <val>
+usage 2                                 (flags: -w 1|2|4, --signed|--unsigned|--float, --le|--be, --dec|--hex, --aligned|--unaligned, --json)
+usage 3   search unknown <space> [flags]  capture full RAM baseline without filtering
+usage 4   search eq|ne|gt|lt <space> <val> [flags] | search between <space> <lo> <hi> [flags]
+usage 5   search refine|eq|ne|gt|lt <val> | search between <lo> <hi>
+usage 6   search changed|unchanged|increased|decreased | search incby|decby <n>
+usage 7   search pointer <space> <target> [--max-offset N] | search pointer rescan <target>
+usage 8   search undo | search list [<count>] | search reset
 
 case with no target
 target none

@@ -1,21 +1,22 @@
 //! `Themes`, the read-only installed themes catalog and active selection projection.
 
-use crate::rows::qobject::ThemeRows;
-use crate::view::Row;
-use core::pin::Pin;
-use cxx_qt::casting::Upcast;
-use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QList, QString, QStringList};
+use {
+    crate::rows::qobject::ThemeRows,
+    crate::view::Row,
+    core::pin::Pin,
+    cxx_qt::{casting::Upcast, CxxQtType},
+    cxx_qt_lib::{QString, QStringList},
+};
 
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-        include!("cxx-qt-lib/qstringlist.h");
-        type QStringList = cxx_qt_lib::QStringList;
         include!("emusen-theme-qt/src/rows.cxxqt.h");
         type ThemeRows = crate::rows::qobject::ThemeRows;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
     }
 
     extern "RustQt" {
@@ -107,50 +108,24 @@ impl cxx_qt::Initialize for qobject::ThemeThemes {
     }
 }
 
-fn to_qstring_list(items: &[String]) -> QStringList {
-    let mut list = QList::<QString>::default();
-    for item in items {
-        list.append(QString::from(item.as_str()));
-    }
-    QStringList::from(&list)
-}
-
 impl qobject::ThemeThemes {
     pub fn show(mut self: Pin<&mut Self>, facts: &ThemesFacts) {
         let mut changed = false;
-        let kinds = to_qstring_list(&facts.kinds);
+        let kinds = crate::to_qstring_list(&facts.kinds);
         if self.kinds != kinds {
             self.as_mut().rust_mut().kinds = kinds;
             changed = true;
         }
-        macro_rules! set_text {
-            ($field:ident, $val:expr) => {{
-                let v = QString::from($val.as_str());
-                if self.$field != v {
-                    self.as_mut().rust_mut().$field = v;
-                    changed = true;
-                }
-            }};
-        }
-        macro_rules! set_plain {
-            ($field:ident, $val:expr) => {{
-                let v = $val;
-                if self.$field != v {
-                    self.as_mut().rust_mut().$field = v;
-                    changed = true;
-                }
-            }};
-        }
-        set_text!(kind, facts.kind);
-        set_plain!(focused, facts.focused);
-        set_text!(chosen, facts.chosen);
-        set_text!(words, facts.words);
-        set_text!(name, facts.name);
-        set_text!(line, facts.line);
-        set_text!(preview, facts.preview);
-        set_text!(findings, facts.findings);
-        set_plain!(usable, facts.usable);
-        set_plain!(help, facts.help);
+        set_text!(self, changed, kind, facts.kind);
+        set_plain!(self, changed, focused, facts.focused);
+        set_text!(self, changed, chosen, facts.chosen);
+        set_text!(self, changed, words, facts.words);
+        set_text!(self, changed, name, facts.name);
+        set_text!(self, changed, line, facts.line);
+        set_text!(self, changed, preview, facts.preview);
+        set_text!(self, changed, findings, facts.findings);
+        set_plain!(self, changed, usable, facts.usable);
+        set_plain!(self, changed, help, facts.help);
         if let Some(list) = unsafe { self.rows.as_mut() } {
             if list.rows() != facts.rows.as_slice() {
                 changed = true;

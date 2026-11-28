@@ -381,6 +381,40 @@ fn desktop_face_covers_host_reference_and_schema2() {
     assert!(actions.as_mut().settings_back(), "settingsBack exits cards subpage");
     wait_for(&mut scene, "dualSettingsMeta", "text", "|false|false|-1", 1000);
 
+    // DesktopSettings listening & typing focus stays on listener/keyboard rather than desktopShell.
+    let sm_qobj = scene.object("settingsModel") as *const emusen_qt_models::library_model::qobject::QAbstractListModel;
+    let sm_ptr = unsafe { <emusen_qt_models::settings_model::qobject::SettingsModel as Upcast<emusen_qt_models::library_model::qobject::QAbstractListModel>>::from_base_ptr(sm_qobj) };
+    let row_of = |id: &str| -> usize {
+        unsafe { &*sm_ptr }.shown_rows().iter().position(|r| r.id == id).expect(id)
+    };
+    assert!(actions.as_mut().settings_section(0));
+    scene.wait(40);
+    let hotkeys_row = row_of("hotkeys");
+    assert!(actions.as_mut().settings_choose(hotkeys_row as i32));
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|true|-1", 1000);
+    assert!(actions.as_mut().settings_choose(0));
+    wait_for(&mut scene, "settingsModel", "listening", "true", 1000);
+    wait_for(&mut scene, "settingsThemeListener", "activeFocus", "true", 1000);
+    scene.key(0x0100_0000, 0);
+    wait_for(&mut scene, "settingsModel", "listening", "false", 1000);
+    assert!(actions.as_mut().settings_back());
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|false|-1", 1000);
+
+    let lib_sec = unsafe { &*sm_ptr }.sections().iter().position(|s| s.to_string() == "Library").expect("Library section") as i32;
+    assert!(actions.as_mut().settings_section(lib_sec));
+    scene.wait(40);
+    let scrape_run_row = row_of("scraperun");
+    assert!(actions.as_mut().settings_choose(scrape_run_row as i32));
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|true|-1", 1000);
+    let login_row = row_of("scrape:login");
+    assert!(actions.as_mut().settings_choose(login_row as i32));
+    wait_for(&mut scene, "settingsModel", "typing", "true", 1000);
+    wait_for(&mut scene, "settingsTyping", "activeFocus", "true", 1000);
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "settingsModel", "typing", "false", 1000);
+    assert!(actions.as_mut().settings_back());
+    wait_for(&mut scene, "dualSettingsMeta", "text", "|false|false|-1", 1000);
+
     // R-20261127-9: Program Tool/Page doors stay in Desktop form without flipping bigScreen.
     assert!(scene.set_property("desktopModel", "view", "0"));
     wait_for(&mut scene, "theme", "desktopLibrary", "true", 2000);

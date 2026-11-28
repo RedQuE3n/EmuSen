@@ -15,6 +15,7 @@ Themes {
     signal used(string folder)
     signal restyled(bool esde)
     visible: screen.screens.shown === Screens.Themes
+    onVisibleChanged: if (visible) screen.forceActiveFocus()
     themes: themesModel
     inputs: visible && !screen.splashShown
     onBacked: screen.screens.back()

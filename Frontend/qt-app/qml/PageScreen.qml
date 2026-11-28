@@ -23,6 +23,7 @@ GamePage {
     signal openFolder(string path)
     signal said(string words)
     visible: pageScreen.screens.shown === Screens.Page && !pageScreen.themed
+    onVisibleChanged: if (visible) pageScreen.focusActive()
     page: pageModel
     inputs: visible && !pageScreen.splashShown
     onBacked: pageScreen.screens.back()

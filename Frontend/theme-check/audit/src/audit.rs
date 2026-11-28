@@ -891,6 +891,28 @@ fn placed(scene: &mut Scene<'_>, folder: &str, screen: AuditTarget, feeding: imp
     feeding(id).map(|_| id)
 }
 
+fn audit_still_and_states(
+    scene: &mut Scene<'_>,
+    target: AuditTarget,
+    id: u64,
+    pass: &Pass<'_>,
+    state: Option<&Path>,
+    sizes: &[(i32, i32)],
+    check_still: bool,
+    lines: &mut Lines<'_>,
+) {
+    lines.guarded(target, |lines| {
+        if check_still && sizes.contains(&SIZES[0]) {
+            lines.at = format!("{}x{}, judged still under reduced motion", SIZES[0].0, SIZES[0].1);
+            scene.resize(SIZES[0].0, SIZES[0].1);
+            if let Some(words) = still(scene) {
+                lines.add(target, "motion", &words);
+            }
+        }
+        states(scene, target, id, pass, state, lines);
+    });
+}
+
 /// The findings of the package at `folder` (named `shown` in the lines), its screens loaded in turn in each state asked.
 /// With a catalogue (`man theme-check`, --catalogue), Choose a console alone is placed over it, its states labelled by its name.
 pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, String> {
@@ -969,17 +991,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
                     match judged {
                         None => {}
                         Some(Err(words)) => words.lines().for_each(|w| lines.add(target, "load", w)),
-                        Some(Ok(id)) => lines.guarded(target, |lines| {
-                            // Stillness is judged once a screen, at the gate's first size, by the run that judges that size.
-                            if default && asked.sizes.contains(&SIZES[0]) {
-                                lines.at = format!("{}x{}, judged still under reduced motion", SIZES[0].0, SIZES[0].1);
-                                scene.resize(SIZES[0].0, SIZES[0].1);
-                                if let Some(words) = still(&mut scene) {
-                                    lines.add(target, "motion", &words);
-                                }
-                            }
-                            states(&mut scene, target, id, &pass, state, lines);
-                        }),
+                        Some(Ok(id)) => audit_still_and_states(&mut scene, target, id, &pass, state, &asked.sizes, default, &mut lines),
                     }
                     if default && screen == Screen::Consoles && asked.crowd != Crowd::Without {
                         // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
@@ -1006,16 +1018,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
             let pass = Pass::plain(&listed, &asked.sizes, "", None);
             match placed(&mut scene, &real, target, |id| feed(id, &library, &view, &fed, &desktop_overrides, section)) {
                 Err(words) => words.lines().for_each(|w| lines.add(target, "load", w)),
-                Ok(id) => lines.guarded(target, |lines| {
-                    if asked.sizes.contains(&SIZES[0]) {
-                        lines.at = format!("{}x{}, judged still under reduced motion", SIZES[0].0, SIZES[0].1);
-                        scene.resize(SIZES[0].0, SIZES[0].1);
-                        if let Some(words) = still(&mut scene) {
-                            lines.add(target, "motion", &words);
-                        }
-                    }
-                    states(&mut scene, target, id, &pass, state, lines);
-                }),
+                Ok(id) => audit_still_and_states(&mut scene, target, id, &pass, state, &asked.sizes, true, &mut lines),
             }
             logged().iter().for_each(|w| lines.add(target, "warning", w));
         }

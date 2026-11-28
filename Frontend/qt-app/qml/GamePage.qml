@@ -19,7 +19,6 @@ Kit.NormalizedCanvas {
     // The focus as the help bar reads it: an action's index, else -1 and the content's index.
     readonly property int actionFocused: frame.actionView.activeFocus ? frame.actionView.currentIndex : -1
     signal focusActive()
-    onVisibleChanged: if (visible) screen.focusActive()
     onFocusActive: {
         if (screen.page.typing) typeFrame.forceActiveFocus()
         else if (screen.page.viewing && !screen.page.asking) viewer.forceActiveFocus()

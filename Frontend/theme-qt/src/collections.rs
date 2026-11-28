@@ -1,11 +1,12 @@
 //! `Collections`, the read-only game collections projection.
 
-use crate::rows::qobject::ThemeRows;
-use crate::view::Row;
-use core::pin::Pin;
-use cxx_qt::casting::Upcast;
-use cxx_qt::CxxQtType;
-use cxx_qt_lib::QString;
+use {
+    crate::rows::qobject::ThemeRows,
+    crate::view::Row,
+    core::pin::Pin,
+    cxx_qt::{casting::Upcast, CxxQtType},
+    cxx_qt_lib::QString,
+};
 
 #[cxx_qt::bridge]
 pub mod qobject {

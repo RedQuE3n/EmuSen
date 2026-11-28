@@ -261,43 +261,25 @@ impl qobject::ThemeSession {
 
     pub fn show_live(mut self: Pin<&mut Self>, facts: &SessionLiveFacts) {
         let mut changed = false;
-        macro_rules! set_plain {
-            ($field:ident, $val:expr) => {{
-                let v = $val;
-                if self.$field != v {
-                    self.as_mut().rust_mut().$field = v;
-                    changed = true;
-                }
-            }};
-        }
-        macro_rules! set_text {
-            ($field:ident, $val:expr) => {{
-                let v = QString::from($val.as_str());
-                if self.$field != v {
-                    self.as_mut().rust_mut().$field = v;
-                    changed = true;
-                }
-            }};
-        }
-        set_plain!(running, facts.running);
-        set_plain!(paused, facts.paused);
-        set_text!(core, facts.core);
-        set_plain!(planet, facts.planet);
-        set_text!(fps_words, facts.fps_words);
-        set_text!(status, facts.status);
-        set_plain!(slot, facts.slot);
-        set_plain!(speed, facts.speed);
-        set_plain!(master_cheats, facts.master_cheats);
-        set_plain!(has_rewind, facts.has_rewind);
-        set_plain!(latest_rewind_frame, facts.latest_rewind_frame);
-        set_plain!(sound_volume, facts.sound_volume);
-        set_plain!(resume_asked, facts.resume_asked);
-        set_text!(resume_subject, facts.resume_subject);
-        set_text!(resume_picture, facts.resume_picture);
-        set_text!(resume_when, facts.resume_when);
-        set_text!(resume_console, facts.resume_console);
-        set_text!(resume_core, facts.resume_core);
-        set_plain!(resume_planet, facts.resume_planet);
+        set_plain!(self, changed, running, facts.running);
+        set_plain!(self, changed, paused, facts.paused);
+        set_text!(self, changed, core, facts.core);
+        set_plain!(self, changed, planet, facts.planet);
+        set_text!(self, changed, fps_words, facts.fps_words);
+        set_text!(self, changed, status, facts.status);
+        set_plain!(self, changed, slot, facts.slot);
+        set_plain!(self, changed, speed, facts.speed);
+        set_plain!(self, changed, master_cheats, facts.master_cheats);
+        set_plain!(self, changed, has_rewind, facts.has_rewind);
+        set_plain!(self, changed, latest_rewind_frame, facts.latest_rewind_frame);
+        set_plain!(self, changed, sound_volume, facts.sound_volume);
+        set_plain!(self, changed, resume_asked, facts.resume_asked);
+        set_text!(self, changed, resume_subject, facts.resume_subject);
+        set_text!(self, changed, resume_picture, facts.resume_picture);
+        set_text!(self, changed, resume_when, facts.resume_when);
+        set_text!(self, changed, resume_console, facts.resume_console);
+        set_text!(self, changed, resume_core, facts.resume_core);
+        set_plain!(self, changed, resume_planet, facts.resume_planet);
 
         for (ptr, rows) in [
             (self.slots, &facts.slots),

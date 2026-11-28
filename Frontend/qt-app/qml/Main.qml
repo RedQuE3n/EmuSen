@@ -122,6 +122,10 @@ Window {
                 settingsEclipseBindings.forceActiveFocus()
             else if (settingsEclipseShaders.focus)
                 settingsEclipseShaders.forceActiveFocus()
+            else if (settingsThemeTypingScope.active && settingsThemeTypingScope.focus)
+                settingsThemeTypingScope.forceActiveFocus()
+            else if (settingsThemeListener.focus)
+                settingsThemeListener.forceActiveFocus()
             else if (themesLoader.active && themesLoader.focus)
                 themesLoader.forceActiveFocus()
             else if (coresLoader.active && coresLoader.focus)
@@ -568,7 +572,7 @@ Window {
             anchors.fill: parent
             active: !program.bigScreen && !program.splashShown
             visible: active
-            focus: active && !(program.themeHost?.takesFocus ?? false) && !(desktopModel.gameShown && !desktopModel.drawerOpen) && !settingsModel.bindingsShown && !settingsModel.shadersShown && !program.desktopOverlayShown
+            focus: active && !(program.themeHost?.takesFocus ?? false) && !(desktopModel.gameShown && !desktopModel.drawerOpen) && !settingsModel.bindingsShown && !settingsModel.shadersShown && !settingsModel.typing && !settingsModel.listening && !program.desktopOverlayShown
             onFocusChanged: program.settleFocus()
             onLoaded: {
                 desktopModel.refresh()
@@ -906,6 +910,7 @@ Window {
             anchors.fill: parent
             active: !program.splashShown && settingsModel.typing && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : (desktopModel.view === 2 && !desktopModel.gameShown))
             focus: active
+            onFocusChanged: if (focus) program.settleFocus()
             onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: Kit.NormalizedCanvas {
                 id: settingsThemeTypingCanvas
@@ -972,6 +977,7 @@ Window {
             id: settingsThemeListener
             objectName: "settingsThemeListener"
             focus: !program.splashShown && !settingsModel.bindingsShown && settingsModel.listening && !settingsModel.listeningPad && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : (desktopModel.view === 2 && !desktopModel.gameShown))
+            onFocusChanged: if (focus) program.settleFocus()
             Keys.onPressed: (event) => event.accepted = settingsModel.heardKey(event.key, event.modifiers)
             Connections {
                 target: Kit.PadRouter

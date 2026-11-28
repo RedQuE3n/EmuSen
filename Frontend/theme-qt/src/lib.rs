@@ -2,6 +2,34 @@
 //! curated view over emusen-qt-models that the host feeds through the functions of `host`; a theme only reads them and
 //! asks for changes through `Actions`. The kit's types are re-exported by name from `qml/`, never the whole kit.
 
+macro_rules! set_plain {
+    ($me:expr, $changed:expr, $field:ident, $val:expr) => {{
+        let v = $val;
+        if $me.$field != v {
+            $me.as_mut().rust_mut().$field = v;
+            $changed = true;
+        }
+    }};
+}
+
+macro_rules! set_text {
+    ($me:expr, $changed:expr, $field:ident, $val:expr) => {{
+        let v = cxx_qt_lib::QString::from($val.as_str());
+        if $me.$field != v {
+            $me.as_mut().rust_mut().$field = v;
+            $changed = true;
+        }
+    }};
+}
+
+pub(crate) fn to_qstring_list(items: &[String]) -> cxx_qt_lib::QStringList {
+    let mut list = cxx_qt_lib::QList::<cxx_qt_lib::QString>::default();
+    for item in items {
+        list.append(cxx_qt_lib::QString::from(item.as_str()));
+    }
+    cxx_qt_lib::QStringList::from(&list)
+}
+
 pub mod actions;
 pub mod bells;
 pub mod browse;

@@ -5,7 +5,7 @@ use crate::view::Row;
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QList, QString, QStringList};
+use cxx_qt_lib::{QString, QStringList};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -413,98 +413,72 @@ impl cxx_qt::Initialize for qobject::ThemeWorkspace {
     }
 }
 
-fn to_qstring_list(items: &[String]) -> QStringList {
-    let mut list = QList::<QString>::default();
-    for item in items {
-        list.append(QString::from(item.as_str()));
-    }
-    QStringList::from(&list)
-}
-
 impl qobject::ThemeWorkspace {
     pub fn show(mut self: Pin<&mut Self>, facts: &WorkspaceFacts) {
         let mut changed = false;
-        macro_rules! set_plain {
-            ($field:ident, $val:expr) => {{
-                let v = $val;
-                if self.$field != v {
-                    self.as_mut().rust_mut().$field = v;
-                    changed = true;
-                }
-            }};
-        }
-        macro_rules! set_text {
-            ($field:ident, $val:expr) => {{
-                let v = QString::from($val.as_str());
-                if self.$field != v {
-                    self.as_mut().rust_mut().$field = v;
-                    changed = true;
-                }
-            }};
-        }
 
-        set_plain!(view, facts.view);
-        set_plain!(sidebar_open, facts.sidebar_open);
-        set_plain!(inspector_open, facts.inspector_open);
-        set_plain!(drawer_open, facts.drawer_open);
-        set_plain!(drawer_tab, facts.drawer_tab);
-        set_text!(theme_name, facts.theme_name);
-        set_plain!(full_screen, facts.full_screen);
-        set_text!(status_text, facts.status_text);
-        set_text!(status_summary, facts.status_summary);
-        set_text!(mode_badge, facts.mode_badge);
-        set_text!(big_picture_hint, facts.big_picture_hint);
-        set_text!(status_hints, facts.status_hints);
-        set_text!(counts_line, facts.counts_line);
-        set_text!(controllers_line, facts.controllers_line);
-        set_text!(console_key, facts.console_key);
-        set_text!(filter_key, facts.filter_key);
-        set_text!(search_query, facts.search_query);
-        set_text!(console_filter, facts.console_filter);
-        set_plain!(console_scope, facts.console_scope);
-        set_plain!(sort_index, facts.sort_index);
-        set_plain!(sort_ascending, facts.sort_ascending);
-        set_text!(selected_key, facts.selected_key);
-        let marked = to_qstring_list(&facts.marked_keys);
+        set_plain!(self, changed, view, facts.view);
+        set_plain!(self, changed, sidebar_open, facts.sidebar_open);
+        set_plain!(self, changed, inspector_open, facts.inspector_open);
+        set_plain!(self, changed, drawer_open, facts.drawer_open);
+        set_plain!(self, changed, drawer_tab, facts.drawer_tab);
+        set_text!(self, changed, theme_name, facts.theme_name);
+        set_plain!(self, changed, full_screen, facts.full_screen);
+        set_text!(self, changed, status_text, facts.status_text);
+        set_text!(self, changed, status_summary, facts.status_summary);
+        set_text!(self, changed, mode_badge, facts.mode_badge);
+        set_text!(self, changed, big_picture_hint, facts.big_picture_hint);
+        set_text!(self, changed, status_hints, facts.status_hints);
+        set_text!(self, changed, counts_line, facts.counts_line);
+        set_text!(self, changed, controllers_line, facts.controllers_line);
+        set_text!(self, changed, console_key, facts.console_key);
+        set_text!(self, changed, filter_key, facts.filter_key);
+        set_text!(self, changed, search_query, facts.search_query);
+        set_text!(self, changed, console_filter, facts.console_filter);
+        set_plain!(self, changed, console_scope, facts.console_scope);
+        set_plain!(self, changed, sort_index, facts.sort_index);
+        set_plain!(self, changed, sort_ascending, facts.sort_ascending);
+        set_text!(self, changed, selected_key, facts.selected_key);
+        let marked = crate::to_qstring_list(&facts.marked_keys);
         if self.marked_keys != marked {
             self.as_mut().rust_mut().marked_keys = marked;
             changed = true;
         }
-        set_plain!(marked_count, facts.marked_count);
-        set_plain!(all_marked, facts.all_marked);
-        set_plain!(count, facts.count);
-        set_plain!(total_count, facts.total_count);
-        set_text!(summary_line, facts.summary_line);
-        set_text!(empty_words, facts.empty_words);
-        set_text!(active_heading, facts.active_heading);
-        set_text!(active_core, facts.active_core);
-        set_plain!(active_planet, facts.active_planet);
-        set_text!(active_screen, facts.active_screen);
-        set_plain!(has_selection, facts.has_selection);
-        set_text!(inspector_key, facts.inspector_key);
-        set_text!(inspector_title, facts.inspector_title);
-        set_text!(inspector_subtitle, facts.inspector_subtitle);
-        set_text!(inspector_console, facts.inspector_console);
-        set_text!(inspector_system, facts.inspector_system);
-        set_text!(inspector_core, facts.inspector_core);
-        set_text!(inspector_core_line, facts.inspector_core_line);
-        set_plain!(inspector_planet, facts.inspector_planet);
-        set_plain!(inspector_libretro, facts.inspector_libretro);
-        set_text!(inspector_played_words, facts.inspector_played_words);
-        set_text!(inspector_players, facts.inspector_players);
-        set_text!(inspector_genre, facts.inspector_genre);
-        set_text!(inspector_description, facts.inspector_description);
-        set_text!(inspector_file_name, facts.inspector_file_name);
-        set_text!(inspector_folder_path, facts.inspector_folder_path);
-        set_text!(inspector_size_words, facts.inspector_size_words);
-        set_plain!(inspector_favourite, facts.inspector_favourite);
-        set_plain!(inspector_running, facts.inspector_running);
-        set_text!(inspector_cover, facts.inspector_cover);
-        set_text!(inspector_hero, facts.inspector_hero);
-        set_plain!(inspector_states_count, facts.inspector_states_count);
-        set_text!(inspector_states_heading, facts.inspector_states_heading);
-        set_text!(inspector_package_words, facts.inspector_package_words);
-        set_text!(inspector_cheats_words, facts.inspector_cheats_words);
+        set_plain!(self, changed, marked_count, facts.marked_count);
+        set_plain!(self, changed, all_marked, facts.all_marked);
+        set_plain!(self, changed, count, facts.count);
+        set_plain!(self, changed, total_count, facts.total_count);
+        set_text!(self, changed, summary_line, facts.summary_line);
+        set_text!(self, changed, empty_words, facts.empty_words);
+        set_text!(self, changed, active_heading, facts.active_heading);
+        set_text!(self, changed, active_core, facts.active_core);
+        set_plain!(self, changed, active_planet, facts.active_planet);
+        set_text!(self, changed, active_screen, facts.active_screen);
+        set_plain!(self, changed, has_selection, facts.has_selection);
+        set_text!(self, changed, inspector_key, facts.inspector_key);
+        set_text!(self, changed, inspector_title, facts.inspector_title);
+        set_text!(self, changed, inspector_subtitle, facts.inspector_subtitle);
+        set_text!(self, changed, inspector_console, facts.inspector_console);
+        set_text!(self, changed, inspector_system, facts.inspector_system);
+        set_text!(self, changed, inspector_core, facts.inspector_core);
+        set_text!(self, changed, inspector_core_line, facts.inspector_core_line);
+        set_plain!(self, changed, inspector_planet, facts.inspector_planet);
+        set_plain!(self, changed, inspector_libretro, facts.inspector_libretro);
+        set_text!(self, changed, inspector_played_words, facts.inspector_played_words);
+        set_text!(self, changed, inspector_players, facts.inspector_players);
+        set_text!(self, changed, inspector_genre, facts.inspector_genre);
+        set_text!(self, changed, inspector_description, facts.inspector_description);
+        set_text!(self, changed, inspector_file_name, facts.inspector_file_name);
+        set_text!(self, changed, inspector_folder_path, facts.inspector_folder_path);
+        set_text!(self, changed, inspector_size_words, facts.inspector_size_words);
+        set_plain!(self, changed, inspector_favourite, facts.inspector_favourite);
+        set_plain!(self, changed, inspector_running, facts.inspector_running);
+        set_text!(self, changed, inspector_cover, facts.inspector_cover);
+        set_text!(self, changed, inspector_hero, facts.inspector_hero);
+        set_plain!(self, changed, inspector_states_count, facts.inspector_states_count);
+        set_text!(self, changed, inspector_states_heading, facts.inspector_states_heading);
+        set_text!(self, changed, inspector_package_words, facts.inspector_package_words);
+        set_text!(self, changed, inspector_cheats_words, facts.inspector_cheats_words);
 
         let lists = [
             (self.places, &facts.places),

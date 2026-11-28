@@ -1,20 +1,28 @@
 {
-    "schema": 1,
-    "api": "1.21",
+    "schema": 2,
+    "api": "1.23",
     "name": "Eclipse",
     "author": "The EmuSen project",
     "licence": "GPL-3.0-or-later",
     "variants": [
         "dark"
     ],
-    "screens": [
-        "home",
-        "games",
-        "consoles",
-        "splash",
-        "settings",
-        "game"
-    ],
+    "faces": {
+        "bigPicture": [
+            "home",
+            "games",
+            "consoles",
+            "splash",
+            "settings",
+            "game"
+        ],
+        "desktop": [
+            "library",
+            "table",
+            "playing",
+            "settings"
+        ]
+    },
     "tokens": {
         "dark": {
             "dashPattern": "3 2",
@@ -65,7 +73,22 @@
             "faceCode": "JetBrains Mono",
             "weightTitle": 600,
             "weightSentence": 300,
-            "weightWordmark": 600
+            "weightWordmark": 600,
+            "desktop": {
+                "rowHeight": 38.0,
+                "controlHeight": 34.0,
+                "rowRadius": 8.0,
+                "tileRadius": 14.0,
+                "buttonRadius": 17.0,
+                "ringThickness": 1.5,
+                "ringOffset": 1.5,
+                "glowBlur": 20.0,
+                "glowSpread": 3.0,
+                "fontRow": 13.5,
+                "fontBody": 13.0,
+                "fontCaption": 11.5,
+                "fontTitle": 26.0
+            }
         }
     }
 }

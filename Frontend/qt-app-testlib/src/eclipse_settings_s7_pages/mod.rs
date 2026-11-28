@@ -568,7 +568,7 @@ pub fn s7_with(harness: &mut emusen_qt_test::Harness, backend: &str) {
             ("rowName.1".into(), "Eclipse".into()),
             ("rowWords.1".into(), "In use".into()),
             ("asideHeading".into(), "Eclipse".into()),
-            ("asideMeta".into(), "By The EmuSen project · EmuSen.Theme 1.21 · dark".into()),
+            ("asideMeta".into(), "By The EmuSen project · EmuSen.Theme 1.24 · dark".into()),
             ("asideSentence".into(), "In use.".into()),
         ];
         check_board(

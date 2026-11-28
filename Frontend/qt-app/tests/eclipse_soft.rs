@@ -26,6 +26,8 @@ mod eclipse_cheats;
 mod eclipse_consoles;
 #[path = "eclipse_soft/eclipse_cores.rs"]
 mod eclipse_cores;
+#[path = "eclipse_soft/eclipse_desktop.rs"]
+mod eclipse_desktop;
 #[path = "eclipse_soft/eclipse_faces.rs"]
 mod eclipse_faces;
 #[path = "eclipse_soft/eclipse_game.rs"]

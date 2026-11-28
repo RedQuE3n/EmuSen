@@ -93,6 +93,8 @@ Item {
     signal favourite(string game)
     signal bigScreenRequested(bool bigScreen)
     signal desktopDoorRequested(string key)
+    signal desktopLibraryRequested()
+    signal desktopShadersRequested()
     signal toolRequested(string key)
     signal fullScreenToggleRequested()
     signal focusActiveSlot()
@@ -179,6 +181,8 @@ Item {
         onSelected: (index) => themed.library.select(index)
         onBigScreenRequested: (bigScreen) => themed.bigScreenRequested(bigScreen)
         onDesktopDoorRequested: (key) => themed.desktopDoorRequested(key)
+        onDesktopLibraryRequested: themed.desktopLibraryRequested()
+        onDesktopShadersRequested: themed.desktopShadersRequested()
         onToolRequested: (key) => themed.toolRequested(key)
         onFullScreenToggleRequested: themed.fullScreenToggleRequested()
     }

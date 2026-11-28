@@ -3,6 +3,13 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.24, an addition: Desktop Mode Library/Shaders doors, `Workspace.themesDoorKey`, and `SortColumn.SaveStates` (2026-11-28)
+
+- **`Actions.workspaceLibrary()`** and **`Actions.workspaceShaders()`**: literal-free Desktop Mode doors returning to Library while pausing the running game session or opening the Eclipse `#20` Shaders dialog cleanly across Library, Table, Settings, and Playing drawer.
+- **`Workspace.themesDoorKey`**: constant read-only tool key (`"themes"`) so themes identify the inline Themes row without hardcoded literals.
+- **`Workspace.SortColumn.SaveStates`**: renames `SortColumn.States` to clear Qt 6's `Q_ENUM` name clash with `DrawerTab.States` on `ThemeWorkspace`.
+- The module is 1.24 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.24.*`.
+
 ## 1.23, an addition: Desktop Mode Workspace, Themes, Tools, Collections, and live Session surfaces (2026-11-27)
 
 Decided 2026-11-27 by the tester (`R-20261127-7`..`R-20261127-11`): Desktop Mode themes read dedicated read-only singletons and act exclusively through `Actions`.

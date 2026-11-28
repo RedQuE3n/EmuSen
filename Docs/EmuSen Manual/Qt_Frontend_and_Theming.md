@@ -29,7 +29,7 @@ The 9 excluded crates carry independent `Cargo.lock` files so dependency-fence t
 | `emusen-theme-host` | `Frontend/theme-host` | Member | Sandboxed QML engine host (`ThemeHost`) enforcing URL interception, module allow-listing, package loading, and verified engine teardown. |
 | `emusen-qml-rules` | `Frontend/qml-rules` | Standalone | Pure-Rust static analyzer enforcing the QML zero-logic boundary on internal views and external theme packages. |
 | `emusen-theme-check` | `Frontend/theme-check` | Standalone | Static theme package validator verifying directory layout, `theme.json`, tokens, QML rules, and asset constraints. |
-| `emusen-theme-manifest` | `Frontend/theme-check/manifest` | Standalone | Plain-data parser and schema validator for `theme.json` (`SCHEMA = 2`, API `1.23`). |
+| `emusen-theme-manifest` | `Frontend/theme-check/manifest` | Standalone | Plain-data parser and schema validator for `theme.json` (`SCHEMA = 2`, API `1.24`). |
 | `theme-audit` | `Frontend/theme-check/audit` | Member | Loaded offscreen theme auditor (`theme-audit`) running `ThemeHost` across viewport sizes, variants, reduced motion, and 15 synthetic library states. |
 | `emusen-esde` | `Frontend/esde` | Standalone | Pure-Rust ES-DE theme engine: XML theme loader, element resolution, scene timeline, built-in icon marks, shelf text mapping, font lookup, and corpus measurement (`esde-check`). |
 | `emusen-esde-text` | `Frontend/esde-text` | Standalone | HarfRust + `read-fonts` text shaper reproducing ES-DE's pixel-rounded glyph advances, word wrapping, `lineSpacing` pitch, and `"..."` ellipsis rules. |
@@ -121,12 +121,12 @@ Themes can completely redesign EmuSen's visual experience without gaining filesy
 
 ### 3.3 `theme.json` Manifest Schema
 
-Every QML theme package is described by `theme.json`, validated by `Frontend/theme-check/manifest` (`SCHEMA = 2`, current runtime API `1.23`):
+Every QML theme package is described by `theme.json`, validated by `Frontend/theme-check/manifest` (`SCHEMA = 2`, current runtime API `1.24`):
 
 | Key | Required | Description |
 |---|---|---|
 | `schema` | Yes | Manifest schema version (`1` or `2`). |
-| `api` | Yes | Target `EmuSen.Theme` minor API version string (for example `"1.23"` or `"1.22"`). |
+| `api` | Yes | Target `EmuSen.Theme` minor API version string (for example `"1.24"` or `"1.23"`). |
 | `name` | Yes | Human-readable theme name. |
 | `author` | Yes | Author or project credit. |
 | `licence` | Yes | Licence identifier or text. |

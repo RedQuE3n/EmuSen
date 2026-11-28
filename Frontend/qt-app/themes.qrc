@@ -69,12 +69,25 @@
         <file alias="parts/TileWords.qml">../themes/eclipse/parts/TileWords.qml</file>
         <file alias="parts/Trail.qml">../themes/eclipse/parts/Trail.qml</file>
         <file alias="parts/WordPill.qml">../themes/eclipse/parts/WordPill.qml</file>
+        <file alias="parts/desktop/DesktopArtTile.qml">../themes/eclipse/parts/desktop/DesktopArtTile.qml</file>
+        <file alias="parts/desktop/DesktopBackdrop.qml">../themes/eclipse/parts/desktop/DesktopBackdrop.qml</file>
+        <file alias="parts/desktop/DesktopConstellationRail.qml">../themes/eclipse/parts/desktop/DesktopConstellationRail.qml</file>
+        <file alias="parts/desktop/DesktopGlyph.qml">../themes/eclipse/parts/desktop/DesktopGlyph.qml</file>
+        <file alias="parts/desktop/DesktopInk.qml">../themes/eclipse/parts/desktop/DesktopInk.qml</file>
+        <file alias="parts/desktop/DesktopInspectorPane.qml">../themes/eclipse/parts/desktop/DesktopInspectorPane.qml</file>
+        <file alias="parts/desktop/DesktopPlayingDrawer.qml">../themes/eclipse/parts/desktop/DesktopPlayingDrawer.qml</file>
+        <file alias="parts/desktop/DesktopStatusBar.qml">../themes/eclipse/parts/desktop/DesktopStatusBar.qml</file>
+        <file alias="parts/desktop/DesktopTopRibbon.qml">../themes/eclipse/parts/desktop/DesktopTopRibbon.qml</file>
+        <file alias="screens/Consoles.qml">../themes/eclipse/screens/Consoles.qml</file>
         <file alias="screens/Game.qml">../themes/eclipse/screens/Game.qml</file>
         <file alias="screens/Games.qml">../themes/eclipse/screens/Games.qml</file>
-        <file alias="screens/Consoles.qml">../themes/eclipse/screens/Consoles.qml</file>
         <file alias="screens/Home.qml">../themes/eclipse/screens/Home.qml</file>
         <file alias="screens/Settings.qml">../themes/eclipse/screens/Settings.qml</file>
         <file alias="screens/Splash.qml">../themes/eclipse/screens/Splash.qml</file>
+        <file alias="screens/desktop/Library.qml">../themes/eclipse/screens/desktop/Library.qml</file>
+        <file alias="screens/desktop/Playing.qml">../themes/eclipse/screens/desktop/Playing.qml</file>
+        <file alias="screens/desktop/Settings.qml">../themes/eclipse/screens/desktop/Settings.qml</file>
+        <file alias="screens/desktop/Table.qml">../themes/eclipse/screens/desktop/Table.qml</file>
         <file alias="sounds/splash.flac">../themes/eclipse/sounds/splash.flac</file>
         <file alias="theme.json">../themes/eclipse/theme.json</file>
     </qresource>

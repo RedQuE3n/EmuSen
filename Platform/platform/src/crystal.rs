@@ -1022,8 +1022,7 @@ struct SerenityLender;
 
 impl emusen_crystal::lend::Lender for SerenityLender {
     fn make(&self, device: usize) -> Result<(usize, emusen_native::core::sys::DeviceLend), String> {
-        let dev = unsafe { (device as *const crate::serenity_device::DeviceHandle).as_ref() };
-        let handle = crate::serenity_device::lend_new(dev).map_err(|(_, w)| w)?;
+        let handle = crate::serenity_device::lend_new_by_addr(device).map_err(|(_, w)| w)?;
         let l = handle.lend.lent();
         let lend = emusen_native::core::sys::DeviceLend {
             size: std::mem::size_of::<emusen_native::core::sys::DeviceLend>() as u32,
@@ -1059,8 +1058,7 @@ impl emusen_crystal::lend::Lender for SerenityLender {
     }
 
     fn make_ring(&self, device: usize, width: u32, height: u32, count: u32) -> Result<emusen_crystal::lend::MachineRing, String> {
-        let dev = unsafe { (device as *const crate::serenity_device::DeviceHandle).as_ref() };
-        let handle = crate::serenity_device::ring_new(dev, width, height, count).map_err(|(_, w)| w)?;
+        let handle = crate::serenity_device::ring_new_by_addr(device, width, height, count).map_err(|(_, w)| w)?;
         let images = handle
             .ring
             .images

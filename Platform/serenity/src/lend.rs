@@ -29,6 +29,8 @@ pub struct Lent {
     pub queue: u32,
     pub host_family: u32,
     pub done: u64,
+    pub int64: bool,
+    pub float_controls: bool,
 }
 
 /// A copy of a picture, on the device, `row_pixels` to a row.
@@ -185,6 +187,8 @@ impl Lend {
             queue: lending.core.1,
             host_family: lending.intake_family,
             done: self.inner.done.as_raw(),
+            int64: device.int64(),
+            float_controls: device.float_controls(),
         }
     }
 

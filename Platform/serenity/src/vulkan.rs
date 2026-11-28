@@ -31,6 +31,7 @@ const LOADER: &str = "libvulkan.dylib";
 const LOADER: &str = "libvulkan.so.1";
 
 const LAYER: &CStr = c"VK_LAYER_KHRONOS_validation";
+const FLOAT_CONTROLS: &CStr = c"VK_KHR_shader_float_controls";
 static ON: u32 = 1;
 static OFF: u32 = 0;
 
@@ -200,6 +201,8 @@ struct Inner {
     physical: vk::PhysicalDevice,
     api: u32,
     max_image_dimension_2d: u32,
+    int64: bool,
+    float_controls: bool,
     /// The queues a device that can be lent keeps for it: one lent to a core, and the host's own for taking the core's
     /// pictures, with its lock (EmuSen_DevicePicture.md §17).
     lending: Option<Lending>,
@@ -549,13 +552,26 @@ impl Device {
         let priorities = [1.0f32; 4];
         let queue_info: Vec<vk::DeviceQueueCreateInfo> = wanted_queues.iter().map(|&(f, n)| vk::DeviceQueueCreateInfo::default().queue_family_index(f).queue_priorities(&priorities[..n as usize])).collect();
         let exporting = Self::offers_exports(&root.instance, physical);
-        missing(&unsafe { instance.enumerate_device_extension_properties(physical) }.unwrap_or_default(), host)?;
+        let offered_extensions = unsafe { instance.enumerate_device_extension_properties(physical) }.unwrap_or_default();
+        missing(&offered_extensions, host)?;
+        let has_ext = |name: &CStr| offered_extensions.iter().any(|e| e.extension_name_as_c_str().is_ok_and(|n| n == name));
+        let int64 = unsafe { instance.get_physical_device_features(physical) }.shader_int64 == vk::TRUE;
+        let float_controls = (api >= vk::API_VERSION_1_2 || has_ext(FLOAT_CONTROLS)) && {
+            let mut fc = vk::PhysicalDeviceFloatControlsProperties::default();
+            let mut p2 = vk::PhysicalDeviceProperties2::default().push_next(&mut fc);
+            unsafe { instance.get_physical_device_properties2(physical, &mut p2) };
+            fc.shader_rounding_mode_rtz_float32 == vk::TRUE && fc.shader_denorm_flush_to_zero_float32 == vk::TRUE
+        };
         let mut wanted: Vec<*const std::ffi::c_char> = host.iter().map(|name| name.as_ptr()).collect();
         if exporting {
             wanted.extend([ash::khr::external_memory_fd::NAME.as_ptr(), ash::khr::external_semaphore_fd::NAME.as_ptr()]);
         }
+        if float_controls && has_ext(FLOAT_CONTROLS) && !host.iter().any(|n| n.as_c_str() == FLOAT_CONTROLS) {
+            wanted.push(FLOAT_CONTROLS.as_ptr());
+        }
+        let enabled_features = vk::PhysicalDeviceFeatures::default().shader_int64(int64);
         let mut v12 = vk::PhysicalDeviceVulkan12Features::default().timeline_semaphore(true);
-        let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info).enabled_extension_names(&wanted);
+        let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info).enabled_extension_names(&wanted).enabled_features(&enabled_features);
         if timeline {
             device_info = device_info.push_next(&mut v12);
         }
@@ -623,6 +639,8 @@ impl Device {
                 physical,
                 api,
                 max_image_dimension_2d,
+                int64,
+                float_controls,
                 lending,
                 probing: AtomicBool::new(false),
                 probe: Mutex::new(None),
@@ -697,6 +715,14 @@ impl Device {
     /// Maximum 2D image dimension supported by the physical device.
     pub fn max_image_dimension_2d(&self) -> u32 {
         self.inner.max_image_dimension_2d
+    }
+
+    pub fn int64(&self) -> bool {
+        self.inner.int64
+    }
+
+    pub fn float_controls(&self) -> bool {
+        self.inner.float_controls
     }
 
     pub fn family(&self) -> u32 {
@@ -1423,6 +1449,21 @@ mod tests {
             for thread in threads {
                 thread.join().expect("a thread that made devices");
             }
+        }
+
+        #[test]
+        fn device_enables_supported_int64_and_float_controls_without_validation_errors() {
+            let wanted = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".into());
+            let device = Device::create(Some(&wanted), true).expect("Vulkan hardware device matching wanted required");
+            assert!(device.int64(), "expected shaderInt64 on {wanted}");
+            assert!(device.float_controls(), "expected VK_KHR_shader_float_controls RTZ/FTZ on {wanted}");
+            let lend = crate::lend::Lend::new(&device).expect("lend on hardware device");
+            let lent = lend.lent();
+            assert_eq!(lent.int64, device.int64());
+            assert_eq!(lent.float_controls, device.float_controls());
+            drop(lend);
+            let findings = device.findings().take();
+            assert!(findings.is_empty(), "validation findings: {findings:?}");
         }
     }
 }

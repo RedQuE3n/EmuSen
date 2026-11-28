@@ -18,15 +18,18 @@ use emusen_serenity::lend::Lend;
 use emusen_serenity::ring::Ring;
 use emusen_serenity::preset::{PassSpec, Preset, ScaleType, TextureSpec, Wrap};
 use emusen_serenity::vulkan::{Device, Findings, Mark, Shown};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+static LIVE_DEVICES: LazyLock<Mutex<HashMap<usize, Arc<Mutex<Option<Device>>>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
 /// A device, what its layer has said, and what of either is waiting for a buffer large enough.
 pub struct DeviceHandle {
-    device: Mutex<Option<Device>>,
+    device: Arc<Mutex<Option<Device>>>,
     findings: Arc<Findings>,
     heard: Mutex<Vec<u8>>,
     marks: Mutex<Vec<Mark>>,
@@ -35,6 +38,17 @@ pub struct DeviceHandle {
 fn device_of(handle: Option<&DeviceHandle>) -> Result<Device, (i32, String)> {
     let handle = handle.ok_or_else(|| (status::NULL, "no handle".to_string()))?;
     locked(&handle.device).clone().ok_or_else(|| (status::DEVICE, "The device has been closed.".to_string()))
+}
+
+pub(crate) fn device_by_addr(addr: usize) -> Result<Device, (i32, String)> {
+    if addr == 0 {
+        return Err((status::NULL, "no handle".to_string()));
+    }
+    let cell = locked(&LIVE_DEVICES).get(&addr).cloned();
+    let Some(cell) = cell else {
+        return Err((status::DEVICE, "The device has been closed.".to_string()));
+    };
+    locked(&cell).clone().ok_or_else(|| (status::DEVICE, "The device has been closed.".to_string()))
 }
 
 /// # Safety
@@ -70,7 +84,10 @@ pub unsafe extern "C" fn emusen_serenity_device_new_for(name: *const u8, len: us
         match Device::create_for(name, validate != 0, &host) {
             Ok(device) => {
                 let findings = device.findings();
-                Box::into_raw(Box::new(DeviceHandle { device: Mutex::new(Some(device)), findings, heard: Mutex::default(), marks: Mutex::default() }))
+                let cell = Arc::new(Mutex::new(Some(device)));
+                let ptr = Box::into_raw(Box::new(DeviceHandle { device: Arc::clone(&cell), findings, heard: Mutex::default(), marks: Mutex::default() }));
+                locked(&LIVE_DEVICES).insert(ptr as usize, cell);
+                ptr
             }
             Err(report) => {
                 fail(status::DEVICE, report);
@@ -101,6 +118,10 @@ pub unsafe extern "C" fn emusen_serenity_device_close(h: *const DeviceHandle) ->
 pub unsafe extern "C" fn emusen_serenity_device_free(h: *mut DeviceHandle) -> i32 {
     guard(|s| s, || {
         if !h.is_null() {
+            let cell = locked(&LIVE_DEVICES).remove(&(h as usize));
+            if let Some(cell) = cell {
+                drop(locked(&cell).take());
+            }
             drop(unsafe { Box::from_raw(h) });
         }
         0
@@ -270,8 +291,8 @@ fn lend_on(device: &Device) -> Result<Box<LendHandle>, (i32, String)> {
     Ok(Box::new(LendHandle { lend }))
 }
 
-pub(crate) fn lend_new(d: Option<&DeviceHandle>) -> Result<Box<LendHandle>, (i32, String)> {
-    let device = device_of(d)?;
+pub(crate) fn lend_new_by_addr(addr: usize) -> Result<Box<LendHandle>, (i32, String)> {
+    let device = device_by_addr(addr)?;
     lend_on(&device)
 }
 
@@ -795,8 +816,8 @@ fn ring_on(device: &Device, width: u32, height: u32, count: u32) -> Result<Box<R
     Ok(Box::new(RingHandle { ring }))
 }
 
-pub(crate) fn ring_new(d: Option<&DeviceHandle>, width: u32, height: u32, count: u32) -> Result<Box<RingHandle>, (i32, String)> {
-    let device = device_of(d)?;
+pub(crate) fn ring_new_by_addr(addr: usize, width: u32, height: u32, count: u32) -> Result<Box<RingHandle>, (i32, String)> {
+    let device = device_by_addr(addr)?;
     ring_on(&device, width, height, count)
 }
 
@@ -1002,6 +1023,26 @@ mod tests {
             let n = unsafe { crate::emusen_platform_last_error(words.as_mut_ptr(), words.len()) };
             assert!(n > 0, "the words why");
         }
+
+        #[test]
+        fn freed_device_handle_is_rejected_by_lender_without_uaf() {
+            let wanted = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".into());
+            Device::card_named(&wanted).unwrap_or_else(|| panic!("Vulkan hardware device matching {wanted:?} required"));
+            let h = unsafe { emusen_serenity_device_new(wanted.as_ptr(), wanted.len(), 0) };
+            assert!(!h.is_null(), "a device named {wanted}");
+            let addr = h as usize;
+            let live_lend = lend_new_by_addr(addr).expect("live device lends");
+            drop(live_lend);
+            assert_eq!(unsafe { emusen_serenity_device_free(h) }, 0);
+            assert!(matches!(lend_new_by_addr(addr), Err((code, _)) if code == status::DEVICE));
+            assert!(matches!(ring_new_by_addr(addr, 64, 64, 3), Err((code, _)) if code == status::DEVICE));
+        }
+    }
+
+    #[test]
+    fn device_by_addr_rejects_null_and_unknown_addresses() {
+        assert!(matches!(device_by_addr(0), Err((code, _)) if code == status::NULL));
+        assert!(matches!(device_by_addr(0xDEAD_BEEF), Err((code, _)) if code == status::DEVICE));
     }
 
     #[test]

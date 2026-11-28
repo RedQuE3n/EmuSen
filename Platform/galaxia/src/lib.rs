@@ -31,6 +31,7 @@ pub mod saves;
 pub mod setting_folders;
 pub mod settings_rows;
 pub mod stores;
+pub mod sysinfo;
 pub mod text_file;
 pub mod tree;
 

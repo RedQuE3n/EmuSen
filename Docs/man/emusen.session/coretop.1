@@ -1,35 +1,39 @@
 NAME
-    coretop - live hardware dashboard of the loaded core (stub in module ABI)
+    coretop - hardware and telemetry dashboard of the loaded core
 
 SYNOPSIS
-    coretop [-w]
+    coretop [-w] [--once [--json]]
 
 DESCRIPTION
-    Intended to display an auto-refreshing, htop-style dashboard of the
-    attached core's hardware telemetry (per-subsystem load bars, CPU
-    registers, sprite capacity, audio channels, palette, and VRAM preview).
+    With no options, 'coretop' requires a real interactive terminal to drive an
+    auto-refreshing dashboard and therefore refuses over buffered module
+    output after verifying that a session is attached.
 
-    In the current emusen.session module implementation, 'coretop' is a
-    refusal stub: it verifies that a session is attached and then returns
-    an error because module commands run over buffered output and cannot
-    drive a raw interactive terminal or open a frontend window directly.
-
-    Use summary(1), regs(1), sprites(1), channels(1), pal(1), and
-    counters(1) to inspect session state from the shell.
+    With --once, 'coretop' prints a single non-interactive snapshot combining
+    the attached session's info, summary, telemetry counters, sprite/palette/
+    audio summaries, and EmuSen process resource usage, then exits.
 
 OPTIONS
     -w
         Request a separate frontend window. Currently fails with
         "coretop: -w is not supported by this frontend."
 
+    --once
+        Print a single-frame snapshot and exit without an interactive TTY.
+
+    --json
+        Emit the --once snapshot as compact JSON (requires --once).
+
 EXAMPLES
+    coretop --once
+    coretop --once --json
     coretop
     coretop -w
 
 EXIT STATUS
-    1   Always fails in the current module implementation (no session
-        attached, no interactive terminal, or windowed mode unsupported).
+    0   Snapshot printed (--once).
+    1   No session attached, interactive TTY unavailable, or unsupported flag.
 
 SEE ALSO
-    summary(1), regs(1), sprites(1), channels(1), pal(1), counters(1),
-    profile(1)
+    sysinfo(1), summary(1), regs(1), sprites(1), channels(1), pal(1),
+    counters(1), profile(1)

@@ -1,0 +1,35 @@
+NAME
+    sysinfo - print host hardware and EmuSen process resource telemetry
+
+SYNOPSIS
+    sysinfo [--json]
+
+DESCRIPTION
+    Prints a one-shot telemetry snapshot of the host machine and the running
+    EmuSen process. Host metrics include CPU model, core/thread topology,
+    per-core and aggregate frequencies (cpufreq), total and iowait CPU
+    utilization, memory and swap usage, DRM GPU utilization/VRAM/GTT and
+    temperature (with N/A where sysfs lacks an attribute), and deduplicated
+    filesystem mount usage.
+
+    Process metrics include CPU utilization as both percentage of total host
+    capacity and percentage of a single logical core (flagging single-core
+    bottlenecks), per-thread group totals (core, audio, render, ui, jobs,
+    other), RSS/PSS/Private RAM from smaps_rollup, DRM fdinfo GPU engine
+    utilization and VRAM/GTT allocations, and cached Galaxia writable vs.
+    read-only game library directory sizes.
+
+OPTIONS
+    --json
+        Emit the structured telemetry snapshot as compact JSON.
+
+EXAMPLES
+    sysinfo
+    sysinfo --json
+
+EXIT STATUS
+    0   Telemetry snapshot printed.
+    1   Unknown option or serialization error.
+
+SEE ALSO
+    coretop(1), summary(1)

@@ -479,6 +479,11 @@ impl qobject::GameModel {
         crate::listing::Sort::at(self.sort).words()
     }
 
+    /// Whether the active sort orders ascending.
+    pub fn sort_ascending(&self) -> bool {
+        crate::listing::Sort::at(self.sort).ascending()
+    }
+
     /// The shown games' first letters in order, and the focused game's.
     pub fn letters(&self) -> (Vec<String>, String) {
         let letters = self.read.letters.iter().map(|(l, _)| l.clone()).collect();

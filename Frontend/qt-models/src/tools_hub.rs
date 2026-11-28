@@ -58,7 +58,7 @@ pub(crate) fn find_settings_row(settings: &crate::settings_model::qobject::Setti
 }
 
 /// Opens the Eclipse Settings page targeted by a Tools card after Settings navigation settles.
-pub(crate) fn open_tools_settings(tool: &str, mut settings: Pin<&mut crate::settings_model::qobject::SettingsModel>) -> Option<usize> {
+pub fn open_tools_settings(tool: &str, mut settings: Pin<&mut crate::settings_model::qobject::SettingsModel>) -> Option<usize> {
     if !*settings.ready() {
         return None;
     }

@@ -787,6 +787,10 @@ fn path_folder(path: &str) -> String {
     Path::new(path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
+fn path_folder_leaf(path: &str) -> String {
+    Path::new(path).parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()).unwrap_or_default().to_owned()
+}
+
 fn meta_str(meta: &[(String, BTreeMap<String, String>)], path: &str, key: &str) -> String {
     meta.iter().find(|(p, _)| p == path).and_then(|(_, m)| m.get(key)).cloned().unwrap_or_default()
 }
@@ -1208,7 +1212,7 @@ pub fn project_workspace(
         data.inspector_genre = if item.genre.is_empty() { words::DESKTOP_DASH.to_owned() } else { item.genre.clone() };
         data.inspector_description = description;
         data.inspector_file_name = path_file_name(&item.row.path);
-        data.inspector_folder_path = path_folder(&item.row.path);
+        data.inspector_folder_path = path_folder_leaf(&item.row.path);
         data.inspector_size_words = size_words;
         data.inspector_favourite = item.row.favourite;
         data.inspector_running = has_running && session.game == item.row.path;
@@ -2085,7 +2089,7 @@ impl qobject::DesktopModel {
         self.as_mut().set_view(2);
     }
 
-    fn set_settings_tool(mut self: Pin<&mut Self>, index: i32) {
+    pub fn set_settings_tool(mut self: Pin<&mut Self>, index: i32) {
         if self.settings_tool_index != index {
             self.as_mut().rust_mut().state.settings_tool_index = index;
             self.as_mut().rust_mut().settings_tool_index = index;
@@ -2183,10 +2187,14 @@ impl qobject::DesktopModel {
                 true
             }
             "shaders" => {
-                self.as_mut().set_settings_tool(-1);
-                if let Some(settings) = unsafe { self.settings.as_mut() } {
-                    unsafe { Pin::new_unchecked(settings) }.open_shaders_door();
+                let Some(settings) = (unsafe { self.settings.as_mut() }) else {
+                    return false;
+                };
+                if !*settings.eclipse_shaders() {
+                    return false;
                 }
+                self.as_mut().set_settings_tool(-1);
+                unsafe { Pin::new_unchecked(settings) }.open_shaders_door();
                 self.refresh();
                 true
             }
@@ -2220,6 +2228,20 @@ impl qobject::DesktopModel {
                 self.as_mut().select_settings_section(4);
                 true
             }
+            "cards" => {
+                self.as_mut().set_settings_tool(-1);
+                self.as_mut().set_view(2);
+                let opened = if let Some(settings) = unsafe { self.settings.as_mut() } {
+                    let mut s = unsafe { Pin::new_unchecked(settings) };
+                    let ready = *s.ready();
+                    crate::tools_hub::open_tools_settings("cards", s.as_mut());
+                    ready
+                } else {
+                    false
+                };
+                self.refresh();
+                opened
+            }
             "scraper" | "compressed" | "cheats" => {
                 self.as_mut().door_requested(QString::from(key));
                 true
@@ -2242,7 +2264,16 @@ impl qobject::DesktopModel {
         if path.is_empty() {
             return false;
         }
-        self.launch_from_requested(QString::from(path), QString::from(state));
+        let resolved = if let Some(rest) = state.strip_prefix("state:") {
+            let Ok(idx) = rest.parse::<usize>() else { return false };
+            let Some(found) = self.cached.as_ref().filter(|c| c.path == path).and_then(|c| c.states.get(idx)).map(|s| s.path.clone()) else {
+                return false;
+            };
+            found
+        } else {
+            state.to_owned()
+        };
+        self.launch_from_requested(QString::from(path), QString::from(resolved.as_str()));
         true
     }
 

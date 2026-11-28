@@ -118,7 +118,11 @@ Window {
         if (program.splashShown || player.session.resumeAsked || resumeDialog.sheetOpen || launch.asking)
             return
         if (!program.bigScreen) {
-            if (themesLoader.active && themesLoader.focus)
+            if (settingsEclipseBindings.focus)
+                settingsEclipseBindings.forceActiveFocus()
+            else if (settingsEclipseShaders.focus)
+                settingsEclipseShaders.forceActiveFocus()
+            else if (themesLoader.active && themesLoader.focus)
                 themesLoader.forceActiveFocus()
             else if (coresLoader.active && coresLoader.focus)
                 coresLoader.forceActiveFocus()
@@ -366,7 +370,8 @@ Window {
             showStatusText: settingsModel.showStatusText
             showFps: settingsModel.showFps
             showStatusBar: settingsModel.showStatusBar
-            focus: (program.gameShown || (!program.bigScreen && program.pauseShown)) && !player.session.resumeAsked && !resumeDialog.sheetOpen && (program.bigScreen || !desktopModel.drawerOpen)
+            focus: (program.gameShown || (!program.bigScreen && program.pauseShown)) && !player.session.resumeAsked && !resumeDialog.sheetOpen && !program.desktopOverlayShown && (program.bigScreen || !desktopModel.drawerOpen)
+            onFocusChanged: program.settleFocus()
             feed: program.feed
             platformLibrary: program.platformLibrary
             cores: library.cores
@@ -477,6 +482,10 @@ Window {
                 program.fullScreenAsked = program.visibility !== Window.FullScreen
                 program.visibility = program.fullScreenAsked ? Window.FullScreen : Window.Windowed
             }
+        }
+        Connections {
+            target: desktopModel
+            function onDrawerOpenChanged() { program.settleFocus() }
         }
         ThemesModel {
             id: desktopThemesModel
@@ -600,6 +609,7 @@ Window {
             active: program.theme.length > 0 && program.theme !== BuiltInThemes.reference && (!program.esdeLook || !program.bigScreen)
             // A Loader is a focus scope: it takes the focus while one of the theme's screens is to hold it.
             focus: program.themeHost?.takesFocus ?? false
+            onFocusChanged: program.settleFocus()
             onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: ThemeHost {
                 objectName: "theme"
@@ -848,7 +858,7 @@ Window {
             id: settingsEclipseBindings
             objectName: "settingsEclipseBindings"
             anchors.fill: parent
-            active: !program.splashShown && settingsModel.bindingsShown && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : desktopModel.view === 2)
+            active: !program.splashShown && settingsModel.bindingsShown && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : (desktopModel.view === 2 && !desktopModel.gameShown))
             focus: active
             onActiveChanged: if (!active) program.settleFocus()
             sourceComponent: ControllersEclipse {
@@ -864,7 +874,7 @@ Window {
             id: settingsEclipseShaders
             objectName: "settingsEclipseShaders"
             anchors.fill: parent
-            active: !program.splashShown && settingsModel.shadersShown && screens.eclipse && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : desktopModel.view === 2)
+            active: !program.splashShown && settingsModel.shadersShown && screens.eclipse && (program.bigScreen ? ((program.themeHost?.settings ?? false) && screens.shown === Screens.Settings) : (desktopModel.view === 2 && !desktopModel.gameShown))
             focus: active && !settingsModel.typing
             onFocusChanged: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
             onLoaded: if (settingsEclipseShaders.focus) settingsEclipseShaders.forceActiveFocus()
@@ -1135,6 +1145,7 @@ Window {
             padFamily: program.padFamily
             splashShown: program.splashShown
             bigScreen: program.bigScreen
+            onVisibleChanged: if (!visible) program.settleFocus()
             onPlay: (path) => program.play(path)
             onPlayFrom: (path, state) => program.playFrom(path, state)
             onOpenFolder: (path) => folders.open(path)

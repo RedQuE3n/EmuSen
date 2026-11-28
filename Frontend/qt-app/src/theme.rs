@@ -549,6 +549,11 @@ impl ActionSink for Sink {
                 let took = within(*section, s.sections().iter().count());
                 if took {
                     self.chip_return = 0;
+                    if !feed.big_screen {
+                        if let Some(desktop) = unsafe { feed.desktop.as_mut() } {
+                            unsafe { Pin::new_unchecked(desktop) }.set_settings_tool(-1);
+                        }
+                    }
                     s.set_section(*section);
                 }
                 took
@@ -572,6 +577,14 @@ impl ActionSink for Sink {
                     return true;
                 }
                 self.chip_return = 0;
+                if !feed.big_screen {
+                    if let Some(desktop) = unsafe { feed.desktop.as_mut() } {
+                        if *desktop.settings_tool_index() >= 0 {
+                            unsafe { Pin::new_unchecked(desktop) }.settings_back();
+                            return true;
+                        }
+                    }
+                }
                 s.back()
             }
             (ScreenAction::PageSection(section), _, Some(p)) => {
@@ -714,15 +727,14 @@ impl ActionSink for Sink {
             WorkspaceAction::OpenDesktopDoor(key) => {
                 if desktop.open_door(key) {
                     true
+                } else if key == "shaders" || key == "cards" {
+                    false
                 } else {
                     unsafe { Pin::new_unchecked(feed) }.desktop_door_requested(QString::from(key.as_str()));
                     true
                 }
             }
-            WorkspaceAction::OpenTool(key) => {
-                unsafe { Pin::new_unchecked(feed) }.tool_requested(QString::from(key.as_str()));
-                true
-            }
+            WorkspaceAction::OpenTool(key) => open_desktop_tool(feed, key),
             WorkspaceAction::ToggleFullScreen => {
                 unsafe { Pin::new_unchecked(feed) }.full_screen_toggle_requested();
                 true
@@ -859,12 +871,20 @@ impl ActionSink for Sink {
                 t.set_focused(*index);
                 true
             }
-            ToolsAction::Open(key) => {
-                unsafe { Pin::new_unchecked(feed) }.tool_requested(QString::from(key.as_str()));
-                true
-            }
+            ToolsAction::Open(key) => open_desktop_tool(feed, key),
         }
     }
+}
+
+fn open_desktop_tool(feed: &mut qobject::ThemeFeed, key: &str) -> bool {
+    if key == "cards" {
+        return unsafe { feed.desktop.as_mut() }.is_some_and(|d| unsafe { Pin::new_unchecked(d) }.open_door("cards"));
+    }
+    if emusen_qt_models::screens::tool_screen(key).is_none() {
+        return false;
+    }
+    unsafe { Pin::new_unchecked(feed) }.tool_requested(QString::from(key));
+    true
 }
 
 impl cxx_qt::Initialize for qobject::ThemeFeed {
@@ -989,6 +1009,7 @@ impl qobject::ThemeFeed {
         facts.empty_words = games.empty_words().to_owned();
         facts.filter = games.filter_key();
         facts.sort = games.sort_words().to_owned();
+        facts.sort_ascending = games.sort_ascending();
         facts.letter = letter;
         let cache_key = (host_gen, self.library_gen.get(), *games.revision(), section.key.clone(), self.now);
         let rebuild = *self.browse_key.borrow() != Some(cache_key.clone());
@@ -1062,11 +1083,13 @@ impl qobject::ThemeFeed {
                 return;
             }
         };
-        if let Some(desktop) = unsafe { self.desktop.as_ref() } {
-            facts.filter = desktop.settings_filter().to_string();
-            facts.modified_only = *desktop.settings_modified_only();
-            facts.tool_index = *desktop.settings_tool_index();
-            facts.can_back = !settings.trail().is_empty() || facts.tool_index >= 0;
+        if !self.big_screen {
+            if let Some(desktop) = unsafe { self.desktop.as_ref() } {
+                facts.filter = desktop.settings_filter().to_string();
+                facts.modified_only = *desktop.settings_modified_only();
+                facts.tool_index = *desktop.settings_tool_index();
+                facts.can_back = !settings.trail().is_empty() || facts.tool_index >= 0;
+            }
         }
         if let Some(view) = self.engine().and_then(host::settings) {
             view.show(&facts);
@@ -1279,15 +1302,7 @@ impl qobject::ThemeFeed {
 
     /// Proxies out-of-store regular image files through the host's `image://thumb/<id>` provider.
     fn thumb_or_url(&self, url: String) -> String {
-        if url.is_empty() || url.starts_with("qrc:") || url.starts_with("image:") {
-            return url;
-        }
-        let Some(host) = (unsafe { self.host.as_ref() }) else { return url };
-        if host.allows_url(&url) {
-            return url;
-        }
-        let allowed = host.allow_thumb(&url);
-        if allowed.is_empty() { url } else { allowed }
+        proxy_thumb_url(unsafe { self.host.as_ref() }, url)
     }
 
     fn feed_page(&self) {
@@ -1571,4 +1586,29 @@ pub(crate) fn host_overrides(host: *const qobject::ThemeHost, big_screen: bool) 
         }
     }
     overrides
+}
+
+fn proxy_thumb_url(host: Option<&qobject::ThemeHost>, url: String) -> String {
+    if url.is_empty() || url.starts_with("qrc:") || url.starts_with("image:") {
+        return url;
+    }
+    let Some(host) = host else { return String::new() };
+    if host.allows_url(&url) {
+        return url;
+    }
+    host.allow_thumb(&url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::proxy_thumb_url;
+
+    #[test]
+    fn thumb_or_url_rejects_raw_file_urls_without_host() {
+        assert_eq!(proxy_thumb_url(None, "file:///home/player/Roms/snes/cover.png".to_owned()), "");
+        assert_eq!(proxy_thumb_url(None, "/home/player/Roms/snes/cover.png".to_owned()), "");
+        assert_eq!(proxy_thumb_url(None, "image://thumb/42".to_owned()), "image://thumb/42");
+        assert_eq!(proxy_thumb_url(None, "qrc:/emusen/icons/pad.svg".to_owned()), "qrc:/emusen/icons/pad.svg");
+        assert_eq!(proxy_thumb_url(None, String::new()), "");
+    }
 }

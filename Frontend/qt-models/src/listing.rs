@@ -34,6 +34,11 @@ impl Sort {
             Sort::Rating => "Rating",
         }
     }
+
+    /// Whether this sort orders ascending (`true` for Name/Year, `false` for newest/most/highest first).
+    pub fn ascending(self) -> bool {
+        matches!(self, Sort::Name | Sort::Year)
+    }
 }
 
 /// How a section is listed: the sort by its index in `Sort::ALL`, whether the Filter page's Favourites or Not played narrows it, the search's words, and the members of the collection the Filter page narrows it to.

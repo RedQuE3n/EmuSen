@@ -548,6 +548,10 @@ pub fn from_workspace_scope(workspace_scope: i32) -> i32 {
     }
 }
 
+fn folder_leaf(path: &str) -> String {
+    std::path::Path::new(path).file_name().and_then(|s| s.to_str()).unwrap_or_default().to_owned()
+}
+
 pub fn facts_of(
     data: &emusen_qt_models::desktop::DesktopWorkspaceData,
     state: &emusen_qt_models::desktop::DesktopState,
@@ -605,7 +609,7 @@ pub fn facts_of(
         inspector_genre: data.inspector_genre.clone(),
         inspector_description: data.inspector_description.clone(),
         inspector_file_name: data.inspector_file_name.clone(),
-        inspector_folder_path: data.inspector_folder_path.clone(),
+        inspector_folder_path: folder_leaf(&data.inspector_folder_path),
         inspector_size_words: data.inspector_size_words.clone(),
         inspector_favourite: data.inspector_favourite,
         inspector_running: data.inspector_running,
@@ -672,9 +676,10 @@ pub fn facts_of(
         inspector_states: data
             .inspector_states
             .iter()
-            .map(|s| {
+            .enumerate()
+            .map(|(i, s)| {
                 vec![
-                    Cell::Text(s.path.clone()),
+                    Cell::Text(format!("state:{i}")),
                     Cell::Text(s.label.clone()),
                     Cell::Text(s.when_words.clone()),
                     Cell::Text(map_url(&s.picture)),
